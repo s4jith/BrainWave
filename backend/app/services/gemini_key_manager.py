@@ -34,6 +34,7 @@ class GeminiKeyManager:
         self.current_key_index = 0
         self.daily_limit = 20  # Free tier limit per key
         self.db = None
+        self.invalid_keys = set()  # Track permanently invalid/expired keys
         
         # Load API keys from environment
         self._load_keys_from_env()
@@ -141,38 +142,69 @@ class GeminiKeyManager:
     def get_available_key(self) -> Optional[str]:
         """
         Get an API key with available quota.
+        Proactively skips:
+        - Keys with exhausted quota
+        - Keys marked as invalid/expired
         
         Returns:
             API key string if available, None if all keys exhausted
         """
-        # Try current key first
+        # Try each key, skipping exhausted and invalid ones
         for attempt in range(len(self.keys)):
             key_info = self.keys[self.current_key_index]
-            quota_data = self._get_quota_data(key_info["id"])
+            key_id = key_info["id"]
+            
+            # Skip permanently invalid keys
+            if key_id in self.invalid_keys:
+                logger.debug(f"⏭️ Skipping invalid key: {key_id}")
+                self.current_key_index = (self.current_key_index + 1) % len(self.keys)
+                continue
+            
+            quota_data = self._get_quota_data(key_id)
             
             if quota_data["request_count"] < self.daily_limit:
                 # Key has available quota
                 api_key = key_info["key"]
                 logger.info(
-                    f"✅ Using {key_info['id']} "
+                    f"✅ Using {key_id} "
                     f"({quota_data['request_count'] + 1}/{self.daily_limit} requests today)"
                 )
                 
                 # Increment usage
-                self._increment_usage(key_info["id"])
+                self._increment_usage(key_id)
                 
                 return api_key
             else:
                 # Key exhausted, try next one
                 logger.warning(
-                    f"⚠️  {key_info['id']} quota exhausted "
+                    f"⚠️ {key_id} quota exhausted "
                     f"({quota_data['request_count']}/{self.daily_limit}). "
                     f"Rotating to next key..."
                 )
                 self.current_key_index = (self.current_key_index + 1) % len(self.keys)
         
-        # All keys exhausted
-        logger.error("❌ All API keys exhausted! All quotas used for today.")
+        # All keys exhausted or invalid
+        logger.error("❌ All API keys exhausted or invalid! All quotas used for today.")
+        return None
+    
+    def mark_key_invalid(self, key_id: str):
+        """
+        Mark a key as permanently invalid (expired/disabled).
+        The key will be skipped in future requests until server restart.
+        """
+        self.invalid_keys.add(key_id)
+        logger.warning(f"🚫 Marked {key_id} as invalid - will be skipped")
+        
+        # Also rotate to next key immediately
+        for i, key_info in enumerate(self.keys):
+            if key_info["id"] == key_id:
+                self.current_key_index = (i + 1) % len(self.keys)
+                break
+    
+    def get_current_key_id(self) -> Optional[str]:
+        """Get the ID of the current key being used."""
+        if self.keys:
+            return self.keys[self.current_key_index]["id"]
         return None
     
     def get_quota_status(self) -> Dict:

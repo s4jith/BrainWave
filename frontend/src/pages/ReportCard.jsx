@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import useUserStore from "../stores/userStore";
-import { 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  TrendingUp,
+  TrendingDown,
   Minus,
-  Target, 
-  Award, 
+  Target,
+  Award,
   BookOpen,
   Brain,
   AlertTriangle,
@@ -17,7 +17,9 @@ import {
   Home,
   Calendar,
   Trophy,
-  Flame
+  Flame,
+  Trash2,
+  X
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
@@ -28,31 +30,72 @@ export default function ReportCard() {
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: null, sessionId: null });
 
   useEffect(() => {
-    fetchAnalytics();
+    fetchData();
   }, [user.id, user.classLevel, user.preferredSubject]);
 
-  const fetchAnalytics = async () => {
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await testService.getTestAnalytics(
-        user.id,
-        user.classLevel || 10,
-        user.preferredSubject
-      );
-      
-      if (data) {
-        setAnalytics(data);
+      // Fetch both analytics and test history in parallel
+      const [analyticsData, historyData] = await Promise.all([
+        testService.getTestAnalytics(
+          user.id,
+          user.classLevel || 10,
+          user.preferredSubject
+        ).catch(() => null),
+        testService.getTestHistory(user.id, 10).catch(() => ({ history: [], analytics: {} }))
+      ]);
+
+      // Merge analytics with history data
+      if (analyticsData || historyData.history?.length > 0) {
+        setAnalytics({
+          ...analyticsData,
+          // Use history analytics if main analytics is empty
+          overall_average: analyticsData?.overall_average ?? historyData.analytics?.average_score ?? 0,
+          total_tests_taken: analyticsData?.total_tests_taken ?? historyData.analytics?.total_tests ?? 0,
+          best_score: analyticsData?.best_score ?? Math.max(...(historyData.history?.map(t => t.score) || [0]), 0),
+          topics_strong: analyticsData?.topics_strong ?? 0,
+          topics_moderate: analyticsData?.topics_moderate ?? 0,
+          topics_weak: analyticsData?.topics_weak ?? 0,
+          recent_tests: historyData.history || []
+        });
       } else {
         setError("No test data available");
       }
     } catch (error) {
-      console.error("Failed to fetch analytics:", error);
+      console.error("Failed to fetch data:", error);
       setError("Failed to load analytics data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteOne = (sessionId, e) => {
+    e.stopPropagation(); // Prevent navigation when clicking delete
+    setDeleteConfirm({ show: true, type: 'one', sessionId });
+  };
+
+  const handleDeleteAll = () => {
+    setDeleteConfirm({ show: true, type: 'all', sessionId: null });
+  };
+
+  const confirmDelete = async () => {
+    try {
+      if (deleteConfirm.type === 'one') {
+        await testService.deleteTestHistory(deleteConfirm.sessionId);
+      } else {
+        await testService.deleteAllTestHistory(user.id);
+      }
+      // Refresh data
+      fetchData();
+    } catch (error) {
+      console.error("Delete failed:", error);
+    } finally {
+      setDeleteConfirm({ show: false, type: null, sessionId: null });
     }
   };
 
@@ -135,7 +178,7 @@ export default function ReportCard() {
               {user.preferredSubject || "Mathematics"} - Class {user.classLevel || 10}
             </p>
           </div>
-          <Button 
+          <Button
             onClick={() => navigate("/test")}
             className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
           >
@@ -230,6 +273,83 @@ export default function ReportCard() {
           </div>
         </div>
 
+        {/* Test History Section - Always show */}
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600" />
+              Recent Test History
+            </h3>
+            {analytics.recent_tests && analytics.recent_tests.length > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear All
+              </button>
+            )}
+          </div>
+          {analytics.recent_tests && analytics.recent_tests.length > 0 ? (
+            <div className="space-y-3">
+              {analytics.recent_tests.map((test, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => navigate(`/test-result`, {
+                    state: {
+                      result: { session_id: test.session_id },
+                      fromHistory: true
+                    }
+                  })}
+                  className="group flex items-center justify-between p-4 rounded-xl bg-gray-50 hover:bg-purple-50 cursor-pointer transition-colors border border-gray-100 hover:border-purple-200"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${test.score >= 80 ? 'bg-green-100' :
+                      test.score >= 60 ? 'bg-yellow-100' : 'bg-red-100'
+                      }`}>
+                      <BookOpen className={`w-5 h-5 ${test.score >= 80 ? 'text-green-600' :
+                        test.score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                        }`} />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-800">
+                        {test.subject} - Ch.{test.chapter_number}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {test.topic_name || 'Topic Test'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className={`text-lg font-bold ${getScoreColor(test.score)}`}>
+                        {test.score?.toFixed(0) || 0}%
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : 'Recent'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteOne(test.session_id, e)}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete this test"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <div className="text-gray-400">→</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p>No test history yet</p>
+              <p className="text-sm">Complete some tests to see your history here</p>
+            </div>
+          )}
+        </div>
+
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-8 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -238,7 +358,7 @@ export default function ReportCard() {
                 Take more tests to improve your scores and master new topics
               </p>
             </div>
-            <Button 
+            <Button
               onClick={() => navigate("/test")}
               className="bg-white text-purple-600 hover:bg-gray-100 gap-2"
             >
@@ -248,6 +368,44 @@ export default function ReportCard() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Confirm Delete</h3>
+              <button
+                onClick={() => setDeleteConfirm({ show: false, type: null, sessionId: null })}
+                className="p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-6">
+              {deleteConfirm.type === 'all'
+                ? "Are you sure you want to delete ALL your test history? This cannot be undone."
+                : "Are you sure you want to delete this test from your history? This cannot be undone."
+              }
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirm({ show: false, type: null, sessionId: null })}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDelete}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -244,7 +244,7 @@ export default function TestSession() {
       navigate("/test-result", {
         state: {
           result,
-          topicConfig
+          topicConfig: testConfig
         }
       });
     } catch (err) {

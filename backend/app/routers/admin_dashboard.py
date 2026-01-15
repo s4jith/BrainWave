@@ -173,21 +173,25 @@ async def get_analytics():
             "new_users_this_month": new_users_this_month
         }
         
-        # Test Statistics
-        quiz_results = db.get_collection("quiz_results")
-        total_tests_taken = quiz_results.count_documents({})
-        tests_today = quiz_results.count_documents({"created_at": {"$gte": today_start}})
-        tests_this_week = quiz_results.count_documents({"created_at": {"$gte": week_ago}})
+        # Test Statistics - Use test_sessions collection (where tests are actually stored)
+        test_sessions = db.get_collection("test_sessions")
+        total_tests_taken = test_sessions.count_documents({"status": "completed"})
+        tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
+        tests_this_week = test_sessions.count_documents({"completed_at": {"$gte": week_ago}})
         
-        # Calculate average score
+        # Also check tests in progress
+        tests_in_progress = test_sessions.count_documents({"status": "in_progress"})
+        
+        # Calculate average score from test_sessions (score)
         pipeline = [
+            {"$match": {"status": "completed", "score": {"$exists": True}}},
             {"$group": {"_id": None, "avg_score": {"$avg": "$score"}}}
         ]
-        avg_result = list(quiz_results.aggregate(pipeline))
+        avg_result = list(test_sessions.aggregate(pipeline))
         average_score = round(avg_result[0]["avg_score"], 1) if avg_result and avg_result[0].get("avg_score") else 0
         
         # Pass rate (score >= 60%)
-        passed = quiz_results.count_documents({"score": {"$gte": 60}})
+        passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
         pass_rate = round((passed / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
         
         # Question sets created
@@ -198,7 +202,7 @@ async def get_analytics():
             "total_tests_created": total_tests_created,
             "total_tests_taken": total_tests_taken,
             "tests_completed": total_tests_taken,
-            "tests_in_progress": 0,
+            "tests_in_progress": tests_in_progress,
             "average_score": average_score,
             "pass_rate": pass_rate,
             "tests_today": tests_today,
@@ -214,8 +218,8 @@ async def get_analytics():
             active_users = db.users.count_documents({
                 "last_login": {"$gte": date, "$lt": next_date}
             })
-            tests_taken = quiz_results.count_documents({
-                "created_at": {"$gte": date, "$lt": next_date}
+            tests_taken = test_sessions.count_documents({
+                "completed_at": {"$gte": date, "$lt": next_date}
             })
             
             activity_trend.append({
@@ -226,6 +230,7 @@ async def get_analytics():
         
         # Subject-wise Performance
         subject_pipeline = [
+            {"$match": {"status": "completed"}},
             {"$group": {
                 "_id": "$subject",
                 "avg_score": {"$avg": "$score"},
@@ -233,16 +238,18 @@ async def get_analytics():
                 "total_students": {"$addToSet": "$student_id"}
             }},
             {"$project": {
+                "_id": 0,
                 "subject": "$_id",
                 "avg_score": {"$round": ["$avg_score", 1]},
                 "total_tests": 1,
                 "total_students": {"$size": "$total_students"}
             }}
         ]
-        subject_stats = list(quiz_results.aggregate(subject_pipeline))
+        subject_stats = list(test_sessions.aggregate(subject_pipeline))
         
         # Top Performers
         performer_pipeline = [
+            {"$match": {"status": "completed"}},
             {"$group": {
                 "_id": "$student_id",
                 "avg_score": {"$avg": "$score"},
@@ -252,7 +259,7 @@ async def get_analytics():
             {"$sort": {"avg_score": -1}},
             {"$limit": 5}
         ]
-        top_performers_raw = list(quiz_results.aggregate(performer_pipeline))
+        top_performers_raw = list(test_sessions.aggregate(performer_pipeline))
         
         top_performers = []
         for p in top_performers_raw:
@@ -266,6 +273,7 @@ async def get_analytics():
         
         # Weak Students (low scores or inactive)
         weak_pipeline = [
+            {"$match": {"status": "completed"}},
             {"$group": {
                 "_id": "$student_id",
                 "avg_score": {"$avg": "$score"},
@@ -275,7 +283,7 @@ async def get_analytics():
             {"$sort": {"avg_score": 1}},
             {"$limit": 5}
         ]
-        weak_students_raw = list(quiz_results.aggregate(weak_pipeline))
+        weak_students_raw = list(test_sessions.aggregate(weak_pipeline))
         
         weak_students = []
         for w in weak_students_raw:
@@ -292,16 +300,28 @@ async def get_analytics():
         
         # Recent Activities
         recent_pipeline = [
-            {"$sort": {"created_at": -1}},
+            {"$match": {"status": "completed"}},
+            {"$sort": {"completed_at": -1}},
             {"$limit": 10},
             {"$project": {
+                "_id": 0,
                 "student_id": 1,
                 "subject": 1,
-                "score": 1,
-                "created_at": 1
+                "score": "$score",
+                "created_at": "$completed_at"
             }}
         ]
-        recent_activities = list(quiz_results.aggregate(recent_pipeline))
+        recent_activities_raw = list(test_sessions.aggregate(recent_pipeline))
+        
+        # Serialize recent_activities to ensure no ObjectId issues
+        recent_activities = []
+        for activity in recent_activities_raw:
+            recent_activities.append({
+                "student_id": str(activity.get("student_id", "")),
+                "subject": activity.get("subject", "Unknown"),
+                "score": activity.get("score", 0),
+                "created_at": activity.get("created_at").isoformat() if activity.get("created_at") else None
+            })
         
         return {
             "user_stats": user_stats,

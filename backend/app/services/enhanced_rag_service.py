@@ -202,63 +202,61 @@ class EnhancedRAGService:
             all_chunks = []
             class_distribution = {}
             
-            for class_level in classes_to_search:
-                # Build metadata filter
-                # Pinecone stores class_level as INTEGER (from pdf_processor.py)
-                metadata_filter = {
-                    "class_level": {"$eq": class_level},  # Integer as stored in pdf_processor
-                    "subject": subject
-                }
-                
-                if chapter is not None:
-                    metadata_filter["chapter_number"] = chapter  # Integer as stored in pdf_processor
-                
-                try:
-                    # Query textbook index with namespace
-                    results = self.textbook_db.index.query(
-                        namespace=namespace,
-                        vector=query_embedding,
-                        top_k=chunks_per_class,
-                        filter=metadata_filter,
-                        include_metadata=True
-                    )
-                    
-                    # Extract matches
-                    matches = results.get('matches', [])
-                    class_chunks = 0
-                    
-                    for match in matches:
-                        score = match.get('score', 0)
-                        
-                        # Dynamic threshold based on mode
-                        threshold = 0.3 if mode == "basic" else 0.2
-                        
-                        if score >= threshold:
-                            metadata = match.get('metadata', {})
-                            chunk_data = {
-                                'text': metadata.get('text', ''),
-                                'class': class_level,
-                                'subject': subject,
-                                'chapter': metadata.get('chapter'),
-                                'page': metadata.get('page'),
-                                'score': score,
-                                'source': 'textbook'
-                            }
-                            all_chunks.append(chunk_data)
-                            class_chunks += 1
-                    
-                    if class_chunks > 0:
-                        class_distribution[class_level] = class_chunks
-                        logger.info(f"  ✓ Class {class_level}: {class_chunks} chunks (scores: {[round(m['score'], 2) for m in matches[:3]]})")
-                
-                except Exception as class_error:
-                    logger.warning(f"  ✗ Class {class_level} query failed: {class_error}")
-                    continue
+            # SIMPLIFIED: Query ALL vectors in namespace without class_level filter
+            # Different books may have different metadata formats, so we filter in Python
+            logger.info(f"   Querying namespace: {namespace} without metadata filters")
             
-            # Sort chunks: earlier classes first (for progressive building)
-            all_chunks.sort(key=lambda x: (x['class'], -x['score']))
+            try:
+                # Query textbook index with namespace only (no metadata filter)
+                results = self.textbook_db.index.query(
+                    namespace=namespace,
+                    vector=query_embedding,
+                    top_k=25,  # Get more chunks, we'll filter by relevance
+                    include_metadata=True
+                )
+                
+                # Extract matches
+                matches = results.get('matches', [])
+                logger.info(f"   🔍 Found {len(matches)} total matches in namespace")
+                
+                for match in matches:
+                    score = match.get('score', 0)
+                    
+                    # Dynamic threshold based on mode
+                    threshold = 0.3 if mode == "basic" else 0.2
+                    
+                    if score >= threshold:
+                        metadata = match.get('metadata', {})
+                        chunk_class = metadata.get('class_level', 0)
+                        
+                        # Try to parse class_level as int (might be stored as string)
+                        try:
+                            chunk_class = int(chunk_class) if chunk_class else 0
+                        except (ValueError, TypeError):
+                            chunk_class = 0
+                        
+                        # Filter by class in Python (if needed)
+                        # For now, accept all chunks from the namespace
+                        chunk_data = {
+                            'text': metadata.get('text', ''),
+                            'class': chunk_class,
+                            'subject': subject,
+                            'chapter': metadata.get('chapter_number', metadata.get('chapter')),
+                            'page': metadata.get('page_number', metadata.get('page')),
+                            'score': score,
+                            'source': 'textbook'
+                        }
+                        all_chunks.append(chunk_data)
+                
+                logger.info(f"   ✓ {len(all_chunks)} chunks passed threshold")
+                        
+            except Exception as query_error:
+                logger.warning(f"  ✗ Query failed: {query_error}")
             
-            logger.info(f"📊 Total chunks retrieved: {len(all_chunks)} from {len(class_distribution)} class levels")
+            # Sort by score (highest first)
+            all_chunks.sort(key=lambda x: -x['score'])
+            
+            logger.info(f"📊 Total chunks retrieved: {len(all_chunks)}")
             
             return all_chunks, class_distribution
             
@@ -633,16 +631,9 @@ Generate a thorough, well-structured deep dive explanation:"""
             Generated answer
         """
         if not textbook_chunks and not llm_chunks and not web_chunks:
-            # Fallback: Try to answer with general knowledge if RAG fails, but warn the user
-            logger.info("⚠️ No RAG content found. Attempting general knowledge fallback.")
-            fallback_prompt = f"""You are an expert tutor for Class {student_class} {subject}.
-            The student asked: "{question}"
-            
-            I could not find specific textbook content for this query. 
-            Please answer the question using your general knowledge, but explicitly mention that this information is based on general principles and not directly from the specific NCERT textbook chapters.
-            Keep the explanation simple, accurate, and suitable for a Class {student_class} student.
-            """
-            return self.gemini.generate_response(fallback_prompt)
+            # BRIEF response when no content found - don't elaborate or explain
+            logger.info("⚠️ No RAG content found. Returning brief response.")
+            return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
         
         # Build multi-source context
         context_sections = []
@@ -763,6 +754,14 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
             query_embedding=query_embedding
         )
         
+        # Log best score for debugging (cross-subject detection disabled for now)
+        best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
+        good_chunks = [c for c in textbook_chunks if c.get('score', 0) >= 0.6]
+        logger.info(f"   📊 Best textbook score: {best_score:.3f}, Good chunks: {len(good_chunks)}/{len(textbook_chunks)}")
+        
+        # NOTE: Cross-subject detection was too aggressive - disabled for now
+        # If best_score < 0.5, question might be off-topic but we'll try to answer anyway
+        
         # 2. Query stored LLM answers
         llm_chunks = self.query_llm_content(
             query_text=question,
@@ -781,23 +780,9 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
             source_chunks = textbook_chunks + llm_chunks
             return cached_answer, source_chunks
         
-        # 3. Query web content - DISABLED to save API calls
-        # web_chunks = self.query_web_content(
-        #     query_text=question,
-        #     subject=subject,
-        #     student_class=student_class,
-        #     top_k=3,
-        #     query_embedding=query_embedding
-        # )
-        web_chunks = []  # Web scraping disabled to reduce Gemini API usage
-        logger.info("🌐 Web content: DISABLED (saving API calls)")
-        
-        # 4. Web scraping trigger - DISABLED
-        # total_chunks = len(textbook_chunks) + len(web_chunks)
-        # if self.web_scraper.should_scrape(total_chunks, threshold=5):
-        #     topic = self.llm_storage._extract_topic(question)
-        #     logger.info(f"🌐 Triggering web scraping for topic: {topic}")
-        #     self.web_scraper.scrape_topic(subject, topic, student_class, max_sources=2)
+        # 3. Query web content - DISABLED to save API calls (restored original behavior)
+        web_chunks = []
+        logger.info("   🌐 Web content: DISABLED (saving API calls)")
         
         # Combine all sources
         all_chunks = textbook_chunks + llm_chunks + web_chunks
@@ -1003,6 +988,10 @@ Keep it under 200 words and student-friendly."""
             mode="deepdive",
             chunks_per_class=8  # More chunks per class for comprehensive coverage
         )
+        
+        # Log best score for debugging (cross-subject detection disabled for now)
+        best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
+        logger.info(f"   📊 Best textbook score: {best_score:.3f}")
         
         # 2. Query stored LLM answers
         llm_chunks = self.query_llm_content(

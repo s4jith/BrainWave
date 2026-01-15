@@ -96,7 +96,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
               {/* Notification Bell */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="p-2 bg-white/20 hover:bg-white/30 rounded-full relative"
                 >
@@ -107,14 +107,14 @@ export default function AdminDashboard() {
                     </span>
                   )}
                 </button>
-                
+
                 {/* Notifications Dropdown */}
                 {showNotifications && (
                   <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-xl z-50 max-h-96 overflow-hidden">
                     <div className="p-3 border-b bg-gray-50">
                       <div className="flex justify-between items-center">
                         <h3 className="font-semibold text-gray-800">Notifications</h3>
-                        <button 
+                        <button
                           onClick={() => navigate("/support-tickets")}
                           className="text-xs text-blue-600 hover:underline"
                         >
@@ -129,7 +129,7 @@ export default function AdminDashboard() {
                         </div>
                       ) : (
                         notifications.slice(0, 5).map(n => (
-                          <div 
+                          <div
                             key={n.id}
                             onClick={() => {
                               markNotificationRead(n.id);
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-              
+
               <span className="text-sm bg-white/20 px-3 py-1 rounded-full">{user?.email || "Admin"}</span>
               <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-md transition">Logout</button>
             </div>
@@ -184,7 +184,7 @@ export default function AdminDashboard() {
           <StatCard label="Teachers" value={user_stats?.total_teachers || 0} icon="" color="purple" />
           <StatCard label="Active Today" value={user_stats?.active_today || 0} icon="" color="emerald" />
           <StatCard label="Tests Today" value={test_stats?.tests_today || 0} icon="" color="orange" />
-          <StatCard label="Avg Score" value={`${test_stats?.average_score || 0}%`} icon="" color="pink" />
+          <StatCard label="Avg Score" value={`${Math.min(test_stats?.average_score || 0, 100)}%`} icon="" color="pink" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -251,10 +251,10 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Avg Score</span>
-                      <span className={`font-medium ${subject.avg_score >= 70 ? "text-green-600" : subject.avg_score >= 50 ? "text-yellow-600" : "text-red-600"}`}>{subject.avg_score}%</span>
+                      <span className={`font-medium ${Math.min(subject.avg_score, 100) >= 70 ? "text-green-600" : Math.min(subject.avg_score, 100) >= 50 ? "text-yellow-600" : "text-red-600"}`}>{Math.min(subject.avg_score, 100)}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className={`h-2 rounded-full ${subject.avg_score >= 70 ? "bg-green-500" : subject.avg_score >= 50 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${subject.avg_score}%` }}></div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div className={`h-2 rounded-full ${Math.min(subject.avg_score, 100) >= 70 ? "bg-green-500" : Math.min(subject.avg_score, 100) >= 50 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${Math.min(subject.avg_score, 100)}%` }}></div>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{subject.total_tests} tests</span>
@@ -284,7 +284,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-500">{student.tests_completed} tests</p>
                       </div>
                     </div>
-                    <p className="text-lg font-bold text-green-600">{student.avg_score}%</p>
+                    <p className="text-lg font-bold text-green-600">{Math.min(student.avg_score, 100)}%</p>
                   </div>
                 ))}
               </div>

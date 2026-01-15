@@ -400,7 +400,7 @@ class RAGService:
             max_chunks: Maximum chunks to retrieve
         
         Returns:
-            Combined chapter text
+            Combined chapter text or empty string if not found
         """
         try:
             # Use a generic query to get chapter content
@@ -426,13 +426,14 @@ class RAGService:
                     chunks.append(match['metadata']['text'])
             
             if not chunks:
-                raise ValueError(f"No content found for Class {class_level}, {subject}, Chapter {chapter}")
+                logger.warning(f"⚠️ No content found for Class {class_level}, {subject}, Chapter {chapter}")
+                return ""  # Return empty string instead of raising error
             
             return "\n\n".join(chunks)
         
         except Exception as e:
-            logger.error(f"❌ Chapter context retrieval failed: {e}")
-            raise
+            logger.error(f"❌ Chapter context retrieval error: {e}")
+            return ""  # Return empty string on error
     
     def query_with_rag_deepdive(
         self,

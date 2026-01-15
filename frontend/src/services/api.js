@@ -632,6 +632,77 @@ export const testService = {
   },
 
   /**
+   * Get test history for a student
+   * @param {string} studentId - Student ID
+   * @param {number} limit - Number of results to return
+   * @returns {Promise<{history, total, analytics}>}
+   */
+  async getTestHistory(studentId, limit = 20) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/test/history/${studentId}?limit=${limit}`
+      );
+      if (!response.ok) throw new Error(`Get Test History Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Get Test History Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get full test result for a session (for viewing historical results)
+   * @param {string} sessionId - Session ID
+   * @returns {Promise<{score, evaluations, feedback, ...}>}
+   */
+  async getTestResult(sessionId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/result/${sessionId}`);
+      if (!response.ok) throw new Error(`Get Test Result Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Get Test Result Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a single test history item
+   * @param {string} sessionId - Session ID to delete
+   * @returns {Promise<{status, session_id}>}
+   */
+  async deleteTestHistory(sessionId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/history/${sessionId}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) throw new Error(`Delete Test History Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Delete Test History Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete all test history for a student
+   * @param {string} studentId - Student ID
+   * @returns {Promise<{status, deleted_count}>}
+   */
+  async deleteAllTestHistory(studentId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/history/all/${studentId}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) throw new Error(`Delete All Test History Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Delete All Test History Error:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Start Test V2 - Supports on-demand generation
    * @param {object} params - Test parameters
    * @returns {Promise<{session_id, questions, time_limit}>}
@@ -873,6 +944,40 @@ export const testService = {
     } catch (error) {
       console.error("Staff Tests API Error:", error);
       return [];
+    }
+  },
+
+  /**
+   * Upload student's answer sheet for a staff test
+   * @param {string} testId - Test ID
+   * @param {string} studentId - Student ID
+   * @param {File} pdfFile - Answer sheet PDF file
+   * @returns {Promise<{success, message, submission}>}
+   */
+  async uploadAnswerSheet(testId, studentId, pdfFile) {
+    try {
+      console.log("📤 Upload Answer Sheet:", { testId, studentId, fileName: pdfFile?.name });
+
+      const formData = new FormData();
+      formData.append("test_id", testId);
+      formData.append("student_id", studentId);
+      formData.append("pdf_file", pdfFile);
+
+      const response = await fetch(`${API_BASE_URL}/api/tests/submit`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("🚨 Upload Error Full Response:", JSON.stringify(errorData, null, 2));
+        throw new Error(errorData.detail || JSON.stringify(errorData) || `Upload failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Upload Answer Sheet Error:", error);
+      throw error;
     }
   },
 

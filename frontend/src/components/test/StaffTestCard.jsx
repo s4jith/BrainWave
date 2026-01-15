@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { 
-  FileText, 
-  Download, 
-  Upload, 
-  Clock, 
-  CheckCircle, 
+import {
+  FileText,
+  Download,
+  Upload,
+  Clock,
+  CheckCircle,
   AlertCircle,
   Eye,
   Loader2,
@@ -137,12 +137,36 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
     setUploading(true);
     setUploadError(null);
 
+    // Debug: Show what we're sending
+    const testId = test.id;
+    console.log("� UPLOAD DEBUG:", { testId, studentId, fileName: file.name });
+    alert(`Uploading: testId=${testId}, studentId=${studentId}, file=${file.name}`);
+
     try {
-      await testService.uploadAnswerSheet(test.id, studentId, file);
-      onRefresh(); // Refresh to update status
+      const formData = new FormData();
+      formData.append("test_id", testId);
+      formData.append("student_id", studentId);
+      formData.append("pdf_file", file);
+
+      const response = await fetch(`${API_BASE}/api/tests/submit`, {
+        method: "POST",
+        body: formData
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+      console.log("📥 RESPONSE:", response.status, responseData);
+
+      if (!response.ok) {
+        console.error("❌ Upload Error:", responseData);
+        alert(`Upload Error: ${JSON.stringify(responseData)}`);
+        throw new Error(responseData.detail || JSON.stringify(responseData) || "Upload failed");
+      }
+
+      alert("✅ Upload successful!");
+      onRefresh();
     } catch (error) {
       console.error("Upload failed:", error);
-      setUploadError("Upload failed. Please try again.");
+      setUploadError(error.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -162,32 +186,29 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
   const isOverdue = dueDate && now > dueDate && testStatus === "pending";
 
   return (
-    <div className={`bg-white rounded-2xl p-6 shadow-sm border transition-all hover:shadow-md ${
-      isOverdue ? "border-red-200" : isBeforeStart ? "border-blue-200" : "border-gray-100"
-    }`}>
+    <div className={`bg-white rounded-2xl p-6 shadow-sm border transition-all hover:shadow-md ${isOverdue ? "border-red-200" : isBeforeStart ? "border-blue-200" : "border-gray-100"
+      }`}>
       <div className="flex items-start justify-between gap-4">
         {/* Left: Test Info */}
         <div className="flex items-start gap-4 flex-1">
-          <div className={`p-3 rounded-xl ${
-            testStatus === "evaluated" ? "bg-green-100" : 
+          <div className={`p-3 rounded-xl ${testStatus === "evaluated" ? "bg-green-100" :
             testStatus === "submitted" ? "bg-blue-100" : "bg-amber-100"
-          }`}>
-            <FileText className={`w-6 h-6 ${
-              testStatus === "evaluated" ? "text-green-600" : 
+            }`}>
+            <FileText className={`w-6 h-6 ${testStatus === "evaluated" ? "text-green-600" :
               testStatus === "submitted" ? "text-blue-600" : "text-amber-600"
-            }`} />
+              }`} />
           </div>
-          
+
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold text-gray-800">{test.title}</h3>
               {getStatusBadge()}
             </div>
-            
+
             {test.description && (
               <p className="text-sm text-gray-600 mb-2">{test.description}</p>
             )}
-            
+
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3">
               <span className="font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
                 {test.subject}
@@ -266,22 +287,17 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
                 className="hidden"
                 disabled={uploading}
               />
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-2 w-full"
-                disabled={uploading}
-                asChild
-              >
-                <span>
-                  {uploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4" />
-                  )}
-                  {uploading ? "Uploading..." : "Upload Answer"}
-                </span>
-              </Button>
+              <div className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md w-full ${uploading
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                }`}>
+                {uploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                {uploading ? "Uploading..." : "Upload Answer"}
+              </div>
             </label>
           )}
 

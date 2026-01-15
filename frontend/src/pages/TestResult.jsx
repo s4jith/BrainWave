@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
-import { 
-  Trophy, 
-  Target, 
-  CheckCircle, 
+import {
+  Trophy,
+  Target,
+  CheckCircle,
   XCircle,
   ChevronDown,
   ChevronUp,
@@ -13,9 +13,11 @@ import {
   AlertTriangle,
   Home,
   RotateCcw,
-  Award
+  Award,
+  Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { testService } from "../services/api";
 
 /**
  * TestResult Page
@@ -30,16 +32,49 @@ import { Button } from "../components/ui/button";
 export default function TestResult() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { result, topicConfig } = location.state || {};
-  
-  const [expandedQuestions, setExpandedQuestions] = useState({});
+  const { result: passedResult, topicConfig, fromHistory } = location.state || {};
 
-  if (!result) {
+  const [expandedQuestions, setExpandedQuestions] = useState({});
+  const [result, setResult] = useState(passedResult);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Fetch result from API if coming from history
+  useEffect(() => {
+    const fetchHistoricalResult = async () => {
+      if (fromHistory && passedResult?.session_id && !passedResult.evaluations) {
+        setLoading(true);
+        try {
+          const data = await testService.getTestResult(passedResult.session_id);
+          setResult(data);
+        } catch (err) {
+          console.error("Failed to fetch test result:", err);
+          setError("Failed to load test result");
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    fetchHistoricalResult();
+  }, [fromHistory, passedResult]);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[50vh] gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+          <span className="text-gray-500">Loading test result...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error || !result) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
           <AlertTriangle className="w-12 h-12 text-amber-500" />
-          <h2 className="text-xl font-semibold text-gray-800">No Results Found</h2>
+          <h2 className="text-xl font-semibold text-gray-800">{error || "No Results Found"}</h2>
           <p className="text-gray-500">Please complete a test first.</p>
           <Button onClick={() => navigate("/test-center")} className="gap-2">
             <Home className="w-4 h-4" />
@@ -165,7 +200,7 @@ export default function TestResult() {
               </ul>
             </div>
           )}
-          
+
           {result.improvements?.length > 0 && (
             <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
               <div className="flex items-center gap-2 mb-4">
@@ -193,7 +228,7 @@ export default function TestResult() {
             </div>
             <div className="flex flex-wrap gap-2">
               {result.topics_to_review.map((topic, index) => (
-                <span 
+                <span
                   key={index}
                   className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
                 >
@@ -217,11 +252,10 @@ export default function TestResult() {
                   className="w-full flex items-center justify-between text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      evaluation.is_correct 
-                        ? "bg-green-100 text-green-600" 
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${evaluation.is_correct
+                        ? "bg-green-100 text-green-600"
                         : "bg-red-100 text-red-600"
-                    }`}>
+                      }`}>
                       {evaluation.is_correct ? (
                         <CheckCircle className="w-4 h-4" />
                       ) : (
@@ -241,7 +275,7 @@ export default function TestResult() {
                     <ChevronDown className="w-5 h-5 text-gray-400" />
                   )}
                 </button>
-                
+
                 {expandedQuestions[evaluation.question_id || index] && (
                   <div className="mt-4 pl-11 space-y-4">
                     <div>

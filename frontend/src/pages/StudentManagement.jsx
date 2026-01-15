@@ -17,6 +17,7 @@ export default function StudentManagement() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState("all");
+  const [filterClass, setFilterClass] = useState("all");
   const [saving, setSaving] = useState(false);
 
   // Updated form with age and mobile (no preferred_subject - students access all subjects)
@@ -30,7 +31,7 @@ export default function StudentManagement() {
 
   useEffect(() => {
     fetchStudents();
-  }, [filterActive]);
+  }, [filterActive, filterClass]);
 
   const fetchStudents = async () => {
     try {
@@ -38,6 +39,7 @@ export default function StudentManagement() {
       setError(null);
       let url = `${API_URL}/api/admin/students?limit=100`;
       if (filterActive !== "all") url += `&is_active=${filterActive === "active"}`;
+      if (filterClass !== "all") url += `&class_level=${filterClass}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch students");
       const data = await response.json();
@@ -65,20 +67,20 @@ export default function StudentManagement() {
           class_level: formData.class_level
         })
       });
-      
+
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to add student");
       }
-      
+
       const newStudent = await response.json();
-      
+
       // Show credentials modal with generated ID and password
       if (newStudent.generated_credentials) {
         setNewCredentials(newStudent.generated_credentials);
         setShowCredentialsModal(true);
       }
-      
+
       setStudents([newStudent, ...students]);
       setShowAddModal(false);
       resetForm();
@@ -188,6 +190,31 @@ export default function StudentManagement() {
     alert("Copied to clipboard!");
   };
 
+  // Export to CSV
+  const handleExportCSV = () => {
+    const headers = ["Name", "User ID", "Age", "Class", "Email", "Mobile", "Status", "Onboarded", "Last Login"];
+    const rows = filteredStudents.map(s => [
+      s.name,
+      s.user_id,
+      s.age || "",
+      `Class ${s.class_level}`,
+      s.email,
+      s.mobile || "",
+      s.is_active ? "Active" : "Inactive",
+      s.is_onboarded ? "Yes" : "No",
+      s.last_login ? new Date(s.last_login).toLocaleString() : "Never"
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(r => r.map(cell => `"${cell}"`).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `students_export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filteredStudents = students.filter(s =>
     s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -256,7 +283,7 @@ export default function StudentManagement() {
         {/* Actions Bar */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-            <div className="flex gap-4 w-full md:w-auto">
+            <div className="flex flex-wrap gap-4 w-full md:w-auto">
               <input
                 type="text"
                 placeholder="Search by name, email, or ID..."
@@ -273,13 +300,31 @@ export default function StudentManagement() {
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
               </select>
+              <select
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Classes</option>
+                {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+                  <option key={c} value={c}>Class {c}</option>
+                ))}
+              </select>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-            >
-              ➕ Add Student
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleExportCSV}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+              >
+                📥 Export CSV
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+              >
+                ➕ Add Student
+              </button>
+            </div>
           </div>
         </div>
 
@@ -311,6 +356,7 @@ export default function StudentManagement() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mobile</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
@@ -336,12 +382,20 @@ export default function StudentManagement() {
                       <td className="px-6 py-4 text-sm text-gray-600">Class {student.class_level}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{student.email}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{student.mobile || "-"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {student.last_login ? (
+                          <span title={new Date(student.last_login).toLocaleString()}>
+                            {new Date(student.last_login).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Never</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleToggleActive(student)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            student.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                          }`}
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${student.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}
                         >
                           {student.is_active ? "Active" : "Inactive"}
                         </button>
@@ -386,7 +440,7 @@ export default function StudentManagement() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Add New Student</h2>
             <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded">
-              💡 User ID and Password will be auto-generated based on name and age.<br/>
+              💡 User ID and Password will be auto-generated based on name and age.<br />
               <strong>Format:</strong> ID = name + age + number, Password = name + age
             </p>
             <form onSubmit={handleAddStudent} className="space-y-4">
@@ -452,18 +506,18 @@ export default function StudentManagement() {
                   placeholder="1234567890"
                 />
               </div>
-              
+
               {/* Preview of generated credentials */}
               {formData.name && formData.age && (
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-sm text-gray-600">
-                    <strong>Preview:</strong><br/>
-                    User ID: <code>{formData.name.toLowerCase().replace(/\s/g, '')}{formData.age}1</code> (approx)<br/>
+                    <strong>Preview:</strong><br />
+                    User ID: <code>{formData.name.toLowerCase().replace(/\s/g, '')}{formData.age}1</code> (approx)<br />
                     Password: <code>{formData.name.toLowerCase().replace(/\s/g, '')}{formData.age}</code>
                   </p>
                 </div>
               )}
-              
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -576,7 +630,7 @@ export default function StudentManagement() {
               </div>
               <h2 className="text-xl font-bold text-green-600">Student Created Successfully!</h2>
             </div>
-            
+
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               <div>
                 <p className="text-sm text-gray-500">User ID (Login ID)</p>
@@ -603,11 +657,11 @@ export default function StudentManagement() {
                 </div>
               </div>
             </div>
-            
+
             <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded">
               ⚠️ <strong>Important:</strong> {newCredentials.note}
             </p>
-            
+
             <button
               onClick={() => { setShowCredentialsModal(false); setNewCredentials(null); }}
               className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"

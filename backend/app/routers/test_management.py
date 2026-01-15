@@ -230,6 +230,7 @@ async def create_test(
                 "message": f"A new {subject} test '{title}' has been created for Class {class_level}.",
                 "test_id": str(result.inserted_id),
                 "is_read": False,
+                "for_admin": False,
                 "created_at": datetime.utcnow()
             })
         
@@ -478,9 +479,14 @@ async def submit_test(
     Student submits their test answers as PDF.
     """
     try:
+        logger.info(f"📝 Submit test: test_id={test_id}, student_id={student_id}, file={pdf_file.filename}")
         # Validate PDF
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+        
+        # Validate test_id format
+        if not ObjectId.is_valid(test_id):
+            raise HTTPException(status_code=400, detail="Invalid test ID format")
         
         # Verify test exists
         test = db.tests.find_one({"_id": ObjectId(test_id)})
@@ -639,6 +645,7 @@ async def add_comment(submission_id: str, comment_data: CommentCreate):
             "test_id": submission.get("test_id"),
             "submission_id": submission_id,
             "is_read": False,
+            "for_admin": False,
             "created_at": datetime.utcnow()
         })
         

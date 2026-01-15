@@ -112,6 +112,9 @@ class AdvancedPDFProcessor:
         self.embedding_model = "models/text-embedding-004"
         self.vision_model = genai.GenerativeModel("gemini-2.5-flash")  
         
+        # Circuit breaker flag for Vision API
+        self.vision_api_enabled = True
+        
         logger.info("✓ AdvancedPDFProcessor initialized")
     
     def process_pdf(
@@ -390,7 +393,12 @@ class AdvancedPDFProcessor:
     def _describe_page_visuals(self, page_image: Image.Image, subject: str) -> List[str]:
         """
         Use Gemini Vision to describe diagrams, figures, and visual content.
+        Includes circuit breaker for API quotas.
         """
+        # Circuit breaker check
+        if not self.use_gemini_vision or not getattr(self, 'vision_api_enabled', True):
+            return []
+
         try:
             # Resize image if too large (to reduce token usage)
             max_size = 1024
@@ -418,14 +426,40 @@ class AdvancedPDFProcessor:
             
             Keep descriptions educational and helpful for understanding the content."""
             
-            response = self.vision_model.generate_content([prompt, page_image])
-            
-            if response.text and "TEXT_ONLY" not in response.text:
-                return [response.text.strip()]
+            # Retry logic for transient errors
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    response = self.vision_model.generate_content([prompt, page_image])
+                    
+                    if response.text and "TEXT_ONLY" not in response.text:
+                        return [response.text.strip()]
+                    return []
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    
+                    # Handle Quota Exceeded (429) - Permanent fail for this session
+                    if "429" in error_str or "quota" in error_str.lower():
+                        logger.warning(f"⚠️ Vision API quota exceeded. Disabling Vision features for remaining pages.")
+                        self.vision_api_enabled = False
+                        return []
+                    
+                    # Handle Server Errors (503, 504) - Retry
+                    if "503" in error_str or "504" in error_str or "overloaded" in error_str.lower():
+                        if attempt < max_retries - 1:
+                            time.sleep(2 * (attempt + 1))  # Exponential backoff
+                            continue
+                    
+                    # Other errors
+                    logger.warning(f"Vision API error (attempt {attempt+1}): {e}")
+                    if attempt == max_retries - 1:
+                        return []
+
             return []
             
         except Exception as e:
-            logger.warning(f"Vision API error: {e}")
+            logger.warning(f"Vision analysis failed: {e}")
             return []
     
     def _combine_page_content(self, page: PageContent, metadata: Dict) -> str:

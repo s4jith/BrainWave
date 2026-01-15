@@ -22,7 +22,8 @@ import {
   TrendingUp,
   Plus,
   StickyNote,
-  Calendar
+  Calendar,
+  Trash2
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import useNotesStore from "../stores/notesStore";
@@ -88,14 +89,168 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [streakDays, setStreakDays] = useState(5);
+  const [streakDays, setStreakDays] = useState(0);
   const [pendingTests, setPendingTests] = useState([]);
   const [loadingTests, setLoadingTests] = useState(true);
+
+  // Dynamic dashboard data
+  const [progressPercentage, setProgressPercentage] = useState(0);
+  const [activityData, setActivityData] = useState([]);
+  const [dynamicCourses, setDynamicCourses] = useState([]);
+  const [loadingProgress, setLoadingProgress] = useState(true);
+
+  // Daily motivational quotes - rotates based on day of year
+  const motivationalQuotes = [
+    "Bringing AI to the place to where you are and everywhere ❤️",
+    "Every expert was once a beginner. Keep learning! 📚",
+    "Success is the sum of small efforts repeated daily 🌟",
+    "Education is the passport to the future 🚀",
+    "Your potential is limitless. Believe in yourself! 💪",
+    "Knowledge is power. Power to change the world! 🌍",
+    "Dream big, work hard, stay focused 🎯",
+  ];
+
+  const getDailyQuote = () => {
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+    return motivationalQuotes[dayOfYear % motivationalQuotes.length];
+  };
+
+  // Get current month's activity periods (1-10, 11-20, 21-end)
+  const getActivityPeriods = () => {
+    const now = new Date();
+    const currentDay = now.getDate();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[now.getMonth()];
+
+    return [
+      { label: `1-10 ${month}`, period: 1, isActive: currentDay >= 1 && currentDay <= 10 },
+      { label: `11-20 ${month}`, period: 2, isActive: currentDay >= 11 && currentDay <= 20 },
+      { label: `21-30 ${month}`, period: 3, isActive: currentDay >= 21 },
+    ];
+  };
 
   useEffect(() => {
     fetchNotifications();
     fetchPendingTests();
+    fetchStreakData();
+    fetchProgressData();
+    fetchAvailableSubjects();
+    logUserActivity();
   }, [user.id]);
+
+  // Fetch progress data from backend
+  const fetchProgressData = async () => {
+    try {
+      setLoadingProgress(true);
+      const response = await fetch(`${API_BASE}/api/user/dashboard/${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProgressPercentage(data.progress?.overall_progress || 0);
+
+        // Calculate activity data from streak data
+        if (data.streak?.weekly_activity) {
+          const periods = getActivityPeriods();
+          // Map weekly activity to period bars
+          const totalHours = data.streak.weekly_activity.reduce((sum, d) => sum + (d.hours || 0), 0);
+          setActivityData(periods.map((p, i) => ({
+            ...p,
+            value: Math.min(60, 20 + (totalHours * 10 * (p.isActive ? 1.5 : 0.5))) // Scale to bar height
+          })));
+        } else {
+          setActivityData(getActivityPeriods().map(p => ({ ...p, value: p.isActive ? 50 : 30 })));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch progress:", err);
+      setActivityData(getActivityPeriods().map(p => ({ ...p, value: p.isActive ? 50 : 30 })));
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
+
+  // Fetch available subjects for this student's class
+  const fetchAvailableSubjects = async () => {
+    try {
+      console.log(`📚 Fetching subjects for class ${user.classLevel || 10}`);
+      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("📚 Subjects API response:", data);
+
+        // API returns {subjects: [...], class_level}
+        const subjectList = data.subjects || [];
+
+        if (subjectList.length === 0) {
+          console.log("📚 No subjects found for this class level");
+          return;
+        }
+
+        // Map subjects to course cards with icons
+        const iconMap = {
+          'Physics': BookOpen,
+          'Chemistry': BarChart3,
+          'Mathematics': BarChart3,
+          'Hindi': Target,
+          'English': FileText,
+          'Social Science': Users,
+          'Biology': Heart,
+          'Science': BookOpen,
+          'Maths': BarChart3
+        };
+        const colorMap = {
+          'Physics': 'bg-green-100 text-green-600',
+          'Chemistry': 'bg-purple-100 text-purple-600',
+          'Mathematics': 'bg-blue-100 text-blue-600',
+          'Hindi': 'bg-amber-100 text-amber-600',
+          'English': 'bg-indigo-100 text-indigo-600',
+          'Social Science': 'bg-orange-100 text-orange-600',
+          'Biology': 'bg-pink-100 text-pink-600',
+          'Science': 'bg-teal-100 text-teal-600',
+          'Maths': 'bg-blue-100 text-blue-600'
+        };
+
+        const mappedCourses = subjectList.map((s, i) => ({
+          id: i + 1,
+          title: s.name || s.subject || s.namespace,
+          watched: s.chapters_completed || 0,  // Default to 0 for new students
+          total: s.total_chapters || 1,  // Use dynamic from API
+          icon: iconMap[s.name] || BookOpen,
+          color: colorMap[s.name] || 'bg-gray-100 text-gray-600'
+        }));
+
+        console.log("📚 Mapped courses:", mappedCourses);
+        setDynamicCourses(mappedCourses);
+      } else {
+        console.error("📚 Failed to fetch subjects:", response.status);
+      }
+    } catch (err) {
+      console.error("📚 Failed to fetch subjects:", err);
+    }
+  };
+
+  // Fetch streak data from backend
+  const fetchStreakData = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/user/streak/${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setStreakDays(data.current_streak || 0);
+      }
+    } catch (err) {
+      console.error("Failed to fetch streak:", err);
+    }
+  };
+
+  // Log user activity for streak tracking
+  const logUserActivity = async () => {
+    try {
+      await fetch(`${API_BASE}/api/user/activity/log?student_id=${user.id}&hours=0.5`, {
+        method: 'POST'
+      });
+    } catch (err) {
+      console.error("Failed to log activity:", err);
+    }
+  };
 
   const fetchPendingTests = async () => {
     try {
@@ -138,14 +293,35 @@ export default function Dashboard() {
     }
   };
 
+  const deleteNotification = async (notificationId, e) => {
+    e.stopPropagation();
+    try {
+      await fetch(`${API_BASE}/api/support-tickets/notifications/${notificationId}`, {
+        method: "DELETE"
+      });
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to delete notification:", err);
+    }
+  };
+
+  const deleteAllNotifications = async () => {
+    try {
+      await fetch(`${API_BASE}/api/support-tickets/notifications/all?user_id=${user.id}`, {
+        method: "DELETE"
+      });
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to delete all notifications:", err);
+    }
+  };
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good Morning";
     if (hour < 17) return "Good Afternoon";
     return "Good Evening";
   };
-
-  const progressPercentage = 32;
 
   return (
     <DashboardLayout>
@@ -191,12 +367,22 @@ export default function Dashboard() {
                   <div className="p-4 border-b bg-gray-50">
                     <div className="flex justify-between items-center">
                       <h3 className="font-semibold text-gray-800">Notifications</h3>
-                      <button
-                        onClick={() => { navigate("/support-tickets"); setShowNotifications(false); }}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        View All
-                      </button>
+                      <div className="flex gap-2">
+                        {notifications.length > 0 && (
+                          <button
+                            onClick={deleteAllNotifications}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { navigate("/support-tickets"); setShowNotifications(false); }}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          View All
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="max-h-72 overflow-y-auto">
@@ -209,16 +395,26 @@ export default function Dashboard() {
                       notifications.slice(0, 5).map(n => (
                         <div
                           key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            navigate("/support-tickets");
-                            setShowNotifications(false);
-                          }}
-                          className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${!n.is_read ? 'bg-blue-50' : ''}`}
+                          className={`group p-4 border-b hover:bg-gray-50 cursor-pointer relative ${!n.is_read ? 'bg-blue-50' : ''}`}
                         >
-                          <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                          <p className="text-xs text-gray-500 mt-1">{n.message}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                          <div
+                            onClick={() => {
+                              markNotificationRead(n.id);
+                              navigate("/support-tickets");
+                              setShowNotifications(false);
+                            }}
+                          >
+                            <p className="text-sm font-medium text-gray-800 pr-6">{n.title}</p>
+                            <p className="text-xs text-gray-500 mt-1">{n.message}</p>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                          </div>
+                          <button
+                            onClick={(e) => deleteNotification(n.id, e)}
+                            className="absolute right-3 top-3 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete notification"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))
                     )}
@@ -251,24 +447,26 @@ export default function Dashboard() {
               </div>
               <span className="text-xs uppercase tracking-wider opacity-80">Free tier</span>
               <h2 className="text-3xl font-bold mt-2 max-w-md">
-                Bringing AI to the place to where you are and everywhere❤️
+                {getDailyQuote()}
               </h2>
 
 
-              {/* Course Pills */}
-              <div className="flex gap-4 mt-8">
-                {courses.map(course => (
-                  <div key={course.id} className="flex items-center gap-3 bg-white/20 backdrop-blur rounded-2xl px-4 py-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${course.color}`}>
-                      <course.icon className="w-5 h-5" />
+              {/* Course Pills - Only show if books exist in Pinecone */}
+              {dynamicCourses.length > 0 && (
+                <div className="flex gap-4 mt-8">
+                  {dynamicCourses.slice(0, 3).map(course => (
+                    <div key={course.id} className="flex items-center gap-3 bg-white/20 backdrop-blur rounded-2xl px-4 py-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${course.color}`}>
+                        <course.icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs opacity-80">{course.watched}/{course.total} watched</p>
+                        <p className="font-medium text-sm">{course.title}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs opacity-80">{course.watched}/{course.total} watched</p>
-                      <p className="font-medium text-sm">{course.title}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Quick Actions */}
@@ -402,12 +600,12 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500">Continue your learning to achieve your target!</p>
               </div>
 
-              {/* Bar Chart */}
+              {/* Bar Chart - Dynamic activity data */}
               <div className="flex items-end justify-between h-24 px-4">
-                {statsData.map((stat, i) => (
+                {(activityData.length > 0 ? activityData : statsData).map((stat, i) => (
                   <div key={i} className="flex flex-col items-center gap-2">
                     <div
-                      className={`w-12 rounded-t-lg ${i === 1 ? 'bg-blue-500' : 'bg-blue-200'}`}
+                      className={`w-12 rounded-t-lg ${stat.isActive ? 'bg-blue-500' : 'bg-blue-200'}`}
                       style={{ height: `${stat.value}px` }}
                     />
                     <span className="text-xs text-gray-500">{stat.label}</span>

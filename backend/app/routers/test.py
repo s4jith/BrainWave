@@ -1387,3 +1387,191 @@ async def debug_pinecone_namespace(namespace: str):
     except Exception as e:
         logger.error(f"Debug error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== TEST HISTORY & ANALYTICS ====================
+
+@router.get("/history/{student_id}")
+async def get_test_history(
+    student_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0)
+):
+    """
+    Get test history for a student.
+    Returns list of completed tests with scores for statistics page.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        # Find completed test sessions for this student
+        cursor = collection.find(
+            {
+                "student_id": student_id,
+                "status": "completed"
+            },
+            {
+                "session_id": 1,
+                "subject": 1,
+                "chapter_number": 1,
+                "chapter_name": 1,
+                "topic_name": 1,
+                "score": 1,
+                "total_questions": 1,
+                "correct_count": 1,
+                "completed_at": 1,
+                "created_at": 1
+            }
+        ).sort("completed_at", -1).skip(offset).limit(limit)
+        
+        history = []
+        async for session in cursor:
+            history.append({
+                "session_id": session.get("session_id"),
+                "subject": session.get("subject", "Unknown"),
+                "chapter_number": session.get("chapter_number", 0),
+                "chapter_name": session.get("chapter_name", ""),
+                "topic_name": session.get("topic_name", "Topic Test"),
+                "score": session.get("score", 0),
+                "total_questions": session.get("total_questions", 0),
+                "correct_count": session.get("correct_count", 0),
+                "completed_at": session.get("completed_at", session.get("created_at")).isoformat() if session.get("completed_at") or session.get("created_at") else None
+            })
+        
+        # Get total count
+        total = await collection.count_documents({
+            "student_id": student_id,
+            "status": "completed"
+        })
+        
+        # Calculate overall analytics
+        all_sessions = collection.find(
+            {"student_id": student_id, "status": "completed"},
+            {"score": 1, "correct_count": 1, "total_questions": 1, "subject": 1}
+        )
+        
+        total_score = 0
+        total_tests = 0
+        subject_scores = {}
+        
+        async for s in all_sessions:
+            score = s.get("score", 0)
+            subject = s.get("subject", "Unknown")
+            total_score += score
+            total_tests += 1
+            
+            if subject not in subject_scores:
+                subject_scores[subject] = {"total": 0, "count": 0}
+            subject_scores[subject]["total"] += score
+            subject_scores[subject]["count"] += 1
+        
+        # Calculate averages
+        average_score = round(total_score / total_tests, 1) if total_tests > 0 else 0
+        subject_averages = {
+            subject: round(data["total"] / data["count"], 1)
+            for subject, data in subject_scores.items()
+            if data["count"] > 0
+        }
+        
+        return {
+            "history": history,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "analytics": {
+                "total_tests": total_tests,
+                "average_score": average_score,
+                "subject_performance": subject_averages
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching test history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/result/{session_id}")
+async def get_test_result(session_id: str):
+    """
+    Get full test result for a session.
+    Used to view past test results from history.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        session = await collection.find_one({"session_id": session_id})
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Test session not found")
+        
+        return {
+            "session_id": session.get("session_id"),
+            "score": session.get("score", 0),
+            "total_questions": session.get("total_questions", 0),
+            "correct_answers": session.get("correct_count", 0),
+            "evaluations": session.get("evaluation_details", []),
+            "feedback": session.get("overall_feedback", {}).get("summary", ""),
+            "strengths": session.get("overall_feedback", {}).get("strengths", []),
+            "improvements": session.get("overall_feedback", {}).get("improvements", []),
+            "topics_to_review": session.get("topics_to_review", []),
+            "topics_to_study": session.get("overall_feedback", {}).get("topics_to_study", []),
+            "subject": session.get("subject", ""),
+            "chapter_number": session.get("chapter_number", 0),
+            "chapter_name": session.get("chapter_name", ""),
+            "topic_name": session.get("topic_name", ""),
+            "completed_at": session.get("completed_at").isoformat() if session.get("completed_at") else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching test result: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/{session_id}")
+async def delete_test_history_item(session_id: str):
+    """
+    Delete a single test history item.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        result = await collection.delete_one({"session_id": session_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Test session not found")
+        
+        return {"status": "deleted", "session_id": session_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting test history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/all/{student_id}")
+async def delete_all_test_history(student_id: str):
+    """
+    Delete all test history for a student.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        result = await collection.delete_many({
+            "student_id": student_id,
+            "status": "completed"
+        })
+        
+        return {
+            "status": "deleted",
+            "student_id": student_id,
+            "deleted_count": result.deleted_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error deleting all test history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+

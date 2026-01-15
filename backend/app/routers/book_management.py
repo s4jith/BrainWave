@@ -597,87 +597,44 @@ async def update_embedding_status(
 @router.get("/student/subjects")
 async def get_available_subjects(class_level: int = Query(...)):
     """
-    Get list of subjects that have books available for a class level.
-    Queries Pinecone to get real data about which subjects have content for this class.
+    Get list of subjects that have books (chapters) available for a class level.
+    Returns subjects with their total chapter count from MongoDB.
     """
     try:
-        from pinecone import Pinecone
-        import random
+        # Aggregate books by subject to get chapter counts for this class level
+        pipeline = [
+            {"$match": {"class_level": class_level}},
+            {"$group": {
+                "_id": "$subject",
+                "total_chapters": {"$sum": 1},
+                "chapters": {"$push": {
+                    "id": {"$toString": "$_id"},
+                    "title": "$title"
+                }}
+            }},
+            {"$project": {
+                "name": "$_id",
+                "total_chapters": 1,
+                "chapters": 1,
+                "_id": 0
+            }},
+            {"$sort": {"name": 1}}
+        ]
         
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-        index = pc.Index(
-            name=settings.PINECONE_MASTER_INDEX,
-            host=settings.PINECONE_MASTER_HOST
-        )
-        
-        # Get index stats to see all namespaces (subjects)
-        stats = index.describe_index_stats()
-        namespaces = stats.get("namespaces", {})
+        subjects_from_db = list(db.books.aggregate(pipeline))
         
         subject_info = []
+        for s in subjects_from_db:
+            subject_info.append({
+                "name": s["name"],
+                "namespace": s["name"].lower().replace(" ", "_"),
+                "total_chapters": s["total_chapters"],
+                "chapters": s.get("chapters", []),
+                "has_ai_support": True,
+                "chapters_completed": 0  # TODO: Get from student progress collection
+            })
         
-        # Use a random vector for querying (zero vector doesn't work well)
-        random_vec = [random.random() for _ in range(768)]
-        
-        for namespace, ns_data in namespaces.items():
-            if ns_data.get("vector_count", 0) == 0:
-                continue
-                
-            # Query this namespace to check if it has vectors for this class level
-            try:
-                # First, query without filter to see what class levels exist
-                sample_response = index.query(
-                    namespace=namespace,
-                    vector=random_vec,
-                    top_k=50,
-                    include_metadata=True
-                )
-                
-                matches = sample_response.get("matches", [])
-                
-                # Check if any match has the target class level
-                has_class = False
-                for match in matches:
-                    metadata = match.get("metadata", {})
-                    # Check various class level field names
-                    meta_class = metadata.get("class_level") or metadata.get("class")
-                    if meta_class is not None:
-                        # Handle string or int
-                        if isinstance(meta_class, str):
-                            try:
-                                if "class" in meta_class.lower():
-                                    meta_class = int(meta_class.lower().replace("class", "").strip())
-                                else:
-                                    meta_class = int(meta_class)
-                            except:
-                                continue
-                        if int(meta_class) == class_level:
-                            has_class = True
-                            break
-                
-                if has_class or (matches and len(matches) > 0 and matches[0].get("metadata", {}).get("class_level") is None):
-                    # This subject has content for this class OR has no class metadata (old data)
-                    # Format subject name nicely
-                    subject_name = namespace.replace('_', ' ').title()
-                    
-                    # Count vectors for this class in this namespace
-                    vector_count = ns_data.get("vector_count", 0)
-                    
-                    subject_info.append({
-                        "name": subject_name,
-                        "namespace": namespace,
-                        "vector_count": vector_count,
-                        "has_ai_support": True
-                    })
-                    
-            except Exception as e:
-                logger.warning(f"Error querying namespace {namespace}: {e}")
-                continue
-        
-        # Sort by name
-        subject_info.sort(key=lambda x: x["name"])
-        
-        logger.info(f"📚 Found {len(subject_info)} subjects with content for Class {class_level}")
+        logger.info(f"📚 Found {len(subject_info)} subjects with {sum(s['total_chapters'] for s in subject_info)} total chapters for Class {class_level}")
         
         return {"subjects": subject_info, "class_level": class_level}
         

@@ -245,6 +245,7 @@ Action: ${actionLabel}`,
                       variant="outline"
                       className="h-auto justify-start p-4"
                       onClick={() => handleActionSelect(action)}
+                      disabled={isProcessing}
                     >
                       <Icon className={`h-5 w-5 mr-3 ${action.color}`} />
                       <div className="text-left">
@@ -274,6 +275,7 @@ Action: ${actionLabel}`,
                     setSelectedAction(null);
                     setResponse("");
                   }}
+                  disabled={isProcessing}
                 >
                   Change Action
                 </Button>

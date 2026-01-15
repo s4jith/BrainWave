@@ -682,3 +682,50 @@ async def mark_all_notifications_read(
     except Exception as e:
         logger.error(f"Error marking all notifications as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    """
+    Delete a single notification by ID.
+    """
+    try:
+        result = db.notifications.delete_one({"_id": ObjectId(notification_id)})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        
+        return {"success": True, "message": "Notification deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/notifications/all")
+async def delete_all_notifications(
+    user_id: Optional[str] = None,
+    is_admin: bool = Query(False)
+):
+    """
+    Delete all notifications for a user or admin.
+    """
+    try:
+        if is_admin:
+            filter_query = {"for_admin": True}
+        else:
+            if not user_id:
+                raise HTTPException(status_code=400, detail="user_id is required for non-admin")
+            filter_query = {"user_id": user_id, "for_admin": False}
+        
+        result = db.notifications.delete_many(filter_query)
+        
+        return {"success": True, "deleted_count": result.deleted_count}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting all notifications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

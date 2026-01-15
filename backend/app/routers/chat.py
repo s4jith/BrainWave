@@ -226,10 +226,10 @@ async def student_chatbot(request: StudentChatRequest):
             # Convert chunk format for compatibility
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
             
-            # Check if answer is meaningful
+            # If not enough content and low scores, return brief message (already handled in enhanced_rag_service)
             if not source_chunks or len(source_chunks) < 2:
                 return ChatResponse(
-                    answer=f"I couldn't find enough information in your textbooks. Try asking about specific topics covered in Chapter {request.chapter} of {request.subject}!",
+                    answer="No relevant content found for this topic.",
                     used_mode="quick",
                     source_chunks=[]
                 )

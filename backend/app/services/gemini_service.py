@@ -134,7 +134,7 @@ class GeminiService:
     
     def generate_response(self, prompt: str, retry_count: int = 0) -> str:
         """
-        Generate a simple text response from Gemini with automatic retry on 429 errors.
+        Generate a simple text response from Gemini with automatic retry on 429 and expired key errors.
         
         Args:
             prompt: Input prompt
@@ -153,12 +153,27 @@ class GeminiService:
         except Exception as e:
             error_str = str(e)
             
-            # Check if it's a 429 rate limit error
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+            # Check if it's a 429 rate limit error OR expired/invalid API key
+            is_expired_key = (
+                "API_KEY_INVALID" in error_str or 
+                "API key expired" in error_str or
+                "API key not valid" in error_str
+            )
+            
+            should_rotate = "429" in error_str or is_expired_key
+            
+            if should_rotate and retry_count < len(gemini_key_manager.keys):
+                current_key_id = gemini_key_manager.get_current_key_id()
                 
-                # Force rotation to next key
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                if is_expired_key:
+                    # Mark key as permanently invalid so it's skipped in future
+                    if current_key_id:
+                        gemini_key_manager.mark_key_invalid(current_key_id)
+                    logger.warning(f"⚠️ API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
+                else:
+                    logger.warning(f"⚠️ 429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                    # Force rotation to next key
+                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
                 # Retry with next key
                 return self.generate_response(prompt, retry_count + 1)
