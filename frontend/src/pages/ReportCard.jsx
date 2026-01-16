@@ -45,7 +45,7 @@ export default function ReportCard() {
         testService.getTestAnalytics(
           user.id,
           user.classLevel || 10,
-          user.preferredSubject
+          null // Don't filter by subject - show all tests
         ).catch(() => null),
         testService.getTestHistory(user.id, 10).catch(() => ({ history: [], analytics: {} }))
       ]);

@@ -1064,6 +1064,13 @@ export const testService = {
       return null;
     }
   },
+
+  /**
+   * Alias for getTestAnalytics (for backward compatibility)
+   */
+  async getStudentAnalytics(studentId, classLevel = 10, subject = null) {
+    return this.getTestAnalytics(studentId, classLevel, subject);
+  },
 };
 
 /**

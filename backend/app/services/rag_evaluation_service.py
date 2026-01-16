@@ -16,6 +16,41 @@ from app.services.topic_question_bank_service import topic_question_bank_service
 
 logger = logging.getLogger(__name__)
 
+# Subject name normalization to fix typos
+SUBJECT_CORRECTIONS = {
+    "mathematicss": "Mathematics",
+    "mathematic": "Mathematics",
+    "maths": "Mathematics",
+    "math": "Mathematics",
+    "science": "Science",
+    "sciences": "Science",
+    "english": "English",
+    "hindi": "Hindi",
+    "history": "History",
+    "geography": "Geography",
+    "civics": "Civics",
+    "economics": "Economics",
+    "physics": "Physics",
+    "chemistry": "Chemistry",
+    "biology": "Biology",
+}
+
+
+def normalize_subject(subject: str) -> str:
+    """Normalize subject name to fix typos and ensure correct namespace lookup."""
+    if not subject:
+        return subject
+    lower = subject.lower().strip()
+    # Check for known corrections
+    if lower in SUBJECT_CORRECTIONS:
+        return SUBJECT_CORRECTIONS[lower]
+    # Also check if lowercase version is in corrections
+    for key, value in SUBJECT_CORRECTIONS.items():
+        if key in lower:
+            return value
+    # Default: capitalize properly
+    return subject.strip().title()
+
 
 class RAGEvaluationService:
     """
@@ -43,6 +78,10 @@ class RAGEvaluationService:
         Evaluate a complete test session using SINGLE batch API call.
         """
         logger.info(f"📊 Evaluating test session {session_id} for student {student_id}")
+        
+        # Normalize subject name to fix typos like "Mathematicss"
+        subject = normalize_subject(subject)
+        logger.info(f"Subject normalized to: {subject}")
         
         # Build Q&A pairs
         qa_pairs = self._build_qa_pairs(questions, answers)

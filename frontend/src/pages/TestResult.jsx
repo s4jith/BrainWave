@@ -253,8 +253,8 @@ export default function TestResult() {
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${evaluation.is_correct
-                        ? "bg-green-100 text-green-600"
-                        : "bg-red-100 text-red-600"
+                      ? "bg-green-100 text-green-600"
+                      : "bg-red-100 text-red-600"
                       }`}>
                       {evaluation.is_correct ? (
                         <CheckCircle className="w-4 h-4" />
@@ -300,6 +300,15 @@ export default function TestResult() {
                         {evaluation.feedback}
                       </p>
                     </div>
+                    {/* Explanation - Why the answer is correct/wrong */}
+                    {evaluation.explanation && (
+                      <div>
+                        <p className="text-sm font-medium text-purple-600 mb-1">💡 Explanation:</p>
+                        <p className="text-gray-700 bg-purple-50 p-3 rounded-lg border border-purple-100">
+                          {evaluation.explanation}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

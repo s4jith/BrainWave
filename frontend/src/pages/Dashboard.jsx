@@ -172,7 +172,7 @@ export default function Dashboard() {
   const fetchAvailableSubjects = async () => {
     try {
       console.log(`📚 Fetching subjects for class ${user.classLevel || 10}`);
-      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}`);
+      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}&student_id=${user.id}`);
       if (response.ok) {
         const data = await response.json();
         console.log("📚 Subjects API response:", data);

@@ -422,3 +422,193 @@ async def image_chat(
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== CHAT HISTORY / SESSIONS ====================
+
+from datetime import datetime
+from app.db.mongo import mongodb
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str
+    timestamp: Optional[str] = None
+
+class SaveSessionRequest(BaseModel):
+    user_id: str
+    subject: str
+    class_level: int
+    messages: List[ChatMessage]
+    title: Optional[str] = None  # Auto-generated if not provided
+
+class ChatSession(BaseModel):
+    id: str
+    user_id: str
+    subject: str
+    class_level: int
+    title: str
+    message_count: int
+    created_at: str
+    updated_at: str
+
+
+@router.post("/sessions", summary="Save chat session")
+async def save_chat_session(request: SaveSessionRequest):
+    """
+    Save or update a chat session for resuming later.
+    """
+    try:
+        db = mongodb.db
+        sessions_col = db["chat_sessions"]
+        
+        # Generate title from first user message if not provided
+        title = request.title
+        if not title and request.messages:
+            first_msg = next((m for m in request.messages if m.role == "user"), None)
+            if first_msg:
+                title = first_msg.content[:50] + ("..." if len(first_msg.content) > 50 else "")
+        title = title or f"{request.subject} Chat"
+        
+        now = datetime.now().isoformat()
+        
+        # Create session document
+        session_doc = {
+            "user_id": request.user_id,
+            "subject": request.subject,
+            "class_level": request.class_level,
+            "title": title,
+            "messages": [m.dict() for m in request.messages],
+            "message_count": len(request.messages),
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        result = sessions_col.insert_one(session_doc)
+        
+        logger.info(f"💾 Saved chat session for user {request.user_id}: {title}")
+        
+        return {
+            "success": True,
+            "session_id": str(result.inserted_id),
+            "title": title,
+            "message_count": len(request.messages)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Save session error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{user_id}", summary="Get user's chat sessions")
+async def get_user_sessions(
+    user_id: str,
+    subject: Optional[str] = None,
+    limit: int = 20
+):
+    """
+    Get list of chat sessions for a user.
+    """
+    try:
+        db = mongodb.db
+        sessions_col = db["chat_sessions"]
+        
+        # Build filter
+        filter_query = {"user_id": user_id}
+        if subject:
+            filter_query["subject"] = subject
+        
+        # Fetch sessions (most recent first)
+        sessions = list(
+            sessions_col.find(filter_query)
+            .sort("updated_at", -1)
+            .limit(limit)
+        )
+        
+        # Format response
+        result = []
+        for s in sessions:
+            result.append({
+                "id": str(s["_id"]),
+                "subject": s.get("subject", "Unknown"),
+                "class_level": s.get("class_level", 0),
+                "title": s.get("title", "Untitled"),
+                "message_count": s.get("message_count", 0),
+                "created_at": s.get("created_at", ""),
+                "updated_at": s.get("updated_at", "")
+            })
+        
+        logger.info(f"📋 Found {len(result)} sessions for user {user_id}")
+        
+        return {"sessions": result, "total": len(result)}
+        
+    except Exception as e:
+        logger.error(f"❌ Get sessions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{user_id}/{session_id}", summary="Load chat session")
+async def load_chat_session(user_id: str, session_id: str):
+    """
+    Load full chat session with messages.
+    """
+    try:
+        from bson import ObjectId
+        db = mongodb.db
+        sessions_col = db["chat_sessions"]
+        
+        # Find session
+        session = sessions_col.find_one({
+            "_id": ObjectId(session_id),
+            "user_id": user_id
+        })
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        logger.info(f"📂 Loaded session {session_id} for user {user_id}")
+        
+        return {
+            "id": str(session["_id"]),
+            "user_id": session["user_id"],
+            "subject": session.get("subject", "Unknown"),
+            "class_level": session.get("class_level", 0),
+            "title": session.get("title", "Untitled"),
+            "messages": session.get("messages", []),
+            "created_at": session.get("created_at", ""),
+            "updated_at": session.get("updated_at", "")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Load session error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/sessions/{user_id}/{session_id}", summary="Delete chat session")
+async def delete_chat_session(user_id: str, session_id: str):
+    """
+    Delete a chat session.
+    """
+    try:
+        from bson import ObjectId
+        db = mongodb.db
+        sessions_col = db["chat_sessions"]
+        
+        result = sessions_col.delete_one({
+            "_id": ObjectId(session_id),
+            "user_id": user_id
+        })
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        logger.info(f"🗑️ Deleted session {session_id} for user {user_id}")
+        
+        return {"success": True, "message": "Session deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Delete session error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

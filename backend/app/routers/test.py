@@ -1529,6 +1529,169 @@ async def get_test_result(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== HISTORY & ANALYTICS ====================
+
+@router.get("/history/{student_id}")
+async def get_test_history(
+    student_id: str,
+    limit: int = Query(20, description="Number of results to return")
+):
+    """
+    Get test history for a student.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        # Fetch completed tests
+        cursor = collection.find({
+            "student_id": student_id,
+            "status": "completed"
+        }).sort("completed_at", -1).limit(limit)
+        
+        tests = await cursor.to_list(length=limit)
+        
+        # Format history
+        history = []
+        total_score = 0
+        for t in tests:
+            score = t.get("score", 0)
+            total_score += score
+            history.append({
+                "session_id": t.get("session_id"),
+                "subject": t.get("subject", "Unknown"),
+                "chapter_number": t.get("chapter_number", 0),
+                "chapter_name": t.get("chapter_name", f"Ch.{t.get('chapter_number', 0)}"),
+                "topic_name": t.get("topic_name", "Topic Test"),
+                "score": score,
+                "total_questions": t.get("total_questions", 0),
+                "correct_count": t.get("correct_count", 0),
+                "completed_at": t.get("completed_at").isoformat() if t.get("completed_at") else None
+            })
+        
+        # Calculate analytics
+        avg_score = (total_score / len(tests)) if tests else 0
+        
+        return {
+            "history": history,
+            "total": len(tests),
+            "analytics": {
+                "total_tests": len(tests),
+                "average_score": round(avg_score, 1),
+                "best_score": max((t.get("score", 0) for t in tests), default=0)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching test history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/{student_id}")
+async def get_test_analytics(
+    student_id: str,
+    class_level: int = Query(10, description="Class level"),
+    subject: Optional[str] = Query(None, description="Filter by subject")
+):
+    """
+    Get comprehensive test analytics for a student.
+    """
+    try:
+        collection = mongodb.db["test_sessions"]
+        
+        # Build filter
+        filter_query = {
+            "student_id": student_id,
+            "status": "completed"
+        }
+        if subject:
+            filter_query["subject"] = {"$regex": subject, "$options": "i"}
+        
+        # Fetch all completed tests
+        tests = await collection.find(filter_query).sort("completed_at", -1).to_list(length=500)
+        
+        if not tests:
+            return StudentAnalytics(
+                total_tests_taken=0,
+                tests_this_week=0,
+                overall_average=0,
+                best_score=0,
+                topics_strong=0,
+                topics_moderate=0,
+                topics_weak=0,
+                weak_topics=[],
+                performance_history=[],
+                topic_breakdown=[],
+                recommendations=[]
+            )
+        
+        # Calculate stats
+        from datetime import datetime, timedelta
+        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        
+        scores = [t.get("score", 0) for t in tests]
+        tests_this_week = sum(1 for t in tests if t.get("completed_at") and t.get("completed_at") > one_week_ago)
+        
+        # Topic breakdown
+        topic_scores = {}
+        for t in tests:
+            topic = t.get("topic_name", "Unknown")
+            if topic not in topic_scores:
+                topic_scores[topic] = []
+            topic_scores[topic].append(t.get("score", 0))
+        
+        # Categorize topics
+        topics_strong = 0
+        topics_moderate = 0
+        topics_weak = 0
+        weak_topics = []
+        topic_breakdown = []
+        
+        for topic, topic_score_list in topic_scores.items():
+            avg = sum(topic_score_list) / len(topic_score_list)
+            topic_breakdown.append({
+                "topic": topic,
+                "average_score": round(avg, 1),
+                "tests_count": len(topic_score_list)
+            })
+            
+            if avg >= 80:
+                topics_strong += 1
+            elif avg >= 60:
+                topics_moderate += 1
+            else:
+                topics_weak += 1
+                weak_topics.append({"topic": topic, "score": round(avg, 1)})
+        
+        # Performance history (last 10)
+        performance_history = []
+        for t in tests[:10]:
+            performance_history.append({
+                "date": t.get("completed_at").isoformat() if t.get("completed_at") else None,
+                "score": t.get("score", 0),
+                "subject": t.get("subject", "Unknown")
+            })
+        
+        return StudentAnalytics(
+            total_tests_taken=len(tests),
+            tests_this_week=tests_this_week,
+            overall_average=round(sum(scores) / len(scores), 1),
+            best_score=max(scores),
+            topics_strong=topics_strong,
+            topics_moderate=topics_moderate,
+            topics_weak=topics_weak,
+            weak_topics=weak_topics,
+            performance_history=performance_history,
+            topic_breakdown=topic_breakdown,
+            recommendations=weak_topics[:3]  # Top 3 weak areas as recommendations
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching test analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/history/{session_id}")
 async def delete_test_history_item(session_id: str):
     """

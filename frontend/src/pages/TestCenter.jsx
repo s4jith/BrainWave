@@ -45,7 +45,8 @@ export default function TestCenter() {
     try {
       const [staffData, analyticsData] = await Promise.all([
         testService.getStaffTests(user.preferredSubject, null, user.id),
-        testService.getStudentAnalytics(user.id, user.classLevel || 10, user.preferredSubject)
+        // Use getTestAnalytics without subject filter to show ALL tests
+        testService.getTestAnalytics(user.id, user.classLevel || 10, null)
       ]);
       setStaffTests(Array.isArray(staffData) ? staffData : []);
       setAnalytics(analyticsData);

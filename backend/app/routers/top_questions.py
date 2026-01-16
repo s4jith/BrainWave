@@ -460,3 +460,125 @@ async def get_subject_stats(
     except Exception as e:
         logger.error(f"❌ Error getting subject stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== DOUBT HISTORY (Q&A BROWSE) ====================
+
+@router.get("/doubts/{user_id}")
+async def get_doubt_history(
+    user_id: str,
+    subject: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    search: Optional[str] = None
+):
+    """
+    Get user's doubt/question history.
+    
+    Browse all past questions and answers with filtering.
+    
+    **Usage:**
+    ```
+    GET /api/top-questions/doubts/STU001?subject=math&limit=10
+    GET /api/top-questions/doubts/STU001?search=photosynthesis
+    ```
+    """
+    try:
+        logger.info(f"📜 Getting doubt history for user {user_id}")
+        
+        from app.db.mongo import mongodb
+        db = mongodb.db
+        qa_col = db["top_questions"]
+        
+        # Build filter
+        filter_query = {"user_id": user_id}
+        if subject:
+            filter_query["subject"] = {"$regex": subject, "$options": "i"}
+        if search:
+            filter_query["question"] = {"$regex": search, "$options": "i"}
+        
+        # Get total count
+        total = qa_col.count_documents(filter_query)
+        
+        # Fetch paginated results
+        doubts = list(
+            qa_col.find(filter_query)
+            .sort("created_at", -1)
+            .skip(offset)
+            .limit(limit)
+        )
+        
+        # Format response
+        result = []
+        for d in doubts:
+            result.append({
+                "id": str(d["_id"]),
+                "question": d.get("question", ""),
+                "answer": d.get("answer", "")[:500] + "..." if len(d.get("answer", "")) > 500 else d.get("answer", ""),
+                "subject": d.get("subject", "Unknown"),
+                "class_level": d.get("class_level", 0),
+                "mode": d.get("mode", "quick"),
+                "created_at": d.get("created_at", ""),
+                "was_helpful": d.get("was_helpful", None)
+            })
+        
+        return {
+            "success": True,
+            "doubts": result,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": (offset + limit) < total
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting doubt history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/doubts/{user_id}/{qa_id}")
+async def get_doubt_detail(user_id: str, qa_id: str):
+    """
+    Get full detail of a specific doubt/question.
+    
+    **Usage:**
+    ```
+    GET /api/top-questions/doubts/STU001/507f1f77bcf86cd799439011
+    ```
+    """
+    try:
+        from bson import ObjectId
+        from app.db.mongo import mongodb
+        
+        db = mongodb.db
+        qa_col = db["top_questions"]
+        
+        doubt = qa_col.find_one({
+            "_id": ObjectId(qa_id),
+            "user_id": user_id
+        })
+        
+        if not doubt:
+            raise HTTPException(status_code=404, detail="Doubt not found")
+        
+        return {
+            "success": True,
+            "doubt": {
+                "id": str(doubt["_id"]),
+                "question": doubt.get("question", ""),
+                "answer": doubt.get("answer", ""),
+                "subject": doubt.get("subject", "Unknown"),
+                "class_level": doubt.get("class_level", 0),
+                "chapter": doubt.get("chapter"),
+                "mode": doubt.get("mode", "quick"),
+                "created_at": doubt.get("created_at", ""),
+                "was_helpful": doubt.get("was_helpful", None),
+                "user_rating": doubt.get("user_rating", None)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting doubt detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

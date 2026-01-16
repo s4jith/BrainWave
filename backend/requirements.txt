@@ -13,7 +13,7 @@ pymongo==4.6.1
 motor==3.3.2
 
 # Vector Database - Pinecone
-pinecone-client==3.0.0
+pinecone>=3.1.0
 
 # Google Gemini AI
 google-generativeai==0.3.2

@@ -322,3 +322,106 @@ async def log_activity(
     except Exception as e:
         logger.error(f"❌ Log activity error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/{student_id}")
+async def get_student_analytics(
+    student_id: str,
+    period: str = Query("week", description="Period: week, month, or all")
+):
+    """
+    Get comprehensive analytics for charts and progress tracking.
+    
+    Returns:
+    - Total study hours
+    - Questions asked per subject
+    - Tests taken per subject
+    - Daily/weekly activity data for charts
+    """
+    try:
+        logger.info(f"📊 Fetching analytics for student: {student_id}, period: {period}")
+        
+        db = mongodb.db
+        today = datetime.utcnow().date()
+        
+        # Calculate date range
+        if period == "week":
+            start_date = today - timedelta(days=7)
+        elif period == "month":
+            start_date = today - timedelta(days=30)
+        else:
+            start_date = today - timedelta(days=365)
+        
+        start_str = start_date.strftime("%Y-%m-%d")
+        
+        # 1. Get activity hours
+        activities_col = db["user_activities"]
+        activities = await activities_col.find({
+            "student_id": student_id,
+            "date": {"$gte": start_str}
+        }).sort("date", 1).to_list(length=100)
+        
+        total_hours = sum(a.get("hours", 0) for a in activities)
+        
+        # Format daily data for charts
+        daily_data = []
+        for a in activities:
+            daily_data.append({
+                "date": a.get("date"),
+                "hours": round(a.get("hours", 0), 1)
+            })
+        
+        # 2. Get questions asked per subject
+        questions_col = db["top_questions"]
+        questions = await questions_col.find({
+            "user_id": student_id
+        }).to_list(length=500)
+        
+        subject_questions = {}
+        for q in questions:
+            subj = q.get("subject", "Unknown")
+            subject_questions[subj] = subject_questions.get(subj, 0) + 1
+        
+        # 3. Get tests taken per subject
+        tests_col = db["test_submissions"]
+        tests = await tests_col.find({
+            "student_id": student_id
+        }).to_list(length=100)
+        
+        subject_tests = {}
+        test_scores = []
+        for t in tests:
+            subj = t.get("subject", "Unknown")
+            subject_tests[subj] = subject_tests.get(subj, 0) + 1
+            score = t.get("score", 0)
+            if score:
+                test_scores.append(score)
+        
+        avg_test_score = sum(test_scores) / len(test_scores) if test_scores else 0
+        
+        # 4. Build subject breakdown
+        all_subjects = set(subject_questions.keys()) | set(subject_tests.keys())
+        subject_breakdown = []
+        for subj in sorted(all_subjects):
+            subject_breakdown.append({
+                "subject": subj,
+                "questions_asked": subject_questions.get(subj, 0),
+                "tests_taken": subject_tests.get(subj, 0)
+            })
+        
+        return {
+            "period": period,
+            "summary": {
+                "total_hours": round(total_hours, 1),
+                "total_questions": len(questions),
+                "total_tests": len(tests),
+                "avg_test_score": round(avg_test_score, 1)
+            },
+            "daily_activity": daily_data,
+            "subject_breakdown": subject_breakdown,
+            "active_days": len(activities)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Get analytics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

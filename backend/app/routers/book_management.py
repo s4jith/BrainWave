@@ -595,10 +595,13 @@ async def update_embedding_status(
 # ==================== STUDENT ENDPOINTS ====================
 
 @router.get("/student/subjects")
-async def get_available_subjects(class_level: int = Query(...)):
+async def get_available_subjects(
+    class_level: int = Query(...),
+    student_id: Optional[str] = Query(None, description="Student ID for progress tracking")
+):
     """
     Get list of subjects that have books (chapters) available for a class level.
-    Returns subjects with their total chapter count from MongoDB.
+    Returns subjects with their total chapter count and real progress from MongoDB.
     """
     try:
         # Aggregate books by subject to get chapter counts for this class level
@@ -623,15 +626,59 @@ async def get_available_subjects(class_level: int = Query(...)):
         
         subjects_from_db = list(db.books.aggregate(pipeline))
         
+        # Get student progress from questions asked (if student_id provided)
+        student_progress = {}
+        if student_id:
+            try:
+                # Count questions asked per subject from top_questions collection
+                questions_col = db.client["ncert_ai"]["top_questions"]
+                progress_pipeline = [
+                    {"$match": {"user_id": student_id, "class_level": class_level}},
+                    {"$group": {
+                        "_id": "$subject",
+                        "questions_asked": {"$sum": 1}
+                    }}
+                ]
+                progress_data = list(questions_col.aggregate(progress_pipeline))
+                for p in progress_data:
+                    student_progress[p["_id"]] = p["questions_asked"]
+                
+                # Also count from test results
+                tests_col = db.client["ncert_ai"]["test_submissions"]
+                test_pipeline = [
+                    {"$match": {"student_id": student_id}},
+                    {"$group": {
+                        "_id": "$subject",
+                        "tests_taken": {"$sum": 1}
+                    }}
+                ]
+                test_data = list(tests_col.aggregate(test_pipeline))
+                for t in test_data:
+                    subj = t["_id"]
+                    if subj in student_progress:
+                        student_progress[subj] += t["tests_taken"] * 5  # Weight tests higher
+                    else:
+                        student_progress[subj] = t["tests_taken"] * 5
+                        
+            except Exception as e:
+                logger.warning(f"Could not fetch student progress: {e}")
+        
         subject_info = []
         for s in subjects_from_db:
+            subject_name = s["name"]
+            total = s["total_chapters"]
+            # Calculate chapters completed based on questions asked (1 chapter = 5 questions)
+            questions = student_progress.get(subject_name, 0)
+            chapters_done = min(questions // 5, total) if total > 0 else 0  # Every 5 questions = 1 chapter
+            
             subject_info.append({
-                "name": s["name"],
-                "namespace": s["name"].lower().replace(" ", "_"),
-                "total_chapters": s["total_chapters"],
+                "name": subject_name,
+                "namespace": subject_name.lower().replace(" ", "_"),
+                "total_chapters": total,
                 "chapters": s.get("chapters", []),
                 "has_ai_support": True,
-                "chapters_completed": 0  # TODO: Get from student progress collection
+                "chapters_completed": chapters_done,
+                "questions_asked": questions  # Extra info for dashboard
             })
         
         logger.info(f"📚 Found {len(subject_info)} subjects with {sum(s['total_chapters'] for s in subject_info)} total chapters for Class {class_level}")
@@ -675,6 +722,131 @@ async def get_books_for_student(
         
     except Exception as e:
         logger.error(f"❌ Get student books failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/flashcards")
+async def generate_flashcards(
+    subject: str = Query(..., description="Subject name"),
+    class_level: int = Query(..., description="Class level"),
+    count: int = Query(10, description="Number of flashcards to generate", ge=5, le=20)
+):
+    """
+    Generate flashcards from textbook content for revision.
+    Uses AI to create question-answer pairs from chapter content.
+    """
+    try:
+        from app.services.flashcard_service import flashcard_service
+        
+        logger.info(f"🎴 Generating {count} flashcards for {subject} Class {class_level}")
+        
+        flashcards = flashcard_service.generate_flashcards(
+            subject=subject,
+            class_level=class_level,
+            count=count
+        )
+        
+        if not flashcards:
+            return {
+                "flashcards": [],
+                "message": "No content found to generate flashcards. Please ensure textbook is uploaded.",
+                "count": 0
+            }
+        
+        return {
+            "flashcards": flashcards,
+            "subject": subject,
+            "class_level": class_level,
+            "count": len(flashcards)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Flashcard generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/notes/generate")
+async def generate_smart_notes(
+    subject: str = Query(..., description="Subject name"),
+    class_level: int = Query(..., description="Class level"),
+    chapter: Optional[str] = Query(None, description="Specific chapter title")
+):
+    """
+    Generate AI-powered study notes from textbook content.
+    Returns summary, key points, important terms, and study tips.
+    """
+    try:
+        from app.services.smart_notes_service import smart_notes_service
+        
+        logger.info(f"📝 Generating smart notes for {subject} Class {class_level}")
+        
+        notes = smart_notes_service.generate_chapter_summary(
+            subject=subject,
+            class_level=class_level,
+            chapter_title=chapter
+        )
+        
+        return notes
+        
+    except Exception as e:
+        logger.error(f"❌ Smart notes generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notes/save")
+async def save_smart_notes(
+    user_id: str = Query(...),
+    subject: str = Query(...),
+    class_level: int = Query(...),
+    title: str = Query(...),
+    content: dict = None
+):
+    """Save generated notes for a user."""
+    try:
+        from app.services.smart_notes_service import smart_notes_service
+        
+        note_id = smart_notes_service.save_notes(
+            user_id=user_id,
+            subject=subject,
+            class_level=class_level,
+            title=title,
+            content=content or {}
+        )
+        
+        if note_id:
+            return {"success": True, "note_id": note_id}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save notes")
+            
+    except Exception as e:
+        logger.error(f"❌ Save notes failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/notes/{user_id}")
+async def get_user_notes(
+    user_id: str,
+    subject: Optional[str] = None,
+    limit: int = 20
+):
+    """Get user's saved smart notes."""
+    try:
+        from app.services.smart_notes_service import smart_notes_service
+        
+        notes = smart_notes_service.get_user_notes(
+            user_id=user_id,
+            subject=subject,
+            limit=limit
+        )
+        
+        return {"notes": notes, "total": len(notes)}
+        
+    except Exception as e:
+        logger.error(f"❌ Get notes failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

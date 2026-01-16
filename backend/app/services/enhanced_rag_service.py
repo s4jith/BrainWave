@@ -631,9 +631,37 @@ Generate a thorough, well-structured deep dive explanation:"""
             Generated answer
         """
         if not textbook_chunks and not llm_chunks and not web_chunks:
-            # BRIEF response when no content found - don't elaborate or explain
-            logger.info("⚠️ No RAG content found. Returning brief response.")
-            return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
+            # SMART FALLBACK: Suggest similar topics when content not found
+            logger.info("⚠️ No RAG content found. Attempting to suggest similar topics.")
+            
+            try:
+                # Get some available topics from Pinecone for this subject
+                namespace = self.get_namespace(subject)
+                generic_query = self.generate_embedding(f"main topics in {subject}")
+                
+                results = self.textbook_db.index.query(
+                    namespace=namespace,
+                    vector=generic_query,
+                    top_k=5,
+                    include_metadata=True
+                )
+                
+                # Extract unique chapters/topics from metadata
+                available_topics = set()
+                for match in results.get('matches', []):
+                    meta = match.get('metadata', {})
+                    chapter = meta.get('chapter_title', meta.get('chapter', ''))
+                    if chapter:
+                        available_topics.add(str(chapter))
+                
+                if available_topics:
+                    topic_list = ', '.join(list(available_topics)[:5])
+                    return f"This topic is not covered in your Class {student_class} {subject} textbook. Try asking about these topics instead: {topic_list}"
+                else:
+                    return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
+            except Exception as e:
+                logger.warning(f"Fallback topic suggestion failed: {e}")
+                return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
         
         # Build multi-source context
         context_sections = []
