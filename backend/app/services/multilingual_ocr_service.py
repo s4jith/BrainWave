@@ -57,17 +57,19 @@ SCRIPT_RANGES = {
 }
 
 # EasyOCR language codes for each script
+# Key languages for NCERT: English, Tamil, Hindi, Urdu, Telugu, Kannada
+# Note: Malayalam (ml) is NOT supported by EasyOCR - falls back to English
 SCRIPT_TO_EASYOCR = {
-    "arabic": ["ur", "ar"],  # Urdu + Arabic
-    "devanagari": ["hi", "mr", "ne"],  # Hindi, Marathi, Nepali
-    "bengali": ["bn", "as"],  # Bengali, Assamese
-    "tamil": ["ta"],
-    "telugu": ["te"],
-    "kannada": ["kn"],
-    "malayalam": ["ml"],
-    "gujarati": ["gu"],
-    "gurmukhi": ["pa"],  # Punjabi
-    "odia": ["or"],
+    "arabic": ["ur", "en"],  # Urdu + English fallback
+    "devanagari": ["hi", "mr", "ne", "en"],  # Hindi, Marathi, Nepali + English
+    "bengali": ["bn", "as", "en"],  # Bengali, Assamese + English
+    "tamil": ["ta", "en"],  # Tamil + English fallback
+    "telugu": ["te", "en"],  # Telugu + English fallback
+    "kannada": ["kn", "en"],  # Kannada + English fallback
+    "malayalam": ["en"],  # Malayalam NOT supported - use English OCR
+    "gujarati": ["gu", "en"],
+    "gurmukhi": ["pa", "en"],  # Punjabi + English
+    "odia": ["or", "en"],
     "latin": ["en"],
 }
 
@@ -118,6 +120,7 @@ class MultilingualOCRService:
         key = tuple(sorted(languages))
         
         if key not in self._easyocr_readers:
+            # Try to load the requested languages
             try:
                 logger.info(f"📥 Loading EasyOCR for languages: {languages}")
                 self._easyocr_readers[key] = easyocr.Reader(
@@ -127,10 +130,26 @@ class MultilingualOCRService:
                 )
                 logger.info(f"✅ EasyOCR loaded for: {languages}")
             except Exception as e:
-                logger.error(f"Failed to load EasyOCR for {languages}: {e}")
-                return None
+                logger.warning(f"⚠️ Failed to load EasyOCR for {languages}: {e}")
+                
+                # Fallback: Try English only if the requested languages failed
+                if 'en' in languages and len(languages) > 1:
+                    try:
+                        fallback_langs = ['en']
+                        logger.info(f"🔄 Falling back to English only...")
+                        self._easyocr_readers[key] = easyocr.Reader(
+                            fallback_langs,
+                            gpu=False,
+                            verbose=False
+                        )
+                        logger.info(f"✅ Fallback: EasyOCR loaded for English")
+                    except Exception as e2:
+                        logger.error(f"❌ Even English fallback failed: {e2}")
+                        return None
+                else:
+                    return None
         
-        return self._easyocr_readers[key]
+        return self._easyocr_readers.get(key)
     
     def _get_openvino_ocr(self):
         """Get OpenVINO OCR service for English text."""
@@ -261,10 +280,10 @@ class MultilingualOCRService:
         return lang_to_script.get(lang_code, "latin")
     
     def _detect_script_quick(self, image: np.ndarray) -> str:
-        """Quick script detection without full OCR."""
-        # For now, default to trying Urdu/Arabic first if not detected
-        # In production, use a lightweight classifier
-        return "arabic"  # Default to Arabic/Urdu for NCERT Urdu books
+        """Quick script detection - default to Latin (English) for NCERT books."""
+        # Most NCERT content is in English
+        # For Indian language detection, use language_hint parameter
+        return "latin"  # Default to English for NCERT books
     
     def _ocr_latin(self, image: np.ndarray) -> Tuple[str, str]:
         """OCR for English/Latin text using OpenVINO."""

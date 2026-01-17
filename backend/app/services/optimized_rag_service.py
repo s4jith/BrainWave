@@ -24,6 +24,9 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from functools import lru_cache
 
+# Import Subject Classifier
+from app.services.subject_classifier import subject_classifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -390,6 +393,21 @@ class OptimizedRagService:
         # Sort by score and deduplicate
         all_chunks.sort(key=lambda x: x['score'], reverse=True)
         
+        # CONFIDENCE THRESHOLD: Filter out low relevance chunks to prevent hallucination
+        # OpenVINO LaBSE scores: >0.7 is good, <0.6 is usually irrelevant
+        CONFIDENCE_THRESHOLD = 0.68
+        
+        high_confidence_chunks = [c for c in all_chunks if c['score'] >= CONFIDENCE_THRESHOLD]
+        
+        # If we have high confidence chunks, use only those. 
+        # Otherwise, keep top 2 results but flag them.
+        if high_confidence_chunks:
+            all_chunks = high_confidence_chunks
+        else:
+            logger.warning(f"⚠️ Low confidence retrieval (Top score: {all_chunks[0]['score'] if all_chunks else 0:.4f})")
+            # Keep extremely few chunks if confidence is low to avoid noise
+            all_chunks = all_chunks[:2]
+        
         # Deduplicate by text content
         seen_texts = set()
         unique_chunks = []
@@ -461,6 +479,12 @@ QUESTION: {question}
 CONTEXT FROM TEXTBOOKS:
 {combined_context}
 
+CRITICAL RULES (NO HALLUCINATION):
+1. ONLY use information strictly from the CONTEXT provided above.
+2. If the context does NOT contain the answer, say "I don't have enough information in the textbook to answer this."
+3. Do NOT make up facts, tables, or numbers.
+4. If the question asks about a table or image, answer ONLY if it is described in the context.
+
 INSTRUCTIONS:{instructions}{lang_instruction}
 
 Answer:"""
@@ -510,6 +534,30 @@ Answer:"""
                     "cached": True,
                     "gemini_calls": 0
                 }
+        
+        # STEP 0: Subject Validation (0 Gemini calls - runs in parallel/optimized)
+        # Validate that the question matches the subject
+        subject_check = await subject_classifier.classify(question)
+        detected_subject = subject_check.get("detected_subject", "Unknown")
+        confidence = subject_check.get("confidence", 0)
+        
+        # Only block if high confidence mismatch
+        # Allow "Science" to match Physics/Chem/Bio
+        is_science = subject.lower() in ["science", "physics", "chemistry", "biology"]
+        detected_is_science = detected_subject.lower() in ["science", "physics", "chemistry", "biology"]
+        
+        if confidence > 0.85 and detected_subject.lower() != subject.lower():
+            # Exception for Science umbrella
+            if not (is_science and detected_is_science):
+                 logger.warning(f"⚠️ Subject mismatch: User={subject}, Detected={detected_subject}")
+                 return {
+                     "answer": f"I can only help with **{subject}** questions here. It looks like you're asking about **{detected_subject}**.\\n\\nPlease switch to the **{detected_subject}** chat to get the right answer!",
+                     "blocked": True,
+                     "detected_subject": detected_subject,
+                     "lang": "en",
+                     "sources": [],
+                     "gemini_calls": 0
+                 }
         
         # STEP 1: Language detection (0 Gemini calls)
         lang = self.detect_language(question)

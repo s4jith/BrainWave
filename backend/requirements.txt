@@ -46,6 +46,16 @@ sentencepiece>=0.1.99
 
 # Multilingual Support & API Optimization
 langdetect>=1.0.9
-easyocr>=1.7.0
+easyocr>=1.7.0  # Note: Tamil has model issues in 1.7.x, service falls back to English
 
-fitz
+# PDF Rendering (PyMuPDF - provides 'fitz' module)
+PyMuPDF>=1.23.0
+
+# Cloudinary for PDF cloud storage (Free tier: 25GB storage, 25GB bandwidth/month)
+cloudinary>=1.40.0
+
+# Google Drive API for PDF storage (legacy - service accounts don't work with personal drives)
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.100.0

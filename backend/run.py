@@ -3,6 +3,11 @@ Run script for NCERT AI Learning Backend.
 Start the FastAPI server with uvicorn.
 """
 
+# Load .env file FIRST before any other imports
+# This ensures all environment variables are available via os.getenv()
+from dotenv import load_dotenv
+load_dotenv()
+
 import uvicorn
 from app.core.config import settings
 from app.main import app  # Expose FastAPI app for `uvicorn run:app`

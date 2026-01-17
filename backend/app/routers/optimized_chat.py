@@ -90,6 +90,17 @@ async def optimized_chat(request: OptimizedChatRequest):
             chapter=request.chapter
         )
         
+        # Check if blocked due to subject mismatch
+        if result.get("blocked"):
+             raise HTTPException(
+                 status_code=400,
+                 detail={
+                     "error": "subject_mismatch",
+                     "message": result["answer"],
+                     "detected_subject": result.get("detected_subject", "Unknown")
+                 }
+             )
+        
         # Track question-answer pair if user info provided (for top questions feature)
         if request.user_id and request.session_id:
             try:

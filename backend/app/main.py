@@ -6,6 +6,11 @@ Entry point for the FastAPI application.
 Includes all routers, CORS configuration, and database initialization.
 """
 
+# Load .env file FIRST before any other imports
+# This ensures all environment variables are available via os.getenv()
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager

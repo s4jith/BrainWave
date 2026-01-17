@@ -26,6 +26,7 @@ from bson import ObjectId
 
 from app.db.mongo import db
 from app.core.config import settings
+from app.services.cloudinary_service import get_cloudinary_service
 
 logger = logging.getLogger(__name__)
 
@@ -194,68 +195,64 @@ async def upload_book(
         generate_embeddings: Whether to generate and upload embeddings (default: True)
         pdf_file: The PDF file to upload
     """
+    print(f"\n{'='*60}\n📤 UPLOAD REQUEST RECEIVED: {title}, {subject}, Class {class_level}\n{'='*60}\n")
     try:
         # Validate PDF file
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Create organized folder structure: class_XX/subject/chapter_XX/
-        class_folder = f"class_{class_level}"
-        subject_folder = subject.lower().replace(' ', '_')
-        chapter_folder = f"chapter_{chapter_number}"
-        
-        # Build the directory path
-        book_dir = os.path.join(BOOKS_UPLOAD_DIR, class_folder, subject_folder, chapter_folder)
-        logger.info(f"📁 Creating directory: {book_dir}")
-        os.makedirs(book_dir, exist_ok=True)
-        
         # Generate clean filename
         clean_title = title.replace(' ', '_').replace('/', '_')[:50]  # Limit length
         safe_filename = f"{clean_title}.pdf"
-        file_path = os.path.join(book_dir, safe_filename)
         
-        # Save the file with verification
-        logger.info(f"📄 Saving PDF to: {file_path}")
+        # Read PDF content
         content = await pdf_file.read()
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
         
-        with open(file_path, "wb") as buffer:
-            buffer.write(content)
+        file_size = len(content)
+        logger.info(f"📄 Received PDF: {safe_filename} ({file_size} bytes)")
         
-        # Verify file was saved
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=500, detail="Failed to save PDF file to disk")
+        # Upload to Cloudinary (Free Tier: 25GB storage) - PRIMARY STORAGE
+        cloud_service = get_cloudinary_service()
         
-        file_size = os.path.getsize(file_path)
-        logger.info(f"✅ PDF saved successfully: {file_path} ({file_size} bytes)")
+        if not cloud_service.is_available():
+            raise HTTPException(status_code=500, detail="Cloud storage not configured. Please configure Cloudinary credentials.")
         
-        # Reset file position for embedding processing
-        await pdf_file.seek(0)
+        logger.info(f"☁️ Uploading PDF to Cloudinary...")
+        cloud_info = cloud_service.upload_pdf(
+            file_content=content,
+            filename=safe_filename,
+            class_level=class_level,
+            subject=subject,
+            chapter_number=chapter_number
+        )
         
-        # Create relative path for storing in DB
-        relative_path = f"{class_folder}/{subject_folder}/{chapter_folder}/{safe_filename}"
+        if not cloud_info:
+            raise HTTPException(status_code=500, detail="Failed to upload PDF to cloud storage")
         
-        logger.info(f"📁 Saved PDF: {relative_path}")
+        cloud_url = cloud_info.get('url')
+        cloud_public_id = cloud_info.get('public_id')
+        logger.info(f"✅ PDF uploaded to Cloudinary: {cloud_url}")
         
         # Create namespace for embeddings - ONE namespace per subject (all classes together)
-        # This allows the bot to retrieve from all class levels for comprehensive answers
         namespace = subject.lower().replace(' ', '_')
         
-        # Generate a unique book_id (for compatibility with old system)
+        # Generate a unique book_id
         book_id = str(uuid.uuid4())
         
-        # Create book document
+        # Create book document - Cloudinary is the only storage
         book_doc = {
-            "book_id": book_id,  # Add book_id for unique index
+            "book_id": book_id,
             "title": title,
             "subject": subject,
             "class_level": class_level,
             "chapter_number": chapter_number,
             "description": description,
             "pdf_filename": safe_filename,
-            "pdf_path": relative_path,  # Store organized path
-            "pdf_url": f"/api/books/pdf/{relative_path}",  # URL with full path
+            "pdf_url": cloud_url,  # Cloudinary URL is the primary URL
+            "cloudinary_url": cloud_url,
+            "cloudinary_public_id": cloud_public_id,
             "has_embeddings": False,
             "embedding_count": 0,
             "embedding_namespace": namespace,
@@ -281,19 +278,31 @@ async def upload_book(
                     {"$set": {"processing_status": "processing"}}
                 )
                 
-                # Process PDF and generate embeddings
-                embedding_result = await process_book_embeddings(
-                    book_id=book_id,  # Use book_id for embeddings metadata
-                    pdf_path=file_path,
-                    book_metadata={
-                        "book_id": book_id,
-                        "title": title,
-                        "subject": subject,
-                        "class_level": class_level,
-                        "chapter_number": chapter_number
-                    },
-                    namespace=namespace
-                )
+                # Create temp file for embedding processing
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                    temp_file.write(content)
+                    temp_pdf_path = temp_file.name
+                
+                try:
+                    # Process PDF and generate embeddings
+                    embedding_result = await process_book_embeddings(
+                        book_id=book_id,
+                        pdf_path=temp_pdf_path,
+                        book_metadata={
+                            "book_id": book_id,
+                            "title": title,
+                            "subject": subject,
+                            "class_level": class_level,
+                            "chapter_number": chapter_number,
+                            "pdf_url": cloud_url  # Include PDF URL in metadata
+                        },
+                        namespace=namespace
+                    )
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(temp_pdf_path):
+                        os.remove(temp_pdf_path)
                 
                 # Update book with embedding info
                 db.books.update_one(
@@ -329,14 +338,21 @@ async def upload_book(
         
         return {
             "success": True,
-            "message": f"Book '{title}' uploaded successfully",
-            "book_id": mongo_id,  # Return MongoDB _id for frontend
-            "pdf_url": book_doc["pdf_url"],
+            "message": f"Book '{title}' uploaded successfully to cloud storage",
+            "book_id": mongo_id,
+            "pdf_url": cloud_url,
+            "cloudinary_url": cloud_url,
             "embeddings": embedding_result
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n{'='*60}\n❌ UPLOAD ERROR:\n{error_trace}\n{'='*60}\n")
         logger.error(f"❌ Book upload failed: {e}")
+        logger.error(f"Traceback:\n{error_trace}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -344,18 +360,21 @@ async def upload_book(
 async def regenerate_embeddings(book_id: str):
     """
     Regenerate embeddings for an existing book.
-    Useful if initial embedding generation failed or you want to update embeddings.
+    Downloads PDF from Cloudinary and reprocesses it.
     """
     try:
+        import tempfile
+        import requests
+        
         # Get book from database
         book = db.books.find_one({"_id": ObjectId(book_id)})
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Get PDF path
-        pdf_path = os.path.join(BOOKS_UPLOAD_DIR, book["pdf_filename"])
-        if not os.path.exists(pdf_path):
-            raise HTTPException(status_code=404, detail="PDF file not found")
+        # Get PDF URL from Cloudinary
+        pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
+        if not pdf_url or not pdf_url.startswith("http"):
+            raise HTTPException(status_code=404, detail="PDF not found in cloud storage")
         
         # Update status
         db.books.update_one(
@@ -363,20 +382,37 @@ async def regenerate_embeddings(book_id: str):
             {"$set": {"processing_status": "processing", "updated_at": datetime.utcnow()}}
         )
         
-        # Process embeddings
-        namespace = book.get("embedding_namespace", f"{book['subject'].lower().replace(' ', '_')}_class{book['class_level']}")
+        # Download PDF from Cloudinary to temp file
+        logger.info(f"⬇️ Downloading PDF from: {pdf_url}")
+        response = requests.get(pdf_url, timeout=60)
+        if response.status_code != 200:
+            raise HTTPException(status_code=404, detail="Failed to download PDF from cloud storage")
         
-        result = await process_book_embeddings(
-            book_id=book_id,
-            pdf_path=pdf_path,
-            book_metadata={
-                "book_id": book_id,
-                "title": book["title"],
-                "subject": book["subject"],
-                "class_level": book["class_level"]
-            },
-            namespace=namespace
-        )
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(response.content)
+            temp_pdf_path = temp_file.name
+        
+        try:
+            # Process embeddings
+            namespace = book.get("embedding_namespace", book['subject'].lower().replace(' ', '_'))
+            
+            result = await process_book_embeddings(
+                book_id=book_id,
+                pdf_path=temp_pdf_path,
+                book_metadata={
+                    "book_id": book_id,
+                    "title": book["title"],
+                    "subject": book["subject"],
+                    "class_level": book["class_level"],
+                    "chapter_number": book.get("chapter_number", 1),
+                    "pdf_url": pdf_url
+                },
+                namespace=namespace
+            )
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
         
         # Update book with results
         db.books.update_one(
@@ -470,7 +506,7 @@ async def list_all_books():
 @router.delete("/{book_id}")
 async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True)):
     """
-    Delete a book from MongoDB and optionally from Pinecone.
+    Delete a book from MongoDB, Cloudinary, and optionally from Pinecone.
     """
     try:
         # Get book info first
@@ -478,11 +514,18 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Delete PDF file
-        pdf_path = os.path.join(BOOKS_UPLOAD_DIR, book["pdf_filename"])
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
-            logger.info(f"Deleted PDF file: {pdf_path}")
+        # Delete PDF from Cloudinary
+        cloudinary_public_id = book.get("cloudinary_public_id")
+        if cloudinary_public_id:
+            try:
+                cloud_service = get_cloudinary_service()
+                if cloud_service.is_available():
+                    if cloud_service.delete_file(cloudinary_public_id):
+                        logger.info(f"✅ Deleted PDF from Cloudinary: {cloudinary_public_id}")
+                    else:
+                        logger.warning(f"⚠️ Could not delete PDF from Cloudinary: {cloudinary_public_id}")
+            except Exception as cloud_error:
+                logger.warning(f"⚠️ Cloudinary deletion failed: {cloud_error}")
         
         # Delete embeddings from Pinecone if requested
         if delete_embeddings and book.get("has_embeddings"):
@@ -1205,6 +1248,118 @@ async def get_pdf_info(file_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== CLOUDINARY PDF RENDERING ====================
+
+@router.get("/render/{book_id}/info")
+async def get_book_pdf_info(book_id: str):
+    """
+    Get PDF info (page count) for a book by ID.
+    Downloads from Cloudinary if needed and caches locally.
+    """
+    import fitz
+    from app.services.pdf_cache import get_cached_pdf
+    
+    try:
+        # Get book from database
+        book = db.books.find_one({"_id": ObjectId(book_id)})
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+        
+        # Get PDF URL
+        pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
+        if not pdf_url:
+            raise HTTPException(status_code=404, detail="PDF URL not found")
+        
+        # Get cached PDF path (downloads if needed)
+        pdf_path = get_cached_pdf(pdf_url)
+        if not pdf_path:
+            raise HTTPException(status_code=500, detail="Failed to download PDF")
+        
+        # Open and get info
+        doc = fitz.open(pdf_path)
+        info = {
+            "numPages": len(doc),
+            "title": book.get("title", ""),
+            "subject": book.get("subject", ""),
+            "chapter_number": book.get("chapter_number", 1),
+            "class_level": book.get("class_level", 11)
+        }
+        doc.close()
+        
+        return info
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Get book PDF info failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/render/{book_id}/page/{page_number}")
+async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.5):
+    """
+    Render a PDF page as PNG image for a book by ID.
+    Downloads from Cloudinary if needed and caches locally.
+    """
+    import fitz
+    from fastapi.responses import Response
+    from app.services.pdf_cache import get_cached_pdf
+    
+    try:
+        # Get book from database
+        book = db.books.find_one({"_id": ObjectId(book_id)})
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+        
+        # Get PDF URL
+        pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
+        if not pdf_url:
+            raise HTTPException(status_code=404, detail="PDF URL not found")
+        
+        # Get cached PDF path (downloads if needed)
+        pdf_path = get_cached_pdf(pdf_url)
+        if not pdf_path:
+            raise HTTPException(status_code=500, detail="Failed to download PDF")
+        
+        # Open PDF
+        doc = fitz.open(pdf_path)
+        
+        # Validate page number
+        if page_number < 1 or page_number > len(doc):
+            doc.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid page number. PDF has {len(doc)} pages."
+            )
+        
+        # Render page
+        pdf_page = doc[page_number - 1]
+        mat = fitz.Matrix(scale, scale)
+        pix = pdf_page.get_pixmap(matrix=mat, alpha=False)
+        img_bytes = pix.tobytes("png")
+        
+        num_pages = len(doc)
+        doc.close()
+        
+        logger.info(f"📄 Rendered page {page_number}/{num_pages} for book {book_id}")
+        
+        return Response(
+            content=img_bytes,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+                "X-Total-Pages": str(num_pages)
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Render book PDF page failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== SYNC EXISTING DATA ====================
 
 @router.post("/admin/sync-existing")
@@ -1561,6 +1716,25 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         logger.info(f"🗑️ Deleting namespace '{namespace}' with {vectors_to_delete} vectors...")
         index.delete(delete_all=True, namespace=namespace)
         
+        # Get all books for this subject to delete from Google Drive
+        books_to_delete = list(db.books.find({"subject": {"$regex": f"^{subject}$", "$options": "i"}}))
+        
+        # Delete PDFs from Google Drive
+        drive_service = get_drive_service()
+        drive_deleted_count = 0
+        if drive_service.is_available():
+            for book in books_to_delete:
+                google_drive_file_id = book.get("google_drive_file_id")
+                if google_drive_file_id:
+                    try:
+                        if drive_service.delete_file(google_drive_file_id):
+                            drive_deleted_count += 1
+                    except Exception as gd_error:
+                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+        
+        if drive_deleted_count > 0:
+            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
+        
         # Delete all books from MongoDB for this subject
         mongo_result = db.books.delete_many({"subject": {"$regex": f"^{subject}$", "$options": "i"}})
         books_deleted = mongo_result.deleted_count
@@ -1654,6 +1828,28 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
             batch = all_vector_ids[i:i+1000]
             index.delete(ids=batch, namespace=namespace)
             logger.info(f"  ✓ Deleted batch of {len(batch)} vectors")
+        
+        # Get all books for this subject and class to delete from Google Drive
+        books_to_delete = list(db.books.find({
+            "subject": {"$regex": f"^{subject}$", "$options": "i"},
+            "class_level": class_level
+        }))
+        
+        # Delete PDFs from Google Drive
+        drive_service = get_drive_service()
+        drive_deleted_count = 0
+        if drive_service.is_available():
+            for book in books_to_delete:
+                google_drive_file_id = book.get("google_drive_file_id")
+                if google_drive_file_id:
+                    try:
+                        if drive_service.delete_file(google_drive_file_id):
+                            drive_deleted_count += 1
+                    except Exception as gd_error:
+                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+        
+        if drive_deleted_count > 0:
+            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
         
         # Delete books from MongoDB for this subject and class
         mongo_result = db.books.delete_many({
@@ -1758,6 +1954,29 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         for i in range(0, len(all_vector_ids), 1000):
             batch = all_vector_ids[i:i+1000]
             index.delete(ids=batch, namespace=namespace)
+        
+        # Get all books for this chapter to delete from Google Drive
+        books_to_delete = list(db.books.find({
+            "subject": {"$regex": f"^{subject}$", "$options": "i"},
+            "class_level": class_level,
+            "chapter_number": chapter_number
+        }))
+        
+        # Delete PDFs from Google Drive
+        drive_service = get_drive_service()
+        drive_deleted_count = 0
+        if drive_service.is_available():
+            for book in books_to_delete:
+                google_drive_file_id = book.get("google_drive_file_id")
+                if google_drive_file_id:
+                    try:
+                        if drive_service.delete_file(google_drive_file_id):
+                            drive_deleted_count += 1
+                    except Exception as gd_error:
+                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+        
+        if drive_deleted_count > 0:
+            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
         
         # Delete book record from MongoDB
         mongo_result = db.books.delete_many({

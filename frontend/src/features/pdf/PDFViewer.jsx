@@ -55,28 +55,41 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+  
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   const setSelectedText = useAnnotationStore((state) => state.setSelectedText);
   const activePanel = useAnnotationStore((state) => state.activePanel);
   const setActivePanel = useAnnotationStore((state) => state.setActivePanel);
 
-  // Extract file path from pdfUrl
+  // Get book ID from currentLesson
+  const bookId = currentLesson?.book_id;
+  
+  // Check if pdfUrl is a Cloudinary URL (starts with http)
+  const isCloudinaryUrl = pdfUrl?.startsWith('http');
+  
+  // Extract file path from local pdfUrl (legacy support)
   const getFilePath = useCallback(() => {
-    if (!pdfUrl) return null;
+    if (!pdfUrl || isCloudinaryUrl) return null;
     const match = pdfUrl.match(/\/api\/books\/pdf\/(.+)$/);
     return match ? match[1] : null;
-  }, [pdfUrl]);
+  }, [pdfUrl, isCloudinaryUrl]);
 
   // Get PDF info (page count) on load
   useEffect(() => {
     const fetchPdfInfo = async () => {
-      const filePath = getFilePath();
-      if (!filePath) return;
-
       try {
-        const response = await fetch(
-          `http://localhost:8000/api/books/pdf-info/${filePath}`
-        );
+        let response;
+        
+        if (bookId) {
+          // Use new book ID-based endpoint for Cloudinary PDFs
+          response = await fetch(`${API_BASE}/api/books/render/${bookId}/info`);
+        } else {
+          // Legacy: use file path-based endpoint
+          const filePath = getFilePath();
+          if (!filePath) return;
+          response = await fetch(`${API_BASE}/api/books/pdf-info/${filePath}`);
+        }
 
         if (!response.ok) {
           throw new Error("Failed to get PDF info");
@@ -92,25 +105,35 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
       }
     };
 
-    if (pdfUrl) {
+    if (pdfUrl || bookId) {
       fetchPdfInfo();
     }
-  }, [pdfUrl, getFilePath]);
+  }, [pdfUrl, bookId, getFilePath, API_BASE]);
 
   // Load page image when page number or scale changes
   useEffect(() => {
     const loadPage = async () => {
-      const filePath = getFilePath();
-      if (!filePath || !numPages) return;
-
+      if (!numPages) return;
+      
       setIsLoading(true);
       const backendScale = 1.5 * scale;
-      const url = `http://localhost:8000/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}`;
+      
+      let url;
+      if (bookId) {
+        // Use new book ID-based endpoint for Cloudinary PDFs
+        url = `${API_BASE}/api/books/render/${bookId}/page/${pageNumber}?scale=${backendScale}`;
+      } else {
+        // Legacy: use file path-based endpoint
+        const filePath = getFilePath();
+        if (!filePath) return;
+        url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}`;
+      }
+      
       setImageUrl(url);
     };
 
     loadPage();
-  }, [pageNumber, scale, numPages, getFilePath]);
+  }, [pageNumber, scale, numPages, bookId, getFilePath, API_BASE]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -471,12 +494,17 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                     onClick={() => {
                       setLoadError(null);
                       setIsLoading(true);
-                      const filePath = getFilePath();
-                      if (filePath) {
-                        setImageUrl(
-                          `http://localhost:8000/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${1.5 * scale}&t=${Date.now()}`
-                        );
+                      const backendScale = 1.5 * scale;
+                      let url;
+                      if (bookId) {
+                        url = `${API_BASE}/api/books/render/${bookId}/page/${pageNumber}?scale=${backendScale}&t=${Date.now()}`;
+                      } else {
+                        const filePath = getFilePath();
+                        if (filePath) {
+                          url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}&t=${Date.now()}`;
+                        }
                       }
+                      if (url) setImageUrl(url);
                     }}
                   >
                     Retry
