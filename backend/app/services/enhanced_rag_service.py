@@ -11,6 +11,7 @@ from app.services.gemini_service import gemini_service
 from app.db.mongo import pinecone_db, pinecone_web_db, pinecone_llm_db
 from app.services.llm_storage_service import llm_storage_service
 from app.services.web_scraper_service import web_scraper_service
+from app.services.subject_classifier import subject_classifier
 import logging
 import re
 from typing import List, Dict, Tuple, Optional
@@ -741,7 +742,7 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
     
     # Main public methods
     
-    def answer_question_basic(
+    async def answer_question_basic(
         self,
         question: str,
         subject: str,
@@ -771,6 +772,24 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
             logger.error(f"Failed to generate embedding: {e}")
             return "I'm having trouble understanding that right now. Please try again.", []
 
+        # 🔍 STRICT SUBJECT VALIDATION
+        try:
+            # Run classification in parallel with other tasks if possible (sync here for safety)
+            # Use lower threshold (0.60) as requested for strict enforcement
+            validation = await subject_classifier.classify(question)
+            detected_subject = validation.get("detected_subject", "Unknown")
+            confidence = validation.get("confidence", 0.0)
+            
+            logger.info(f"🔍 Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
+            
+            # STRICT BLOCKING LOGIC
+            if confidence > 0.60 and detected_subject.lower() != subject.lower():
+                 logger.warning(f"⚠️ Subject mismatch blocked: User={subject}, Detected={detected_subject}")
+                 return "The specific topic is not present in the book. Change the book or question.", []
+                 
+        except Exception as e:
+            logger.warning(f"Subject validation failed (proceeding anyway): {e}")
+
         # 1. Query textbook content (primary source)
         textbook_chunks, class_dist = self.query_multi_class(
             query_text=question,
@@ -782,13 +801,10 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
             query_embedding=query_embedding
         )
         
-        # Log best score for debugging (cross-subject detection disabled for now)
+        # Log best score for debugging
         best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
         good_chunks = [c for c in textbook_chunks if c.get('score', 0) >= 0.6]
         logger.info(f"   📊 Best textbook score: {best_score:.3f}, Good chunks: {len(good_chunks)}/{len(textbook_chunks)}")
-        
-        # NOTE: Cross-subject detection was too aggressive - disabled for now
-        # If best_score < 0.5, question might be off-topic but we'll try to answer anyway
         
         # 2. Query stored LLM answers
         llm_chunks = self.query_llm_content(
@@ -983,7 +999,7 @@ Keep it under 200 words and student-friendly."""
         
         return answer, all_chunks
     
-    def answer_question_deepdive(
+    async def answer_question_deepdive(
         self,
         question: str,
         subject: str,
@@ -1003,6 +1019,23 @@ Keep it under 200 words and student-friendly."""
         Returns:
             Tuple of (answer, combined_source_chunks)
         """
+        # 🔍 STRICT SUBJECT VALIDATION
+        try:
+            # Use lower threshold (0.60) as requested for strict enforcement
+            validation = await subject_classifier.classify(question)
+            detected_subject = validation.get("detected_subject", "Unknown")
+            confidence = validation.get("confidence", 0.0)
+            
+            logger.info(f"🔍 Deep Dive Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
+            
+            # STRICT BLOCKING LOGIC
+            if confidence > 0.60 and detected_subject.lower() != subject.lower():
+                 logger.warning(f"⚠️ Subject mismatch blocked: User={subject}, Detected={detected_subject}")
+                 return "The specific topic is not present in the book. Change the book or question.", []
+                 
+        except Exception as e:
+            logger.warning(f"Subject validation failed (proceeding anyway): {e}")
+
         logger.info(f"🔍 DEEP DIVE MODE (Triple-Index): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
         logger.info(f"   Will search from fundamentals (earliest class) to current class")

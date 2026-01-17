@@ -74,13 +74,18 @@ QUESTION: "{question}"
 VALID SUBJECTS: {', '.join(self.valid_subjects)}
 
 CRITERIA:
-- Physics: Forces, motion, energy, electricity, optics, units
-- Chemistry: Elements, reactions, atomic structure, periodic table
-- Mathematics: Algebra, geometry, calculus, numbers, probability
+- Physics: Forces, motion, energy, electricity, optics, units, Newton's laws, gravitation, thermodynamics (physical aspect)
+- Chemistry: Elements, reactions, atomic structure, periodic table, bonding, thermodynamics (chemical aspect), stoichiometry
+- Mathematics: Algebra, geometry, calculus, numbers, probability, equations (y=mx+c), trigonometry
 - Biology: Living organisms, cells, genetics, human body, plants
 - English: Grammar, literature, comprehension, poetry
 - Hindi: Grammar, literature, poems (in Hindi/Devanagari)
 - Social Science: History, geography, civics, economics
+
+IMPORTANT:
+- "Newton's Laws" is PHYSICS.
+- "y = mx + c" is MATHEMATICS.
+- Be precise. Do not use generic "Science" if a specific subject applies.
 
 Return ONLY a JSON object:
 {{

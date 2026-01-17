@@ -546,18 +546,18 @@ Answer:"""
         is_science = subject.lower() in ["science", "physics", "chemistry", "biology"]
         detected_is_science = detected_subject.lower() in ["science", "physics", "chemistry", "biology"]
         
-        if confidence > 0.85 and detected_subject.lower() != subject.lower():
-            # Exception for Science umbrella
-            if not (is_science and detected_is_science):
-                 logger.warning(f"⚠️ Subject mismatch: User={subject}, Detected={detected_subject}")
-                 return {
-                     "answer": f"I can only help with **{subject}** questions here. It looks like you're asking about **{detected_subject}**.\\n\\nPlease switch to the **{detected_subject}** chat to get the right answer!",
-                     "blocked": True,
-                     "detected_subject": detected_subject,
-                     "lang": "en",
-                     "sources": [],
-                     "gemini_calls": 0
-                 }
+        # Lower threshold to 0.60 to ensure we catch mismatches
+        # User explicitly requested strict checking
+        if confidence > 0.60 and detected_subject.lower() != subject.lower():
+             logger.warning(f"⚠️ Subject mismatch: User={subject}, Detected={detected_subject}")
+             return {
+                 "answer": "The specific topic is not present in the book. Change the book or question.",
+                 "blocked": True,
+                 "detected_subject": detected_subject,
+                 "lang": "en",
+                 "sources": [],
+                 "gemini_calls": 0
+             }
         
         # STEP 1: Language detection (0 Gemini calls)
         lang = self.detect_language(question)

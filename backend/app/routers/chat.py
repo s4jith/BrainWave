@@ -216,7 +216,7 @@ async def student_chatbot(request: StudentChatRequest):
         # Convert to new enhanced system
         if request.mode == "quick":
             # BASIC MODE: Current + recent lower classes (textbook only)
-            answer, source_chunks_list = enhanced_rag_service.answer_question_basic(
+            answer, source_chunks_list = await enhanced_rag_service.answer_question_basic(
                 question=request.question,
                 subject=request.subject,
                 student_class=request.class_level,
@@ -236,7 +236,7 @@ async def student_chatbot(request: StudentChatRequest):
         
         else:  # deepdive mode
             # DEEP DIVE MODE: ALL prerequisite classes + web content
-            answer, source_chunks_list = enhanced_rag_service.answer_question_deepdive(
+            answer, source_chunks_list = await enhanced_rag_service.answer_question_deepdive(
                 question=request.question,
                 subject=request.subject,
                 student_class=request.class_level,
@@ -389,14 +389,14 @@ async def image_chat(
         
         # 5. Run RAG pipeline
         if mode == "quick":
-            answer, source_chunks_list = enhanced_rag_service.answer_question_basic(
+            answer, source_chunks_list = await enhanced_rag_service.answer_question_basic(
                 question=query,
                 subject=subject,
                 student_class=class_level,
                 chapter=chapter
             )
         else:  # deepdive
-            answer, source_chunks_list = enhanced_rag_service.answer_question_deepdive(
+            answer, source_chunks_list = await enhanced_rag_service.answer_question_deepdive(
                 question=query,
                 subject=subject,
                 student_class=class_level,
