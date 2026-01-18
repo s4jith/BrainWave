@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  User, 
-  GraduationCap, 
-  Palette, 
-  Calendar, 
-  Shield, 
+import {
+  User,
+  GraduationCap,
+  Palette,
+  Calendar,
+  Shield,
   ArrowLeft,
   Save,
   Plus,
@@ -51,17 +51,17 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { 
-    user, 
-    academics, 
-    calendar, 
-    privacySettings, 
-    updateProfile, 
-    updateAcademics, 
-    updateCalendar, 
-    updatePrivacySettings 
+  const {
+    user,
+    academics,
+    calendar,
+    privacySettings,
+    updateProfile,
+    updateAcademics,
+    updateCalendar,
+    updatePrivacySettings
   } = useUserStore();
-  
+
   const [activeTab, setActiveTab] = useState('profile');
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -233,9 +233,9 @@ export default function Settings() {
               <Input
                 type="text"
                 value={profileData.username}
-                onChange={(e) => setProfileData({ 
-                  ...profileData, 
-                  username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') 
+                onChange={(e) => setProfileData({
+                  ...profileData,
+                  username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
                 })}
                 placeholder="your_username"
                 className="h-12"
@@ -247,17 +247,22 @@ export default function Settings() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Class Level
               </label>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  <span>Class level can only be changed by admin. Contact support if needed.</span>
+                </p>
+              </div>
               <div className="grid grid-cols-4 gap-2">
                 {classesData.classes.map((cls) => (
                   <button
                     key={cls.level}
                     type="button"
-                    onClick={() => setProfileData({ ...profileData, classLevel: cls.level })}
-                    className={`p-3 rounded-lg border-2 text-center transition-all duration-200 ${
-                      profileData.classLevel === cls.level
-                        ? 'border-gray-900 bg-gray-900 text-white'
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
+                    disabled={true}
+                    className={`p-3 rounded-lg border-2 text-center transition-all duration-200 cursor-not-allowed opacity-60 ${profileData.classLevel === cls.level
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-gray-200'
+                      }`}
                   >
                     <span className="font-medium">{cls.level}</span>
                   </button>
@@ -329,8 +334,8 @@ export default function Settings() {
                   <Button onClick={addSubject} disabled={!newSubject.name || !newSubject.marks} className="flex-1">
                     Add Subject
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => { setShowAddSubject(false); setNewSubject({ name: '', marks: '' }); }}
                   >
                     Cancel
@@ -363,7 +368,7 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={regenerateAvatar}
-                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors shadow-lg"
+                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shadow-lg"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
@@ -381,11 +386,10 @@ export default function Settings() {
                     key={style.id}
                     type="button"
                     onClick={() => setAvatarStyle(style.id)}
-                    className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all duration-200 ${
-                      avatarStyle === style.id
-                        ? 'border-gray-900 bg-gray-50'
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
+                    className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all duration-200 ${avatarStyle === style.id
+                      ? 'border-gray-900 bg-gray-50'
+                      : 'border-gray-200 hover:border-gray-400'
+                      }`}
                   >
                     <img
                       src={getAvatarUrl(style.id, avatarSeed)}
@@ -415,13 +419,13 @@ export default function Settings() {
              * - DELETE /api/calendar/events/:id - Delete event
              * - PUT /api/calendar/events/:id - Update event
              */}
-            
+
             {/* Header with Add Event Button */}
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 Manage your exam dates and reminders
               </p>
-              <Button 
+              <Button
                 onClick={() => {
                   setSelectedDate(formatDate(new Date().getDate()));
                   setNewExam({ subject: '', date: formatDate(new Date().getDate()), type: 'exam' });
@@ -460,11 +464,10 @@ export default function Settings() {
               {/* Weekday Headers */}
               <div className="grid grid-cols-7 border-b border-gray-100">
                 {WEEKDAYS.map((day, index) => (
-                  <div 
-                    key={day} 
-                    className={`text-center text-xs font-medium text-gray-500 py-3 ${
-                      index < 6 ? 'border-r border-gray-100' : ''
-                    }`}
+                  <div
+                    key={day}
+                    className={`text-center text-xs font-medium text-gray-500 py-3 ${index < 6 ? 'border-r border-gray-100' : ''
+                      }`}
                   >
                     {day}
                   </div>
@@ -476,44 +479,41 @@ export default function Settings() {
                 {calendarDays.map((day, index) => {
                   const isLastInRow = (index + 1) % 7 === 0;
                   const isInLastRow = index >= calendarDays.length - 7;
-                  
+
                   if (day === null) {
                     return (
-                      <div 
-                        key={`empty-${index}`} 
-                        className={`min-h-[100px] bg-gray-50 ${
-                          !isLastInRow ? 'border-r border-gray-100' : ''
-                        } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
+                      <div
+                        key={`empty-${index}`}
+                        className={`min-h-[100px] bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
+                          } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                       />
                     );
                   }
 
                   const dayExams = getExamsForDate(day);
-                  const isToday = new Date().getDate() === day && 
-                                  new Date().getMonth() === currentMonth && 
-                                  new Date().getFullYear() === currentYear;
+                  const isToday = new Date().getDate() === day &&
+                    new Date().getMonth() === currentMonth &&
+                    new Date().getFullYear() === currentYear;
 
                   return (
                     <div
                       key={day}
                       onClick={() => handleDateClick(day)}
-                      className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${
-                        !isLastInRow ? 'border-r border-gray-100' : ''
-                      } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
+                      className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
+                        } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                     >
                       {/* Date Number */}
                       <div className="flex items-start justify-between mb-1">
-                        <span 
-                          className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${
-                            isToday 
-                              ? 'bg-gray-900 text-white' 
-                              : 'text-gray-700'
-                          }`}
+                        <span
+                          className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${isToday
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-700'
+                            }`}
                         >
                           {day}
                         </span>
                       </div>
-                      
+
                       {/* Events on this date */}
                       <div className="space-y-1">
                         {dayExams.slice(0, 3).map((exam, examIndex) => {
@@ -523,10 +523,10 @@ export default function Settings() {
                             { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-l-pink-500' },
                             { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-l-blue-500' },
                             { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-l-amber-500' },
-                            { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-l-purple-500' },
+                            { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-l-blue-500' },
                           ];
                           const color = colors[examIndex % colors.length];
-                          
+
                           return (
                             <div
                               key={exam.id}
@@ -560,14 +560,14 @@ export default function Settings() {
                    */}
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-lg font-semibold text-gray-800">Add Event</h4>
-                    <button 
-                      onClick={() => { setShowAddExam(false); setSelectedDate(null); }} 
+                    <button
+                      onClick={() => { setShowAddExam(false); setSelectedDate(null); }}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <X className="w-5 h-5 text-gray-500" />
                     </button>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
@@ -575,7 +575,7 @@ export default function Settings() {
                         {selectedDate}
                       </div>
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
                       <Input
@@ -588,16 +588,16 @@ export default function Settings() {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => { setShowAddExam(false); setSelectedDate(null); }}
                         className="flex-1 h-12"
                       >
                         Cancel
                       </Button>
-                      <Button 
-                        onClick={addExam} 
-                        disabled={!newExam.subject} 
+                      <Button
+                        onClick={addExam}
+                        disabled={!newExam.subject}
                         className="flex-1 h-12 bg-orange-500 hover:bg-orange-600"
                       >
                         <Plus className="w-4 h-4 mr-2" />
@@ -620,10 +620,10 @@ export default function Settings() {
                       { bg: 'bg-pink-50', border: 'border-l-pink-500', icon: 'bg-pink-500' },
                       { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'bg-blue-500' },
                       { bg: 'bg-amber-50', border: 'border-l-amber-500', icon: 'bg-amber-500' },
-                      { bg: 'bg-purple-50', border: 'border-l-purple-500', icon: 'bg-purple-500' },
+                      { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'bg-blue-500' },
                     ];
                     const color = colors[index % colors.length];
-                    
+
                     return (
                       <div
                         key={exam.id}
@@ -664,7 +664,7 @@ export default function Settings() {
 
             {/* Privacy Toggle Items */}
             <div className="space-y-3">
-              <div 
+              <div
                 onClick={() => togglePrivacy('showProfileToOthers')}
                 className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
               >
@@ -677,7 +677,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => togglePrivacy('allowNotifications')}
                 className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
               >
@@ -690,7 +690,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => togglePrivacy('shareProgressWithTeacher')}
                 className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
               >
@@ -703,7 +703,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => togglePrivacy('dataCollectionConsent')}
                 className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
               >
@@ -757,16 +757,15 @@ export default function Settings() {
               {TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
-                
+
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                      isActive 
-                        ? 'bg-gray-900 text-white shadow-lg' 
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-gray-600 hover:bg-gray-100'
+                      }`}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">{tab.label}</span>

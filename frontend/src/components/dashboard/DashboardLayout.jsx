@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
+  Menu,
+  X,
   BookOpen,
   MessageSquare,
   FileText,
   BarChart3,
   Settings,
   LogOut,
-  Menu,
-  X,
   Sparkles,
+  Bell,
   HelpCircle,
   LayoutGrid,
   GraduationCap,
-  StickyNote
+  StickyNote,
+  Calendar
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import ChatbotPanel from "./ChatbotPanel";
@@ -66,18 +68,13 @@ const navItems = [
     icon: Settings,
     path: "/about-you"
   },
-  {
-    id: "help",
-    label: "Updates & FAQ",
-    icon: HelpCircle,
-    path: "/help"
-  },
+
 ];
 
 export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useUserStore();
+  const { user, calendar, logout } = useUserStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatbotOpen, setChatbotOpen] = useState(false);
 
@@ -105,18 +102,30 @@ export default function DashboardLayout({ children }) {
       >
         {/* Logo */}
         <div className="p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+          {sidebarOpen ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <span className="font-bold text-gray-900 text-lg">The brainwave</span>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Collapse sidebar"
+              >
+                <Menu className="w-5 h-5 text-gray-600" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mx-auto"
+              title="Expand sidebar"
+            >
               <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            {sidebarOpen && (
-              <span className="font-bold text-gray-900 text-lg">The brainwave</span>
-            )}
-          </div>
-          {sidebarOpen && (
-            <div className="w-6 h-6 rounded border border-gray-300 flex items-center justify-center">
-              <div className="w-2 h-3 border border-gray-400 rounded-sm" />
-            </div>
+            </button>
           )}
         </div>
 
@@ -153,13 +162,13 @@ export default function DashboardLayout({ children }) {
           })}
         </nav>
 
-        {/* Pro Plan Card - Orange Gradient */}
+        {/* Calendar Reminders Card - Orange Gradient */}
         {sidebarOpen && (
           <div className="px-3 pb-3">
             <div
               className="rounded-2xl p-5 relative overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)'
+                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%)'
               }}
             >
               {/* Decorative circles */}
@@ -169,18 +178,61 @@ export default function DashboardLayout({ children }) {
 
               <div className="relative z-10">
                 <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center mb-3">
-                  <GraduationCap className="w-5 h-5 text-white" />
+                  <Calendar className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-white font-bold text-lg mb-1">Pro Plan</h3>
-                <p className="text-white/80 text-xs mb-4">
-                  Unlock all features and strengthen your learning!
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-white font-semibold">1000 / mo</span>
-                  <button className="px-4 py-1.5 rounded-sm bg-white text-gray-900 text-sm font-semibold hover:bg-gray-100 transition-colors">
-                    Live soon
-                  </button>
-                </div>
+                <h3 className="text-white font-bold text-lg mb-1">Reminders</h3>
+
+                {/* Calendar Reminder Logic */}
+                {!calendar.exams || calendar.exams.length === 0 ? (
+                  <p className="text-white/90 text-sm">
+                    No upcoming exams. Have a great day! 📚
+                  </p>
+                ) : (() => {
+                  const today = new Date();
+                  const upcomingExams = calendar.exams
+                    .map(exam => ({
+                      ...exam,
+                      dateObj: new Date(exam.date)
+                    }))
+                    .filter(exam => exam.dateObj >= today)
+                    .sort((a, b) => a.dateObj - b.dateObj);
+
+                  if (upcomingExams.length === 0) {
+                    return (
+                      <p className="text-white/90 text-sm">
+                        All caught up! No upcoming exams.
+                      </p>
+                    );
+                  }
+
+                  const nextExam = upcomingExams[0];
+                  const daysUntil = Math.ceil((nextExam.dateObj - today) / (1000 * 60 * 60 * 24));
+                  const dateStr = nextExam.dateObj.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                  });
+
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-white/90 text-sm font-medium">
+                        {daysUntil === 0 ? '🔥 Today!' :
+                          daysUntil === 1 ? '⚡ Tomorrow' :
+                            `📅 In ${daysUntil} days`}
+                      </p>
+                      <p className="text-white font-semibold text-base">
+                        {nextExam.subject}
+                      </p>
+                      <p className="text-white/70 text-xs">
+                        {dateStr}
+                      </p>
+                      {upcomingExams.length > 1 && (
+                        <p className="text-white/60 text-xs mt-2">
+                          +{upcomingExams.length - 1} more exam{upcomingExams.length > 2 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -198,9 +250,12 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-6">
-        {children}
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {children}
+        </div>
       </main>
 
       {/* Mobile Menu Toggle */}
@@ -213,6 +268,6 @@ export default function DashboardLayout({ children }) {
 
       {/* Chatbot Panel */}
       <ChatbotPanel isOpen={chatbotOpen} onClose={() => setChatbotOpen(false)} />
-    </div>
+    </div >
   );
 }

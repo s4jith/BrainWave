@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
+import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -316,13 +317,13 @@ export default function StudentManagement() {
                 onClick={handleExportCSV}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
               >
-                📥 Export CSV
+                <Download className="w-4 h-4" /> Export CSV
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
               >
-                ➕ Add Student
+                <Plus className="w-4 h-4" /> Add Student
               </button>
             </div>
           </div>
@@ -407,21 +408,21 @@ export default function StudentManagement() {
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                             title="Edit"
                           >
-                            ✏️
+                            <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleResetPassword(student)}
                             className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
                             title="Reset Password"
                           >
-                            🔑
+                            <Key className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteStudent(student.id)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                             title="Delete"
                           >
-                            🗑️
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -439,9 +440,12 @@ export default function StudentManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Add New Student</h2>
-            <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded">
-              💡 User ID and Password will be auto-generated based on name and age.<br />
-              <strong>Format:</strong> ID = name + age + number, Password = name + age
+            <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded flex items-start gap-2">
+              <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>
+                User ID and Password will be auto-generated based on name and age.<br />
+                <strong>Format:</strong> ID = name + age + number, Password = name + age
+              </span>
             </p>
             <form onSubmit={handleAddStudent} className="space-y-4">
               <div>
@@ -626,7 +630,7 @@ export default function StudentManagement() {
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
             <div className="text-center mb-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">✅</span>
+                <CheckCircle className="w-16 h-16 text-green-600" />
               </div>
               <h2 className="text-xl font-bold text-green-600">Student Created Successfully!</h2>
             </div>
@@ -638,9 +642,9 @@ export default function StudentManagement() {
                   <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.user_id}</code>
                   <button
                     onClick={() => copyToClipboard(newCredentials.user_id)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center gap-1"
                   >
-                    📋 Copy
+                    <Clipboard className="w-3 h-3" /> Copy
                   </button>
                 </div>
               </div>
@@ -650,16 +654,17 @@ export default function StudentManagement() {
                   <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.password}</code>
                   <button
                     onClick={() => copyToClipboard(newCredentials.password)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center gap-1"
                   >
-                    📋 Copy
+                    <Clipboard className="w-3 h-3" /> Copy
                   </button>
                 </div>
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded">
-              ⚠️ <strong>Important:</strong> {newCredentials.note}
+            <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+              <span><strong>Important:</strong> {newCredentials.note}</span>
             </p>
 
             <button

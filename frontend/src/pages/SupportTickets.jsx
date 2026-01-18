@@ -230,7 +230,7 @@ export default function SupportTickets() {
     // Admin Layout
     <div className="min-h-screen bg-gray-50">
       {/* Admin Header */}
-      <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">

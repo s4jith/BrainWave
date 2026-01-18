@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
+import { Bell } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="p-2 bg-white/20 hover:bg-white/30 rounded-full relative"
                 >
-                  <span className="text-xl">🔔</span>
+                  <Bell className="w-5 h-5 text-white" />
                   {unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -333,7 +334,7 @@ export default function AdminDashboard() {
 }
 
 function StatCard({ label, value, icon, color }) {
-  const colors = { blue: "from-blue-500 to-blue-600", green: "from-green-500 to-green-600", purple: "from-purple-500 to-purple-600", emerald: "from-emerald-500 to-emerald-600", orange: "from-orange-500 to-orange-600", pink: "from-pink-500 to-pink-600" };
+  const colors = { blue: "from-blue-500 to-blue-600", green: "from-green-500 to-green-600", purple: "from-purple-500 to-purple-600", emerald: "from-blue-400 to-blue-500", orange: "from-blue-500 to-blue-700", pink: "from-blue-600 to-blue-700" };
   return (
     <div className={`bg-gradient-to-br ${colors[color]} text-white rounded-xl p-4 shadow-sm`}>
       <div className="flex items-center justify-between mb-2"><span className="text-2xl">{icon}</span></div>

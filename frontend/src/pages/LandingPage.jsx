@@ -392,37 +392,10 @@ const ScrollProgress = ({ progress, panels }) => (
 
 // Footer
 const Footer = () => {
-    const navigate = useNavigate();
     return (
-        <footer className="bg-neutral-950 text-white py-12 px-6">
-            <div className="max-w-6xl mx-auto">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-8">
-                    <div className="col-span-2 md:col-span-1">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                                <Zap className="w-5 h-5 text-neutral-900" />
-                            </div>
-                            <span className="text-lg font-bold">Brainwave</span>
-                        </div>
-                        <p className="text-sm text-neutral-400">AI-powered learning for everyone.</p>
-                    </div>
-                    {['Product', 'Resources', 'Company', 'Legal'].map((title) => (
-                        <div key={title}>
-                            <h4 className="font-semibold text-sm mb-3">{title}</h4>
-                            <ul className="space-y-2">
-                                {['Link 1', 'Link 2', 'Link 3'].map((link, i) => (
-                                    <li key={i}>
-                                        <span onClick={() => navigate('/login')} className="text-sm text-neutral-400 hover:text-white cursor-pointer">{link}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
-                </div>
-                <div className="border-t border-neutral-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p className="text-sm text-neutral-500">© 2025 Brainwave. All rights reserved.</p>
-                    <p className="text-sm text-neutral-500">Built with ❤ by <span className="text-white font-medium">4%</span></p>
-                </div>
+        <footer className="bg-neutral-950 text-white py-6 px-6">
+            <div className="max-w-6xl mx-auto text-center">
+                <p className="text-sm text-neutral-400">Made with ❤️ by <span className="text-white font-medium">4%</span></p>
             </div>
         </footer>
     );

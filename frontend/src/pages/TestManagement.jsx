@@ -14,12 +14,12 @@ export default function TestManagement() {
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
-  
+
   // Filters
   const [filterClass, setFilterClass] = useState("");
   const [filterSubject, setFilterSubject] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  
+
   // Comment modal
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
@@ -38,7 +38,7 @@ export default function TestManagement() {
       if (filterClass) url += `class_level=${filterClass}&`;
       if (filterSubject) url += `subject=${filterSubject}&`;
       if (filterStatus) url += `status=${filterStatus}&`;
-      
+
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch tests");
       const data = await response.json();
@@ -84,7 +84,7 @@ export default function TestManagement() {
 
   const handleDeleteTest = async (testId) => {
     if (!confirm("Are you sure you want to delete this test? This will also delete all submissions.")) return;
-    
+
     try {
       const response = await fetch(`${API_URL}/api/tests/${testId}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Failed to delete test");
@@ -109,7 +109,7 @@ export default function TestManagement() {
       alert("Please enter a comment");
       return;
     }
-    
+
     setSavingComment(true);
     try {
       const response = await fetch(`${API_URL}/api/tests/submissions/${selectedSubmission.id}/comment`, {
@@ -117,16 +117,16 @@ export default function TestManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ comment: comment.trim() })
       });
-      
+
       if (!response.ok) throw new Error("Failed to save comment");
-      
+
       // Update submission in list
-      setSubmissions(submissions.map(s => 
-        s.id === selectedSubmission.id 
+      setSubmissions(submissions.map(s =>
+        s.id === selectedSubmission.id
           ? { ...s, admin_comment: comment, is_reviewed: true }
           : s
       ));
-      
+
       setShowCommentModal(false);
       setSelectedSubmission(null);
       setComment("");
@@ -150,7 +150,7 @@ export default function TestManagement() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -212,7 +212,7 @@ export default function TestManagement() {
                 <option key={c} value={c}>Class {c}</option>
               ))}
             </select>
-            
+
             <select
               value={filterSubject}
               onChange={(e) => setFilterSubject(e.target.value)}
@@ -223,7 +223,7 @@ export default function TestManagement() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            
+
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -234,7 +234,7 @@ export default function TestManagement() {
               <option value="upcoming">Upcoming</option>
               <option value="closed">Closed</option>
             </select>
-            
+
             <button
               onClick={() => { setFilterClass(""); setFilterSubject(""); setFilterStatus(""); }}
               className="px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-lg"
@@ -248,7 +248,7 @@ export default function TestManagement() {
           {/* Test List */}
           <div className="lg:col-span-1 space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Tests ({tests.length})</h2>
-            
+
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-600 mx-auto"></div>
@@ -268,9 +268,8 @@ export default function TestManagement() {
                 <div
                   key={test.id}
                   onClick={() => handleTestClick(test)}
-                  className={`bg-white p-4 rounded-xl shadow-sm cursor-pointer transition hover:shadow-md ${
-                    selectedTest?.id === test.id ? "ring-2 ring-purple-500" : ""
-                  }`}
+                  className={`bg-white p-4 rounded-xl shadow-sm cursor-pointer transition hover:shadow-md ${selectedTest?.id === test.id ? "ring-2 ring-purple-500" : ""
+                    }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-medium text-gray-900">{test.title}</h3>
@@ -362,17 +361,16 @@ export default function TestManagement() {
                             </a>
                             <button
                               onClick={() => openCommentModal(sub)}
-                              className={`px-3 py-1 rounded text-sm ${
-                                sub.is_reviewed
+                              className={`px-3 py-1 rounded text-sm ${sub.is_reviewed
                                   ? "bg-green-100 text-green-700 hover:bg-green-200"
                                   : "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                              }`}
+                                }`}
                             >
                               {sub.is_reviewed ? "✅ Edit Comment" : "💬 Add Comment"}
                             </button>
                           </div>
                         </div>
-                        
+
                         {sub.admin_comment && (
                           <div className="mt-3 p-3 bg-green-50 rounded-lg">
                             <p className="text-sm text-green-800">
@@ -403,7 +401,7 @@ export default function TestManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4">
             <h2 className="text-xl font-bold mb-4">Add Feedback for {selectedSubmission.student_name}</h2>
-            
+
             <div className="mb-4">
               <a
                 href={`${API_URL}${selectedSubmission.pdf_url}`}
@@ -414,7 +412,7 @@ export default function TestManagement() {
                 📄 View Student's Submission
               </a>
             </div>
-            
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Your Comment/Feedback
@@ -427,11 +425,11 @@ export default function TestManagement() {
                 placeholder="Enter your feedback for the student..."
               />
             </div>
-            
+
             <p className="text-sm text-gray-500 mb-4">
               ℹ️ The student will receive a notification when you save this comment.
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowCommentModal(false); setSelectedSubmission(null); }}

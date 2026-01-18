@@ -55,7 +55,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
-  
+
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   const setSelectedText = useAnnotationStore((state) => state.setSelectedText);
@@ -64,10 +64,10 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
   // Get book ID from currentLesson
   const bookId = currentLesson?.book_id;
-  
+
   // Check if pdfUrl is a Cloudinary URL (starts with http)
   const isCloudinaryUrl = pdfUrl?.startsWith('http');
-  
+
   // Extract file path from local pdfUrl (legacy support)
   const getFilePath = useCallback(() => {
     if (!pdfUrl || isCloudinaryUrl) return null;
@@ -80,7 +80,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     const fetchPdfInfo = async () => {
       try {
         let response;
-        
+
         if (bookId) {
           // Use new book ID-based endpoint for Cloudinary PDFs
           response = await fetch(`${API_BASE}/api/books/render/${bookId}/info`);
@@ -114,10 +114,10 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   useEffect(() => {
     const loadPage = async () => {
       if (!numPages) return;
-      
+
       setIsLoading(true);
       const backendScale = 1.5 * scale;
-      
+
       let url;
       if (bookId) {
         // Use new book ID-based endpoint for Cloudinary PDFs
@@ -128,7 +128,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         if (!filePath) return;
         url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}`;
       }
-      
+
       setImageUrl(url);
     };
 
@@ -444,13 +444,13 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
       {/* Selection Mode Indicator */}
       {isSelecting && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-violet-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
           <Scissors className="h-4 w-4" />
           <span className="text-sm font-medium">Draw a box around your doubt</span>
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-white hover:bg-violet-700"
+            className="h-6 w-6 text-white hover:bg-blue-700"
             onClick={cancelSelection}
           >
             <X className="h-4 w-4" />
@@ -538,7 +538,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   {/* Selection Rectangle */}
                   {isSelecting && selectionStart && selectionEnd && (
                     <div
-                      className="absolute border-2 border-violet-500 bg-violet-500/20 pointer-events-none"
+                      className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
                       style={getSelectionStyle()}
                     />
                   )}
@@ -546,7 +546,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   {/* Selected Area Highlight */}
                   {selectedArea && showActionPopup && (
                     <div
-                      className="absolute border-2 border-violet-500 bg-violet-500/10"
+                      className="absolute border-2 border-blue-500 bg-blue-500/10"
                       style={{
                         left: selectedArea.x,
                         top: selectedArea.y,
@@ -611,12 +611,12 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
               <div className="grid gap-3">
                 <Button
                   variant="outline"
-                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-violet-50 hover:border-violet-200 dark:hover:bg-violet-950/30"
+                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-950/30"
                   onClick={() => handleAction("define")}
                   disabled={isProcessing}
                 >
-                  <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                    <BookOpen className="h-5 w-5 text-violet-600" />
+                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                    <BookOpen className="h-5 w-5 text-blue-600" />
                   </div>
                   <div className="text-left">
                     <div className="font-medium">Define</div>
@@ -668,7 +668,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         {/* Floating "Doubt?" Button */}
         {currentLesson && !isLoading && !loadError && !isSelecting && !showActionPopup && (
           <Button
-            className="fixed bottom-6 right-6 h-14 px-6 rounded-full shadow-lg bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 z-40 gap-2"
+            className="fixed bottom-6 right-6 h-14 px-6 rounded-full shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 z-40 gap-2"
             onClick={startSelectionMode}
             title="Have a doubt? Select an area to ask AI (Press D)"
           >

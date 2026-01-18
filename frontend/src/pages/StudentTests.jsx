@@ -227,10 +227,10 @@ export default function StudentTests() {
               <p className="text-gray-500">{test.description || "No description available"}</p>
             </div>
             <div className={`px-4 py-2 rounded-full text-sm font-medium ${test.has_submitted
-                ? "bg-green-100 text-green-700"
-                : test.status === "closed"
-                  ? "bg-gray-100 text-gray-600"
-                  : "bg-blue-100 text-blue-700"
+              ? "bg-blue-100 text-blue-700"
+              : test.status === "closed"
+                ? "bg-gray-100 text-gray-600"
+                : "bg-blue-100 text-blue-700"
               }`}>
               {stats.status}
             </div>
@@ -273,7 +273,7 @@ export default function StudentTests() {
             {!test.has_submitted && test.status !== "closed" && (
               <button
                 onClick={() => openSubmitModal(test)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-medium"
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
               >
                 <Upload className="w-4 h-4" />
                 Submit Answer
@@ -296,7 +296,7 @@ export default function StudentTests() {
                 {test.has_feedback && (
                   <button
                     onClick={() => viewFeedback(submission)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm font-medium"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm font-medium"
                   >
                     <MessageSquare className="w-4 h-4" />
                     View Feedback
@@ -334,7 +334,7 @@ export default function StudentTests() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Status</span>
-                  <span className="font-medium text-green-600">Completed</span>
+                  <span className="font-medium text-blue-600">Completed</span>
                 </div>
               </div>
             </div>
@@ -342,8 +342,8 @@ export default function StudentTests() {
             {test.has_feedback && (
               <div className="bg-white rounded-2xl p-6 border border-gray-100">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
                   </div>
                   <h3 className="font-semibold text-gray-900">Teacher Feedback</h3>
                 </div>
@@ -451,8 +451,8 @@ export default function StudentTests() {
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setCurrentPage(1); }}
               className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === tab.id
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
                 }`}
             >
               {tab.label}
@@ -504,16 +504,16 @@ export default function StudentTests() {
                     {/* Test Info */}
                     <div className="col-span-5 flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${test.has_submitted
-                          ? "bg-green-100"
-                          : test.status === "closed"
-                            ? "bg-gray-100"
-                            : "bg-blue-100"
+                        ? "bg-blue-100"
+                        : test.status === "closed"
+                          ? "bg-gray-100"
+                          : "bg-blue-100"
                         }`}>
                         <FileText className={`w-5 h-5 ${test.has_submitted
-                            ? "text-green-600"
-                            : test.status === "closed"
-                              ? "text-gray-500"
-                              : "text-blue-600"
+                          ? "text-blue-600"
+                          : test.status === "closed"
+                            ? "text-gray-500"
+                            : "text-blue-600"
                           }`} />
                       </div>
                       <div>
@@ -535,10 +535,10 @@ export default function StudentTests() {
                     {/* Status */}
                     <div className="col-span-2 flex items-center justify-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${test.has_submitted
-                          ? "bg-green-100 text-green-700"
-                          : test.status === "closed"
-                            ? "bg-gray-100 text-gray-600"
-                            : "bg-blue-100 text-blue-700"
+                        ? "bg-blue-100 text-blue-700"
+                        : test.status === "closed"
+                          ? "bg-gray-100 text-gray-600"
+                          : "bg-blue-100 text-blue-700"
                         }`}>
                         {stats.status}
                       </span>
@@ -574,8 +574,8 @@ export default function StudentTests() {
                       key={page}
                       onClick={() => setCurrentPage(page)}
                       className={`w-8 h-8 rounded-lg text-sm font-medium transition ${currentPage === page
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-600 hover:bg-gray-100"
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-600 hover:bg-gray-100"
                         }`}
                     >
                       {page}
@@ -653,7 +653,7 @@ export default function StudentTests() {
               <button
                 onClick={handleSubmitTest}
                 disabled={uploading || !uploadFile}
-                className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 font-medium transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition flex items-center justify-center gap-2"
               >
                 {uploading ? (
                   <>
@@ -702,14 +702,14 @@ export default function StudentTests() {
               </a>
             )}
 
-            <div className="bg-purple-50 p-4 rounded-xl mb-6">
+            <div className="bg-blue-50 p-4 rounded-xl mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="w-4 h-4 text-purple-600" />
-                <h3 className="font-medium text-purple-900">Teacher's Feedback</h3>
+                <MessageSquare className="w-4 h-4 text-blue-600" />
+                <h3 className="font-medium text-blue-900">Teacher's Feedback</h3>
               </div>
-              <p className="text-purple-800">{selectedSubmission.admin_comment || "No comment yet"}</p>
+              <p className="text-blue-800">{selectedSubmission.admin_comment || "No comment yet"}</p>
               {selectedSubmission.comment_at && (
-                <p className="text-xs text-purple-600 mt-2">
+                <p className="text-xs text-blue-600 mt-2">
                   Received: {new Date(selectedSubmission.comment_at).toLocaleString()}
                 </p>
               )}
@@ -717,7 +717,7 @@ export default function StudentTests() {
 
             <button
               onClick={() => { setShowFeedbackModal(false); setSelectedSubmission(null); }}
-              className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium transition"
+              className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
             >
               Close
             </button>

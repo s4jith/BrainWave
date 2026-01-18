@@ -194,16 +194,16 @@ Action: ${actionLabel}`,
       <SheetContent
         side="right"
         onClose={handleClose}
-        className="w-[500px] max-w-[90vw]"
+        className="w-[500px] max-w-[90vw] flex flex-col"
       >
-        <SheetHeader className="mb-6">
+        <SheetHeader className="mb-6 flex-shrink-0">
           <SheetTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             AI Assistant
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 flex-1 overflow-y-auto pr-2">
           {/* Selected Content Preview */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2">

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Send, Plus, Clock, Search, Share2, LayoutGrid, ArrowUp,
   ChevronLeft, Settings, Sparkles, Zap, Brain,
-  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon
+  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon, XCircle
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import useUserStore from "../../stores/userStore";
@@ -238,7 +238,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     if (!validTypes.includes(file.type)) {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "❌ Please upload a valid image (JPG, PNG, or WebP).",
+        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Please upload a valid image (JPG, PNG, or WebP).</span>),
         timestamp: new Date(),
         isError: true
       }]);
@@ -249,7 +249,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     if (file.size > 5 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "❌ Image is too large. Maximum size is 5MB.",
+        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Image is too large. Maximum size is 5MB.</span>),
         timestamp: new Date(),
         isError: true
       }]);
@@ -374,36 +374,29 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* Settings */}
-          <div className="p-3 border-t border-gray-100">
-            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">
-              <Settings className="w-4 h-4" /> Settings
-            </button>
-          </div>
+
         </div>
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col bg-[#fafafa] relative overflow-hidden">
 
           {/* Animated Grid Background */}
-          <div className="absolute inset-0 opacity-[0.03]" style={{
-            backgroundImage: 'linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)',
+          <div className="absolute inset-0 opacity-[0.15]" style={{
+            backgroundImage: 'linear-gradient(to right, #6b7280 1px, transparent 1px), linear-gradient(to bottom, #6b7280 1px, transparent 1px)',
             backgroundSize: '50px 50px',
             animation: 'gridScroll 8s linear infinite'
           }} />
-          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/30" />
-          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-blue-200/20" />
+          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-blue-200/40" />
+          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-blue-300/30" />
 
           {/* Header */}
           <div className="relative z-10 h-14 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6">
             <div className="flex items-center gap-3">
-              <button className="p-2 hover:bg-gray-100 rounded-lg"><Search className="w-5 h-5 text-gray-500" /></button>
               <button onClick={() => setMessages([])} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
                 <Plus className="w-4 h-4 text-gray-600" /><span className="text-sm font-medium text-gray-700">New Chat</span>
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg"><LayoutGrid className="w-5 h-5 text-gray-500" /></button>
               <button
                 onClick={() => {
                   if (messages.length > 0) {
@@ -425,7 +418,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           </div>
 
           {/* Content Area - Scrollable */}
-          <div className="relative z-10 flex-1 overflow-y-auto">
+          <div className="relative z-10 flex-1 overflow-y-scroll">
             {messages.length === 0 ? (
               /* Welcome State */
               <div className="h-full flex flex-col items-center justify-center px-6 pb-32">
@@ -546,7 +539,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 >
                   <Camera className="w-5 h-5" />
                 </button>
-                <button className="p-2 rounded-full hover:bg-gray-100 text-gray-400"><Clock className="w-5 h-5" /></button>
                 <input
                   value={message}
                   onChange={e => setMessage(e.target.value)}

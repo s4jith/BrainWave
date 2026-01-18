@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
+import { CheckCircle, XCircle } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const SUBJECTS = [
   "Mathematics",
   "Science",
-  "Social Science", 
+  "Social Science",
   "English",
   "Hindi",
   "Physics",
@@ -23,7 +24,7 @@ export default function CreateTest() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -34,7 +35,7 @@ export default function CreateTest() {
     end_datetime: "",
     duration_minutes: 60
   });
-  
+
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfPreview, setPdfPreview] = useState(null);
 
@@ -53,12 +54,12 @@ export default function CreateTest() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!pdfFile) {
       setError("Please upload a PDF file for the test");
       return;
     }
-    
+
     if (formData.is_timed) {
       if (!formData.start_datetime || !formData.end_datetime) {
         setError("Please set both start and end times for timed tests");
@@ -69,10 +70,10 @@ export default function CreateTest() {
         return;
       }
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const submitData = new FormData();
       submitData.append("title", formData.title);
@@ -82,7 +83,7 @@ export default function CreateTest() {
       submitData.append("is_timed", formData.is_timed);
       submitData.append("created_by", user?.user_id || "admin");
       submitData.append("pdf_file", pdfFile);
-      
+
       if (formData.is_timed) {
         submitData.append("start_datetime", formData.start_datetime);
         submitData.append("end_datetime", formData.end_datetime);
@@ -90,20 +91,20 @@ export default function CreateTest() {
           submitData.append("duration_minutes", formData.duration_minutes);
         }
       }
-      
+
       const response = await fetch(`${API_URL}/api/tests/create`, {
         method: "POST",
         body: submitData
       });
-      
+
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to create test");
       }
-      
+
       const result = await response.json();
       setSuccess(`Test created successfully! ${result.students_notified} students have been notified.`);
-      
+
       // Reset form
       setFormData({
         title: "",
@@ -117,12 +118,12 @@ export default function CreateTest() {
       });
       setPdfFile(null);
       setPdfPreview(null);
-      
+
       // Redirect after 2 seconds
       setTimeout(() => {
         navigate("/test-management");
       }, 2000);
-      
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -133,7 +134,7 @@ export default function CreateTest() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-green-600 to-teal-600 text-white shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -145,7 +146,7 @@ export default function CreateTest() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold">Create New Test</h1>
-                <p className="text-green-100 text-sm">Upload test PDF for students</p>
+                <p className="text-blue-100 text-sm">Upload test PDF for students</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -159,14 +160,18 @@ export default function CreateTest() {
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 py-8">
         {success && (
-          <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded">
-            <p className="text-green-700">✅ {success}</p>
+          <div className="mb-6 bg-green-50 border-l-4 border-blue-500 p-4 rounded">
+            <p className="text-green-700 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5" /> {success}
+            </p>
           </div>
         )}
-        
+
         {error && (
           <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
-            <p className="text-red-700">❌ {error}</p>
+            <p className="text-red-700 flex items-center gap-2">
+              <XCircle className="w-5 h-5" /> {error}
+            </p>
           </div>
         )}
 
@@ -174,7 +179,7 @@ export default function CreateTest() {
           {/* Basic Info */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900 border-b pb-2">Test Information</h2>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Test Title *</label>
               <input
@@ -182,42 +187,42 @@ export default function CreateTest() {
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., Mathematics Unit Test - Chapter 1"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={3}
                 placeholder="Add any instructions or notes for students..."
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Class Level *</label>
                 <select
                   value={formData.class_level}
                   onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {CLASSES.map(c => (
                     <option key={c} value={c}>Class {c}</option>
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
                 <select
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {SUBJECTS.map(s => (
                     <option key={s} value={s}>{s}</option>
@@ -230,8 +235,8 @@ export default function CreateTest() {
           {/* PDF Upload */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900 border-b pb-2">Test Questions (PDF)</h2>
-            
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-500 transition">
+
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition">
               <input
                 type="file"
                 accept=".pdf"
@@ -243,7 +248,7 @@ export default function CreateTest() {
                 {pdfPreview ? (
                   <div className="flex flex-col items-center">
                     <span className="text-4xl mb-2">📄</span>
-                    <p className="text-green-600 font-medium">{pdfPreview}</p>
+                    <p className="text-blue-600 font-medium">{pdfPreview}</p>
                     <p className="text-sm text-gray-500 mt-1">Click to change file</p>
                   </div>
                 ) : (
@@ -260,20 +265,20 @@ export default function CreateTest() {
           {/* Timing Options */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900 border-b pb-2">Timing (Optional)</h2>
-            
+
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
                 id="is_timed"
                 checked={formData.is_timed}
                 onChange={(e) => setFormData({ ...formData, is_timed: e.target.checked })}
-                className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
               />
               <label htmlFor="is_timed" className="text-sm font-medium text-gray-700">
                 This is a timed test with specific start and end dates
               </label>
             </div>
-            
+
             {formData.is_timed && (
               <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
                 <div>
@@ -282,20 +287,20 @@ export default function CreateTest() {
                     type="datetime-local"
                     value={formData.start_datetime}
                     onChange={(e) => setFormData({ ...formData, start_datetime: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">End Date & Time *</label>
                   <input
                     type="datetime-local"
                     value={formData.end_datetime}
                     onChange={(e) => setFormData({ ...formData, end_datetime: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
                   <input
@@ -304,12 +309,12 @@ export default function CreateTest() {
                     max={180}
                     value={formData.duration_minutes}
                     onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
             )}
-            
+
             {!formData.is_timed && (
               <p className="text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
                 ℹ️ Without timing, this will be a <strong>general test</strong> that students can complete anytime.
@@ -341,7 +346,7 @@ export default function CreateTest() {
             <button
               type="submit"
               disabled={loading || !pdfFile}
-              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? "Creating Test..." : "Create Test & Notify Students"}
             </button>

@@ -14,7 +14,12 @@ import {
   Home,
   RotateCcw,
   Award,
-  Loader2
+  Loader2,
+  Star,
+  PartyPopper,
+  ThumbsUp,
+  Dumbbell,
+  Lightbulb
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
@@ -99,18 +104,42 @@ export default function TestResult() {
   };
 
   const getScoreBgColor = (score) => {
-    if (score >= 80) return "from-green-500 to-emerald-500";
+    if (score >= 80) return "from-blue-500 to-blue-600";
     if (score >= 60) return "from-yellow-500 to-amber-500";
     return "from-red-500 to-orange-500";
   };
 
   const getScoreMessage = (score) => {
-    if (score >= 90) return "Outstanding! 🌟";
-    if (score >= 80) return "Excellent Work! 🎉";
-    if (score >= 70) return "Good Job! 👍";
-    if (score >= 60) return "Keep Practicing! 💪";
-    if (score >= 50) return "Needs Improvement 📚";
-    return "More Practice Required 📖";
+    if (score >= 90) return (
+      <span className="flex items-center gap-2">
+        Outstanding! <Star className="w-5 h-5 inline text-yellow-300" />
+      </span>
+    );
+    if (score >= 80) return (
+      <span className="flex items-center gap-2">
+        Excellent Work! <PartyPopper className="w-5 h-5 inline" />
+      </span>
+    );
+    if (score >= 70) return (
+      <span className="flex items-center gap-2">
+        Good Job! <ThumbsUp className="w-5 h-5 inline" />
+      </span>
+    );
+    if (score >= 60) return (
+      <span className="flex items-center gap-2">
+        Keep Practicing! <Dumbbell className="w-5 h-5 inline" />
+      </span>
+    );
+    if (score >= 50) return (
+      <span className="flex items-center gap-2">
+        Needs Improvement <BookOpen className="w-5 h-5 inline" />
+      </span>
+    );
+    return (
+      <span className="flex items-center gap-2">
+        More Practice Required <BookOpen className="w-5 h-5 inline" />
+      </span>
+    );
   };
 
   return (
@@ -157,7 +186,7 @@ export default function TestResult() {
             </p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-2 text-purple-600 mb-2">
+            <div className="flex items-center gap-2 text-orange-600 mb-2">
               <Target className="w-5 h-5" />
               <span className="text-sm font-medium">Questions</span>
             </div>
@@ -284,27 +313,29 @@ export default function TestResult() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500 mb-1">Your Answer:</p>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
                         {evaluation.student_answer || "No answer provided"}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500 mb-1">Correct Answer:</p>
-                      <p className="text-green-700 bg-green-50 p-3 rounded-lg">
+                      <p className="text-green-700 bg-green-50 p-3 rounded-lg max-h-40 overflow-y-auto">
                         {evaluation.correct_answer}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500 mb-1">Feedback:</p>
-                      <p className="text-gray-600 bg-blue-50 p-3 rounded-lg">
+                      <p className="text-gray-600 bg-blue-50 p-3 rounded-lg max-h-40 overflow-y-auto">
                         {evaluation.feedback}
                       </p>
                     </div>
                     {/* Explanation - Why the answer is correct/wrong */}
                     {evaluation.explanation && (
                       <div>
-                        <p className="text-sm font-medium text-purple-600 mb-1">💡 Explanation:</p>
-                        <p className="text-gray-700 bg-purple-50 p-3 rounded-lg border border-purple-100">
+                        <p className="text-sm font-medium text-orange-600 mb-1 flex items-center gap-2">
+                          <Lightbulb className="w-4 h-4 inline" /> Explanation:
+                        </p>
+                        <p className="text-gray-700 bg-orange-50 p-3 rounded-lg border border-orange-100 max-h-40 overflow-y-auto">
                           {evaluation.explanation}
                         </p>
                       </div>

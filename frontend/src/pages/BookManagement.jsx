@@ -18,7 +18,8 @@ import {
   XCircle,
   FileText,
   Layers,
-  Settings
+  Settings,
+  Zap
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -37,7 +38,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export default function BookManagement() {
   const navigate = useNavigate();
   const { user } = useUserStore();
-  
+
   // State
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,7 @@ export default function BookManagement() {
   const [filterClass, setFilterClass] = useState("all");
   const [pineconeStats, setPineconeStats] = useState(null);
   const [syncing, setSyncing] = useState(false);
-  
+
   // Upload form state
   const [uploadForm, setUploadForm] = useState({
     title: "",
@@ -59,16 +60,16 @@ export default function BookManagement() {
     description: "",
     pdf_file: null
   });
-  
+
   // Subjects and classes for filters
   const subjects = ["Mathematics", "Science", "Physics", "Chemistry", "Biology", "Social Science", "English", "Hindi"];
   const classes = [5, 6, 7, 8, 9, 10, 11, 12];
-  
+
   useEffect(() => {
     fetchBooks();
     fetchPineconeStats();
   }, []);
-  
+
   const fetchBooks = async () => {
     setLoading(true);
     try {
@@ -93,7 +94,7 @@ export default function BookManagement() {
       setLoading(false);
     }
   };
-  
+
   const fetchPineconeStats = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/books/admin/pinecone-stats`);
@@ -105,22 +106,22 @@ export default function BookManagement() {
       console.error("Failed to fetch Pinecone stats:", err);
     }
   };
-  
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!uploadForm.pdf_file) {
       alert("Please select a PDF file");
       return;
     }
-    
+
     if (!uploadForm.title.trim()) {
       alert("Please enter a book title");
       return;
     }
-    
+
     setUploading(true);
     setUploadProgress({ stage: "uploading", message: "Uploading PDF file...", percent: 10 });
-    
+
     try {
       const formData = new FormData();
       formData.append("title", uploadForm.title);
@@ -130,22 +131,22 @@ export default function BookManagement() {
       formData.append("description", uploadForm.description);
       formData.append("generate_embeddings", "true");
       formData.append("pdf_file", uploadForm.pdf_file);
-      
+
       setUploadProgress({ stage: "processing", message: "Processing PDF and generating embeddings... This may take several minutes for large books.", percent: 30 });
-      
+
       const response = await fetch(`${API_BASE}/api/books/upload`, {
         method: "POST",
         body: formData
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setUploadProgress({ stage: "complete", message: "Upload complete!", percent: 100 });
-        
-        const embeddingInfo = data.embeddings 
+
+        const embeddingInfo = data.embeddings
           ? `\n\nEmbeddings: ${data.embeddings.embedding_count || 0} vectors created from ${data.embeddings.total_pages || 0} pages`
           : "";
-        
+
         alert(`Book uploaded successfully!${embeddingInfo}`);
         setShowUploadModal(false);
         setUploadForm({
@@ -172,17 +173,17 @@ export default function BookManagement() {
       setUploading(false);
     }
   };
-  
+
   const handleDelete = async (bookId, bookTitle) => {
     if (!confirm(`Are you sure you want to delete "${bookTitle}"?\nThis will also remove embeddings from Pinecone.`)) {
       return;
     }
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/books/${bookId}?delete_embeddings=true`, {
         method: "DELETE"
       });
-      
+
       if (response.ok) {
         alert("Book deleted successfully!");
         fetchBooks();
@@ -196,14 +197,14 @@ export default function BookManagement() {
       alert("Delete failed. Please try again.");
     }
   };
-  
+
   const handleSyncExisting = async () => {
     setSyncing(true);
     try {
       const response = await fetch(`${API_BASE}/api/books/admin/sync-existing`, {
         method: "POST"
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         alert(data.message);
@@ -219,14 +220,14 @@ export default function BookManagement() {
       setSyncing(false);
     }
   };
-  
+
   const handleFixMissingFields = async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
       const response = await fetch(`${API_BASE}/api/books/admin/fix-missing-fields`, {
         method: "POST"
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (!silent) alert(data.message);
@@ -245,22 +246,22 @@ export default function BookManagement() {
       if (!silent) setSyncing(false);
     }
   };
-  
+
   const handleRegenerateEmbeddings = async (bookId, bookTitle) => {
     if (!confirm(`Regenerate embeddings for "${bookTitle}"?\n\nThis will process the PDF again and may take several minutes.`)) {
       return;
     }
-    
+
     // Find the book and mark it as processing in UI
-    setBooks(prev => prev.map(b => 
+    setBooks(prev => prev.map(b =>
       b.id === bookId ? { ...b, processing_status: 'processing' } : b
     ));
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/books/${bookId}/regenerate-embeddings`, {
         method: "POST"
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         alert(`Embeddings regenerated!\n\n${data.details?.embedding_count || 0} vectors created from ${data.details?.total_pages || 0} pages.`);
@@ -277,24 +278,24 @@ export default function BookManagement() {
       fetchBooks();
     }
   };
-  
+
   // Filter books
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         book.description.toLowerCase().includes(searchTerm.toLowerCase());
+      book.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSubject = filterSubject === "all" || book.subject === filterSubject;
     const matchesClass = filterClass === "all" || book.class_level === parseInt(filterClass);
     return matchesSearch && matchesSubject && matchesClass;
   });
-  
+
   // Get unique subjects from books
   const uniqueSubjects = [...new Set(books.map(b => b.subject))];
   const uniqueClasses = [...new Set(books.map(b => b.class_level))].sort((a, b) => a - b);
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -309,10 +310,10 @@ export default function BookManagement() {
                   <BookOpen className="w-6 h-6" />
                   Book Management
                 </h1>
-                <p className="text-purple-200 text-sm">Manage textbooks and AI embeddings</p>
+                <p className="text-blue-200 text-sm">Manage textbooks and AI embeddings</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <Button
                 onClick={() => handleFixMissingFields(false)}
@@ -335,7 +336,7 @@ export default function BookManagement() {
               </Button>
               <Button
                 onClick={() => setShowUploadModal(true)}
-                className="bg-white text-purple-600 hover:bg-purple-50"
+                className="bg-white text-blue-600 hover:bg-blue-50"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Upload Book
@@ -344,7 +345,7 @@ export default function BookManagement() {
           </div>
         </div>
       </header>
-      
+
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Pinecone Stats Card */}
         {pineconeStats && (
@@ -387,7 +388,7 @@ export default function BookManagement() {
             )}
           </div>
         )}
-        
+
         {/* Search and Filters */}
         <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
           <div className="flex flex-wrap gap-4 items-center">
@@ -399,33 +400,33 @@ export default function BookManagement() {
                   placeholder="Search books..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
-            
+
             <select
               value={filterSubject}
               onChange={(e) => setFilterSubject(e.target.value)}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Subjects</option>
               {uniqueSubjects.map(subject => (
                 <option key={subject} value={subject}>{subject}</option>
               ))}
             </select>
-            
+
             <select
               value={filterClass}
               onChange={(e) => setFilterClass(e.target.value)}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Classes</option>
               {uniqueClasses.map(cls => (
                 <option key={cls} value={cls}>Class {cls}</option>
               ))}
             </select>
-            
+
             <Button
               onClick={fetchBooks}
               variant="outline"
@@ -435,18 +436,18 @@ export default function BookManagement() {
             </Button>
           </div>
         </div>
-        
+
         {/* Books Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : filteredBooks.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center">
             <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-800 mb-2">No Books Found</h3>
             <p className="text-gray-500 mb-6">
-              {books.length === 0 
+              {books.length === 0
                 ? "Upload your first book or sync existing books from the system."
                 : "No books match your search criteria."
               }
@@ -467,12 +468,12 @@ export default function BookManagement() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredBooks.map(book => (
-              <div 
-                key={book.id} 
+              <div
+                key={book.id}
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition"
               >
                 {/* Book Header */}
-                <div className="bg-gradient-to-r from-purple-500 to-indigo-500 p-4 text-white">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg line-clamp-1">{book.title}</h3>
@@ -487,13 +488,13 @@ export default function BookManagement() {
                     <FileText className="w-8 h-8 opacity-50" />
                   </div>
                 </div>
-                
+
                 {/* Book Body */}
                 <div className="p-4">
                   <p className="text-gray-600 text-sm line-clamp-2 mb-4">
                     {book.description || "No description available"}
                   </p>
-                  
+
                   {/* Status */}
                   <div className="flex items-center gap-2 mb-4">
                     {book.processing_status === 'processing' ? (
@@ -513,7 +514,7 @@ export default function BookManagement() {
                       </span>
                     )}
                   </div>
-                  
+
                   {/* Chapters */}
                   {book.chapters && book.chapters.length > 0 && (
                     <div className="mb-4">
@@ -523,7 +524,7 @@ export default function BookManagement() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -560,7 +561,7 @@ export default function BookManagement() {
                     </Button>
                   </div>
                 </div>
-                
+
                 {/* Footer */}
                 <div className="px-4 py-3 bg-gray-50 text-xs text-gray-500">
                   Added: {new Date(book.created_at).toLocaleDateString()}
@@ -570,28 +571,28 @@ export default function BookManagement() {
           </div>
         )}
       </main>
-      
+
       {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto">
-            <button 
+            <button
               onClick={() => setShowUploadModal(false)}
               className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-lg"
             >
               <XCircle className="w-5 h-5 text-gray-500" />
             </button>
-            
+
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <Upload className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <Upload className="w-6 h-6 text-blue-600" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-800">Upload New Book</h2>
                 <p className="text-sm text-gray-500">Add a textbook to the library</p>
               </div>
             </div>
-            
+
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -602,11 +603,11 @@ export default function BookManagement() {
                   value={uploadForm.title}
                   onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
                   placeholder="e.g., Mathematics - Chapter 1"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -615,7 +616,7 @@ export default function BookManagement() {
                   <select
                     value={uploadForm.subject}
                     onChange={(e) => setUploadForm({ ...uploadForm, subject: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     required
                   >
                     {subjects.map(subject => (
@@ -623,7 +624,7 @@ export default function BookManagement() {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Class Level *
@@ -631,7 +632,7 @@ export default function BookManagement() {
                   <select
                     value={uploadForm.class_level}
                     onChange={(e) => setUploadForm({ ...uploadForm, class_level: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     required
                   >
                     {classes.map(cls => (
@@ -639,7 +640,7 @@ export default function BookManagement() {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Chapter # *
@@ -651,12 +652,12 @@ export default function BookManagement() {
                     value={uploadForm.chapter_number}
                     onChange={(e) => setUploadForm({ ...uploadForm, chapter_number: parseInt(e.target.value) })}
                     placeholder="1"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description
@@ -666,15 +667,15 @@ export default function BookManagement() {
                   onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
                   placeholder="Brief description of the book content..."
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   PDF File *
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition cursor-pointer">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer">
                   <input
                     type="file"
                     accept=".pdf"
@@ -685,7 +686,7 @@ export default function BookManagement() {
                   />
                   <label htmlFor="pdf-upload" className="cursor-pointer">
                     {uploadForm.pdf_file ? (
-                      <div className="flex items-center justify-center gap-2 text-purple-600">
+                      <div className="flex items-center justify-center gap-2 text-blue-600">
                         <FileText className="w-8 h-8" />
                         <span>{uploadForm.pdf_file.name}</span>
                       </div>
@@ -699,7 +700,7 @@ export default function BookManagement() {
                   </label>
                 </div>
               </div>
-              
+
               <div className="flex gap-3 pt-4">
                 <Button
                   type="button"
@@ -713,7 +714,7 @@ export default function BookManagement() {
                 <Button
                   type="submit"
                   disabled={uploading}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   {uploading ? (
                     <>
@@ -728,14 +729,13 @@ export default function BookManagement() {
                   )}
                 </Button>
               </div>
-              
+
               {/* Upload Progress Section */}
               {uploadProgress && (
-                <div className={`mt-4 p-4 rounded-lg ${
-                  uploadProgress.stage === 'error' ? 'bg-red-50 border border-red-200' :
+                <div className={`mt-4 p-4 rounded-lg ${uploadProgress.stage === 'error' ? 'bg-red-50 border border-red-200' :
                   uploadProgress.stage === 'complete' ? 'bg-green-50 border border-green-200' :
-                  'bg-blue-50 border border-blue-200'
-                }`}>
+                    'bg-blue-50 border border-blue-200'
+                  }`}>
                   <div className="flex items-center gap-3 mb-2">
                     {uploadProgress.stage === 'error' ? (
                       <XCircle className="w-5 h-5 text-red-500" />
@@ -744,11 +744,10 @@ export default function BookManagement() {
                     ) : (
                       <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                     )}
-                    <span className={`font-medium ${
-                      uploadProgress.stage === 'error' ? 'text-red-700' :
+                    <span className={`font-medium ${uploadProgress.stage === 'error' ? 'text-red-700' :
                       uploadProgress.stage === 'complete' ? 'text-green-700' :
-                      'text-blue-700'
-                    }`}>
+                        'text-blue-700'
+                      }`}>
                       {uploadProgress.stage === 'uploading' && 'Uploading...'}
                       {uploadProgress.stage === 'processing' && 'Processing PDF...'}
                       {uploadProgress.stage === 'complete' && 'Complete!'}
@@ -758,10 +757,9 @@ export default function BookManagement() {
                   <p className="text-sm text-gray-600 mb-2">{uploadProgress.message}</p>
                   {uploadProgress.stage !== 'error' && (
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full transition-all duration-500 ${
-                          uploadProgress.stage === 'complete' ? 'bg-green-500' : 'bg-blue-500'
-                        }`}
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${uploadProgress.stage === 'complete' ? 'bg-green-500' : 'bg-blue-500'
+                          }`}
                         style={{ width: `${uploadProgress.percent}%` }}
                       />
                     </div>
@@ -769,13 +767,14 @@ export default function BookManagement() {
                 </div>
               )}
             </form>
-            
+
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-blue-900 text-sm mb-2">
-                <strong>📚 Chapter Organization:</strong> Upload one chapter at a time. All chapters for a subject (e.g., all Chemistry chapters from Class 6-12) are stored together for comprehensive AI retrieval.
+                <strong>Chapter Organization:</strong> Upload one chapter at a time. All chapters for a subject (e.g., all Chemistry chapters from Class 6-12) are stored together for comprehensive AI retrieval.
               </p>
-              <p className="text-blue-700 text-xs">
-                <strong>⚡ Processing:</strong> Automatic text extraction, OCR, image analysis, and embedding generation. Large PDFs may take 5-10 minutes.
+              <p className="text-blue-700 text-xs flex items-start gap-1">
+                <Zap className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <span><strong>Processing:</strong> Automatic text extraction, OCR, image analysis, and embedding generation. Large PDFs may take 5-10 minutes.</span>
               </p>
             </div>
           </div>

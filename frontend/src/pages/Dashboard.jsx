@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   FileText,
   ArrowRight,
-  Bell,
   Mail,
-  Search,
   Flame,
   BookOpen,
+  Bell,
   BarChart3,
   Users,
   ChevronRight,
@@ -46,7 +45,7 @@ const quickActions = [
     title: "My Tests",
     description: "View and submit your assigned tests, track your progress",
     icon: FileText,
-    color: "bg-blue-500",
+    color: "bg-blue-600",
     bgColor: "bg-blue-50",
     textColor: "text-blue-600",
     route: "/test"
@@ -56,9 +55,9 @@ const quickActions = [
     title: "Book to Bot",
     description: "Upload any textbook and chat with AI to understand concepts",
     icon: BookOpen,
-    color: "bg-emerald-500",
-    bgColor: "bg-emerald-50",
-    textColor: "text-emerald-600",
+    color: "bg-blue-500",
+    bgColor: "bg-blue-50",
+    textColor: "text-blue-600",
     route: "/book-to-bot"
   },
   {
@@ -66,9 +65,9 @@ const quickActions = [
     title: "AI Helper",
     description: "Get instant answers and explanations from our AI assistant",
     icon: MessageCircle,
-    color: "bg-amber-500",
-    bgColor: "bg-amber-50",
-    textColor: "text-amber-600",
+    color: "bg-blue-400",
+    bgColor: "bg-blue-50",
+    textColor: "text-blue-600",
     route: "/book-to-bot"
   },
 ];
@@ -84,7 +83,7 @@ const statsData = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useUserStore();
+  const { user, calendar } = useUserStore();
   const { getRecentNotes } = useNotesStore();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -198,14 +197,14 @@ export default function Dashboard() {
           'Maths': BarChart3
         };
         const colorMap = {
-          'Physics': 'bg-green-100 text-green-600',
-          'Chemistry': 'bg-purple-100 text-purple-600',
+          'Physics': 'bg-blue-100 text-blue-700',
+          'Chemistry': 'bg-blue-200 text-blue-800',
           'Mathematics': 'bg-blue-100 text-blue-600',
-          'Hindi': 'bg-amber-100 text-amber-600',
-          'English': 'bg-indigo-100 text-indigo-600',
-          'Social Science': 'bg-orange-100 text-orange-600',
-          'Biology': 'bg-pink-100 text-pink-600',
-          'Science': 'bg-teal-100 text-teal-600',
+          'Hindi': 'bg-blue-50 text-blue-500',
+          'English': 'bg-indigo-100 text-indigo-700',
+          'Social Science': 'bg-blue-300 text-blue-900',
+          'Biology': 'bg-blue-100 text-blue-600',
+          'Science': 'bg-blue-200 text-blue-700',
           'Maths': 'bg-blue-100 text-blue-600'
         };
 
@@ -327,113 +326,7 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
         {/* Top Bar */}
-        <div className="flex items-center justify-between mb-6">
-          {/* Search Bar */}
-          <div className="flex-1 max-w-xl">
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search your course...."
-                className="w-full pl-12 pr-4 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Right Actions */}
-          <div className="flex items-center gap-4 ml-6">
-            {/* Mail */}
-            <button className="p-3 bg-white rounded-xl border border-gray-200 hover:bg-gray-50">
-              <Mail className="w-5 h-5 text-gray-600" />
-            </button>
-
-            {/* Notifications */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-3 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 relative"
-              >
-                <Bell className="w-5 h-5 text-gray-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 top-14 w-80 bg-white rounded-2xl shadow-xl z-50 max-h-96 overflow-hidden border border-gray-100">
-                  <div className="p-4 border-b bg-gray-50">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold text-gray-800">Notifications</h3>
-                      <div className="flex gap-2">
-                        {notifications.length > 0 && (
-                          <button
-                            onClick={deleteAllNotifications}
-                            className="text-xs text-red-600 hover:underline"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                        <button
-                          onClick={() => { navigate("/support-tickets"); setShowNotifications(false); }}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          View All
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-gray-500">
-                        <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                        No notifications yet
-                      </div>
-                    ) : (
-                      notifications.slice(0, 5).map(n => (
-                        <div
-                          key={n.id}
-                          className={`group p-4 border-b hover:bg-gray-50 cursor-pointer relative ${!n.is_read ? 'bg-blue-50' : ''}`}
-                        >
-                          <div
-                            onClick={() => {
-                              markNotificationRead(n.id);
-                              navigate("/support-tickets");
-                              setShowNotifications(false);
-                            }}
-                          >
-                            <p className="text-sm font-medium text-gray-800 pr-6">{n.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{n.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
-                          </div>
-                          <button
-                            onClick={(e) => deleteNotification(n.id, e)}
-                            className="absolute right-3 top-3 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete notification"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile */}
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name || 'User'}`}
-                alt="Profile"
-                className="w-10 h-10 rounded-full bg-gray-100"
-              />
-              <span className="font-medium text-gray-800">{user.name || 'Student'}</span>
-            </div>
-          </div>
-        </div>
+    
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -441,7 +334,7 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-6">
 
             {/* Hero Banner */}
-            <div className="bg-gradient-to-r from-sky-400 to-cyan-400 rounded-3xl p-8 text-white relative overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl p-8 text-white relative overflow-hidden">
               <div className="absolute right-0 top-0 w-64 h-64 opacity-20">
                 <div className="w-full h-full bg-white/20 rounded-full blur-3xl"></div>
               </div>
@@ -554,13 +447,11 @@ export default function Dashboard() {
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
 
-            {/* Statistics Card */}
+            {/* Statistics Card - Simplified */}
             <div className="bg-white rounded-2xl p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Statistics</h3>
-                <button className="text-gray-400 hover:text-gray-600">
-                  <BarChart3 className="w-5 h-5" />
-                </button>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-800">Your Progress</h3>
+                <BarChart3 className="w-5 h-5 text-gray-400" />
               </div>
 
               {/* Profile Progress Ring */}
@@ -617,8 +508,8 @@ export default function Dashboard() {
             {/* Sticky Notes - Funky colorful component */}
             <StickyNotesCard />
 
-            {/* Streak Card */}
-            <div className="bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl p-6 text-white">
+            {/* Streak Card - Blue Theme */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -633,10 +524,10 @@ export default function Dashboard() {
 
 
 
-            {/* Message Staff */}
+            {/* Message Staff - Blue Theme */}
             <div
               onClick={() => navigate("/support-tickets")}
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-6 cursor-pointer hover:shadow-lg"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg"
             >
               <div className="flex items-center justify-between text-white">
                 <div>
