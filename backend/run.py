@@ -2,6 +2,14 @@
 Run script for NCERT AI Learning Backend.
 Start the FastAPI server with uvicorn.
 """
+import sys
+import os
+
+# WORKAROUND: Python 3.14 compatibility fix for Google Protobuf
+# Force pure-Python implementation to avoid "TypeError: Metaclasses with custom tp_new are not supported"
+# when importing the C-extension module 'google._upb._message'.
+sys.modules["google._upb._message"] = None
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 # Load .env file FIRST before any other imports
 # This ensures all environment variables are available via os.getenv()
