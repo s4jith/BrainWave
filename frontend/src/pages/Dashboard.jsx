@@ -31,23 +31,23 @@ import StickyNotesCard from "../components/dashboard/StickyNotesCard";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// Sample course data
+// Sample course data - Purple/Violet theme
 const courses = [
   { id: 1, title: "Social Studies", watched: 2, total: 8, icon: Target, color: "bg-amber-100 text-amber-600" },
-  { id: 2, title: "Mathematics", watched: 3, total: 8, icon: BarChart3, color: "bg-blue-100 text-blue-600" },
+  { id: 2, title: "Mathematics", watched: 3, total: 8, icon: BarChart3, color: "bg-orange-100 text-orange-600" },
   { id: 3, title: "Physics", watched: 6, total: 12, icon: BookOpen, color: "bg-green-100 text-green-600" },
 ];
 
-// Quick action cards data
+// Quick action cards data - Purple/Violet theme
 const quickActions = [
   {
     id: 1,
     title: "My Tests",
     description: "View and submit your assigned tests, track your progress",
     icon: FileText,
-    color: "bg-blue-600",
-    bgColor: "bg-blue-50",
-    textColor: "text-blue-600",
+    color: "bg-orange-600",
+    bgColor: "bg-orange-50",
+    textColor: "text-orange-600",
     route: "/test"
   },
   {
@@ -55,9 +55,9 @@ const quickActions = [
     title: "Book to Bot",
     description: "Upload any textbook and chat with AI to understand concepts",
     icon: BookOpen,
-    color: "bg-blue-500",
-    bgColor: "bg-blue-50",
-    textColor: "text-blue-600",
+    color: "bg-orange-500",
+    bgColor: "bg-orange-50",
+    textColor: "text-orange-600",
     route: "/book-to-bot"
   },
   {
@@ -65,9 +65,9 @@ const quickActions = [
     title: "AI Helper",
     description: "Get instant answers and explanations from our AI assistant",
     icon: MessageCircle,
-    color: "bg-blue-400",
-    bgColor: "bg-blue-50",
-    textColor: "text-blue-600",
+    color: "bg-orange-500",
+    bgColor: "bg-orange-50",
+    textColor: "text-orange-600",
     route: "/book-to-bot"
   },
 ];
@@ -197,15 +197,15 @@ export default function Dashboard() {
           'Maths': BarChart3
         };
         const colorMap = {
-          'Physics': 'bg-blue-100 text-blue-700',
-          'Chemistry': 'bg-blue-200 text-blue-800',
-          'Mathematics': 'bg-blue-100 text-blue-600',
-          'Hindi': 'bg-blue-50 text-blue-500',
-          'English': 'bg-indigo-100 text-indigo-700',
-          'Social Science': 'bg-blue-300 text-blue-900',
-          'Biology': 'bg-blue-100 text-blue-600',
-          'Science': 'bg-blue-200 text-blue-700',
-          'Maths': 'bg-blue-100 text-blue-600'
+          'Physics': 'bg-orange-100 text-orange-700',
+          'Chemistry': 'bg-orange-200 text-orange-800',
+          'Mathematics': 'bg-orange-100 text-orange-600',
+          'Hindi': 'bg-orange-50 text-orange-500',
+          'English': 'bg-orange-100 text-orange-700',
+          'Social Science': 'bg-orange-300 text-orange-900',
+          'Biology': 'bg-orange-100 text-orange-600',
+          'Science': 'bg-orange-200 text-orange-700',
+          'Maths': 'bg-orange-100 text-orange-600'
         };
 
         const mappedCourses = subjectList.map((s, i) => ({
@@ -326,15 +326,15 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
         {/* Top Bar */}
-    
+
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Hero Banner */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl p-8 text-white relative overflow-hidden">
+            {/* Hero Banner - Purple/Violet Theme */}
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-8 text-white relative overflow-hidden">
               <div className="absolute right-0 top-0 w-64 h-64 opacity-20">
                 <div className="w-full h-full bg-white/20 rounded-full blur-3xl"></div>
               </div>
@@ -392,12 +392,12 @@ export default function Dashboard() {
             <div className="bg-white rounded-2xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">Your Pending Tests</h3>
-                <button onClick={() => navigate('/test')} className="text-sm text-blue-600 hover:underline">See all</button>
+                <button onClick={() => navigate('/test')} className="text-sm text-orange-600 hover:underline">See all</button>
               </div>
 
               {loadingTests ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
               ) : pendingTests.length === 0 ? (
                 <div className="text-center py-8">
@@ -419,8 +419,8 @@ export default function Dashboard() {
                   {pendingTests.map(test => (
                     <div key={test.id} className="grid grid-cols-4 gap-4 items-center py-4 border-b border-gray-50">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-orange-600" />
                         </div>
                         <p className="font-medium text-sm text-gray-800 line-clamp-1">{test.title}</p>
                       </div>
@@ -433,7 +433,7 @@ export default function Dashboard() {
                       </span>
                       <button
                         onClick={() => navigate('/test')}
-                        className="p-2 bg-blue-500 text-white rounded-full w-fit hover:bg-blue-600"
+                        className="p-2 bg-orange-500 text-white rounded-full w-fit hover:bg-orange-600"
                       >
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -463,7 +463,7 @@ export default function Dashboard() {
                       cx="48"
                       cy="48"
                       r="40"
-                      stroke="#3b82f6"
+                      stroke="#f97316"
                       strokeWidth="8"
                       fill="none"
                       strokeDasharray={`${2 * Math.PI * 40 * progressPercentage / 100} ${2 * Math.PI * 40}`}
@@ -477,7 +477,7 @@ export default function Dashboard() {
                       className="w-16 h-16 rounded-full"
                     />
                   </div>
-                  <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+                  <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
                     {progressPercentage}%
                   </div>
                 </div>
@@ -496,7 +496,7 @@ export default function Dashboard() {
                 {(activityData.length > 0 ? activityData : statsData).map((stat, i) => (
                   <div key={i} className="flex flex-col items-center gap-2">
                     <div
-                      className={`w-12 rounded-t-lg ${stat.isActive ? 'bg-blue-500' : 'bg-blue-200'}`}
+                      className={`w-12 rounded-t-lg ${stat.isActive ? 'bg-orange-500' : 'bg-orange-200'}`}
                       style={{ height: `${stat.value}px` }}
                     />
                     <span className="text-xs text-gray-500">{stat.label}</span>
@@ -508,8 +508,8 @@ export default function Dashboard() {
             {/* Sticky Notes - Funky colorful component */}
             <StickyNotesCard />
 
-            {/* Streak Card - Blue Theme */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white">
+            {/* Streak Card - Purple/Violet Theme */}
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -524,10 +524,10 @@ export default function Dashboard() {
 
 
 
-            {/* Message Staff - Blue Theme */}
+            {/* Message Staff - Purple/Violet Theme */}
             <div
               onClick={() => navigate("/support-tickets")}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg"
+              className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg"
             >
               <div className="flex items-center justify-between text-white">
                 <div>

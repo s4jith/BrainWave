@@ -122,6 +122,100 @@ export const chatService = {
   },
 
   /**
+   * Student chatbot with STREAMING - Reduced perceived latency
+   * Streams the response token-by-token using Server-Sent Events (SSE)
+   * 
+   * @param {string} question - Student's question
+   * @param {number} classLevel - User's class level (5-12)
+   * @param {string} subject - Subject name
+   * @param {number} chapter - Chapter number
+   * @param {string} mode - Chat mode: "quick" or "deepdive"
+   * @param {function} onChunk - Callback for each text chunk: (text) => void
+   * @param {function} onComplete - Callback when complete: ({sources, cached}) => void
+   * @param {function} onError - Callback on error: (error) => void
+   * @returns {function} Abort function to cancel the stream
+   */
+  studentChatStream(question, classLevel, subject, chapter, mode = "quick", onChunk, onComplete, onError) {
+    const controller = new AbortController();
+
+    const fetchStream = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/chat/student/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            question: question,
+            class_level: classLevel,
+            subject: subject,
+            chapter: chapter,
+            mode: mode,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Streaming Chat API Error: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE messages
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || ""; // Keep incomplete message in buffer
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.error) {
+                  onError?.(new Error(data.error));
+                  return;
+                }
+
+                if (data.done) {
+                  onComplete?.({
+                    sources: data.sources || [],
+                    cached: data.cached || false,
+                    totalLength: data.total_length || 0,
+                  });
+                } else if (data.text) {
+                  onChunk?.(data.text);
+                }
+              } catch (parseError) {
+                console.warn("Failed to parse SSE message:", line);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (error.name === "AbortError") {
+          console.log("Stream aborted by user");
+        } else {
+          console.error("Streaming Chat Error:", error);
+          onError?.(error);
+        }
+      }
+    };
+
+    fetchStream();
+
+    // Return abort function
+    return () => controller.abort();
+  },
+
+  /**
    * Image-based chat - Upload photo of textbook/diagram/handwritten question
    * Uses Intel OpenVINO OCR to extract text and generate RAG answer
    * @param {File} imageFile - Image file (jpg/png, max 5MB)

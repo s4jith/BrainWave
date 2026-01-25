@@ -63,7 +63,7 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
       case "pending":
         if (isBeforeStart) {
           return (
-            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+            <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
               <Timer className="w-3 h-3" />
               Upcoming
             </span>
@@ -85,7 +85,7 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
         );
       case "submitted":
         return (
-          <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+          <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
             <CheckCircle className="w-3 h-3" />
             Submitted
           </span>
@@ -192,10 +192,10 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
         {/* Left: Test Info */}
         <div className="flex items-start gap-4 flex-1">
           <div className={`p-3 rounded-xl ${testStatus === "evaluated" ? "bg-green-100" :
-            testStatus === "submitted" ? "bg-blue-100" : "bg-amber-100"
+            testStatus === "submitted" ? "bg-orange-100" : "bg-amber-100"
             }`}>
             <FileText className={`w-6 h-6 ${testStatus === "evaluated" ? "text-green-600" :
-              testStatus === "submitted" ? "text-blue-600" : "text-amber-600"
+              testStatus === "submitted" ? "text-orange-600" : "text-amber-600"
               }`} />
           </div>
 
@@ -214,7 +214,7 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
                 {test.subject}
               </span>
               {test.start_date && (
-                <span className="flex items-center gap-1 text-blue-600">
+                <span className="flex items-center gap-1 text-orange-600">
                   <Timer className="w-3.5 h-3.5" />
                   Starts: {formatDateTime(test.start_date)}
                 </span>
@@ -235,7 +235,7 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
 
             {/* Upcoming Notice */}
             {isBeforeStart && testStatus === "pending" && (
-              <div className="flex items-center gap-2 text-blue-600 text-sm mb-2 bg-blue-50 p-2 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-600 text-sm mb-2 bg-orange-50 p-2 rounded-lg">
                 <Timer className="w-4 h-4" />
                 <span>Test will be available on {formatDateTime(test.start_date)}</span>
               </div>
@@ -324,7 +324,7 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
 
           {/* Submitted confirmation */}
           {testStatus === "submitted" && (
-            <div className="text-center text-sm text-blue-600">
+            <div className="text-center text-sm text-orange-600">
               Awaiting feedback
             </div>
           )}

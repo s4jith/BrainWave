@@ -53,8 +53,19 @@ class GeminiService:
         # Configure Gemini with the available key
         genai.configure(api_key=api_key)
         
-        # Return model instance with current key index for error handling
-        return genai.GenerativeModel(self.model_name), gemini_key_manager.current_key_index
+        # Optimized generation config for faster responses
+        generation_config = {
+            "max_output_tokens": 1500,  # Limit response length for faster completion
+            "temperature": 0.7,          # Balanced creativity vs focus
+            "top_p": 0.9,                # Focus on likely tokens
+            "top_k": 40,                 # Limit token candidates
+        }
+        
+        # Return model instance with optimized config
+        return genai.GenerativeModel(
+            self.model_name,
+            generation_config=generation_config
+        ), gemini_key_manager.current_key_index
     
     def generate_embedding(self, text: str) -> list[float]:
         """
@@ -180,6 +191,59 @@ class GeminiService:
             
             logger.error(f"❌ Gemini generation failed: {e}")
             raise
+    
+    def generate_response_streaming(self, prompt: str, retry_count: int = 0):
+        """
+        Generate a streaming text response from Gemini.
+        Yields text chunks as they are generated for reduced perceived latency.
+        
+        Args:
+            prompt: Input prompt
+            retry_count: Number of retries attempted (internal use)
+        
+        Yields:
+            Text chunks as they are generated
+        """
+        try:
+            # Get model with available API key
+            model, key_index = self._get_model_with_available_key(retry_count)
+            
+            # Generate with streaming enabled
+            response = model.generate_content(prompt, stream=True)
+            
+            # Yield each chunk as it arrives
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        
+        except Exception as e:
+            error_str = str(e)
+            
+            # Check if it's a 429 rate limit error OR expired/invalid API key
+            is_expired_key = (
+                "API_KEY_INVALID" in error_str or 
+                "API key expired" in error_str or
+                "API key not valid" in error_str
+            )
+            
+            should_rotate = "429" in error_str or is_expired_key
+            
+            if should_rotate and retry_count < len(gemini_key_manager.keys):
+                current_key_id = gemini_key_manager.get_current_key_id()
+                
+                if is_expired_key:
+                    if current_key_id:
+                        gemini_key_manager.mark_key_invalid(current_key_id)
+                    logger.warning(f"⚠️ API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
+                else:
+                    logger.warning(f"⚠️ 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
+                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                
+                # Retry with next key - yield from recursive call
+                yield from self.generate_response_streaming(prompt, retry_count + 1)
+            else:
+                logger.error(f"❌ Gemini streaming failed: {e}")
+                raise
     
     def generate_response_with_image(
         self, 

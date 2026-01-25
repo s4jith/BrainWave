@@ -296,7 +296,7 @@ export default function BookManagement() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-6">
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
         </div>
       </div>
     );
@@ -320,7 +320,7 @@ export default function BookManagement() {
                   <BookOpen className="w-8 h-8" />
                   <h1 className="text-3xl font-bold">Book Management</h1>
                 </div>
-                <p className="text-purple-100 mt-1">Manage textbooks and AI embeddings</p>
+                <p className="text-orange-100 mt-1">Manage textbooks and AI embeddings</p>
               </div>
             </div>
             
@@ -335,7 +335,7 @@ export default function BookManagement() {
               </Button>
               <Button
                 onClick={() => setShowUploadModal(true)}
-                className="bg-white text-purple-600 hover:bg-purple-50"
+                className="bg-white text-orange-600 hover:bg-orange-50"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Upload Book
@@ -384,7 +384,7 @@ export default function BookManagement() {
         {/* Hierarchical Book Structure */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-            <Layers className="w-6 h-6 text-purple-600" />
+            <Layers className="w-6 h-6 text-orange-600" />
             Books Library
           </h2>
           
@@ -405,9 +405,9 @@ export default function BookManagement() {
                       className="flex items-center gap-3 flex-1"
                     >
                       {expandedSubjects[subject] ? (
-                        <ChevronDown className="w-5 h-5 text-purple-600" />
+                        <ChevronDown className="w-5 h-5 text-orange-600" />
                       ) : (
-                        <ChevronRight className="w-5 h-5 text-purple-600" />
+                        <ChevronRight className="w-5 h-5 text-orange-600" />
                       )}
                       {getSubjectIcon(subject)}
                       <span className="font-semibold text-lg text-gray-800">
@@ -418,7 +418,7 @@ export default function BookManagement() {
                       <span className="text-sm text-gray-600">
                         {subjectData.total_vectors.toLocaleString()} vectors
                       </span>
-                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
                         {Object.keys(subjectData.classes).length} classes
                       </span>
                       <button
@@ -446,11 +446,11 @@ export default function BookManagement() {
                               className="flex items-center gap-3 flex-1"
                             >
                               {expandedClasses[`${subject}-${classKey}`] ? (
-                                <ChevronDown className="w-4 h-4 text-blue-600" />
+                                <ChevronDown className="w-4 h-4 text-orange-600" />
                               ) : (
-                                <ChevronRight className="w-4 h-4 text-blue-600" />
+                                <ChevronRight className="w-4 h-4 text-orange-600" />
                               )}
-                              <GraduationCap className="w-5 h-5 text-blue-600" />
+                              <GraduationCap className="w-5 h-5 text-orange-600" />
                               <span className="font-medium text-gray-700">
                                 Class {classData.class_level}
                               </span>
@@ -459,7 +459,7 @@ export default function BookManagement() {
                               <span className="text-sm text-gray-500">
                                 {classData.vector_count.toLocaleString()} vectors
                               </span>
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                              <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
                                 {classData.chapters.length} chapters
                               </span>
                               <button
@@ -533,7 +533,7 @@ export default function BookManagement() {
                 <Upload className="w-6 h-6" />
                 Upload Book Chapter
               </h2>
-              <p className="text-purple-100 mt-1">Upload one chapter at a time</p>
+              <p className="text-orange-100 mt-1">Upload one chapter at a time</p>
             </div>
             
             <form onSubmit={handleUpload} className="p-6 space-y-6">
@@ -636,14 +636,14 @@ export default function BookManagement() {
               
               {/* Upload Progress */}
               {uploadProgress && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-orange-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                    <span className="font-medium text-blue-900">{uploadProgress.message}</span>
+                    <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+                    <span className="font-medium text-orange-900">{uploadProgress.message}</span>
                   </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div className="w-full bg-orange-200 rounded-full h-2">
                     <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-orange-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${uploadProgress.percent}%` }}
                     />
                   </div>

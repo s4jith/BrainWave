@@ -247,8 +247,8 @@ export default function Settings() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Class Level
               </label>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
-                <p className="text-sm text-blue-800 flex items-center gap-2">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3">
+                <p className="text-sm text-gray-800 flex items-center gap-2">
                   <Shield className="w-4 h-4" />
                   <span>Class level can only be changed by admin. Contact support if needed.</span>
                 </p>
@@ -260,7 +260,7 @@ export default function Settings() {
                     type="button"
                     disabled={true}
                     className={`p-3 rounded-lg border-2 text-center transition-all duration-200 cursor-not-allowed opacity-60 ${profileData.classLevel === cls.level
-                      ? 'border-blue-600 bg-blue-600 text-white'
+                      ? 'border-gray-900 bg-gray-900 text-white'
                       : 'border-gray-200'
                       }`}
                   >
@@ -368,7 +368,7 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={regenerateAvatar}
-                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shadow-lg"
+                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-black transition-colors shadow-lg"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
@@ -431,7 +431,7 @@ export default function Settings() {
                   setNewExam({ subject: '', date: formatDate(new Date().getDate()), type: 'exam' });
                   setShowAddExam(true);
                 }}
-                className="bg-orange-500 hover:bg-orange-600"
+                className="bg-gray-900 hover:bg-black text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Event
@@ -506,7 +506,7 @@ export default function Settings() {
                       <div className="flex items-start justify-between mb-1">
                         <span
                           className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${isToday
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-gray-900 text-white'
                             : 'text-gray-700'
                             }`}
                         >
@@ -521,9 +521,9 @@ export default function Settings() {
                           const colors = [
                             { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-l-emerald-500' },
                             { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-l-pink-500' },
-                            { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-l-blue-500' },
+                            { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-l-blue-500' },
                             { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-l-amber-500' },
-                            { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-l-blue-500' },
+                            { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-l-blue-500' },
                           ];
                           const color = colors[examIndex % colors.length];
 
@@ -598,7 +598,7 @@ export default function Settings() {
                       <Button
                         onClick={addExam}
                         disabled={!newExam.subject}
-                        className="flex-1 h-12 bg-orange-500 hover:bg-orange-600"
+                        className="flex-1 h-12 bg-gray-900 hover:bg-black text-white"
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Event
@@ -618,9 +618,9 @@ export default function Settings() {
                     const colors = [
                       { bg: 'bg-emerald-50', border: 'border-l-emerald-500', icon: 'bg-emerald-500' },
                       { bg: 'bg-pink-50', border: 'border-l-pink-500', icon: 'bg-pink-500' },
-                      { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'bg-blue-500' },
+                      { bg: 'bg-orange-50', border: 'border-l-blue-500', icon: 'bg-orange-500' },
                       { bg: 'bg-amber-50', border: 'border-l-amber-500', icon: 'bg-amber-500' },
-                      { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'bg-blue-500' },
+                      { bg: 'bg-orange-50', border: 'border-l-blue-500', icon: 'bg-orange-500' },
                     ];
                     const color = colors[index % colors.length];
 
@@ -763,7 +763,7 @@ export default function Settings() {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
-                      ? 'bg-blue-600 text-white shadow-lg'
+                      ? 'bg-gray-900 text-white shadow-lg'
                       : 'text-gray-600 hover:bg-gray-100'
                       }`}
                   >

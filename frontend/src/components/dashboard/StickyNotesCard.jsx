@@ -12,11 +12,11 @@ import useNotesStore from '../../stores/notesStore';
 // Funky color palette for sticky notes
 const stickyColors = [
   { bg: 'bg-pink-500', text: 'text-white', shadow: 'shadow-pink-500/30' },
-  { bg: 'bg-blue-500', text: 'text-white', shadow: 'shadow-blue-500/30' },
+  { bg: 'bg-orange-500', text: 'text-white', shadow: 'shadow-blue-500/30' },
   { bg: 'bg-slate-100', text: 'text-white', shadow: 'shadow-slate-800/30' },
   { bg: 'bg-fuchsia-500', text: 'text-white', shadow: 'shadow-fuchsia-500/30' },
   { bg: 'bg-cyan-500', text: 'text-white', shadow: 'shadow-cyan-500/30' },
-  { bg: 'bg-violet-600', text: 'text-white', shadow: 'shadow-violet-600/30' },
+  { bg: 'bg-orange-600', text: 'text-white', shadow: 'shadow-violet-600/30' },
 ];
 
 export default function StickyNotesCard() {

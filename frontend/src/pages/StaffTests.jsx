@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 
@@ -95,10 +95,10 @@ export default function StaffTests() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-blue-600">{tests.length}</p><p className="text-sm text-gray-600">Total Tests</p></div>
+          <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-orange-600">{tests.length}</p><p className="text-sm text-gray-600">Total Tests</p></div>
           <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-green-600">{tests.filter(t => t.is_active).length}</p><p className="text-sm text-gray-600">Active</p></div>
           <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-yellow-600">{tests.reduce((sum, t) => sum + (t.questions?.length || t.total_questions || 0), 0)}</p><p className="text-sm text-gray-600">Total Questions</p></div>
-          <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-purple-600">{subjects.length}</p><p className="text-sm text-gray-600">Subjects</p></div>
+          <div className="bg-white p-4 rounded-xl shadow-sm"><p className="text-3xl font-bold text-orange-600">{subjects.length}</p><p className="text-sm text-gray-600">Subjects</p></div>
         </div>
 
         {/* Actions Bar */}
@@ -144,8 +144,8 @@ export default function StaffTests() {
                   </div>
                   <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{test.title}</h3>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">{test.subject}</span>
-                    <span className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded">Class {test.class_level}</span>
+                    <span className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded">{test.subject}</span>
+                    <span className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded">Class {test.class_level}</span>
                     <span className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded">Ch {test.chapter}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-4">

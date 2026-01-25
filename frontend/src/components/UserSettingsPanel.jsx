@@ -149,8 +149,8 @@ export default function UserSettingsPanel({ open, onClose }) {
           </div>
 
           {/* Info Box */}
-          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-            <p className="text-xs text-blue-900 dark:text-blue-100">
+          <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-orange-900 dark:text-orange-100">
               <strong>Tip:</strong> The AI will adjust its language complexity based on your class level. 
               Only subjects with uploaded books for your class are shown here.
             </p>

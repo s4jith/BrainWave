@@ -31,7 +31,7 @@ function BookToBot() {
   const [currentLesson, setCurrentLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingLessons, setLoadingLessons] = useState(false);
-  
+
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -56,12 +56,12 @@ function BookToBot() {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const subjects = data.subjects || [];
         setAvailableSubjects(subjects);
-        
+
         // If no subjects from DB, show empty state
         if (subjects.length === 0) {
           setLessons([]);
@@ -95,17 +95,17 @@ function BookToBot() {
       const response = await fetch(
         `${API_BASE}/api/books/student/lessons?class_level=${user.classLevel}&subject=${encodeURIComponent(subject)}`
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         const fetchedLessons = data.lessons || [];
-        
+
         // Convert relative PDF URLs to absolute URLs
         const lessonsWithAbsoluteUrls = fetchedLessons.map(lesson => ({
           ...lesson,
           pdfUrl: lesson.pdfUrl?.startsWith('http') ? lesson.pdfUrl : `${API_BASE}${lesson.pdfUrl}`
         }));
-        
+
         // Always use fetched lessons - never fall back to static data
         setLessons(lessonsWithAbsoluteUrls);
         setCurrentLesson(lessonsWithAbsoluteUrls.length > 0 ? lessonsWithAbsoluteUrls[0] : null);
@@ -136,8 +136,17 @@ function BookToBot() {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading books...</p>
+          {/* Animated Book Loading */}
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            {/* Book base */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <BookOpen className="h-16 w-16 text-orange-500 animate-pulse" />
+            </div>
+            {/* Rotating ring around book */}
+            <div className="absolute inset-0 border-4 border-orange-200 border-t-violet-500 rounded-full animate-spin"></div>
+          </div>
+          <p className="text-lg font-medium text-orange-600">Loading your books...</p>
+          <p className="text-sm text-muted-foreground mt-1">Preparing your learning materials</p>
         </div>
       </div>
     );
@@ -147,9 +156,8 @@ function BookToBot() {
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* Sidebar - Lesson Navigation */}
       <div
-        className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "w-80" : "w-0"
-        } overflow-hidden border-r`}
+        className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
+          } overflow-hidden border-r`}
       >
         <div className="h-full flex flex-col">
           {/* Subject Selector - Only show available subjects from DB */}
@@ -192,7 +200,7 @@ function BookToBot() {
               Class {user.classLevel} • {lessons.length} Lessons Available
             </p>
           </div>
-          
+
           {/* Lessons List */}
           {loadingLessons ? (
             <div className="flex-1 flex items-center justify-center">
@@ -210,16 +218,6 @@ function BookToBot() {
 
       {/* Main Content - PDF Viewer */}
       <div className="flex-1 flex flex-col">
-        {/* AI Support Warning Banner */}
-        {!hasAISupport && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <p className="text-sm text-amber-800">
-              AI features are not available for {user.preferredSubject} yet.
-              Switch to a subject with AI support for full features.
-            </p>
-          </div>
-        )}
 
         {/* Header */}
         <div className="px-6 py-4 border-b bg-card flex items-center gap-4">

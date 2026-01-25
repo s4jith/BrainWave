@@ -650,12 +650,18 @@ async def get_available_subjects(
         # Aggregate books by subject to get chapter counts for this class level
         pipeline = [
             {"$match": {"class_level": class_level}},
+            # Deduplicate by title to avoid counting duplicate uploads
             {"$group": {
-                "_id": "$subject",
+                "_id": {"subject": "$subject", "title": "$title"},
+                "doc": {"$first": "$$ROOT"}
+            }},
+            # Then group by subject
+            {"$group": {
+                "_id": "$_id.subject",
                 "total_chapters": {"$sum": 1},
                 "chapters": {"$push": {
-                    "id": {"$toString": "$_id"},
-                    "title": "$title"
+                    "id": {"$toString": "$doc._id"},
+                    "title": "$doc.title"
                 }}
             }},
             {"$project": {

@@ -30,7 +30,8 @@ class LLMStorageService:
         subject: str,
         class_level: int,
         topic: str = None,
-        quality_score: float = 0.9
+        quality_score: float = 0.9,
+        textbook_chunks: list = None
     ) -> bool:
         """
         Store LLM-generated answer if it meets quality criteria.
@@ -42,13 +43,14 @@ class LLMStorageService:
             class_level: Student's class level
             topic: Specific topic extracted from question (optional)
             quality_score: Answer quality score (0-1)
+            textbook_chunks: Source textbook chunks for verification (optional)
         
         Returns:
             True if stored successfully, False otherwise
         """
         try:
-            # Check if answer should be stored
-            if not self._should_store_answer(answer):
+            # Check if answer should be stored (includes textbook verification)
+            if not self._should_store_answer(answer, textbook_chunks):
                 logger.debug(f"Answer not stored - quality check failed")
                 return False
             
@@ -63,7 +65,10 @@ class LLMStorageService:
             question_hash = hashlib.md5(question.lower().strip().encode()).hexdigest()[:16]
             vector_id = f"llm_{subject.lower()}_{class_level}_{topic.lower()}_{question_hash}"
             
-            # Store in Pinecone LLM DB
+            # Generate source fingerprint for verification
+            source_fingerprint = self._generate_source_fingerprint(textbook_chunks) if textbook_chunks else None
+            
+            # Store in Pinecone LLM DB with enhanced metadata
             success = pinecone_llm_db.store_llm_response(
                 vector_id=vector_id,
                 question=question,
@@ -76,7 +81,8 @@ class LLMStorageService:
             )
             
             if success:
-                logger.info(f"✅ Stored LLM answer for: {topic} (Class {class_level}, {subject})")
+                grounded_status = "GROUNDED" if textbook_chunks else "UNVERIFIED"
+                logger.info(f"✅ Stored LLM answer [{grounded_status}] for: {topic} (Class {class_level}, {subject})")
             
             return success
             
@@ -84,7 +90,27 @@ class LLMStorageService:
             logger.error(f"Failed to store LLM answer: {e}")
             return False
     
-    def _should_store_answer(self, answer: str) -> bool:
+    def _generate_source_fingerprint(self, textbook_chunks: list) -> str:
+        """
+        Generate a fingerprint from source textbook chunks.
+        Used to verify answer grounding.
+        
+        Args:
+            textbook_chunks: List of textbook chunk dictionaries
+        
+        Returns:
+            MD5 hash of combined chunk texts
+        """
+        if not textbook_chunks:
+            return None
+        
+        # Combine first 5 chunks for fingerprint
+        combined_text = " ".join([
+            c.get('text', '')[:200] for c in textbook_chunks[:5]
+        ])
+        return hashlib.md5(combined_text.encode()).hexdigest()[:16]
+    
+    def _should_store_answer(self, answer: str, textbook_chunks: list = None) -> bool:
         """
         Check if answer meets quality criteria for storage.
         
@@ -153,7 +179,66 @@ class LLMStorageService:
         has_educational_content = any(indicator in answer_lower for indicator in educational_indicators)
         
         # Must have educational content
-        return has_educational_content
+        if not has_educational_content:
+            logger.debug("Answer lacks educational content indicators")
+            return False
+        
+        # NEW: Textbook grounding verification
+        if textbook_chunks:
+            grounding_score = self._verify_textbook_grounding(answer, textbook_chunks)
+            if grounding_score < 0.3:  # Less than 30% overlap
+                logger.warning(f"⚠️ Answer not grounded in textbook (score: {grounding_score:.2f}) - NOT storing")
+                return False
+            logger.info(f"✅ Answer grounding verified (score: {grounding_score:.2f})")
+        
+        return True
+    
+    def _verify_textbook_grounding(self, answer: str, textbook_chunks: list) -> float:
+        """
+        Verify that answer content is grounded in textbook chunks.
+        
+        Args:
+            answer: Generated answer text
+            textbook_chunks: Source textbook chunks
+        
+        Returns:
+            Grounding score (0-1), higher = more grounded
+        """
+        if not textbook_chunks:
+            return 0.0
+        
+        # Combine textbook content
+        textbook_text = " ".join([
+            c.get('text', '') for c in textbook_chunks
+        ]).lower()
+        
+        # Extract key terms from textbook
+        textbook_words = set(re.findall(r'\b\w{4,}\b', textbook_text))
+        
+        # Extract key terms from answer
+        answer_lower = answer.lower()
+        answer_words = set(re.findall(r'\b\w{4,}\b', answer_lower))
+        
+        if not answer_words:
+            return 0.0
+        
+        # Calculate word overlap
+        overlap = answer_words & textbook_words
+        grounding_score = len(overlap) / len(answer_words)
+        
+        # Bonus: Check for key concept matches
+        key_concepts = [
+            'definition', 'formula', 'theorem', 'law', 'principle',
+            'equation', 'method', 'process', 'example'
+        ]
+        
+        concept_matches = sum(1 for concept in key_concepts 
+                            if concept in textbook_text and concept in answer_lower)
+        
+        # Add concept bonus (up to 0.2)
+        concept_bonus = min(concept_matches * 0.05, 0.2)
+        
+        return min(grounding_score + concept_bonus, 1.0)
     
     def _extract_topic(self, question: str) -> str:
         """

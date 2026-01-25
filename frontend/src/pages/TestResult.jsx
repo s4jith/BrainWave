@@ -67,7 +67,7 @@ export default function TestResult() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[50vh] gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
           <span className="text-gray-500">Loading test result...</span>
         </div>
       </DashboardLayout>
@@ -193,7 +193,7 @@ export default function TestResult() {
             <p className="text-2xl font-bold text-gray-800">{result.total_questions}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-2 text-blue-600 mb-2">
+            <div className="flex items-center gap-2 text-orange-600 mb-2">
               <Award className="w-5 h-5" />
               <span className="text-sm font-medium">Score</span>
             </div>
@@ -250,16 +250,16 @@ export default function TestResult() {
 
         {/* Topics to Review */}
         {result.topics_to_review?.length > 0 && (
-          <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+          <div className="bg-orange-50 rounded-2xl p-6 border border-orange-100">
             <div className="flex items-center gap-2 mb-4">
-              <BookOpen className="w-5 h-5 text-blue-600" />
-              <h3 className="font-semibold text-blue-800">Topics to Review</h3>
+              <BookOpen className="w-5 h-5 text-orange-600" />
+              <h3 className="font-semibold text-orange-800">Topics to Review</h3>
             </div>
             <div className="flex flex-wrap gap-2">
               {result.topics_to_review.map((topic, index) => (
                 <span
                   key={index}
-                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                  className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm"
                 >
                   {topic}
                 </span>
@@ -325,7 +325,7 @@ export default function TestResult() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500 mb-1">Feedback:</p>
-                      <p className="text-gray-600 bg-blue-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+                      <p className="text-gray-600 bg-orange-50 p-3 rounded-lg max-h-40 overflow-y-auto">
                         {evaluation.feedback}
                       </p>
                     </div>
@@ -368,7 +368,7 @@ export default function TestResult() {
             </Button>
             <Button
               onClick={() => navigate("/test-center")}
-              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+              className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
             >
               <RotateCcw className="w-4 h-4" />
               Take Another Test

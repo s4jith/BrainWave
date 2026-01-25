@@ -1,4 +1,4 @@
-ï»¿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
@@ -201,7 +201,7 @@ export default function SupportTickets() {
   const getStatusBadge = (status) => {
     const styles = {
       open: "bg-yellow-100 text-yellow-700",
-      in_progress: "bg-blue-100 text-blue-700",
+      in_progress: "bg-orange-100 text-orange-700",
       resolved: "bg-green-100 text-green-700",
       closed: "bg-gray-100 text-gray-700"
     };
@@ -242,7 +242,7 @@ export default function SupportTickets() {
                 Back to Dashboard
               </button>
               <div>
-                <h1 className="text-2xl font-bold">Support Tickets ðŸŽ«</h1>
+                <h1 className="text-2xl font-bold">Support Tickets ??</h1>
                 <p className="text-purple-100 text-sm">Manage all support tickets</p>
               </div>
             </div>
@@ -277,9 +277,9 @@ export default function SupportTickets() {
               <p className="text-sm text-yellow-600">Open</p>
               <p className="text-2xl font-bold text-yellow-600">{stats.open}</p>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm">
-              <p className="text-sm text-blue-600">In Progress</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.in_progress}</p>
+            <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm">
+              <p className="text-sm text-orange-600">In Progress</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.in_progress}</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-green-200 shadow-sm">
               <p className="text-sm text-green-600">Resolved</p>
@@ -339,10 +339,10 @@ export default function SupportTickets() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${ticket.status === "open" ? "bg-yellow-100" :
-                          ticket.status === "resolved" ? "bg-green-100" : "bg-blue-100"
+                          ticket.status === "resolved" ? "bg-green-100" : "bg-orange-100"
                           }`}>
                           <MessageSquare className={`w-5 h-5 ${ticket.status === "open" ? "text-yellow-600" :
-                            ticket.status === "resolved" ? "text-green-600" : "text-blue-600"
+                            ticket.status === "resolved" ? "text-green-600" : "text-orange-600"
                             }`} />
                         </div>
                         <div>
@@ -354,7 +354,7 @@ export default function SupportTickets() {
                           </div>
                           <h3 className="font-medium text-gray-800">{ticket.title}</h3>
                           <p className="text-sm text-gray-500">
-                            by {ticket.created_by_name} â€¢ {new Date(ticket.created_at).toLocaleDateString()}
+                            by {ticket.created_by_name} • {new Date(ticket.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
@@ -380,11 +380,11 @@ export default function SupportTickets() {
 
                       {/* Read Status */}
                       {!isAdmin && ticket.is_read_by_admin && (
-                        <div className="flex items-center gap-2 text-sm text-blue-600">
+                        <div className="flex items-center gap-2 text-sm text-orange-600">
                           <Eye className="w-4 h-4" />
                           <span>Admin has viewed your ticket</span>
                           {ticket.read_at && (
-                            <span className="text-gray-400">â€¢ {new Date(ticket.read_at).toLocaleString()}</span>
+                            <span className="text-gray-400">• {new Date(ticket.read_at).toLocaleString()}</span>
                           )}
                         </div>
                       )}
@@ -396,11 +396,11 @@ export default function SupportTickets() {
                           {ticket.replies.map((reply, idx) => (
                             <div
                               key={idx}
-                              className={`p-3 rounded-lg ${reply.is_admin ? "bg-blue-50 ml-4" : "bg-gray-50 mr-4"
+                              className={`p-3 rounded-lg ${reply.is_admin ? "bg-orange-50 ml-4" : "bg-gray-50 mr-4"
                                 }`}
                             >
                               <div className="flex justify-between items-center mb-1">
-                                <span className={`text-xs font-medium ${reply.is_admin ? "text-blue-600" : "text-gray-600"
+                                <span className={`text-xs font-medium ${reply.is_admin ? "text-orange-600" : "text-gray-600"
                                   }`}>
                                   {reply.author_name}
                                 </span>
@@ -536,8 +536,8 @@ export default function SupportTickets() {
         <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <Ticket className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-orange-50 rounded-lg">
+                <Ticket className="w-6 h-6 text-orange-600" />
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Tickets</p>
@@ -582,7 +582,7 @@ export default function SupportTickets() {
               key={status}
               onClick={() => setActiveFilter(status)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeFilter === status
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-orange-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
             >
@@ -615,7 +615,7 @@ export default function SupportTickets() {
                     <p className="text-sm text-gray-600 line-clamp-2">{ticket.description}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                    ticket.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                    ticket.status === 'in_progress' ? 'bg-orange-100 text-orange-700' :
                       'bg-green-100 text-green-700'
                     }`}>
                     {ticket.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -645,7 +645,7 @@ export default function SupportTickets() {
         {/* Create Button */}
         <button
           onClick={() => setShowCreateModal(true)}
-          className="fixed bottom-6 right-6 p-4 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
+          className="fixed bottom-6 right-6 p-4 bg-orange-600 text-white rounded-full shadow-lg hover:bg-orange-700 transition-colors"
         >
           <Plus className="w-6 h-6" />
         </button>
@@ -705,7 +705,7 @@ export default function SupportTickets() {
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Submit Ticket
@@ -726,7 +726,7 @@ export default function SupportTickets() {
                 <span className="text-xs text-gray-500">{selectedTicket.ticket_number}</span>
                 <h2 className="text-lg font-bold text-gray-800">{selectedTicket.title}</h2>
                 <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${selectedTicket.status === 'open' ? 'bg-amber-100 text-amber-700' :
-                  selectedTicket.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                  selectedTicket.status === 'in_progress' ? 'bg-orange-100 text-orange-700' :
                     selectedTicket.status === 'resolved' ? 'bg-green-100 text-green-700' :
                       'bg-gray-100 text-gray-700'
                   }`}>
@@ -746,8 +746,8 @@ export default function SupportTickets() {
               {/* Original Message */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                    <span className="text-indigo-600 text-sm font-medium">
+                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <span className="text-orange-600 text-sm font-medium">
                       {(user.name || 'S')[0].toUpperCase()}
                     </span>
                   </div>
@@ -763,11 +763,11 @@ export default function SupportTickets() {
 
               {/* Admin View Status */}
               {selectedTicket.is_read_by_admin && (
-                <div className="flex items-center gap-2 text-sm text-blue-600 px-4">
+                <div className="flex items-center gap-2 text-sm text-orange-600 px-4">
                   <Eye className="w-4 h-4" />
                   <span>Admin has viewed your ticket</span>
                   {selectedTicket.read_at && (
-                    <span className="text-gray-400">â€¢ {new Date(selectedTicket.read_at).toLocaleString()}</span>
+                    <span className="text-gray-400">• {new Date(selectedTicket.read_at).toLocaleString()}</span>
                   )}
                 </div>
               )}
@@ -780,20 +780,20 @@ export default function SupportTickets() {
                     <div
                       key={idx}
                       className={`rounded-xl p-4 ${reply.is_admin
-                        ? 'bg-blue-50 ml-8'
+                        ? 'bg-orange-50 ml-8'
                         : 'bg-gray-50 mr-8'
                         }`}
                     >
                       <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${reply.is_admin ? 'bg-blue-200' : 'bg-indigo-100'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${reply.is_admin ? 'bg-orange-200' : 'bg-orange-100'
                           }`}>
-                          <span className={`text-sm font-medium ${reply.is_admin ? 'text-blue-700' : 'text-indigo-600'
+                          <span className={`text-sm font-medium ${reply.is_admin ? 'text-orange-700' : 'text-orange-600'
                             }`}>
                             {reply.is_admin ? 'A' : (user.name || 'S')[0].toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className={`text-sm font-medium ${reply.is_admin ? 'text-blue-700' : 'text-gray-800'
+                          <p className={`text-sm font-medium ${reply.is_admin ? 'text-orange-700' : 'text-gray-800'
                             }`}>
                             {reply.author_name || (reply.is_admin ? 'Admin' : 'You')}
                           </p>
@@ -834,7 +834,7 @@ export default function SupportTickets() {
                       }
                     }}
                     disabled={submitting || !replyText.trim()}
-                    className="gap-2 bg-indigo-600 hover:bg-indigo-700"
+                    className="gap-2 bg-orange-600 hover:bg-orange-700"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     Send

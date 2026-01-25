@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import { Bell } from "lucide-react";
@@ -92,7 +92,7 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-blue-100 text-sm">NCERT Learning Platform - Live Data</p>
+              <p className="text-orange-100 text-sm">NCERT Learning Platform - Live Data</p>
             </div>
             <div className="flex items-center gap-4">
               {/* Notification Bell */}
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                         <h3 className="font-semibold text-gray-800">Notifications</h3>
                         <button
                           onClick={() => navigate("/support-tickets")}
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-orange-600 hover:underline"
                         >
                           View All Tickets
                         </button>
@@ -137,7 +137,7 @@ export default function AdminDashboard() {
                               navigate("/support-tickets");
                               setShowNotifications(false);
                             }}
-                            className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!n.is_read ? 'bg-blue-50' : ''}`}
+                            className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!n.is_read ? 'bg-orange-50' : ''}`}
                           >
                             <p className="text-sm font-medium text-gray-800">{n.title}</p>
                             <p className="text-xs text-gray-500 mt-1">{n.message}</p>
@@ -159,7 +159,7 @@ export default function AdminDashboard() {
           <nav className="flex space-x-4">
             {[{ id: "overview", label: "Overview" }, { id: "students", label: "Students" }, { id: "tests", label: "Tests" }, { id: "books", label: "Books" }, { id: "support", label: "Support Tickets" }].map(tab => (
               <button key={tab.id} onClick={() => { if (tab.id === "students") navigate("/student-management"); else if (tab.id === "tests") navigate("/test-management"); else if (tab.id === "books") navigate("/book-management"); else if (tab.id === "support") navigate("/support-tickets"); else setActiveTab(tab.id); }}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition ${activeTab === tab.id ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"}`}>
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition ${activeTab === tab.id ? "border-white text-white" : "border-transparent text-orange-100 hover:text-white"}`}>
                 {tab.label}
                 {tab.id === "support" && unreadCount > 0 && (
                   <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unreadCount}</span>
@@ -197,7 +197,7 @@ export default function AdminDashboard() {
                 {activity_trend.map((day, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center">
                     <div className="w-full flex flex-col items-center gap-1">
-                      <div className="w-full bg-blue-500 rounded-t" style={{ height: `${Math.max(day.active_users * 3, 2)}px` }} title={`${day.active_users} users`}></div>
+                      <div className="w-full bg-orange-500 rounded-t" style={{ height: `${Math.max(day.active_users * 3, 2)}px` }} title={`${day.active_users} users`}></div>
                       <div className="w-full bg-green-500 rounded-t" style={{ height: `${Math.max(day.tests_taken * 4, 2)}px` }} title={`${day.tests_taken} tests`}></div>
                     </div>
                     <span className="text-xs text-gray-500 mt-2">{day.date?.slice(5)}</span>
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
               </div>
             )}
             <div className="flex justify-center gap-6 mt-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded"></div><span className="text-sm text-gray-600">Active Users</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-500 rounded"></div><span className="text-sm text-gray-600">Active Users</span></div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded"></div><span className="text-sm text-gray-600">Tests Taken</span></div>
             </div>
           </div>
@@ -224,8 +224,8 @@ export default function AdminDashboard() {
                 <p className="text-sm text-gray-600">Pass Rate</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{test_stats?.tests_completed || 0}</p>
+                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                  <p className="text-2xl font-bold text-orange-600">{test_stats?.tests_completed || 0}</p>
                   <p className="text-xs text-gray-600">Completed</p>
                 </div>
                 <div className="text-center p-3 bg-yellow-50 rounded-lg">
@@ -233,8 +233,8 @@ export default function AdminDashboard() {
                   <p className="text-xs text-gray-600">In Progress</p>
                 </div>
               </div>
-              <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-2xl font-bold text-purple-600">{test_stats?.total_tests_created || 0}</p>
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <p className="text-2xl font-bold text-orange-600">{test_stats?.total_tests_created || 0}</p>
                 <p className="text-xs text-gray-600">Total Tests Created</p>
               </div>
             </div>
@@ -324,7 +324,7 @@ export default function AdminDashboard() {
             <ActionButton icon="" label="Add Student" onClick={() => navigate("/student-management")} color="blue" />
             <ActionButton icon="" label="Create Test" onClick={() => navigate("/create-test")} color="green" />
             <ActionButton icon="" label="View Tests" onClick={() => navigate("/test-management")} color="purple" />
-            <ActionButton icon="🎫" label="Support Tickets" onClick={() => navigate("/support-tickets")} color="orange" badge={unreadCount > 0 ? unreadCount : null} />
+            <ActionButton icon="??" label="Support Tickets" onClick={() => navigate("/support-tickets")} color="orange" badge={unreadCount > 0 ? unreadCount : null} />
             <ActionButton icon="" label="Refresh Data" onClick={fetchAnalytics} color="blue" />
           </div>
         </div>
@@ -345,7 +345,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 function ActionButton({ icon, label, onClick, color, badge }) {
-  const colors = { blue: "bg-blue-600 hover:bg-blue-700", green: "bg-green-600 hover:bg-green-700", purple: "bg-purple-600 hover:bg-purple-700", orange: "bg-orange-600 hover:bg-orange-700" };
+  const colors = { blue: "bg-orange-600 hover:bg-orange-700", green: "bg-green-600 hover:bg-green-700", purple: "bg-orange-600 hover:bg-orange-700", orange: "bg-orange-600 hover:bg-orange-700" };
   return (
     <button onClick={onClick} className={`${colors[color]} text-white p-4 rounded-xl flex flex-col items-center gap-2 transition shadow-sm hover:shadow-md relative`}>
       <span className="text-2xl">{icon}</span>

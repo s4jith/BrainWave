@@ -168,7 +168,7 @@ export default function DashboardLayout({ children }) {
             <div
               className="rounded-2xl p-5 relative overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%)'
+                background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)'
               }}
             >
               {/* Decorative circles */}
@@ -236,7 +236,8 @@ export default function DashboardLayout({ children }) {
               </div>
             </div>
           </div>
-        )}
+        )
+        }
 
         {/* Logout */}
         <div className="p-3 border-t border-gray-100">
@@ -248,26 +249,26 @@ export default function DashboardLayout({ children }) {
             <LogOut className="w-5 h-5" />
           </button>
         </div>
-      </aside>
+      </aside >
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      < main className="flex-1 flex flex-col overflow-hidden" >
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        < div className="flex-1 overflow-y-auto p-6" >
           {children}
-        </div>
-      </main>
+        </div >
+      </main >
 
       {/* Mobile Menu Toggle */}
-      <button
+      < button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="fixed bottom-4 left-4 z-40 lg:hidden p-3 rounded-full bg-white text-gray-900 shadow-lg border border-gray-200"
       >
         {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
+      </button >
 
       {/* Chatbot Panel */}
-      <ChatbotPanel isOpen={chatbotOpen} onClose={() => setChatbotOpen(false)} />
+      < ChatbotPanel isOpen={chatbotOpen} onClose={() => setChatbotOpen(false)} />
     </div >
   );
 }

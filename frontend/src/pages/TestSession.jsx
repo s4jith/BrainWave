@@ -337,7 +337,7 @@ export default function TestSession() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
         </div>
       </DashboardLayout>
     );
@@ -350,8 +350,8 @@ export default function TestSession() {
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Target className="w-5 h-5 text-blue-600" />
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Target className="w-5 h-5 text-orange-600" />
               </div>
               <div>
                 <h2 className="font-semibold text-gray-800">{session.topic_name}</h2>
@@ -383,7 +383,7 @@ export default function TestSession() {
           {/* Question Header */}
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b border-gray-100">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-blue-600">
+              <span className="text-sm font-medium text-orange-600">
                 Question {currentQuestionIndex + 1} of {session.questions.length}
               </span>
               <div className="flex items-center gap-2">
@@ -583,7 +583,7 @@ export default function TestSession() {
               <Button
                 onClick={handleSaveAnswer}
                 disabled={!currentAnswer.trim() || isSubmitting || testBlocked}
-                className="bg-blue-600 hover:bg-blue-700 text-white gap-2 disabled:opacity-50"
+                className="bg-orange-600 hover:bg-orange-700 text-white gap-2 disabled:opacity-50"
                 title={testBlocked ? "Test blocked due to cheating" : ""}
               >
                 {isSubmitting ? (
@@ -645,7 +645,7 @@ export default function TestSession() {
                     setCurrentAnswer(answers[q.question_id] || "");
                   }}
                   className={`w-10 h-10 rounded-lg font-medium transition-all ${isCurrent
-                    ? "bg-blue-600 text-white"
+                    ? "bg-orange-600 text-white"
                     : isAnswered
                       ? "bg-green-100 text-green-700 border border-green-200"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"

@@ -93,7 +93,7 @@ export default function ReportCard() {
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto" />
             <p className="text-gray-500">Loading your performance data...</p>
           </div>
         </div>
@@ -106,14 +106,14 @@ export default function ReportCard() {
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-              <BarChart3 className="w-10 h-10 text-blue-600" />
+            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto">
+              <BarChart3 className="w-10 h-10 text-orange-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900">No Test Data Yet</h2>
             <p className="text-gray-500 max-w-md mx-auto">
               Complete some tests to see your performance analytics and insights.
             </p>
-            <Button onClick={() => navigate("/test")} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 mt-4">
+            <Button onClick={() => navigate("/test")} className="bg-orange-600 hover:bg-orange-700 text-white gap-2 mt-4">
               <Brain className="w-4 h-4" />
               Take Your First Test
             </Button>
@@ -137,8 +137,8 @@ export default function ReportCard() {
                 key={subject}
                 onClick={() => setSelectedSubject(subject)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${selectedSubject === subject
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-gray-700 hover:bg-gray-50"
+                  ? "bg-orange-600 text-white shadow-md"
+                  : "text-gray-700 hover:bg-gray-50"
                   }`}
               >
                 <div className="flex items-center gap-3">
@@ -147,8 +147,8 @@ export default function ReportCard() {
                 </div>
                 {subject !== "All Subjects" && (
                   <span className={`text-xs px-2 py-0.5 rounded-full ${selectedSubject === subject
-                      ? "bg-white/20 text-white"
-                      : "bg-gray-100 text-gray-600"
+                    ? "bg-white/20 text-white"
+                    : "bg-gray-100 text-gray-600"
                     }`}>
                     {subjectData[subject]?.count || 0}
                   </span>
@@ -166,7 +166,7 @@ export default function ReportCard() {
               <h1 className="text-3xl font-bold text-gray-900">{selectedSubject}</h1>
               <p className="text-gray-500 mt-1">Performance Analytics - Class {user.classLevel}</p>
             </div>
-            <Button onClick={() => navigate("/test")} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+            <Button onClick={() => navigate("/test")} className="bg-orange-600 hover:bg-orange-700 text-white gap-2">
               <Brain className="w-4 h-4" />
               New Test
             </Button>
@@ -174,19 +174,19 @@ export default function ReportCard() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white">
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-blue-100 text-sm">Average Score</span>
-                <Trophy className="w-5 h-5 text-blue-200" />
+                <span className="text-orange-100 text-sm">Average Score</span>
+                <Trophy className="w-5 h-5 text-orange-200" />
               </div>
               <div className="text-4xl font-bold">{currentAverage.toFixed(1)}%</div>
-              <p className="text-blue-100 text-sm mt-1">Overall performance</p>
+              <p className="text-orange-100 text-sm mt-1">Overall performance</p>
             </div>
 
             <div className="bg-white rounded-2xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-gray-600 text-sm">Tests Taken</span>
-                <Calendar className="w-5 h-5 text-blue-600" />
+                <Calendar className="w-5 h-5 text-orange-600" />
               </div>
               <div className="text-4xl font-bold text-gray-900">{currentTests.length}</div>
               <p className="text-gray-500 text-sm mt-1">Total completed</p>
@@ -242,7 +242,7 @@ export default function ReportCard() {
           {/* Recent Tests */}
           <div className="bg-white rounded-2xl p-6 border border-gray-100">
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-600" />
+              <Activity className="w-5 h-5 text-orange-600" />
               Recent Tests
             </h3>
             <div className="space-y-3">
@@ -252,7 +252,7 @@ export default function ReportCard() {
                   onClick={() => navigate(`/test-result`, {
                     state: { result: { session_id: test.session_id }, fromHistory: true }
                   })}
-                  className="group flex items-center justify-between p-4 rounded-xl bg-gray-50 hover:bg-blue-50 cursor-pointer transition-all border border-gray-100 hover:border-blue-200"
+                  className="group flex items-center justify-between p-4 rounded-xl bg-gray-50 hover:bg-orange-50 cursor-pointer transition-all border border-gray-100 hover:border-orange-200"
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${test.score >= 80 ? 'bg-green-100' : test.score >= 60 ? 'bg-yellow-100' : 'bg-red-100'
@@ -273,7 +273,7 @@ export default function ReportCard() {
                     <span className="text-xs text-gray-400">
                       {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : 'Recent'}
                     </span>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600" />
                   </div>
                 </div>
               ))}

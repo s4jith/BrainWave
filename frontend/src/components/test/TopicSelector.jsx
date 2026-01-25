@@ -175,7 +175,7 @@ export default function TopicSelector({
             {[1, 2].map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${s < step ? "bg-green-500 text-white" :
-                  s === step ? "bg-blue-600 text-white" :
+                  s === step ? "bg-orange-600 text-white" :
                     "bg-gray-200 text-gray-500"
                   }`}>
                   {s < step ? <CheckCircle className="w-4 h-4" /> : s}
@@ -190,7 +190,7 @@ export default function TopicSelector({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
             </div>
           ) : (
             <>
@@ -215,13 +215,13 @@ export default function TopicSelector({
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <BookOpen className="w-8 h-8 text-blue-600 mb-3" />
+                            <BookOpen className="w-8 h-8 text-orange-600 mb-3" />
                             <h3 className="font-semibold text-gray-800 text-lg">{subject.subject}</h3>
                             <p className="text-sm text-gray-500 mt-1">
                               {subject.total_chapters} Chapters • {subject.total_questions} Questions
                             </p>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600" />
                         </div>
                       </button>
                     ))
@@ -270,7 +270,7 @@ export default function TopicSelector({
                         className="w-full p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 transition-all text-left group flex items-center justify-between"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-semibold">
+                          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 font-semibold">
                             {chapter.chapter_number}
                           </div>
                           <div>
@@ -282,7 +282,7 @@ export default function TopicSelector({
                             )}
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600" />
                       </button>
                     ))}
                   </div>
@@ -297,8 +297,8 @@ export default function TopicSelector({
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Brain className="w-8 h-8 text-blue-600" />
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Brain className="w-8 h-8 text-orange-600" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-800">Start Chapter Test</h3>
                 <p className="text-gray-500 mt-2">
@@ -309,15 +309,15 @@ export default function TopicSelector({
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 mb-6">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-blue-600">15</p>
+                    <p className="text-2xl font-bold text-orange-600">15</p>
                     <p className="text-xs text-gray-500">Questions</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-blue-600">20</p>
+                    <p className="text-2xl font-bold text-orange-600">20</p>
                     <p className="text-xs text-gray-500">Marks</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-blue-600">40</p>
+                    <p className="text-2xl font-bold text-orange-600">40</p>
                     <p className="text-xs text-gray-500">Minutes</p>
                   </div>
                 </div>
@@ -338,7 +338,7 @@ export default function TopicSelector({
                 </Button>
                 <Button
                   onClick={handleStartTest}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white gap-2"
                 >
                   <Brain className="w-4 h-4" />
                   Start Test

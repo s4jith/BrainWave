@@ -310,7 +310,7 @@ export default function BookManagement() {
                   <BookOpen className="w-6 h-6" />
                   Book Management
                 </h1>
-                <p className="text-blue-200 text-sm">Manage textbooks and AI embeddings</p>
+                <p className="text-orange-200 text-sm">Manage textbooks and AI embeddings</p>
               </div>
             </div>
 
@@ -336,7 +336,7 @@ export default function BookManagement() {
               </Button>
               <Button
                 onClick={() => setShowUploadModal(true)}
-                className="bg-white text-blue-600 hover:bg-blue-50"
+                className="bg-white text-orange-600 hover:bg-orange-50"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Upload Book
@@ -440,7 +440,7 @@ export default function BookManagement() {
         {/* Books Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
           </div>
         ) : filteredBooks.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center">
@@ -498,7 +498,7 @@ export default function BookManagement() {
                   {/* Status */}
                   <div className="flex items-center gap-2 mb-4">
                     {book.processing_status === 'processing' ? (
-                      <span className="flex items-center gap-1 text-blue-600 text-sm">
+                      <span className="flex items-center gap-1 text-orange-600 text-sm">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Processing embeddings...
                       </span>
@@ -584,8 +584,8 @@ export default function BookManagement() {
             </button>
 
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Upload className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-orange-100 rounded-xl">
+                <Upload className="w-6 h-6 text-orange-600" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-800">Upload New Book</h2>
@@ -686,7 +686,7 @@ export default function BookManagement() {
                   />
                   <label htmlFor="pdf-upload" className="cursor-pointer">
                     {uploadForm.pdf_file ? (
-                      <div className="flex items-center justify-center gap-2 text-blue-600">
+                      <div className="flex items-center justify-center gap-2 text-orange-600">
                         <FileText className="w-8 h-8" />
                         <span>{uploadForm.pdf_file.name}</span>
                       </div>
@@ -714,7 +714,7 @@ export default function BookManagement() {
                 <Button
                   type="submit"
                   disabled={uploading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   {uploading ? (
                     <>
@@ -734,7 +734,7 @@ export default function BookManagement() {
               {uploadProgress && (
                 <div className={`mt-4 p-4 rounded-lg ${uploadProgress.stage === 'error' ? 'bg-red-50 border border-red-200' :
                   uploadProgress.stage === 'complete' ? 'bg-green-50 border border-green-200' :
-                    'bg-blue-50 border border-blue-200'
+                    'bg-orange-50 border border-blue-200'
                   }`}>
                   <div className="flex items-center gap-3 mb-2">
                     {uploadProgress.stage === 'error' ? (
@@ -742,11 +742,11 @@ export default function BookManagement() {
                     ) : uploadProgress.stage === 'complete' ? (
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     ) : (
-                      <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                      <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
                     )}
                     <span className={`font-medium ${uploadProgress.stage === 'error' ? 'text-red-700' :
                       uploadProgress.stage === 'complete' ? 'text-green-700' :
-                        'text-blue-700'
+                        'text-orange-700'
                       }`}>
                       {uploadProgress.stage === 'uploading' && 'Uploading...'}
                       {uploadProgress.stage === 'processing' && 'Processing PDF...'}
@@ -758,7 +758,7 @@ export default function BookManagement() {
                   {uploadProgress.stage !== 'error' && (
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full transition-all duration-500 ${uploadProgress.stage === 'complete' ? 'bg-green-500' : 'bg-blue-500'
+                        className={`h-2 rounded-full transition-all duration-500 ${uploadProgress.stage === 'complete' ? 'bg-green-500' : 'bg-orange-500'
                           }`}
                         style={{ width: `${uploadProgress.percent}%` }}
                       />
@@ -768,11 +768,11 @@ export default function BookManagement() {
               )}
             </form>
 
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-blue-900 text-sm mb-2">
+            <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-blue-200">
+              <p className="text-orange-900 text-sm mb-2">
                 <strong>Chapter Organization:</strong> Upload one chapter at a time. All chapters for a subject (e.g., all Chemistry chapters from Class 6-12) are stored together for comprehensive AI retrieval.
               </p>
-              <p className="text-blue-700 text-xs flex items-start gap-1">
+              <p className="text-orange-700 text-xs flex items-start gap-1">
                 <Zap className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span><strong>Processing:</strong> Automatic text extraction, OCR, image analysis, and embedding generation. Large PDFs may take 5-10 minutes.</span>
               </p>

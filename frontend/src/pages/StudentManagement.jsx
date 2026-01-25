@@ -239,7 +239,7 @@ export default function StudentManagement() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold">Student Management</h1>
-                <p className="text-blue-100 text-sm">Add, edit, and manage students</p>
+                <p className="text-orange-100 text-sm">Add, edit, and manage students</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -264,7 +264,7 @@ export default function StudentManagement() {
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white p-4 rounded-xl shadow-sm">
-            <p className="text-3xl font-bold text-blue-600">{students.length}</p>
+            <p className="text-3xl font-bold text-orange-600">{students.length}</p>
             <p className="text-sm text-gray-600">Total Students</p>
           </div>
           <div className="bg-white p-4 rounded-xl shadow-sm">
@@ -321,7 +321,7 @@ export default function StudentManagement() {
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" /> Add Student
               </button>
@@ -333,7 +333,7 @@ export default function StudentManagement() {
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           {loading ? (
             <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-600 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading from database...</p>
             </div>
           ) : students.length === 0 ? (
@@ -341,7 +341,7 @@ export default function StudentManagement() {
               <p className="text-gray-500 text-lg mb-4">No students found in the database.</p>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
               >
                 Add Your First Student
               </button>
@@ -405,7 +405,7 @@ export default function StudentManagement() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => openEditModal(student)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
                             title="Edit"
                           >
                             <Edit className="w-4 h-4" />
@@ -440,7 +440,7 @@ export default function StudentManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Add New Student</h2>
-            <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded flex items-start gap-2">
+            <p className="text-sm text-gray-600 mb-4 bg-orange-50 p-3 rounded flex items-start gap-2">
               <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>
                 User ID and Password will be auto-generated based on name and age.<br />
@@ -533,7 +533,7 @@ export default function StudentManagement() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
                 >
                   {saving ? "Creating..." : "Add Student"}
                 </button>
@@ -614,7 +614,7 @@ export default function StudentManagement() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
@@ -642,7 +642,7 @@ export default function StudentManagement() {
                   <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.user_id}</code>
                   <button
                     onClick={() => copyToClipboard(newCredentials.user_id)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center gap-1"
+                    className="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 flex items-center gap-1"
                   >
                     <Clipboard className="w-3 h-3" /> Copy
                   </button>
@@ -654,7 +654,7 @@ export default function StudentManagement() {
                   <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.password}</code>
                   <button
                     onClick={() => copyToClipboard(newCredentials.password)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center gap-1"
+                    className="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 flex items-center gap-1"
                   >
                     <Clipboard className="w-3 h-3" /> Copy
                   </button>
@@ -669,7 +669,7 @@ export default function StudentManagement() {
 
             <button
               onClick={() => { setShowCredentialsModal(false); setNewCredentials(null); }}
-              className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="w-full mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
             >
               Done
             </button>

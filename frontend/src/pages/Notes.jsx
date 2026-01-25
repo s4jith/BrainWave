@@ -59,7 +59,7 @@ export default function Notes() {
             case 'Book to Bot':
                 return 'bg-emerald-50 text-emerald-600';
             case 'AI Chat':
-                return 'bg-blue-50 text-blue-600';
+                return 'bg-orange-50 text-orange-600';
             default:
                 return 'bg-amber-50 text-amber-600';
         }
@@ -108,7 +108,7 @@ export default function Notes() {
                     </div>
                     <button
                         onClick={() => setShowAddNote(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600"
                     >
                         <Plus className="w-5 h-5" />
                         Add Note
@@ -147,7 +147,7 @@ export default function Notes() {
                         <p className="text-gray-500 mb-6">Start taking notes while learning!</p>
                         <button
                             onClick={() => setShowAddNote(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600"
                         >
                             <Plus className="w-5 h-5" />
                             Create Your First Note
@@ -232,7 +232,7 @@ export default function Notes() {
                                 </button>
                                 <button
                                     onClick={handleAddNote}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600"
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600"
                                 >
                                     <Save className="w-4 h-4" />
                                     Save Note
@@ -275,7 +275,7 @@ export default function Notes() {
                                 </button>
                                 <button
                                     onClick={handleUpdateNote}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600"
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600"
                                 >
                                     <Save className="w-4 h-4" />
                                     Update Note

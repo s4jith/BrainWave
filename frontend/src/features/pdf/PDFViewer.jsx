@@ -444,13 +444,13 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
       {/* Selection Mode Indicator */}
       {isSelecting && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-orange-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
           <Scissors className="h-4 w-4" />
           <span className="text-sm font-medium">Draw a box around your doubt</span>
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-white hover:bg-blue-700"
+            className="h-6 w-6 text-white hover:bg-orange-700"
             onClick={cancelSelection}
           >
             <X className="h-4 w-4" />
@@ -538,7 +538,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   {/* Selection Rectangle */}
                   {isSelecting && selectionStart && selectionEnd && (
                     <div
-                      className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
+                      className="absolute border-2 border-blue-500 bg-orange-500/20 pointer-events-none"
                       style={getSelectionStyle()}
                     />
                   )}
@@ -546,7 +546,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   {/* Selected Area Highlight */}
                   {selectedArea && showActionPopup && (
                     <div
-                      className="absolute border-2 border-blue-500 bg-blue-500/10"
+                      className="absolute border-2 border-blue-500 bg-orange-500/10"
                       style={{
                         left: selectedArea.x,
                         top: selectedArea.y,
@@ -611,12 +611,12 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
               <div className="grid gap-3">
                 <Button
                   variant="outline"
-                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-950/30"
+                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-orange-50 hover:border-blue-200 dark:hover:bg-orange-950/30"
                   onClick={() => handleAction("define")}
                   disabled={isProcessing}
                 >
-                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                    <BookOpen className="h-5 w-5 text-blue-600" />
+                  <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
+                    <BookOpen className="h-5 w-5 text-orange-600" />
                   </div>
                   <div className="text-left">
                     <div className="font-medium">Define</div>

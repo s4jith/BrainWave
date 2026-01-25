@@ -146,7 +146,7 @@ export default function CreateTest() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold">Create New Test</h1>
-                <p className="text-blue-100 text-sm">Upload test PDF for students</p>
+                <p className="text-orange-100 text-sm">Upload test PDF for students</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -248,7 +248,7 @@ export default function CreateTest() {
                 {pdfPreview ? (
                   <div className="flex flex-col items-center">
                     <span className="text-4xl mb-2">📄</span>
-                    <p className="text-blue-600 font-medium">{pdfPreview}</p>
+                    <p className="text-orange-600 font-medium">{pdfPreview}</p>
                     <p className="text-sm text-gray-500 mt-1">Click to change file</p>
                   </div>
                 ) : (
@@ -272,7 +272,7 @@ export default function CreateTest() {
                 id="is_timed"
                 checked={formData.is_timed}
                 onChange={(e) => setFormData({ ...formData, is_timed: e.target.checked })}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                className="w-5 h-5 text-orange-600 rounded focus:ring-blue-500"
               />
               <label htmlFor="is_timed" className="text-sm font-medium text-gray-700">
                 This is a timed test with specific start and end dates
@@ -316,7 +316,7 @@ export default function CreateTest() {
             )}
 
             {!formData.is_timed && (
-              <p className="text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-gray-500 bg-orange-50 p-3 rounded-lg">
                 ℹ️ Without timing, this will be a <strong>general test</strong> that students can complete anytime.
               </p>
             )}
@@ -346,7 +346,7 @@ export default function CreateTest() {
             <button
               type="submit"
               disabled={loading || !pdfFile}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? "Creating Test..." : "Create Test & Notify Students"}
             </button>

@@ -141,7 +141,7 @@ export default function TestManagement() {
   const getStatusBadge = (status) => {
     const styles = {
       active: "bg-green-100 text-green-700",
-      upcoming: "bg-blue-100 text-blue-700",
+      upcoming: "bg-orange-100 text-orange-700",
       closed: "bg-gray-100 text-gray-700"
     };
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.closed}`}>{status}</span>;
@@ -159,13 +159,13 @@ export default function TestManagement() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold">Test Management</h1>
-                <p className="text-purple-100 text-sm">View tests, submissions, and provide feedback</p>
+                <p className="text-orange-100 text-sm">View tests, submissions, and provide feedback</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate("/create-test")}
-                className="px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 font-medium"
+                className="px-4 py-2 bg-white text-orange-600 rounded-lg hover:bg-orange-50 font-medium"
               >
                 + Create Test
               </button>
@@ -181,7 +181,7 @@ export default function TestManagement() {
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white p-4 rounded-xl shadow-sm">
-              <p className="text-2xl font-bold text-purple-600">{stats.total_tests}</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.total_tests}</p>
               <p className="text-sm text-gray-500">Total Tests</p>
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm">
@@ -189,7 +189,7 @@ export default function TestManagement() {
               <p className="text-sm text-gray-500">Active Tests</p>
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm">
-              <p className="text-2xl font-bold text-blue-600">{stats.total_submissions}</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.total_submissions}</p>
               <p className="text-sm text-gray-500">Submissions</p>
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm">
@@ -237,7 +237,7 @@ export default function TestManagement() {
 
             <button
               onClick={() => { setFilterClass(""); setFilterSubject(""); setFilterStatus(""); }}
-              className="px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+              className="px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg"
             >
               Clear Filters
             </button>
@@ -258,7 +258,7 @@ export default function TestManagement() {
                 <p>No tests found</p>
                 <button
                   onClick={() => navigate("/create-test")}
-                  className="mt-4 text-purple-600 hover:underline"
+                  className="mt-4 text-orange-600 hover:underline"
                 >
                   Create your first test
                 </button>
@@ -279,7 +279,7 @@ export default function TestManagement() {
                     <p>Class {test.class_level} • {test.subject}</p>
                     <p>{test.submission_count} submissions</p>
                     {test.is_timed && test.start_datetime && (
-                      <p className="text-blue-600">Starts: {new Date(test.start_datetime).toLocaleString()}</p>
+                      <p className="text-orange-600">Starts: {new Date(test.start_datetime).toLocaleString()}</p>
                     )}
                     {test.is_timed && test.end_datetime && (
                       <p className="text-orange-600">Ends: {new Date(test.end_datetime).toLocaleString()}</p>
@@ -291,7 +291,7 @@ export default function TestManagement() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
                     >
                       📄 View PDF
                     </a>
@@ -320,7 +320,7 @@ export default function TestManagement() {
                     href={`${API_URL}${selectedTest.pdf_url}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                    className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200"
                   >
                     📄 View Test PDF
                   </a>
@@ -355,7 +355,7 @@ export default function TestManagement() {
                               href={`${API_URL}${sub.pdf_url}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm"
+                              className="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 text-sm"
                             >
                               📄 View Submission
                             </a>
@@ -407,7 +407,7 @@ export default function TestManagement() {
                 href={`${API_URL}${selectedSubmission.pdf_url}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm"
+                className="text-orange-600 hover:underline text-sm"
               >
                 📄 View Student's Submission
               </a>
@@ -440,7 +440,7 @@ export default function TestManagement() {
               <button
                 onClick={handleSaveComment}
                 disabled={savingComment || !comment.trim()}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
               >
                 {savingComment ? "Saving..." : "Save & Notify Student"}
               </button>

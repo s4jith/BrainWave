@@ -14,6 +14,7 @@ from app.services.web_scraper_service import web_scraper_service
 from app.services.subject_classifier import subject_classifier
 import logging
 import re
+import asyncio
 from typing import List, Dict, Tuple, Optional
 import google.generativeai as genai
 
@@ -704,30 +705,38 @@ Generate a thorough, well-structured deep dive explanation:"""
         
         combined_context = "\n\n".join(context_sections)
         
-        # Build comprehensive prompt
+        # Build comprehensive prompt with STRICT anti-hallucination rules
         mode_description = "COMPREHENSIVE" if mode == "deepdive" else "FOCUSED"
         
-        prompt = f"""You are an expert NCERT tutor for Class {student_class} {subject} providing a {mode_description} explanation.
+        prompt = f"""You are an NCERT tutor for Class {student_class} {subject}. 
+
+**🚨 CRITICAL ANTI-HALLUCINATION RULES - YOU MUST FOLLOW:**
+
+1. ✅ ONLY use information EXPLICITLY stated in the TEXTBOOK CONTENT below
+2. ✅ If information is NOT in the textbook, say: "This specific topic is not covered in your Class {student_class} textbook."
+3. ❌ NEVER make up facts, dates, names, formulas, definitions, or examples
+4. ❌ NEVER use your general knowledge - you are a RAG-only system
+5. ❌ NEVER say "In general...", "According to science...", "It is known that..."
+6. ❌ NEVER invent examples that aren't in the textbook
+7. ✅ If you can only partially answer, say what IS covered and what ISN'T
 
 **STUDENT QUESTION:** {question}
 
-**AVAILABLE SOURCES (in priority order):**
+**📚 TEXTBOOK CONTENT (Your ONLY source of truth):**
 {combined_context}
 
-**ANSWER GENERATION INSTRUCTIONS:**
+**ANSWER FORMAT ({mode_description}):**
+{'- Start from fundamentals and build up' if mode == 'deepdive' else '- Direct and concise answer'}
+- Use headings and bullet points
+- Include ONLY examples from the textbook above
+- Appropriate language for Class {student_class} students
 
-1. **Primary Source**: Base your answer on NCERT textbook content (if available)
-2. **Enhancement**: Use previously generated explanations for clarity and additional insights
-3. **Enrichment**: Add web resources for examples, applications, or additional context
-4. **NO HALLUCINATION**: Only use information provided in the sources above
-5. **Clear Structure**: 
-   {'- Start from fundamentals' if mode == 'deepdive' else '- Direct and concise'}
-   - Use headings, bullet points, and examples
-   - Appropriate for Class {student_class} students
-6. **Source Integration**: Smoothly blend information from all sources
-7. **Educational Focus**: Emphasize understanding, not just facts
+**⚠️ BEFORE ANSWERING, ASK YOURSELF:**
+- Is every fact I'm stating from the textbook content above?
+- Am I inventing any information?
+- If unsure, don't include it.
 
-Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answer:"""
+Generate your answer using ONLY the textbook content provided:"""
         
         answer = self.gemini.generate_response(prompt)
         
@@ -790,32 +799,45 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
         except Exception as e:
             logger.warning(f"Subject validation failed (proceeding anyway): {e}")
 
-        # 1. Query textbook content (primary source)
-        textbook_chunks, class_dist = self.query_multi_class(
-            query_text=question,
-            subject=subject,
-            student_class=student_class,
-            chapter=chapter,
-            mode="basic",
-            chunks_per_class=5,
-            query_embedding=query_embedding
+        # 1. PARALLEL QUERY: Textbook + LLM cache simultaneously
+        # This saves 2-4 seconds by not waiting for sequential queries
+        logger.info("   ⚡ Running parallel queries (textbook + LLM cache)...")
+        
+        async def query_textbook_async():
+            return await asyncio.to_thread(
+                self.query_multi_class,
+                query_text=question,
+                subject=subject,
+                student_class=student_class,
+                chapter=chapter,
+                mode="basic",
+                chunks_per_class=5,
+                query_embedding=query_embedding
+            )
+        
+        async def query_llm_async():
+            return await asyncio.to_thread(
+                self.query_llm_content,
+                query_text=question,
+                subject=subject,
+                top_k=2,
+                query_embedding=query_embedding
+            )
+        
+        # Execute both queries in parallel
+        (textbook_chunks, class_dist), llm_chunks = await asyncio.gather(
+            query_textbook_async(),
+            query_llm_async()
         )
         
         # Log best score for debugging
         best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
         good_chunks = [c for c in textbook_chunks if c.get('score', 0) >= 0.6]
         logger.info(f"   📊 Best textbook score: {best_score:.3f}, Good chunks: {len(good_chunks)}/{len(textbook_chunks)}")
+        logger.info(f"   ⚡ Parallel query complete")
         
-        # 2. Query stored LLM answers
-        llm_chunks = self.query_llm_content(
-            query_text=question,
-            subject=subject,
-            top_k=2,
-            query_embedding=query_embedding
-        )
-        
-        # 🎯 CACHE HIT: Return cached answer directly if high similarity
-        if llm_chunks and llm_chunks[0]['score'] >= 0.95:
+        # 🎯 CACHE HIT: Return cached answer if high similarity (threshold: 0.85 for more cache hits)
+        if llm_chunks and llm_chunks[0]['score'] >= 0.85:
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
@@ -843,8 +865,8 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
             mode="basic"
         )
         
-        # Store answer if high quality
-        if self.llm_storage._should_store_answer(answer):
+        # Store answer if high quality (with textbook verification)
+        if self.llm_storage._should_store_answer(answer, textbook_chunks):
             topic = self.llm_storage._extract_topic(question)
             self.llm_storage.store_answer(
                 question=question,
@@ -852,7 +874,8 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
                 subject=subject,
                 class_level=student_class,
                 topic=topic,
-                quality_score=0.9
+                quality_score=0.9,
+                textbook_chunks=textbook_chunks  # Pass for fingerprinting
             )
         
         return answer, all_chunks
@@ -985,8 +1008,8 @@ Keep it under 200 words and student-friendly."""
             mode="basic"
         )
         
-        # Store answer if high quality
-        if self.llm_storage._should_store_answer(answer):
+        # Store answer if high quality (with textbook verification)
+        if self.llm_storage._should_store_answer(answer, textbook_chunks):
             topic = self.llm_storage._extract_topic(question)
             self.llm_storage.store_answer(
                 question=question,
@@ -994,7 +1017,8 @@ Keep it under 200 words and student-friendly."""
                 subject=subject,
                 class_level=student_class,
                 topic=topic,
-                quality_score=0.9
+                quality_score=0.9,
+                textbook_chunks=textbook_chunks
             )
         
         return answer, all_chunks
@@ -1040,29 +1064,61 @@ Keep it under 200 words and student-friendly."""
         logger.info(f"   Question: {question[:100]}...")
         logger.info(f"   Will search from fundamentals (earliest class) to current class")
         
-        # 1. Query textbook content (all prerequisite classes)
-        textbook_chunks, class_dist = self.query_multi_class(
-            query_text=question,
-            subject=subject,
-            student_class=student_class,
-            chapter=chapter,
-            mode="deepdive",
-            chunks_per_class=8  # More chunks per class for comprehensive coverage
+        # Generate embedding ONCE for all queries
+        try:
+            query_embedding = self.generate_embedding(question)
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
+            return "I'm having trouble understanding that right now. Please try again.", []
+        
+        # 1. PARALLEL QUERY: Textbook + LLM cache + Web content simultaneously
+        logger.info("   ⚡ Running parallel queries (textbook + LLM + web)...")
+        
+        async def query_textbook_async():
+            return await asyncio.to_thread(
+                self.query_multi_class,
+                query_text=question,
+                subject=subject,
+                student_class=student_class,
+                chapter=chapter,
+                mode="deepdive",
+                chunks_per_class=8,
+                query_embedding=query_embedding
+            )
+        
+        async def query_llm_async():
+            return await asyncio.to_thread(
+                self.query_llm_content,
+                query_text=question,
+                subject=subject,
+                top_k=3,
+                query_embedding=query_embedding
+            )
+        
+        async def query_web_async():
+            return await asyncio.to_thread(
+                self.query_web_content,
+                query_text=question,
+                subject=subject,
+                student_class=student_class,
+                top_k=10,
+                query_embedding=query_embedding
+            )
+        
+        # Execute all three queries in parallel
+        (textbook_chunks, class_dist), llm_chunks, web_chunks = await asyncio.gather(
+            query_textbook_async(),
+            query_llm_async(),
+            query_web_async()
         )
         
-        # Log best score for debugging (cross-subject detection disabled for now)
+        # Log best score for debugging
         best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
         logger.info(f"   📊 Best textbook score: {best_score:.3f}")
+        logger.info(f"   ⚡ Parallel query complete (textbook: {len(textbook_chunks)}, llm: {len(llm_chunks)}, web: {len(web_chunks)})")
         
-        # 2. Query stored LLM answers
-        llm_chunks = self.query_llm_content(
-            query_text=question,
-            subject=subject,
-            top_k=3
-        )
-        
-        # 🎯 CACHE HIT: Return cached answer directly if high similarity
-        if llm_chunks and llm_chunks[0]['score'] >= 0.95:
+        # 🎯 CACHE HIT: Return cached answer if high similarity (threshold: 0.85 for more cache hits)
+        if llm_chunks and llm_chunks[0]['score'] >= 0.85:
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
@@ -1070,14 +1126,6 @@ Keep it under 200 words and student-friendly."""
             # Return cached answer with source information
             source_chunks = textbook_chunks + llm_chunks
             return cached_answer, source_chunks
-        
-        # 3. Query web content for additional context
-        web_chunks = self.query_web_content(
-            query_text=question,
-            subject=subject,
-            student_class=student_class,
-            top_k=10
-        )
         
         # 4. Check if we need more content via web scraping
         total_chunks = len(textbook_chunks) + len(web_chunks)
@@ -1110,8 +1158,8 @@ Keep it under 200 words and student-friendly."""
             mode="deepdive"
         )
         
-        # Store answer if high quality
-        if self.llm_storage._should_store_answer(answer):
+        # Store answer if high quality (with textbook verification)
+        if self.llm_storage._should_store_answer(answer, textbook_chunks):
             topic = self.llm_storage._extract_topic(question)
             self.llm_storage.store_answer(
                 question=question,
@@ -1119,7 +1167,8 @@ Keep it under 200 words and student-friendly."""
                 subject=subject,
                 class_level=student_class,
                 topic=topic,
-                quality_score=0.95  # Higher score for deepdive answers
+                quality_score=0.95,  # Higher score for deepdive answers
+                textbook_chunks=textbook_chunks
             )
         
         return answer, all_chunks

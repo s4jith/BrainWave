@@ -386,8 +386,8 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             backgroundSize: '50px 50px',
             animation: 'gridScroll 8s linear infinite'
           }} />
-          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-blue-200/40" />
-          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-blue-300/30" />
+          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/40" />
+          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-orange-300/30" />
 
           {/* Header */}
           <div className="relative z-10 h-14 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6">
