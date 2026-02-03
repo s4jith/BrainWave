@@ -118,6 +118,16 @@ class SyncMongoDB:
         """Get book chapters collection."""
         return self.db.book_chapters
     
+    @property
+    def groups(self):
+        """Get groups collection for group management."""
+        return self.db.groups
+    
+    @property
+    def teacher_counters(self):
+        """Get teacher counters collection for ID generation."""
+        return self.db.teacher_counters
+    
     def get_collection(self, name: str):
         """Get a collection by name."""
         return self.db[name]
@@ -1069,6 +1079,12 @@ def get_user_activities_collection():
     return mongodb.get_collection("user_activities")
 
 
+
 def get_users_collection():
     """Get users collection from MongoDB (for user profiles)."""
     return mongodb.get_collection("users")
+
+
+def get_annotation_history_collection():
+    """Get annotation history collection from MongoDB."""
+    return mongodb.get_collection("annotation_history")

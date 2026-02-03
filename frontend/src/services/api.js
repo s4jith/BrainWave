@@ -514,6 +514,135 @@ export const notesService = {
       throw error;
     }
   },
+
+  /**
+   * Update a note
+   * @param {string} id
+   * @param {object} updates
+   * @returns {Promise<Note>}
+   */
+  async updateNote(id, updates) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Update Note API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Update Note API Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a note
+   * @param {string} id
+   */
+  async deleteNote(id) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete Note API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Delete Note API Error:", error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * AI Annotation History Service
+ */
+export const historyService = {
+  /**
+   * Save an AI annotation to history
+   * @param {object} data - Annotation data
+   * @returns {Promise<AnnotationHistoryItem>}
+   */
+  async createEntry(data) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Create History Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Create History Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get annotation history for a student
+   * @param {string} studentId
+   * @param {object} filters
+   * @returns {Promise<{history: array, total: number}>}
+   */
+  async getHistory(studentId, filters = {}) {
+    try {
+      let url = `${API_BASE_URL}/api/history/${studentId}`;
+      const params = new URLSearchParams();
+
+      if (filters.class_level) params.append("class_level", filters.class_level);
+      if (filters.subject) params.append("subject", filters.subject);
+      if (filters.chapter) params.append("chapter", filters.chapter);
+      if (filters.limit) params.append("limit", filters.limit);
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Get History Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Get History Error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a history entry
+   * @param {string} id
+   */
+  async deleteEntry(id) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete History Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Delete History Error:", error);
+      throw error;
+    }
+  },
 };
 
 /**

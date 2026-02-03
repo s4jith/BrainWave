@@ -97,13 +97,13 @@ def extract_text_from_image(image_data: str, language_hint: str = None) -> str:
                 text, detected_lang = ocr_service.extract_text(img_array, language_hint=language_hint)
                 
                 if text and text.strip():
-                    logger.info(f"   ✅ Multilingual OCR extracted ({detected_lang}): '{text[:100]}...'")
+                    logger.info(f"   [OK] Multilingual OCR extracted ({detected_lang}): '{text[:100]}...'")
                     return text.strip()
                 else:
-                    logger.warning("   ⚠️ Multilingual OCR found no text")
+                    logger.warning("   [WARNING] Multilingual OCR found no text")
                     return None
             else:
-                logger.warning("   ⚠️ Multilingual OCR service not available")
+                logger.warning("   [WARNING] Multilingual OCR service not available")
                 return None
                 
         except ImportError as e:
@@ -128,7 +128,7 @@ class AnnotationResponse(BaseModel):
 @router.post("/", response_model=AnnotationResponse)
 async def process_annotation(request: AnnotationRequest):
     """
-    🎯 Process annotation request with AI assistance.
+    [TARGET] Process annotation request with AI assistance.
     
     **Actions:**
     - `define`: Quick, accurate definition from textbook
@@ -146,6 +146,21 @@ async def process_annotation(request: AnnotationRequest):
     - No matches: Uses Gemini general knowledge with disclaimer
     """
     try:
+        from app.services.cache_service import cache_service
+        
+        # 1. CHECK CACHE FIRST (Deterministic Exact Match)
+        cached_response = await cache_service.get_annotation_cache(
+            action=request.action,
+            subject=request.subject,
+            class_level=request.class_level,
+            selected_text=request.selected_text,
+            image_data=request.image_data
+        )
+        
+        if cached_response:
+            logger.info(f"[FAST] CACHE HIT: Serving stored {request.action} response (0 cost)")
+            return AnnotationResponse(**cached_response)
+
         # Determine the text to process
         query_text = request.selected_text
         
@@ -160,9 +175,9 @@ async def process_annotation(request: AnnotationRequest):
             "bengali": "bn",
             "marathi": "mr",
             "gujarati": "gu",
-            "kannada": "kn",
-            "malayalam": "ml",
-            "punjabi": "pa",
+            "kn": "kn",
+            "ml": "ml",
+            "pa": "pa",
             # English subjects (explicitly set to avoid auto-detect issues)
             "english": "en",
             "physics": "en",
@@ -180,32 +195,73 @@ async def process_annotation(request: AnnotationRequest):
         }
         language_hint = subject_to_lang.get(request.subject.lower(), "en")  # Default to English
         
-        # If image data is provided, extract text from it using OCR
         if request.image_data:
-            logger.info(f"📷 Screenshot doubt received, extracting text...")
+            logger.info(f"[IMAGE] Screenshot doubt received, extracting text...")
             logger.info(f"   Using language hint: {language_hint or 'auto-detect'}")
+            
+            # 1. Try Local Multilingual OCR first (Fast, Free)
             extracted_text = extract_text_from_image(request.image_data, language_hint=language_hint)
             
-            if extracted_text:
+            # Simple validation: Must be > 3 chars and contain at least one letter
+            is_valid_ocr = extracted_text and len(extracted_text.strip()) > 3 and any(c.isalpha() for c in extracted_text)
+            
+            if is_valid_ocr:
                 query_text = extracted_text
                 logger.info(f"   OCR extracted: '{query_text[:100]}...'")
             else:
-                # Fallback to using Gemini vision (future enhancement)
-                logger.info(f"   OCR failed, using original query text")
+                logger.warning(f"   OCR returned invalid/short text: '{extracted_text}'")
+                logger.info(f"   ⚠️ Local OCR failed/poor quality. Attempting Gemini Vision fallback...")
+                
+                try:
+                    # 2. Fallback to Gemini Vision (High Accuracy, Costs Tokens)
+                    import base64
+                    import asyncio
+                    
+                    # Prepare image bytes
+                    if request.image_data.startswith('data:'):
+                        b64_data = request.image_data.split(',', 1)[1]
+                    else:
+                        b64_data = request.image_data
+                        
+                    image_bytes = base64.b64decode(b64_data)
+                    
+                    vision_prompt = """Extract the main educational text from this textbook screenshot. 
+                    If it contains a question, output the question. 
+                    If it contains a paragraph, output the paragraph.
+                    Do not describe the UI, just give the content text.
+                    Output ONLY the extracted text."""
+                    
+                    # Call Gemini Service (Sync method wrapped in thread)
+                    # Using a different method name if needed, checking gemini_service.py...
+                    # It has generate_response_with_image(prompt, image_bytes, mime_type, ...)
+                    extracted_text_vision = await asyncio.to_thread(
+                        gemini_service.generate_response_with_image,
+                        prompt=vision_prompt,
+                        image_bytes=image_bytes
+                    )
+                    
+                    if extracted_text_vision and len(extracted_text_vision.strip()) > 3:
+                         query_text = extracted_text_vision.strip()
+                         logger.info(f"   ✅ Gemini Vision extracted: '{query_text[:100]}...'")
+                    else:
+                         logger.warning("   ❌ Gemini Vision also failed to extract meaningful text")
+                         
+                except Exception as ve:
+                    logger.error(f"   ❌ Gemini Vision fallback failed: {ve}")
         
-        logger.info(f"📝 Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
+        logger.info(f"[NOTE] Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
         logger.info(f"   Class {request.class_level}, {request.subject}")
         
         # Detect input language for multilingual response
         lang_instruction = detect_text_language(query_text)
         if lang_instruction:
-            logger.info(f"   🌐 Detected non-English input, will respond in same language")
+            logger.info(f"   [LANG] Detected non-English input, will respond in same language")
         
         # EDGE CASE: Check class availability
         # Currently we have comprehensive data for Classes 5-10
         # Classes 11-12 have limited content
         if request.class_level > 10:
-            logger.warning(f"⚠️ Class {request.class_level} requested (limited content available)")
+            logger.warning(f"[WARNING] Class {request.class_level} requested (limited content available)")
             # Don't block the request - let the RAG system try to find content
             # If not found, it will fall back to general knowledge
         
@@ -227,34 +283,34 @@ async def process_annotation(request: AnnotationRequest):
             # Create language instruction based on subject
             if is_hindi_subject:
                 language_instruction = """
-⚠️ CRITICAL: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
+[CRITICAL]: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
 - Example: क, ख, ग, घ, च, छ, ज, झ
 - Write like this: "यह एक उदाहरण है"
 - DO NOT use Urdu/Arabic script"""
                 format_example = """**परिभाषा:** [Explanation in Hindi Devanagari]
 
 **मुख्य बिंदु:**
-• [Point 1 in Hindi]
-• [Point 2 in Hindi]"""
+- [Point 1 in Hindi]
+- [Point 2 in Hindi]"""
             elif is_urdu_subject:
                 language_instruction = """
-⚠️ CRITICAL: You MUST respond in Urdu using NASTALIQ script
+[CRITICAL]: You MUST respond in Urdu using NASTALIQ script
 - Write right-to-left in Urdu/Arabic script
 - Example: یہ ایک مثال ہے"""
                 format_example = """**تعریف:** [Explanation in Urdu]
 
 **اہم نکات:**
-• [Point 1 in Urdu]
-• [Point 2 in Urdu]"""
+- [Point 1 in Urdu]
+- [Point 2 in Urdu]"""
             else:
                 # Default: English for Physics, Chemistry, Biology, Mathematics, etc.
                 language_instruction = ""  # No special instruction, respond in English
                 format_example = """**Definition:** [Clear explanation in English]
 
 **Key Points:**
-• [Point 1]
-• [Point 2]
-• [Point 3]"""
+- [Point 1]
+- [Point 2]
+- [Point 3]"""
             
             # Generate better definition using Gemini
             if source_chunks:
@@ -299,7 +355,7 @@ Format:
         
         elif request.action == "elaborate":
             # Deep dive mode: Comprehensive explanation
-            answer, source_chunks = enhanced_rag_service.answer_question_deepdive(
+            answer, source_chunks = await enhanced_rag_service.answer_question_deepdive(
                 question=f"Explain in detail: {query_text}",
                 subject=request.subject,
                 student_class=request.class_level,
@@ -314,7 +370,7 @@ Format:
             # Create language instruction based on subject
             if is_hindi_subject:
                 language_instruction = """
-⚠️ CRITICAL: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
+[CRITICAL]: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
 - Write like this: "यह एक उदाहरण है"
 - DO NOT use Urdu/Arabic script"""
                 format_example = """**परिचय:** [Introduction in Hindi]
@@ -322,7 +378,7 @@ Format:
 **उदाहरण:** [Examples in Hindi]"""
             elif is_urdu_subject:
                 language_instruction = """
-⚠️ CRITICAL: You MUST respond in Urdu using NASTALIQ script
+[CRITICAL]: You MUST respond in Urdu using NASTALIQ script
 - Write right-to-left in Urdu/Arabic script"""
                 format_example = """**تعارف:** [Introduction in Urdu]
 **تفصیل:** [Explanation in Urdu]
@@ -390,7 +446,7 @@ Provide a helpful explanation even though specific textbook content wasn't found
 
 **Instructions:**
 1. Create a step-by-step flow using text and arrows
-2. Use these symbols: ↓ → ← ↑ ⟶ ⟵ 
+2. Use these symbols: v -> <- ^
 3. Keep each step brief (5-8 words max)
 4. Show relationships and progression clearly
 5. Use boxes made with text characters
@@ -400,19 +456,19 @@ Provide a helpful explanation even though specific textbook content wasn't found
 
 **Format Example:**
 ```
-┌─────────────────────┐
-│   Starting Point    │
-└─────────────────────┘
-          ↓
-┌─────────────────────┐
-│   Key Process       │
-└─────────────────────┘
-          ↓
-    ┌─────┴─────┐
-    ↓           ↓
-┌───────┐   ┌───────┐
-│ Path A│   │ Path B│
-└───────┘   └───────┘
++---------------------+
+|   Starting Point    |
++---------------------+
+          v
++---------------------+
+|   Key Process       |
++---------------------+
+          v
+    +-----+-----+
+    v           v
++-------+   +-------+
+| Path A|   | Path B|
++-------+   +-------+
 ```
 
 Generate a similar flow diagram for "{query_text}":{lang_instruction}"""
@@ -422,22 +478,35 @@ Generate a similar flow diagram for "{query_text}":{lang_instruction}"""
                 answer = f"""No flow information found in the book.
 
 Try asking about:
-• Specific processes or procedures
-• Step-by-step concepts
-• Sequential topics
+- Specific processes or procedures
+- Step-by-step concepts
+- Sequential topics
 
 Current search: "{request.selected_text}" in Class {request.class_level} {request.subject}"""
         
-        logger.info(f"✅ Annotation processed: {len(answer)} chars, {len(source_chunks)} sources")
+        logger.info(f"[OK] Annotation processed: {len(answer)} chars, {len(source_chunks)} sources")
         
-        return AnnotationResponse(
-            answer=answer,
-            action_type=request.action,
-            source_count=len(source_chunks)
+        response_data = {
+            "answer": answer,
+            "action_type": request.action,
+            "source_count": len(source_chunks)
+        }
+
+        # Save to cache asynchronously (fire and forget pattern not fully safe here without background tasks, 
+        # so we await to ensure it saves)
+        await cache_service.set_annotation_cache(
+            action=request.action,
+            subject=request.subject,
+            class_level=request.class_level,
+            selected_text=request.selected_text,
+            response_data=response_data,
+            image_data=request.image_data
         )
+
+        return AnnotationResponse(**response_data)
     
     except Exception as e:
-        logger.error(f"❌ Annotation error: {e}")
+        logger.error(f"[ERROR] Annotation error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -450,14 +519,14 @@ async def quick_define(
     subject: str = Query(..., description="Subject name")
 ):
     """
-    ⚡ Ultra-fast definition endpoint (optimized for speed).
+    [FAST] Ultra-fast definition endpoint (optimized for speed).
     
     Returns just the definition without extra processing.
     Perfect for quick lookups while reading.
     """
     try:
         # Use basic RAG with minimal chunks
-        answer, source_chunks = enhanced_rag_service.answer_question_basic(
+        answer, source_chunks = await enhanced_rag_service.answer_question_basic(
             question=f"What is {text}?",
             subject=subject,
             student_class=class_level,

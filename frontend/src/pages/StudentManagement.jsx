@@ -1,13 +1,17 @@
+/**
+ * StudentManagement - Admin page to manage students
+ * Uses AdminLayout with light/dark theme support
+ */
+
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
-import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard } from "lucide-react";
+import AdminLayout from "../components/AdminLayout";
+import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function StudentManagement() {
-  const navigate = useNavigate();
-  const { user, logout } = useUserStore();
+  const { getAuthHeader } = useUserStore();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +25,6 @@ export default function StudentManagement() {
   const [filterClass, setFilterClass] = useState("all");
   const [saving, setSaving] = useState(false);
 
-  // Updated form with age and mobile (no preferred_subject - students access all subjects)
   const [formData, setFormData] = useState({
     name: "",
     age: 14,
@@ -60,28 +63,17 @@ export default function StudentManagement() {
       const response = await fetch(`${API_URL}/api/admin/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          age: formData.age,
-          email: formData.email,
-          mobile: formData.mobile,
-          class_level: formData.class_level
-        })
+        body: JSON.stringify(formData)
       });
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to add student");
       }
-
       const newStudent = await response.json();
-
-      // Show credentials modal with generated ID and password
       if (newStudent.generated_credentials) {
         setNewCredentials(newStudent.generated_credentials);
         setShowCredentialsModal(true);
       }
-
       setStudents([newStudent, ...students]);
       setShowAddModal(false);
       resetForm();
@@ -99,13 +91,7 @@ export default function StudentManagement() {
       const response = await fetch(`${API_URL}/api/admin/students/${selectedStudent.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          age: formData.age,
-          email: formData.email,
-          mobile: formData.mobile,
-          class_level: formData.class_level
-        })
+        body: JSON.stringify(formData)
       });
       if (!response.ok) throw new Error("Failed to update student");
       const updated = await response.json();
@@ -123,23 +109,11 @@ export default function StudentManagement() {
   const handleDeleteStudent = async (studentId) => {
     if (!confirm("Are you sure you want to delete this student?")) return;
     try {
-      const response = await fetch(`${API_URL}/api/admin/students/${studentId}`, { method: "DELETE" });
+      const response = await fetch(`${API_URL}/api/admin/students/${studentId}`, {
+        method: "DELETE"
+      });
       if (!response.ok) throw new Error("Failed to delete student");
       setStudents(students.filter(s => s.id !== studentId));
-    } catch (err) {
-      alert("Error: " + err.message);
-    }
-  };
-
-  const handleToggleActive = async (student) => {
-    try {
-      const response = await fetch(`${API_URL}/api/admin/students/${student.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: !student.is_active })
-      });
-      if (!response.ok) throw new Error("Failed to update student");
-      setStudents(students.map(s => s.id === student.id ? { ...s, is_active: !s.is_active } : s));
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -156,7 +130,7 @@ export default function StudentManagement() {
       setNewCredentials({
         user_id: student.user_id,
         password: result.new_password,
-        note: result.note
+        note: "Password has been reset"
       });
       setShowCredentialsModal(true);
     } catch (err) {
@@ -165,13 +139,7 @@ export default function StudentManagement() {
   };
 
   const resetForm = () => {
-    setFormData({
-      name: "",
-      age: 14,
-      email: "",
-      mobile: "",
-      class_level: 10
-    });
+    setFormData({ name: "", age: 14, email: "", mobile: "", class_level: 10 });
   };
 
   const openEditModal = (student) => {
@@ -186,34 +154,25 @@ export default function StudentManagement() {
     setShowEditModal(true);
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
-  };
-
-  // Export to CSV
-  const handleExportCSV = () => {
-    const headers = ["Name", "User ID", "Age", "Class", "Email", "Mobile", "Status", "Onboarded", "Last Login"];
-    const rows = filteredStudents.map(s => [
-      s.name,
-      s.user_id,
-      s.age || "",
-      `Class ${s.class_level}`,
-      s.email,
-      s.mobile || "",
+  const exportCSV = () => {
+    const headers = ["Name", "User ID", "Email", "Class", "Mobile", "Status", "Last Login"];
+    const rows = students.map(s => [
+      s.name, s.user_id, s.email, s.class_level, s.mobile || "",
       s.is_active ? "Active" : "Inactive",
-      s.is_onboarded ? "Yes" : "No",
-      s.last_login ? new Date(s.last_login).toLocaleString() : "Never"
+      s.last_login ? new Date(s.last_login).toLocaleDateString() : "Never"
     ]);
-
-    const csvContent = [headers.join(","), ...rows.map(r => r.map(cell => `"${cell}"`).join(","))].join("\n");
+    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `students_export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = "students.csv";
     a.click();
-    URL.revokeObjectURL(url);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert("Copied to clipboard!");
   };
 
   const filteredStudents = students.filter(s =>
@@ -222,320 +181,261 @@ export default function StudentManagement() {
     s.user_id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
+  const stats = {
+    total: students.length,
+    active: students.filter(s => s.is_active).length,
+    onboarded: students.filter(s => s.has_completed_onboarding).length,
+    inactive: students.filter(s => !s.is_active).length
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate("/admin-dashboard")} className="p-2 hover:bg-white/20 rounded-lg transition">
-                ← Back
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold">Student Management</h1>
-                <p className="text-orange-100 text-sm">Add, edit, and manage students</p>
-              </div>
+    <AdminLayout title="Student Management" icon={Users}>
+      {error && (
+        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-lg flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+          <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Search and Actions */}
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+          />
+        </div>
+        <div className="flex gap-3">
+          <select
+            value={filterClass}
+            onChange={(e) => setFilterClass(e.target.value)}
+            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+          >
+            <option value="all">All Classes</option>
+            {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+              <option key={c} value={c}>Class {c}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition flex items-center gap-2 font-medium"
+          >
+            <UserPlus className="w-4 h-4" /> Add New User
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm bg-white/20 px-3 py-1 rounded-full">{user?.email || "Admin"}</span>
-              <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-md transition">
-                Logout
-              </button>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Total Users</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total}</p>
             </div>
           </div>
         </div>
-      </header>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Admins</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">1</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Teachers</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.onboarded}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.active}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error Banner */}
-        {error && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded">
-            <p className="text-red-700 text-sm">⚠️ Could not connect to backend: {error}</p>
-            <p className="text-red-600 text-xs mt-1">Please ensure the backend server is running on port 8000</p>
+      {/* Users Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+            <p className="mt-4 text-gray-500 dark:text-gray-400">Loading students...</p>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="p-12 text-center">
+            <Users className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">No students found</p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium"
+            >
+              Add Your First Student
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Email</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Role</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Assigned Groups</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Created</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {filteredStudents.map((student) => (
+                  <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                    <td className="px-6 py-4">
+                      <p className="font-medium text-gray-900 dark:text-white">{student.name}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{student.email}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                        <Users className="w-3 h-3" /> Student
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">-</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        {student.created_at ? new Date(student.created_at).toLocaleDateString() : "-"}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEditModal(student)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        >
+                          <Edit className="w-3.5 h-3.5" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteStudent(student.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-4 rounded-xl shadow-sm">
-            <p className="text-3xl font-bold text-orange-600">{students.length}</p>
-            <p className="text-sm text-gray-600">Total Students</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm">
-            <p className="text-3xl font-bold text-green-600">{students.filter(s => s.is_active).length}</p>
-            <p className="text-sm text-gray-600">Active</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm">
-            <p className="text-3xl font-bold text-yellow-600">{students.filter(s => s.is_onboarded).length}</p>
-            <p className="text-sm text-gray-600">Onboarded</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm">
-            <p className="text-3xl font-bold text-red-600">{students.filter(s => !s.is_active).length}</p>
-            <p className="text-sm text-gray-600">Inactive</p>
-          </div>
-        </div>
-
-        {/* Actions Bar */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-            <div className="flex flex-wrap gap-4 w-full md:w-auto">
-              <input
-                type="text"
-                placeholder="Search by name, email, or ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-72"
-              />
-              <select
-                value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active Only</option>
-                <option value="inactive">Inactive Only</option>
-              </select>
-              <select
-                value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Classes</option>
-                {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
-                  <option key={c} value={c}>Class {c}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleExportCSV}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" /> Export CSV
-              </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Add Student
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Students Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading from database...</p>
-            </div>
-          ) : students.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-500 text-lg mb-4">No students found in the database.</p>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-              >
-                Add Your First Student
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mobile</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredStudents.map((student) => (
-                    <tr key={student.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-                            {student.name?.charAt(0) || "?"}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{student.name}</p>
-                            <p className="text-xs text-gray-500">{student.is_onboarded ? "✓ Onboarded" : "⏳ Not onboarded"}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <code className="text-sm bg-gray-100 px-2 py-1 rounded">{student.user_id}</code>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{student.age || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">Class {student.class_level}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{student.email}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{student.mobile || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {student.last_login ? (
-                          <span title={new Date(student.last_login).toLocaleString()}>
-                            {new Date(student.last_login).toLocaleDateString()}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">Never</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleToggleActive(student)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${student.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                            }`}
-                        >
-                          {student.is_active ? "Active" : "Inactive"}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => openEditModal(student)}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleResetPassword(student)}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                            title="Reset Password"
-                          >
-                            <Key className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStudent(student.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Add Student Modal */}
+      {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Add New Student</h2>
-            <p className="text-sm text-gray-600 mb-4 bg-orange-50 p-3 rounded flex items-start gap-2">
-              <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>
-                User ID and Password will be auto-generated based on name and age.<br />
-                <strong>Format:</strong> ID = name + age + number, Password = name + age
-              </span>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Add New Student</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex items-start gap-2">
+              <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+              <span>User ID and Password will be auto-generated based on name.</span>
             </p>
             <form onSubmit={handleAddStudent} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Student Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name *</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Sajith"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                  placeholder="Student name"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Age *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age *</label>
                   <input
                     type="number"
                     required
-                    min="5"
-                    max="25"
+                    min={5}
+                    max={25}
                     value={formData.age}
                     onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="14"
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Class *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class *</label>
                   <select
                     value={formData.class_level}
                     onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg"
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   >
-                    {[5, 6, 7, 8, 9, 10, 11, 12].map((l) => (
-                      <option key={l} value={l}>Class {l}</option>
+                    {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+                      <option key={c} value={c}>Class {c}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gmail Address *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email *</label>
                 <input
                   type="email"
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="sajith123@gmail.com"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                  placeholder="email@example.com"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile</label>
                 <input
                   type="tel"
-                  required
-                  minLength="10"
-                  maxLength="15"
                   value={formData.mobile}
                   onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   placeholder="1234567890"
                 />
               </div>
-
-              {/* Preview of generated credentials */}
-              {formData.name && formData.age && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    <strong>Preview:</strong><br />
-                    User ID: <code>{formData.name.toLowerCase().replace(/\s/g, '')}{formData.age}1</code> (approx)<br />
-                    Password: <code>{formData.name.toLowerCase().replace(/\s/g, '')}{formData.age}</code>
-                  </p>
-                </div>
-              )}
-
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => { setShowAddModal(false); resetForm(); }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
                 >
-                  {saving ? "Creating..." : "Add Student"}
+                  {saving ? "Adding..." : "Add Student"}
                 </button>
               </div>
             </form>
@@ -543,78 +443,78 @@ export default function StudentManagement() {
         </div>
       )}
 
-      {/* Edit Student Modal */}
+      {/* Edit Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4">
-            <h2 className="text-xl font-bold mb-4">Edit Student</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-5">Edit Student</h2>
             <form onSubmit={handleEditStudent} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
                   <input
                     type="number"
-                    min="5"
-                    max="25"
+                    min={5}
+                    max={25}
                     value={formData.age}
                     onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg"
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Class</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class</label>
                   <select
                     value={formData.class_level}
                     onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg"
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   >
-                    {[5, 6, 7, 8, 9, 10, 11, 12].map((l) => (
-                      <option key={l} value={l}>Class {l}</option>
+                    {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+                      <option key={c} value={c}>Class {c}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
                 <input
                   type="email"
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile</label>
                 <input
                   type="tel"
                   value={formData.mobile}
                   onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                 />
               </div>
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => { setShowEditModal(false); setSelectedStudent(null); resetForm(); }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
@@ -627,55 +527,44 @@ export default function StudentManagement() {
       {/* Credentials Modal */}
       {showCredentialsModal && newCredentials && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <div className="text-center mb-4">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-16 h-16 text-green-600" />
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
-              <h2 className="text-xl font-bold text-green-600">Student Created Successfully!</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Credentials Generated</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Share these with the student</p>
             </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-              <div>
-                <p className="text-sm text-gray-500">User ID (Login ID)</p>
-                <div className="flex items-center gap-2">
-                  <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.user_id}</code>
-                  <button
-                    onClick={() => copyToClipboard(newCredentials.user_id)}
-                    className="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 flex items-center gap-1"
-                  >
-                    <Clipboard className="w-3 h-3" /> Copy
+            <div className="space-y-4 mb-6">
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">User ID</p>
+                <div className="flex items-center justify-between">
+                  <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.user_id}</code>
+                  <button onClick={() => copyToClipboard(newCredentials.user_id)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+                    <Clipboard className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Password</p>
-                <div className="flex items-center gap-2">
-                  <code className="text-lg font-bold bg-white px-3 py-1 rounded border flex-1">{newCredentials.password}</code>
-                  <button
-                    onClick={() => copyToClipboard(newCredentials.password)}
-                    className="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 flex items-center gap-1"
-                  >
-                    <Clipboard className="w-3 h-3" /> Copy
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Password</p>
+                <div className="flex items-center justify-between">
+                  <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.password}</code>
+                  <button onClick={() => copyToClipboard(newCredentials.password)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+                    <Clipboard className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             </div>
-
-            <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-              <span><strong>Important:</strong> {newCredentials.note}</span>
-            </p>
-
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">{newCredentials.note}</p>
             <button
               onClick={() => { setShowCredentialsModal(false); setNewCredentials(null); }}
-              className="w-full mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              className="w-full px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 font-medium transition"
             >
               Done
             </button>
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

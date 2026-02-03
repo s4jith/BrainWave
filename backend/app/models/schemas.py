@@ -12,7 +12,7 @@ from datetime import datetime
 
 class ChatRequest(BaseModel):
     """Request schema for RAG-based chat."""
-    class_level: int = Field(..., ge=5, le=10, description="Class level (5-10)")
+    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
     subject: str = Field(..., description="Subject name (e.g., Geography, History)")
     chapter: int = Field(..., ge=1, description="Chapter number")
     highlight_text: str = Field(..., min_length=1, description="Text highlighted by student")
@@ -70,7 +70,7 @@ class MCQAnswer(BaseModel):
 class EvaluationRequest(BaseModel):
     """Request schema for evaluating MCQ answers."""
     student_id: Optional[str] = Field(None, description="Student identifier (optional)")
-    class_level: int = Field(..., ge=5, le=10, description="Class level")
+    class_level: int = Field(..., ge=5, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mcqs: List[MCQ] = Field(..., description="Original MCQs")
@@ -98,7 +98,7 @@ class EvaluationResponse(BaseModel):
 class NoteCreateRequest(BaseModel):
     """Request schema for creating a note."""
     student_id: str = Field(..., description="Student identifier")
-    class_level: int = Field(..., ge=5, le=10, description="Class level")
+    class_level: int = Field(..., ge=5, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     page_number: int = Field(..., ge=1, description="Page number where note was created")
@@ -140,7 +140,7 @@ class AssessmentAnswer(BaseModel):
 class AssessmentSubmitRequest(BaseModel):
     """Request schema for submitting assessment."""
     student_id: str = Field(..., description="Student identifier")
-    class_level: int = Field(..., ge=5, le=10, description="Class level")
+    class_level: int = Field(..., ge=5, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     answers: List[AssessmentAnswer] = Field(..., description="List of Q&A pairs")
@@ -171,6 +171,42 @@ class ErrorResponse(BaseModel):
 
 
 class SuccessResponse(BaseModel):
-    """Generic success response."""
+    """Standard success response."""
     message: str = Field(..., description="Success message")
     data: Optional[dict] = Field(None, description="Optional response data")
+
+
+# ==================== ANNOTATION HISTORY SCHEMAS ====================
+
+class AnnotationHistoryCreateRequest(BaseModel):
+    """Request schema for saving an AI annotation."""
+    student_id: str = Field(..., description="Student identifier")
+    class_level: int = Field(..., ge=5, le=12, description="Class level")
+    subject: str = Field(..., description="Subject name")
+    chapter: int = Field(None, ge=1, description="Chapter number (optional)")
+    page_number: int = Field(..., ge=1, description="Page number")
+    selected_text: str = Field(..., description="Text selected by user")
+    action_type: str = Field(..., description="Action type (define, elaborate, stick_flow, etc.)")
+    ai_response: str = Field(..., description="AI generated response")
+    source_count: int = Field(0, description="Number of sources used")
+
+
+class AnnotationHistoryItem(BaseModel):
+    """Annotation history item model."""
+    id: str = Field(..., description="MongoDB _id")
+    student_id: str
+    class_level: int
+    subject: str
+    chapter: Optional[int]
+    page_number: int
+    selected_text: str
+    action_type: str
+    ai_response: str
+    source_count: int
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AnnotationHistoryListResponse(BaseModel):
+    """Response schema for listing annotation history."""
+    history: List[AnnotationHistoryItem] = Field(..., description="List of history items")
+    total: int = Field(..., description="Total number of items")

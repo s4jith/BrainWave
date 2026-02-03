@@ -28,6 +28,7 @@ import useUserStore from "../stores/userStore";
 import useNotesStore from "../stores/notesStore";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import StickyNotesCard from "../components/dashboard/StickyNotesCard";
+import quotesData from "../data/quotes.json";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -98,20 +99,15 @@ export default function Dashboard() {
   const [dynamicCourses, setDynamicCourses] = useState([]);
   const [loadingProgress, setLoadingProgress] = useState(true);
 
-  // Daily motivational quotes - rotates based on day of year
-  const motivationalQuotes = [
-    "Bringing AI to the place to where you are and everywhere ❤️",
-    "Every expert was once a beginner. Keep learning! 📚",
-    "Success is the sum of small efforts repeated daily 🌟",
-    "Education is the passport to the future 🚀",
-    "Your potential is limitless. Believe in yourself! 💪",
-    "Knowledge is power. Power to change the world! 🌍",
-    "Dream big, work hard, stay focused 🎯",
-  ];
 
+
+  // Daily motivational quotes - rotates based on day of month
   const getDailyQuote = () => {
-    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
-    return motivationalQuotes[dayOfYear % motivationalQuotes.length];
+    // Get current day of the month (1-31)
+    const day = new Date().getDate();
+    // Map to 0-based index
+    const quoteIndex = (day - 1) % quotesData.quotes.length;
+    return quotesData.quotes[quoteIndex];
   };
 
   // Get current month's activity periods (1-10, 11-20, 21-end)
@@ -339,9 +335,10 @@ export default function Dashboard() {
                 <div className="w-full h-full bg-white/20 rounded-full blur-3xl"></div>
               </div>
               <span className="text-xs uppercase tracking-wider opacity-80">Free tier</span>
-              <h2 className="text-3xl font-bold mt-2 max-w-md">
-                {getDailyQuote()}
+              <h2 className="text-3xl font-semibold mt-2 max-w-md leading-tight">
+                "{getDailyQuote().text}"
               </h2>
+              <p className="text-sm mt-2 opacity-90 font-medium">— {getDailyQuote().author}</p>
 
 
               {/* Course Pills - Only show if books exist in Pinecone */}

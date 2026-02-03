@@ -146,6 +146,9 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         pageNumber: pageNumber,
         position: selectedText.position,
         lessonId: currentLesson?.id,
+        classLevel: user.classLevel,
+        subject: effectiveSubject,
+        chapter: currentLesson?.number,
       });
 
       setSelectedAction(null);

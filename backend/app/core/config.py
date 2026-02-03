@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     SECRET_KEY: Optional[str] = None
     
+    # JWT Settings
+    JWT_SECRET_KEY: str = "ncert-super-secret-jwt-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_HOURS: int = 24
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

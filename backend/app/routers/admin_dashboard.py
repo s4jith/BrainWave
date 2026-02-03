@@ -617,6 +617,8 @@ async def get_teachers(
                 "user_id": t.get("user_id", ""),
                 "name": t.get("name", ""),
                 "email": t.get("email", ""),
+                "mobile": t.get("mobile", ""),
+                "subjects": t.get("subjects", []),
                 "is_active": t.get("is_active", True),
                 "created_at": t.get("created_at", datetime.utcnow()).isoformat() if t.get("created_at") else None,
                 "last_login": t.get("last_login").isoformat() if t.get("last_login") else None
@@ -627,3 +629,341 @@ async def get_teachers(
     except Exception as e:
         logger.error(f"Error fetching teachers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class TeacherCreate(BaseModel):
+    """Model for creating a new teacher."""
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., description="Email address")
+    mobile: Optional[str] = None
+    subjects: List[str] = []
+
+
+class TeacherUpdate(BaseModel):
+    """Model for updating a teacher."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    mobile: Optional[str] = None
+    subjects: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+def generate_teacher_id(name: str) -> str:
+    """Generate unique teacher ID."""
+    try:
+        counter = db.teacher_counters.find_one_and_update(
+            {"_id": "teacher_count"},
+            {"$inc": {"count": 1}},
+            upsert=True,
+            return_document=True
+        )
+        teacher_number = counter.get("count", 1)
+        clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
+        return f"teacher_{clean_name}{teacher_number}"
+    except Exception as e:
+        logger.error(f"Error generating teacher ID: {e}")
+        import time
+        clean_name = name.lower().replace(" ", "")[:10]
+        return f"teacher_{clean_name}{int(time.time()) % 10000}"
+
+
+def generate_teacher_password(name: str) -> str:
+    """Generate default teacher password."""
+    clean_name = name.lower().replace(" ", "").replace(".", "")
+    return f"{clean_name}@123"
+
+
+@router.post("/teachers")
+async def create_teacher(teacher: TeacherCreate):
+    """Create a new teacher account."""
+    try:
+        existing = db.users.find_one({"email": teacher.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        user_id = generate_teacher_id(teacher.name)
+        password = generate_teacher_password(teacher.name)
+        hashed_password = hash_password(password)
+        
+        teacher_doc = {
+            "user_id": user_id,
+            "name": teacher.name,
+            "email": teacher.email,
+            "mobile": teacher.mobile or "",
+            "subjects": teacher.subjects,
+            "password": hashed_password,
+            "role": "teacher",
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "last_login": None
+        }
+        
+        result = db.users.insert_one(teacher_doc)
+        teacher_doc["_id"] = result.inserted_id
+        
+        response = {
+            "id": str(teacher_doc["_id"]),
+            "user_id": user_id,
+            "name": teacher.name,
+            "email": teacher.email,
+            "mobile": teacher.mobile or "",
+            "subjects": teacher.subjects,
+            "is_active": True,
+            "generated_credentials": {
+                "user_id": user_id,
+                "password": password,
+                "note": "Share these credentials with the teacher."
+            }
+        }
+        
+        logger.info(f"Created teacher: {user_id} ({teacher.name})")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating teacher: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/teachers/{teacher_id}")
+async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
+    """Update a teacher's information."""
+    try:
+        update_doc = {}
+        if teacher.name is not None:
+            update_doc["name"] = teacher.name
+        if teacher.email is not None:
+            update_doc["email"] = teacher.email
+        if teacher.mobile is not None:
+            update_doc["mobile"] = teacher.mobile
+        if teacher.subjects is not None:
+            update_doc["subjects"] = teacher.subjects
+        if teacher.is_active is not None:
+            update_doc["is_active"] = teacher.is_active
+        
+        if not update_doc:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        update_doc["updated_at"] = datetime.utcnow()
+        
+        query = {"_id": ObjectId(teacher_id), "role": "teacher"} if ObjectId.is_valid(teacher_id) else {"user_id": teacher_id, "role": "teacher"}
+        result = db.users.find_one_and_update(
+            query,
+            {"$set": update_doc},
+            return_document=True
+        )
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        logger.info(f"Updated teacher: {teacher_id}")
+        return {
+            "id": str(result["_id"]),
+            "user_id": result.get("user_id", ""),
+            "name": result.get("name", ""),
+            "email": result.get("email", ""),
+            "mobile": result.get("mobile", ""),
+            "subjects": result.get("subjects", []),
+            "is_active": result.get("is_active", True)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating teacher: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/teachers/{teacher_id}")
+async def delete_teacher(teacher_id: str):
+    """Delete a teacher."""
+    try:
+        query = {"_id": ObjectId(teacher_id), "role": "teacher"} if ObjectId.is_valid(teacher_id) else {"user_id": teacher_id, "role": "teacher"}
+        result = db.users.delete_one(query)
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        logger.info(f"Deleted teacher: {teacher_id}")
+        return {"success": True, "message": "Teacher deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting teacher: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/teachers/{teacher_id}/reset-password")
+async def reset_teacher_password(teacher_id: str):
+    """Reset a teacher's password."""
+    try:
+        query = {"_id": ObjectId(teacher_id), "role": "teacher"} if ObjectId.is_valid(teacher_id) else {"user_id": teacher_id, "role": "teacher"}
+        teacher = db.users.find_one(query)
+        
+        if not teacher:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+        
+        new_password = generate_teacher_password(teacher.get("name", "teacher"))
+        hashed_password = hash_password(new_password)
+        
+        db.users.update_one(
+            {"_id": teacher["_id"]},
+            {"$set": {"password": hashed_password, "password_changed_at": None}}
+        )
+        
+        logger.info(f"Reset password for teacher: {teacher_id}")
+        return {
+            "success": True,
+            "message": "Password reset successfully",
+            "new_password": new_password,
+            "note": "Share this password with the teacher"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting password: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== GROUP MANAGEMENT ENDPOINTS ====================
+
+class GroupCreate(BaseModel):
+    """Model for creating a group."""
+    name: str = Field(..., min_length=2, max_length=100)
+    teacher_id: str = Field(..., description="Teacher ID is required")
+    student_ids: List[str] = []
+
+
+class GroupStudentUpdate(BaseModel):
+    """Model for updating group students."""
+    student_ids: List[str] = []
+
+
+@router.get("/groups")
+async def get_groups():
+    """Get all groups."""
+    try:
+        cursor = db.groups.find({}).sort("created_at", -1)
+        groups = []
+        
+        for g in cursor:
+            teacher_name = None
+            if g.get("teacher_id"):
+                teacher = db.users.find_one({"_id": ObjectId(g["teacher_id"])} if ObjectId.is_valid(g["teacher_id"]) else {"user_id": g["teacher_id"]})
+                teacher_name = teacher.get("name") if teacher else None
+            
+            groups.append({
+                "id": str(g["_id"]),
+                "name": g.get("name", ""),
+                "description": g.get("description", ""),
+                "teacher_id": g.get("teacher_id", ""),
+                "teacher_name": teacher_name,
+                "student_ids": g.get("student_ids", []),
+                "student_count": len(g.get("student_ids", [])),
+                "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
+            })
+        
+        return {"groups": groups}
+        
+    except Exception as e:
+        logger.error(f"Error fetching groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/groups")
+async def create_group(group: GroupCreate):
+    """Create a new group."""
+    try:
+        group_doc = {
+            "name": group.name,
+            "teacher_id": group.teacher_id,
+            "student_ids": group.student_ids,
+            "created_at": datetime.utcnow()
+        }
+        
+        result = db.groups.insert_one(group_doc)
+        group_doc["_id"] = result.inserted_id
+        
+        teacher_name = None
+        if group.teacher_id:
+            teacher = db.users.find_one({"_id": ObjectId(group.teacher_id)} if ObjectId.is_valid(group.teacher_id) else {"user_id": group.teacher_id})
+            teacher_name = teacher.get("name") if teacher else None
+        
+        logger.info(f"Created group: {group.name} with {len(group.student_ids)} students")
+        return {
+            "id": str(group_doc["_id"]),
+            "name": group.name,
+            "teacher_id": group.teacher_id,
+            "teacher_name": teacher_name,
+            "student_ids": group.student_ids,
+            "student_count": len(group.student_ids)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/groups/{group_id}")
+async def delete_group(group_id: str):
+    """Delete a group."""
+    try:
+        if not ObjectId.is_valid(group_id):
+            raise HTTPException(status_code=400, detail="Invalid group ID")
+        
+        result = db.groups.delete_one({"_id": ObjectId(group_id)})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Group not found")
+        
+        logger.info(f"Deleted group: {group_id}")
+        return {"success": True, "message": "Group deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/groups/{group_id}/students")
+async def update_group_students(group_id: str, data: GroupStudentUpdate):
+    """Update students in a group."""
+    try:
+        if not ObjectId.is_valid(group_id):
+            raise HTTPException(status_code=400, detail="Invalid group ID")
+        
+        result = db.groups.find_one_and_update(
+            {"_id": ObjectId(group_id)},
+            {"$set": {"student_ids": data.student_ids, "updated_at": datetime.utcnow()}},
+            return_document=True
+        )
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Group not found")
+        
+        teacher_name = None
+        if result.get("teacher_id"):
+            teacher = db.users.find_one({"_id": ObjectId(result["teacher_id"])} if ObjectId.is_valid(result["teacher_id"]) else {"user_id": result["teacher_id"]})
+            teacher_name = teacher.get("name") if teacher else None
+        
+        logger.info(f"Updated group students: {group_id} - {len(data.student_ids)} students")
+        return {
+            "id": str(result["_id"]),
+            "name": result.get("name", ""),
+            "description": result.get("description", ""),
+            "teacher_id": result.get("teacher_id", ""),
+            "teacher_name": teacher_name,
+            "student_ids": result.get("student_ids", []),
+            "student_count": len(result.get("student_ids", []))
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating group students: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

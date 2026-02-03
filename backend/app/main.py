@@ -18,7 +18,7 @@ import logging
 
 from app.core.config import settings
 from app.db.mongo import init_databases, close_databases
-from app.routers import chat, mcq, evaluate, notes, assessment, annotation
+from app.routers import chat, mcq, evaluate, notes, assessment, annotation, history
 
 # Configure logging
 logging.basicConfig(
@@ -85,14 +85,10 @@ app = FastAPI(
 )
 
 
-# CORS Configuration
+# CORS Configuration - Allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "http://localhost:5173",  # Vite default
-        "http://localhost:3000",  # Alternative React dev server
-    ],
+    allow_origins=["*"],  # Allow all origins in development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,6 +102,7 @@ app.include_router(evaluate.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(assessment.router, prefix="/api")  # ✅ Voice Assessment
 app.include_router(annotation.router, prefix="/api")  # ✅ Annotation Chatbot
+app.include_router(history.router, prefix="/api")     # ✅ Annotation History
 
 # Import admin and user routers
 from app.routers import admin, user, test, auth
@@ -133,6 +130,18 @@ app.include_router(optimized_chat.router, prefix="/api")  # ⚡ Optimized Chat (
 # Top Questions & Recommendations
 from app.routers import top_questions
 app.include_router(top_questions.router)         # ✅ Top Questions & Recommendations
+
+# Course Management (LMS)
+from app.routers import courses
+app.include_router(courses.router)               # ✅ Course Management (Teachers/Students)
+
+# Assessment System (LMS)
+from app.routers import assessments
+app.include_router(assessments.router)           # ✅ Assessments (Quizzes/Exams)
+
+# Gradebook & Analytics (LMS)
+from app.routers import gradebook
+app.include_router(gradebook.router)             # ✅ Gradebook & Analytics
 
 
 # Root endpoint

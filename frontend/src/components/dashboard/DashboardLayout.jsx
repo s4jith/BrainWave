@@ -15,7 +15,9 @@ import {
   LayoutGrid,
   GraduationCap,
   StickyNote,
-  Calendar
+  Calendar,
+  Award,
+  ClipboardCheck
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import ChatbotPanel from "./ChatbotPanel";
@@ -36,17 +38,28 @@ const navItems = [
     highlight: true
   },
   {
+    id: "courses",
+    label: "My Courses",
+    icon: GraduationCap,
+    path: "/my-courses"
+  },
+  {
+    id: "grades",
+    label: "My Grades",
+    icon: Award,
+    path: "/my-grades"
+  },
+  {
+    id: "assessments",
+    label: "Assessments",
+    icon: ClipboardCheck,
+    path: "/my-tests"
+  },
+  {
     id: "book-to-bot",
     label: "Book to Bot",
     icon: BookOpen,
     path: "/book-to-bot",
-    badge: "PRO"
-  },
-  {
-    id: "test",
-    label: "My Tests",
-    icon: LayoutGrid,
-    path: "/test",
     badge: "PRO"
   },
   {

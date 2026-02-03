@@ -60,6 +60,8 @@ backend/models/
 backend/ncert-working-dataset/
 backend/uploads/
 backend/extracted_images/
+backend/Books/
+Books/
 *.pdf
 
 # Test cache
@@ -93,3 +95,16 @@ htmlcov/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+Thumbs.db
+
+# Dependencies (Binary & Cache)
+poppler/
+backend/poppler/
+
+# Legacy Frontend Gitignore patterns (Consolidated)
+lerna-debug.log*
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+

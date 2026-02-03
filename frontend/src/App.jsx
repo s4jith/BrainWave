@@ -21,6 +21,17 @@ import TestManagement from "./pages/TestManagement";
 import StudentTests from "./pages/StudentTests";
 import Notes from "./pages/Notes";
 import BookManagement from "./pages/BookManagementHierarchical";
+import TeacherDashboard from "./pages/TeacherDashboard";
+import CourseBuilder from "./pages/CourseBuilder";
+import AssessmentBuilder from "./pages/AssessmentBuilder";
+import AssessmentTaker from "./pages/AssessmentTaker";
+import Gradebook from "./pages/Gradebook";
+import StudentDashboard from "./pages/StudentDashboard";
+import MyCourses from "./pages/MyCourses";
+import TeacherManagement from "./pages/TeacherManagement";
+import GroupManagement from "./pages/GroupManagement";
+import AdminSettings from "./pages/AdminSettings";
+import AdminReports from "./pages/AdminReports";
 import "./App.css";
 
 // Protected Route wrapper - For authenticated users
@@ -37,7 +48,7 @@ function ProtectedRoute({ children }) {
   // Admin should only access admin routes
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -48,9 +59,15 @@ function ProtectedRoute({ children }) {
   // Teacher should only access teacher routes
   if (user.role === "teacher") {
     const path = window.location.pathname;
-    if (!path.startsWith("/staff-tests") && path !== "/support-tickets") {
-      console.log("Teacher trying to access non-teacher route, redirecting to /staff-tests");
-      return <Navigate to="/staff-tests" replace />;
+    const teacherRoutes = [
+      "/staff-tests", "/teacher-dashboard", "/course-builder",
+      "/my-courses", "/courses/", "/support-tickets",
+      "/assessment-builder", "/assessments/"
+    ];
+    const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
+    if (!isTeacherRoute) {
+      console.log("Teacher trying to access non-teacher route, redirecting to /teacher-dashboard");
+      return <Navigate to="/teacher-dashboard" replace />;
     }
   }
 
@@ -83,8 +100,8 @@ function OnboardingRoute({ children }) {
   }
 
   if (user.role === "teacher") {
-    console.log("Teacher in onboarding, redirecting to /staff-tests");
-    return <Navigate to="/staff-tests" replace />;
+    console.log("Teacher in onboarding, redirecting to /teacher-dashboard");
+    return <Navigate to="/teacher-dashboard" replace />;
   }
 
   if (user.isOnboarded) {
@@ -109,8 +126,8 @@ function PublicRoute({ children }) {
     }
 
     if (user.role === "teacher") {
-      console.log("Teacher logged in, redirecting to /staff-tests");
-      return <Navigate to="/staff-tests" replace />;
+      console.log("Teacher logged in, redirecting to /teacher-dashboard");
+      return <Navigate to="/teacher-dashboard" replace />;
     }
 
     // Students
@@ -304,6 +321,90 @@ function App() {
             </StaffRoute>
           }
         />
+        <Route
+          path="/teacher-management"
+          element={
+            <StaffRoute>
+              <TeacherManagement />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/group-management"
+          element={
+            <StaffRoute>
+              <GroupManagement />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/admin-settings"
+          element={
+            <StaffRoute>
+              <AdminSettings />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/admin-reports"
+          element={
+            <StaffRoute>
+              <AdminReports />
+            </StaffRoute>
+          }
+        />
+
+        {/* Teacher LMS Routes */}
+        <Route
+          path="/teacher-dashboard"
+          element={
+            <StaffRoute>
+              <TeacherDashboard />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/course-builder"
+          element={
+            <StaffRoute>
+              <CourseBuilder />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/course-builder/:courseId"
+          element={
+            <StaffRoute>
+              <CourseBuilder />
+            </StaffRoute>
+          }
+        />
+
+        {/* Assessment LMS Routes */}
+        <Route
+          path="/assessment-builder"
+          element={
+            <StaffRoute>
+              <AssessmentBuilder />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/assessment-builder/:assessmentId"
+          element={
+            <StaffRoute>
+              <AssessmentBuilder />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/assessments/:assessmentId"
+          element={
+            <ProtectedRoute>
+              <AssessmentTaker />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Student Test Routes */}
         <Route
@@ -321,6 +422,42 @@ function App() {
           element={
             <ProtectedRoute>
               <StudentTests />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Student Dashboard */}
+        <Route
+          path="/student-dashboard"
+          element={
+            <ProtectedRoute>
+              <StudentDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Gradebook & Analytics Routes */}
+        <Route
+          path="/gradebook/:courseId"
+          element={
+            <ProtectedRoute>
+              <Gradebook />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-grades"
+          element={
+            <ProtectedRoute>
+              <Gradebook />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-courses"
+          element={
+            <ProtectedRoute>
+              <MyCourses />
             </ProtectedRoute>
           }
         />

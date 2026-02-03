@@ -23,6 +23,7 @@ httpx==0.26.0
 
 # Validation & Security
 email-validator==2.1.0
+PyJWT>=2.8.0
 
 # Testing (optional)
 pytest==7.4.3
@@ -31,6 +32,11 @@ pytest-asyncio==0.21.1
 # PDF Processing & OCR (Intel OpenVINO optimized)
 PyPDF2==3.0.1
 pdf2image==1.17.0
+# NOTE: pdf2image requires Poppler to be installed as a SYSTEM DEPENDENCY.
+# Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases
+#          Extract to C:\poppler and add C:\poppler\Library\bin to your PATH.
+# macOS: brew install poppler
+# Linux: sudo apt-get install poppler-utils
 Pillow>=10.2.0
 opencv-python-headless>=4.9.0.80
 numpy>=1.24.0

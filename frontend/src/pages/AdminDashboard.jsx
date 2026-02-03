@@ -1,360 +1,166 @@
+/**
+ * AdminDashboard - Main admin dashboard with analytics
+ * Uses AdminLayout with light/dark theme support
+ */
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
-import { Bell } from "lucide-react";
+import AdminLayout from "../components/AdminLayout";
+import {
+  LayoutDashboard, Users, BookOpen, FolderKanban, FileText,
+  ClipboardList, TrendingUp, CheckCircle, AlertCircle, ArrowRight,
+  GraduationCap, BarChart3
+} from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useUserStore();
+  const { user } = useUserStore();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     fetchAnalytics();
-    fetchNotifications();
   }, []);
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      setError(null);
       const response = await fetch(`${API_URL}/api/admin/analytics`);
       if (!response.ok) throw new Error("Failed to fetch analytics");
-      const data = await response.json();
-      setAnalytics(data);
+      setAnalytics(await response.json());
     } catch (err) {
       setError(err.message);
-      // Set empty state - NO mock data
       setAnalytics({
-        user_stats: { total_users: 0, total_students: 0, total_teachers: 0, active_today: 0, active_this_week: 0, active_this_month: 0, inactive_users: 0, new_users_today: 0, new_users_this_week: 0, new_users_this_month: 0 },
-        test_stats: { total_tests_created: 0, total_tests_taken: 0, tests_completed: 0, tests_in_progress: 0, average_score: 0, pass_rate: 0, tests_today: 0, tests_this_week: 0 },
-        activity_trend: [],
-        subject_stats: [],
-        top_performers: [],
-        weak_students: [],
-        recent_activities: []
+        user_stats: { total_users: 0, total_students: 0, total_teachers: 0, active_today: 0, active_this_week: 0, active_this_month: 0, new_users_this_month: 0 },
+        test_stats: { total_tests_created: 0, total_tests_taken: 0, tests_completed: 0, average_score: 0, pass_rate: 0, tests_this_week: 0 }
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/support-tickets/notifications/admin`);
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unread_count || 0);
-      }
-    } catch (err) {
-      console.error("Failed to fetch notifications:", err);
-    }
-  };
-
-  const markNotificationRead = async (notificationId) => {
-    try {
-      await fetch(`${API_URL}/api/support-tickets/notifications/${notificationId}/mark-read`, {
-        method: "POST"
-      });
-      fetchNotifications();
-    } catch (err) {
-      console.error("Failed to mark notification as read:", err);
-    }
-  };
-
-  const handleLogout = () => { logout(); navigate("/"); };
+  const quickActions = [
+    { label: "Manage Users", description: "Add or edit users", icon: Users, path: "/student-management" },
+    { label: "Manage Teachers", description: "Configure teachers", icon: GraduationCap, path: "/teacher-management" },
+    { label: "Create Test", description: "Build new assessments", icon: ClipboardList, path: "/create-test" },
+    { label: "Manage Groups", description: "Organize student groups", icon: FolderKanban, path: "/group-management" },
+  ];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading analytics from database...</p>
+      <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-gray-900 dark:border-white mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
-  const { user_stats, test_stats, activity_trend, subject_stats, top_performers, weak_students } = analytics || {};
+  const stats = analytics?.user_stats || {};
+  const testStats = analytics?.test_stats || {};
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-orange-100 text-sm">NCERT Learning Platform - Live Data</p>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Notification Bell */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-full relative"
-                >
-                  <Bell className="w-5 h-5 text-white" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {/* Notifications Dropdown */}
-                {showNotifications && (
-                  <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-xl z-50 max-h-96 overflow-hidden">
-                    <div className="p-3 border-b bg-gray-50">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-semibold text-gray-800">Notifications</h3>
-                        <button
-                          onClick={() => navigate("/support-tickets")}
-                          className="text-xs text-orange-600 hover:underline"
-                        >
-                          View All Tickets
-                        </button>
-                      </div>
-                    </div>
-                    <div className="max-h-72 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500">
-                          No notifications
-                        </div>
-                      ) : (
-                        notifications.slice(0, 5).map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              markNotificationRead(n.id);
-                              navigate("/support-tickets");
-                              setShowNotifications(false);
-                            }}
-                            className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!n.is_read ? 'bg-orange-50' : ''}`}
-                          >
-                            <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{n.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <span className="text-sm bg-white/20 px-3 py-1 rounded-full">{user?.email || "Admin"}</span>
-              <button onClick={handleLogout} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-md transition">Logout</button>
-            </div>
+    <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
+      {error && (
+        <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Connection Issue</p>
+            <p className="text-sm text-amber-700 dark:text-amber-400">Could not fetch live data. Showing cached data.</p>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-4">
-            {[{ id: "overview", label: "Overview" }, { id: "students", label: "Students" }, { id: "tests", label: "Tests" }, { id: "books", label: "Books" }, { id: "support", label: "Support Tickets" }].map(tab => (
-              <button key={tab.id} onClick={() => { if (tab.id === "students") navigate("/student-management"); else if (tab.id === "tests") navigate("/test-management"); else if (tab.id === "books") navigate("/book-management"); else if (tab.id === "support") navigate("/support-tickets"); else setActiveTab(tab.id); }}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition ${activeTab === tab.id ? "border-white text-white" : "border-transparent text-orange-100 hover:text-white"}`}>
-                {tab.label}
-                {tab.id === "support" && unreadCount > 0 && (
-                  <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unreadCount}</span>
-                )}
+      )}
+
+      {/* Stats Grid - Row 1 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Students" value={stats.total_students || 0} icon={Users} />
+        <StatCard label="Total Teachers" value={stats.total_teachers || 0} icon={GraduationCap} />
+        <StatCard label="Total Tests" value={testStats.total_tests_created || 0} icon={ClipboardList} />
+        <StatCard label="Tests Taken" value={testStats.total_tests_taken || 0} icon={FileText} />
+      </div>
+
+      {/* Stats Grid - Row 2 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <StatCard label="Active Today" value={stats.active_today || 0} icon={TrendingUp} iconColor="text-green-500 dark:text-green-400" />
+        <StatCard label="Completed Tests" value={testStats.tests_completed || 0} icon={CheckCircle} iconColor="text-green-500 dark:text-green-400" />
+        <StatCard label="Avg Score" value={`${testStats.average_score?.toFixed(1) || 0}%`} icon={BarChart3} iconColor="text-blue-500 dark:text-blue-400" />
+      </div>
+
+      {/* Quick Actions & Platform Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Quick Actions */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Quick Actions</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Common administrative tasks</p>
+
+          <div className="space-y-2">
+            {quickActions.map((action, index) => (
+              <button
+                key={index}
+                onClick={() => navigate(action.path)}
+                className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition group"
+              >
+                <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center group-hover:bg-gray-200 dark:group-hover:bg-gray-600 transition">
+                  <action.icon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{action.label}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{action.description}</p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition" />
               </button>
             ))}
-          </nav>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded">
-            <p className="text-red-700 text-sm"> Could not connect to backend. Please start the backend server.</p>
-            <p className="text-red-600 text-xs mt-1">Error: {error}</p>
-          </div>
-        )}
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-          <StatCard label="Total Users" value={user_stats?.total_users || 0} icon="" color="blue" />
-          <StatCard label="Students" value={user_stats?.total_students || 0} icon="" color="green" />
-          <StatCard label="Teachers" value={user_stats?.total_teachers || 0} icon="" color="purple" />
-          <StatCard label="Active Today" value={user_stats?.active_today || 0} icon="" color="emerald" />
-          <StatCard label="Tests Today" value={test_stats?.tests_today || 0} icon="" color="orange" />
-          <StatCard label="Avg Score" value={`${Math.min(test_stats?.average_score || 0, 100)}%`} icon="" color="pink" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Activity Chart */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">User Activity (Last 14 Days)</h2>
-            {activity_trend?.length > 0 ? (
-              <div className="h-64 flex items-end justify-between gap-1">
-                {activity_trend.map((day, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center">
-                    <div className="w-full flex flex-col items-center gap-1">
-                      <div className="w-full bg-orange-500 rounded-t" style={{ height: `${Math.max(day.active_users * 3, 2)}px` }} title={`${day.active_users} users`}></div>
-                      <div className="w-full bg-green-500 rounded-t" style={{ height: `${Math.max(day.tests_taken * 4, 2)}px` }} title={`${day.tests_taken} tests`}></div>
-                    </div>
-                    <span className="text-xs text-gray-500 mt-2">{day.date?.slice(5)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-gray-400">
-                <p>No activity data yet. Data will appear as users interact with the platform.</p>
-              </div>
-            )}
-            <div className="flex justify-center gap-6 mt-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-500 rounded"></div><span className="text-sm text-gray-600">Active Users</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded"></div><span className="text-sm text-gray-600">Tests Taken</span></div>
-            </div>
-          </div>
-
-          {/* Test Performance */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Test Performance</h2>
-            <div className="space-y-4">
-              <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg">
-                <p className="text-4xl font-bold text-green-600">{test_stats?.pass_rate || 0}%</p>
-                <p className="text-sm text-gray-600">Pass Rate</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-orange-50 rounded-lg">
-                  <p className="text-2xl font-bold text-orange-600">{test_stats?.tests_completed || 0}</p>
-                  <p className="text-xs text-gray-600">Completed</p>
-                </div>
-                <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-2xl font-bold text-yellow-600">{test_stats?.tests_in_progress || 0}</p>
-                  <p className="text-xs text-gray-600">In Progress</p>
-                </div>
-              </div>
-              <div className="text-center p-3 bg-orange-50 rounded-lg">
-                <p className="text-2xl font-bold text-orange-600">{test_stats?.total_tests_created || 0}</p>
-                <p className="text-xs text-gray-600">Total Tests Created</p>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Subject Performance */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Subject-wise Performance</h2>
-          {subject_stats?.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              {subject_stats.map((subject, i) => (
-                <div key={i} className="p-4 border rounded-lg hover:shadow-md transition">
-                  <h3 className="font-medium text-gray-900 mb-2">{subject.subject}</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Avg Score</span>
-                      <span className={`font-medium ${Math.min(subject.avg_score, 100) >= 70 ? "text-green-600" : Math.min(subject.avg_score, 100) >= 50 ? "text-yellow-600" : "text-red-600"}`}>{Math.min(subject.avg_score, 100)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                      <div className={`h-2 rounded-full ${Math.min(subject.avg_score, 100) >= 70 ? "bg-green-500" : Math.min(subject.avg_score, 100) >= 50 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${Math.min(subject.avg_score, 100)}%` }}></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>{subject.total_tests} tests</span>
-                      <span>{subject.total_students} students</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-center py-8">No subject data yet. Create tests and have students take them to see performance data.</p>
-          )}
-        </div>
+        {/* Platform Insights */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Platform Insights</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Real-time metrics from database</p>
 
-        {/* Top Performers & Weak Students */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4"> Top Performers</h2>
-            {top_performers?.length > 0 ? (
-              <div className="space-y-3">
-                {top_performers.map((student, i) => (
-                  <div key={student.student_id} className="flex items-center justify-between p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{i === 0 ? "" : i === 1 ? "" : i === 2 ? "" : ""}</span>
-                      <div>
-                        <p className="font-medium text-gray-900">{student.name}</p>
-                        <p className="text-xs text-gray-500">{student.tests_completed} tests</p>
-                      </div>
-                    </div>
-                    <p className="text-lg font-bold text-green-600">{Math.min(student.avg_score, 100)}%</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-center py-8">No top performers yet. Students will appear here after completing tests.</p>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4"> Needs Attention</h2>
-            {weak_students?.length > 0 ? (
-              <div className="space-y-3">
-                {weak_students.map((student) => (
-                  <div key={student.student_id} className="flex items-center justify-between p-3 bg-gradient-to-r from-red-50 to-orange-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl"></span>
-                      <div>
-                        <p className="font-medium text-gray-900">{student.name}</p>
-                        <p className="text-xs text-gray-500">{student.days_inactive} days inactive</p>
-                      </div>
-                    </div>
-                    <p className="text-lg font-bold text-red-600">{student.avg_score}%</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-center py-8">No struggling students identified yet.</p>
-            )}
+          <div className="space-y-4">
+            <InsightRow label="Total Users" value={stats.total_users || 0} />
+            <InsightRow label="Active This Week" value={stats.active_this_week || 0} />
+            <InsightRow label="Tests This Week" value={testStats.tests_this_week || 0} />
+            <InsightRow label="Pass Rate" value={`${testStats.pass_rate?.toFixed(1) || 0}%`} />
+            <InsightRow label="New Users This Month" value={stats.new_users_this_month || 0} last />
           </div>
         </div>
+      </div>
+    </AdminLayout>
+  );
+}
 
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <ActionButton icon="" label="Add Student" onClick={() => navigate("/student-management")} color="blue" />
-            <ActionButton icon="" label="Create Test" onClick={() => navigate("/create-test")} color="green" />
-            <ActionButton icon="" label="View Tests" onClick={() => navigate("/test-management")} color="purple" />
-            <ActionButton icon="??" label="Support Tickets" onClick={() => navigate("/support-tickets")} color="orange" badge={unreadCount > 0 ? unreadCount : null} />
-            <ActionButton icon="" label="Refresh Data" onClick={fetchAnalytics} color="blue" />
-          </div>
+// Stat Card Component
+function StatCard({ label, value, icon: Icon, iconColor = "text-gray-400 dark:text-gray-500" }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+          <p className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</p>
         </div>
-      </main>
+        <div className={`p-2 ${iconColor}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatCard({ label, value, icon, color }) {
-  const colors = { blue: "from-blue-500 to-blue-600", green: "from-green-500 to-green-600", purple: "from-purple-500 to-purple-600", emerald: "from-blue-400 to-blue-500", orange: "from-blue-500 to-blue-700", pink: "from-blue-600 to-blue-700" };
+// Insight Row Component
+function InsightRow({ label, value, last = false }) {
   return (
-    <div className={`bg-gradient-to-br ${colors[color]} text-white rounded-xl p-4 shadow-sm`}>
-      <div className="flex items-center justify-between mb-2"><span className="text-2xl">{icon}</span></div>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs opacity-80">{label}</p>
+    <div className={`flex items-center justify-between py-3 ${last ? "" : "border-b border-gray-100 dark:border-gray-700"}`}>
+      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+      <span className="text-sm font-semibold text-gray-900 dark:text-white">{value}</span>
     </div>
-  );
-}
-
-function ActionButton({ icon, label, onClick, color, badge }) {
-  const colors = { blue: "bg-orange-600 hover:bg-orange-700", green: "bg-green-600 hover:bg-green-700", purple: "bg-orange-600 hover:bg-orange-700", orange: "bg-orange-600 hover:bg-orange-700" };
-  return (
-    <button onClick={onClick} className={`${colors[color]} text-white p-4 rounded-xl flex flex-col items-center gap-2 transition shadow-sm hover:shadow-md relative`}>
-      <span className="text-2xl">{icon}</span>
-      <span className="text-sm font-medium">{label}</span>
-      {badge && (
-        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
-    </button>
   );
 }

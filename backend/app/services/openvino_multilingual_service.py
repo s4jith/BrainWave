@@ -131,7 +131,7 @@ class OpenVinoMultilingualService:
         
         if not self.model_path.exists():
             self._load_error = f"Model not found at {self.model_path}. Run setup_multilingual_model.py first."
-            logger.warning(f"⚠️ {self._load_error}")
+            logger.debug(f"Multilingual model not available - using Gemini fallback (this is fine)")
             return
         
         try:

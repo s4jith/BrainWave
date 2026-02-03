@@ -475,12 +475,28 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
             >
               {/* Loading Overlay */}
               {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10 min-h-[600px] min-w-[400px]">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-sm text-muted-foreground">
-                      Loading page {pageNumber}...
-                    </span>
+                <div className="absolute inset-0 flex items-center justify-center bg-background/90 z-20 min-h-[600px] min-w-[400px] backdrop-blur-sm transition-all duration-300">
+                  <div className="flex flex-col items-center gap-6">
+                    {/* Modern Animated Book Loader */}
+                    <div className="relative w-20 h-20">
+                      {/* Outer Ring */}
+                      <div className="absolute inset-0 border-4 border-orange-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+
+                      {/* Inner Book Icon */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <BookOpen className="w-8 h-8 text-orange-600 animate-pulse" />
+                      </div>
+                    </div>
+
+                    <div className="text-center space-y-1">
+                      <p className="text-lg font-semibold text-gray-800 animate-pulse">
+                        Loading Page {pageNumber}...
+                      </p>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                        Preparing your content
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

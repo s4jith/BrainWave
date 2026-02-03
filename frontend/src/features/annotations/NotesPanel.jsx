@@ -36,6 +36,9 @@ export default function NotesPanel({
         pageNumber: pageNumber,
         position: selectedText.position,
         lessonId: currentLesson?.id,
+        classLevel: currentLesson?.classLevel, // Or user.classLevel?
+        subject: currentLesson?.subject,
+        chapter: currentLesson?.number,
       });
 
       setHeading("");
