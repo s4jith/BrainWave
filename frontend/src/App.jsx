@@ -32,6 +32,10 @@ import TeacherManagement from "./pages/TeacherManagement";
 import GroupManagement from "./pages/GroupManagement";
 import AdminSettings from "./pages/AdminSettings";
 import AdminReports from "./pages/AdminReports";
+import TeacherGroups from "./pages/TeacherGroups";
+import QuestionBank from "./pages/QuestionBank";
+import TeacherTests from "./pages/TeacherTests";
+import TeacherReports from "./pages/TeacherReports";
 import "./App.css";
 
 // Protected Route wrapper - For authenticated users
@@ -360,6 +364,38 @@ function App() {
           element={
             <StaffRoute>
               <TeacherDashboard />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/teacher-groups"
+          element={
+            <StaffRoute>
+              <TeacherGroups />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/teacher-questions"
+          element={
+            <StaffRoute>
+              <QuestionBank />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/teacher-tests"
+          element={
+            <StaffRoute>
+              <TeacherTests />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/teacher-reports"
+          element={
+            <StaffRoute>
+              <TeacherReports />
             </StaffRoute>
           }
         />

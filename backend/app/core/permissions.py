@@ -70,12 +70,14 @@ async def get_current_user(
             return {"user": user.email}
     """
     if not credentials:
+        logger.warning("No credentials provided in request - Authorization header missing or empty")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
+    logger.info(f"Token received, attempting decode...")
     return decode_token(credentials.credentials)
 
 

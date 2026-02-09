@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 class LoginRequest(BaseModel):
     user_id: str
     password: str
-    role: str
+    role: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
@@ -124,16 +124,19 @@ async def login(request: LoginRequest):
     Returns user data, session token, and JWT access token.
     """
     try:
-        # Find user by user_id and role
-        user = db.users.find_one({
-            "user_id": request.user_id,
-            "role": request.role
-        })
+        # Pydantic validation handles missing fields for us if they were required
+        # Since role is optional, we build query dynamically
+        query = {"user_id": request.user_id}
+        if request.role:
+            query["role"] = request.role
+            
+        user = db.users.find_one(query)
         
         if not user:
+            role_msg = f"No {request.role}" if request.role else "No user"
             return {
                 "success": False,
-                "error": f"No {request.role} found with this user ID"
+                "error": f"{role_msg} found with this user ID"
             }
         
         # Verify password
@@ -151,8 +154,23 @@ async def login(request: LoginRequest):
             }
         
         # Check if this is first login (password is default pattern)
-        default_password = f"{request.user_id}@123"
-        is_first_login = request.password == default_password
+        is_first_login = False
+        try:
+            if user["role"] == "teacher":
+                clean_name = user.get("name", "").lower().replace(" ", "").replace(".", "")
+                default_password = f"{clean_name}@123"
+                is_first_login = request.password == default_password
+            elif user["role"] == "student":
+                clean_name = user.get("name", "").lower().replace(" ", "").replace(".", "")
+                age = user.get("age", "")
+                default_password = f"{clean_name}{age}"
+                is_first_login = request.password == default_password
+            else:
+                default_password = f"{request.user_id}@123"
+                is_first_login = request.password == default_password
+        except Exception as e:
+            logger.warning(f"Error checking first login: {e}")
+            is_first_login = False
         
         # Update last login time
         db.users.update_one(

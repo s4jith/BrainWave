@@ -8,11 +8,12 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle } from "lucide-react";
+import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Hindi", "Physics", "Chemistry", "Biology"];
+const CLASSES = [5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function CreateTest() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function CreateTest() {
   // Form data
   const [formData, setFormData] = useState({
     title: "",
+    class_level: 10,  // Default class
     subject: "",
     startDate: "",
     endDate: "",
@@ -46,10 +48,86 @@ export default function CreateTest() {
 
   // Questions (for tab 2)
   const [questions, setQuestions] = useState([]);
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [questionForm, setQuestionForm] = useState({
+    class_level: 10,
+    subject: "",
+    marks: 1,
+    type: "mcq", // mcq, fillup, subjective
+    text: "",
+    options: ["", "", "", ""],
+    correct_answer: 0
+  });
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [testSubjects, setTestSubjects] = useState([]);  // For Test Details tab
 
   useEffect(() => {
     fetchGroupsAndStudents();
   }, []);
+
+  // Fetch subjects when test class_level changes
+  useEffect(() => {
+    if (formData.class_level) {
+      fetchTestSubjectsForClass(formData.class_level);
+      fetchStudentsForClass(formData.class_level);  // Refetch students when class changes
+    }
+  }, [formData.class_level]);
+
+  // Fetch subjects when class changes in question modal
+  useEffect(() => {
+    if (showQuestionModal && questionForm.class_level) {
+      fetchSubjectsForClass(questionForm.class_level);
+    }
+  }, [showQuestionModal, questionForm.class_level]);
+
+  const fetchSubjectsForClass = async (classLevel) => {
+    setLoadingSubjects(true);
+    try {
+      const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
+      if (response.ok) {
+        const data = await response.json();
+        // API returns list of {subject, total_chapters, total_questions} objects
+        const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
+        setAvailableSubjects(subjects);
+        // Set first subject as default if current is empty or not in list
+        if (!questionForm.subject || !subjects.includes(questionForm.subject)) {
+          setQuestionForm(prev => ({ ...prev, subject: subjects[0] || "" }));
+        }
+      } else {
+        // Fallback if API fails
+        setAvailableSubjects(SUBJECTS);
+      }
+    } catch (err) {
+      console.error("Failed to fetch subjects:", err);
+      // Fallback to default subjects
+      setAvailableSubjects(SUBJECTS);
+    } finally {
+      setLoadingSubjects(false);
+    }
+  };
+
+  // Fetch subjects for Test Details tab based on class
+  const fetchTestSubjectsForClass = async (classLevel) => {
+    try {
+      const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
+      if (response.ok) {
+        const data = await response.json();
+        const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
+        setTestSubjects(subjects);
+        // Reset subject if not in new list
+        if (!subjects.includes(formData.subject)) {
+          setFormData(prev => ({ ...prev, subject: "" }));
+        }
+      } else {
+        setTestSubjects(SUBJECTS);
+      }
+    } catch (err) {
+      console.error("Failed to fetch test subjects:", err);
+      setTestSubjects(SUBJECTS);
+    }
+  };
 
   const fetchGroupsAndStudents = async () => {
     setLoadingGroups(true);
@@ -61,18 +139,31 @@ export default function CreateTest() {
         setGroups(data.groups || []);
       }
 
-      // Fetch students
-      const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200`);
-      if (studentsRes.ok) {
-        const data = await studentsRes.json();
-        setStudents(data || []);
-      }
+      // Fetch students for default class (10)
+      await fetchStudentsForClass(formData.class_level);
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error("Error:", err);
     } finally {
       setLoadingGroups(false);
     }
   };
+
+  // Fetch students filtered by class
+  const fetchStudentsForClass = async (classLevel) => {
+    try {
+      const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
+      if (studentsRes.ok) {
+        const data = await studentsRes.json();
+        setStudents(data || []);
+        // Clear selections when students change
+        setSelectedStudents([]);
+      }
+    } catch (err) {
+      console.error("Error fetching students:", err);
+    }
+  };
+
+
 
   const handleGroupToggle = (groupId) => {
     const group = groups.find(g => g.id === groupId);
@@ -193,6 +284,61 @@ export default function CreateTest() {
     }
   };
 
+  // Question Modal Functions
+  const openAddQuestion = () => {
+    setQuestionForm({
+      class_level: 10,
+      subject: "",  // Will be set by useEffect when subjects are fetched
+      marks: 1,
+      type: "mcq",
+      text: "",
+      options: ["", "", "", ""],
+      correct_answer: 0
+    });
+    setEditingIndex(null);
+    setShowQuestionModal(true);
+  };
+
+  const handleSaveQuestion = () => {
+    if (!questionForm.text.trim()) {
+      setError("Please enter question text");
+      return;
+    }
+    if (questionForm.type === "mcq" && questionForm.options.some(o => !o.trim())) {
+      setError("Please fill all MCQ options");
+      return;
+    }
+
+    const newQuestion = {
+      ...questionForm,
+      id: editingIndex !== null ? questions[editingIndex].id : Date.now()
+    };
+
+    if (editingIndex !== null) {
+      setQuestions(prev => prev.map((q, i) => i === editingIndex ? newQuestion : q));
+    } else {
+      setQuestions(prev => [...prev, newQuestion]);
+    }
+
+    setShowQuestionModal(false);
+    setError(null);
+  };
+
+  const editQuestion = (index) => {
+    setQuestionForm(questions[index]);
+    setEditingIndex(index);
+    setShowQuestionModal(true);
+  };
+
+  const deleteQuestion = (index) => {
+    setQuestions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMarksChange = (marks) => {
+    const type = marks === 1 ? "mcq" : "subjective";
+    setQuestionForm(prev => ({ ...prev, marks, type }));
+  };
+
   return (
     <AdminLayout title="Create Test" icon={ClipboardList}>
       {/* Header Actions */}
@@ -239,8 +385,8 @@ export default function CreateTest() {
           <button
             onClick={() => setActiveTab("details")}
             className={`px-6 py-3 text-sm font-medium border-b-2 transition ${activeTab === "details"
-                ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
+              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
           >
             Test Details
@@ -248,8 +394,8 @@ export default function CreateTest() {
           <button
             onClick={() => setActiveTab("questions")}
             className={`px-6 py-3 text-sm font-medium border-b-2 transition ${activeTab === "questions"
-                ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
+              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
           >
             Questions
@@ -279,6 +425,20 @@ export default function CreateTest() {
                 />
               </div>
 
+              {/* Class */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Class <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.class_level}
+                  onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value), subject: "" })}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
+                >
+                  {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
+                </select>
+              </div>
+
               {/* Subject */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -290,7 +450,7 @@ export default function CreateTest() {
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                 >
                   <option value="">Select a subject</option>
-                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {testSubjects.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
 
@@ -507,9 +667,12 @@ export default function CreateTest() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">Questions</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Add questions to your test</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Add questions to your test ({questions.length} added)</p>
             </div>
-            <button className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium flex items-center gap-2">
+            <button
+              onClick={openAddQuestion}
+              className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" /> Add Question
             </button>
           </div>
@@ -521,16 +684,212 @@ export default function CreateTest() {
               <p className="text-gray-400 dark:text-gray-500 text-sm">Click "Add Question" to start building your test</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {questions.map((q, index) => (
-                <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <p className="font-medium text-gray-900 dark:text-white">Q{index + 1}. {q.text}</p>
+                <div key={q.id || index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                          {q.marks} Mark{q.marks > 1 ? 's' : ''}
+                        </span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                          {q.type === 'mcq' ? 'MCQ' : q.type === 'fillup' ? 'Fill in the Blank' : 'Subjective'}
+                        </span>
+                        <span className="text-xs text-gray-400">Class {q.class_level} · {q.subject}</span>
+                      </div>
+                      <p className="font-medium text-gray-900 dark:text-white">Q{index + 1}. {q.text}</p>
+                      {q.type === 'mcq' && q.options && (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {q.options.map((opt, i) => (
+                            <div key={i} className={`text-sm px-3 py-1.5 rounded border ${i === q.correct_answer ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}>
+                              {String.fromCharCode(65 + i)}. {opt}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => editQuestion(index)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deleteQuestion(index)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+
+      {/* Question Modal */}
+      {showQuestionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {editingIndex !== null ? 'Edit Question' : 'Add New Question'}
+              </h3>
+              <button onClick={() => setShowQuestionModal(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              {/* Class and Subject */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class</label>
+                  <select
+                    value={questionForm.class_level}
+                    onChange={(e) => {
+                      const cl = parseInt(e.target.value);
+                      setQuestionForm(prev => ({ ...prev, class_level: cl, subject: "" }));
+                    }}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                  >
+                    {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                  <select
+                    value={questionForm.subject}
+                    onChange={(e) => setQuestionForm(prev => ({ ...prev, subject: e.target.value }))}
+                    disabled={loadingSubjects}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {loadingSubjects ? (
+                      <option>Loading...</option>
+                    ) : (
+                      availableSubjects.map(s => <option key={s} value={s}>{s}</option>)
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Marks */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Question Marks</label>
+                <div className="flex gap-2">
+                  {[1, 2, 5].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => handleMarksChange(m)}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${questionForm.marks === m ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                    >
+                      {m} Mark{m > 1 ? 's' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question Type (only for 1 mark) */}
+              {questionForm.marks === 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Question Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setQuestionForm(prev => ({ ...prev, type: 'mcq' }))}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${questionForm.type === 'mcq' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                    >
+                      MCQ (Multiple Choice)
+                    </button>
+                    <button
+                      onClick={() => setQuestionForm(prev => ({ ...prev, type: 'fillup' }))}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${questionForm.type === 'fillup' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                    >
+                      Fill in the Blank
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Question Text */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Question Text</label>
+                <textarea
+                  value={questionForm.text}
+                  onChange={(e) => setQuestionForm(prev => ({ ...prev, text: e.target.value }))}
+                  placeholder={questionForm.type === 'fillup' ? 'Use ___ for blank spaces (e.g., "The capital of India is ___")' : 'Enter your question here...'}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                />
+              </div>
+
+              {/* MCQ Options */}
+              {questionForm.type === 'mcq' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Options (select correct answer)</label>
+                  <div className="space-y-2">
+                    {questionForm.options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <button
+                          onClick={() => setQuestionForm(prev => ({ ...prev, correct_answer: i }))}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-medium transition ${questionForm.correct_answer === i ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                        >
+                          {String.fromCharCode(65 + i)}
+                        </button>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...questionForm.options];
+                            newOpts[i] = e.target.value;
+                            setQuestionForm(prev => ({ ...prev, options: newOpts }));
+                          }}
+                          placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                          className="flex-1 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Click the letter to mark as correct answer</p>
+                </div>
+              )}
+
+              {/* Info for Fill-ups and Subjective */}
+              {questionForm.type === 'fillup' && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    <strong>Fill in the Blank:</strong> Students will type their answer in a text box. Use ___ in your question to indicate where the blank is.
+                  </p>
+                </div>
+              )}
+
+              {questionForm.marks > 1 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <p className="text-sm text-amber-700 dark:text-amber-400">
+                    <strong>Subjective Question ({questionForm.marks} Marks):</strong> Students will write a detailed answer. Teachers will manually grade these responses.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowQuestionModal(false)}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveQuestion}
+                className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium"
+              >
+                {editingIndex !== null ? 'Update Question' : 'Add Question'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
+

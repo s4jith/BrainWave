@@ -313,11 +313,28 @@ async def get_analytics():
         ]
         recent_activities_raw = list(test_sessions.aggregate(recent_pipeline))
         
-        # Serialize recent_activities to ensure no ObjectId issues
+        # Serialize recent_activities and look up student names
         recent_activities = []
         for activity in recent_activities_raw:
+            student_id = activity.get("student_id", "")
+            student_name = "Unknown Student"
+            class_level = None
+            
+            # Try to find student by ObjectId or user_id
+            if student_id:
+                student = None
+                if ObjectId.is_valid(str(student_id)):
+                    student = db.users.find_one({"_id": ObjectId(str(student_id))})
+                if not student:
+                    student = db.users.find_one({"user_id": str(student_id)})
+                if student:
+                    student_name = student.get("name", "Unknown Student")
+                    class_level = student.get("class_level")
+            
             recent_activities.append({
-                "student_id": str(activity.get("student_id", "")),
+                "student_id": str(student_id),
+                "student_name": student_name,
+                "class_level": class_level,
                 "subject": activity.get("subject", "Unknown"),
                 "score": activity.get("score", 0),
                 "created_at": activity.get("created_at").isoformat() if activity.get("created_at") else None

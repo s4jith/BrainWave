@@ -416,17 +416,28 @@ async def update_test(test_id: str, test: TestUpdate):
 
 @router.delete("/{test_id}")
 async def delete_test(test_id: str):
-    """Delete a test and its PDF file."""
+    """Delete a test, its PDF file, and all related submissions."""
     try:
         test = db.tests.find_one({"_id": ObjectId(test_id)})
         
         if not test:
             raise HTTPException(status_code=404, detail="Test not found")
         
-        # Delete PDF file
+        # Delete test PDF file
         pdf_path = os.path.join(UPLOAD_DIR, test.get("pdf_filename", ""))
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
+        
+        # Delete all submissions for this test and their PDF files
+        submissions = list(db.test_submissions.find({"test_id": test_id}))
+        for submission in submissions:
+            sub_pdf_path = os.path.join(SUBMISSION_DIR, submission.get("pdf_filename", ""))
+            if os.path.exists(sub_pdf_path):
+                os.remove(sub_pdf_path)
+        
+        # Delete all submission documents
+        deleted_subs = db.test_submissions.delete_many({"test_id": test_id})
+        logger.info(f"Deleted {deleted_subs.deleted_count} submissions for test {test_id}")
         
         # Delete test document
         db.tests.delete_one({"_id": ObjectId(test_id)})
@@ -436,7 +447,10 @@ async def delete_test(test_id: str):
         
         logger.info(f"Deleted test: {test_id}")
         
-        return {"success": True, "message": "Test deleted successfully"}
+        return {
+            "success": True, 
+            "message": f"Test deleted successfully! {deleted_subs.deleted_count} submissions also removed."
+        }
         
     except HTTPException:
         raise

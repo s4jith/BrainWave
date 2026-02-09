@@ -120,6 +120,14 @@ app.include_router(support_tickets.router)       # ✅ Support Tickets
 app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
 app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
 
+# Teacher specific router
+from app.routers import teacher
+app.include_router(teacher.router)               # ✅ Teacher specific (Groups, Questions, Stats)
+
+# Notifications router
+from app.routers import notifications
+app.include_router(notifications.router)         # ✅ Notifications
+
 # Stretch goal routers (Intel Unnati)
 from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat
 app.include_router(voice_chat.router)            # ✅ Voice Chat (Stretch Goal)
