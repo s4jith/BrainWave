@@ -129,9 +129,11 @@ from app.routers import notifications
 app.include_router(notifications.router)         # ✅ Notifications
 
 # Stretch goal routers (Intel Unnati)
-from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat
+# Stretch goal routers (Intel Unnati)
+from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat, student
 app.include_router(voice_chat.router)            # ✅ Voice Chat (Stretch Goal)
 app.include_router(student_level.router)         # ✅ Adaptive Explanations (Stretch Goal)
+app.include_router(student.router)               # ✅ Student specific (Groups)
 app.include_router(multilingual_chat.router)     # ✅ Multilingual Chat (Indian Languages)
 app.include_router(optimized_chat.router, prefix="/api")  # ⚡ Optimized Chat (2-call max)
 

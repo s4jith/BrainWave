@@ -666,7 +666,7 @@ class TeacherUpdate(BaseModel):
 
 
 def generate_teacher_id(name: str) -> str:
-    """Generate unique teacher ID."""
+    """Generate unique teacher ID in format: staff_{number}_{name}"""
     try:
         counter = db.teacher_counters.find_one_and_update(
             {"_id": "teacher_count"},
@@ -676,12 +676,12 @@ def generate_teacher_id(name: str) -> str:
         )
         teacher_number = counter.get("count", 1)
         clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
-        return f"teacher_{clean_name}{teacher_number}"
+        return f"staff_{teacher_number}_{clean_name}"
     except Exception as e:
         logger.error(f"Error generating teacher ID: {e}")
         import time
         clean_name = name.lower().replace(" ", "")[:10]
-        return f"teacher_{clean_name}{int(time.time()) % 10000}"
+        return f"staff_{int(time.time()) % 10000}_{clean_name}"
 
 
 def generate_teacher_password(name: str) -> str:
@@ -879,6 +879,7 @@ async def get_groups():
                 "teacher_id": g.get("teacher_id", ""),
                 "teacher_name": teacher_name,
                 "student_ids": g.get("student_ids", []),
+                "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
                 "student_count": len(g.get("student_ids", [])),
                 "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
             })

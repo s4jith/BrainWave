@@ -223,7 +223,13 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name || "Admin"}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
                         </div>
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Sign out"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -361,14 +367,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                             )}
                         </div>
 
-                        {/* Logout */}
-                        <button
-                            onClick={handleLogout}
-                            className="p-2.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            title="Logout"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
+
                     </div>
                 </header>
 

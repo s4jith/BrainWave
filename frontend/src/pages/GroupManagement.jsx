@@ -287,7 +287,7 @@ export default function GroupManagement() {
                                                 onClick={() => handleRemoveStudentFromGroup(student.id)}
                                                 className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                                             >
-                                                <X className="w-4 h-4" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     ))}
@@ -329,7 +329,7 @@ export default function GroupManagement() {
                                     required
                                 >
                                     <option value="">Select a teacher</option>
-                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.preferred_subject})</option>)}
+                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
                             </div>
                             <div>

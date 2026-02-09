@@ -28,9 +28,26 @@ export default function TeacherDashboard() {
 
     const [loading, setLoading] = useState(true);
 
+    const [groups, setGroups] = useState([]);
+
     useEffect(() => {
         fetchDashboardStats();
+        fetchGroups();
     }, []);
+
+    const fetchGroups = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/teacher/groups`, {
+                headers: getAuthHeader()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setGroups(data.groups || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch teacher groups:", err);
+        }
+    };
 
     const fetchDashboardStats = async () => {
         try {
@@ -51,9 +68,9 @@ export default function TeacherDashboard() {
                 // Fallback / Mock data if endpoint not ready
                 console.warn("Using mock stats data");
                 setStats({
-                    myQuestions: 3,
-                    myTests: 1,
-                    evaluated: 2,
+                    myQuestions: 0,
+                    myTests: 0,
+                    evaluated: 0,
                     pending: 0
                 });
             }
@@ -151,21 +168,43 @@ export default function TeacherDashboard() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col items-center justify-center text-center">
                     <div className="w-full text-left mb-auto">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">My Groups</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Student groups you manage.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Student groups you manage.</p>
                     </div>
 
-                    <div className="flex flex-col items-center my-8">
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                            <Users className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                    {groups.length > 0 ? (
+                        <div className="w-full space-y-3 mb-6">
+                            {groups.slice(0, 3).map(group => (
+                                <div key={group.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-500">
+                                            <Users className="w-4 h-4 text-gray-500 dark:text-gray-300" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-medium text-sm text-gray-900 dark:text-white">{group.name}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{group.student_count || 0} students</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {groups.length > 3 && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">+{groups.length - 3} more groups</p>
+                            )}
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">View and manage your student groups</p>
-                        <button
-                            onClick={() => navigate("/teacher-groups")}
-                            className="text-sm font-medium text-gray-900 dark:text-white hover:underline"
-                        >
-                            View Groups
-                        </button>
-                    </div>
+                    ) : (
+                        <div className="flex flex-col items-center my-8">
+                            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                                <Users className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">No groups assigned yet</p>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => navigate("/teacher-groups")}
+                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline mt-auto"
+                    >
+                        View All Groups
+                    </button>
                 </div>
             </div>
         </AdminLayout>

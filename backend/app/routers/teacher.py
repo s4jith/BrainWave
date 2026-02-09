@@ -205,26 +205,30 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
     """Get dashboard stats for teacher."""
     try:
         # My Questions
+        # My Questions
         my_questions = db.questions.count_documents({"created_by": current_user.user_id})
         
-        # My Tests (Assessments)
-        my_tests = db.assessments.count_documents({"instructor_id": current_user.user_id})
+        # My Tests (Tests)
+        # Using db.tests instead of assessments, and checking created_by
+        my_tests = db.tests.count_documents({"created_by": current_user.user_id, "is_active": True})
         
-        # Evaluated (Submissions with status 'graded')
-        # We need to find submissions for assessments created by this teacher
-        my_assessment_ids = [str(a["_id"]) for a in db.assessments.find({"instructor_id": current_user.user_id}, {"_id": 1})]
+        # Evaluated and Pending (from test_submissions)
+        # First get all test IDs created by this teacher
+        my_test_ids = [str(t["_id"]) for t in db.tests.find({"created_by": current_user.user_id}, {"_id": 1})]
         
         evaluated = 0
         pending = 0
         
-        if my_assessment_ids:
-            evaluated = db.submissions.count_documents({
-                "assessment_id": {"$in": my_assessment_ids},
-                "status": "graded"
+        if my_test_ids:
+            # Evaluated = is_reviewed is True
+            evaluated = db.test_submissions.count_documents({
+                "test_id": {"$in": my_test_ids},
+                "is_reviewed": True
             })
-            pending = db.submissions.count_documents({
-                "assessment_id": {"$in": my_assessment_ids},
-                "status": {"$ne": "graded"}
+            # Pending = is_reviewed is False
+            pending = db.test_submissions.count_documents({
+                "test_id": {"$in": my_test_ids},
+                "is_reviewed": False
             })
             
         return {
