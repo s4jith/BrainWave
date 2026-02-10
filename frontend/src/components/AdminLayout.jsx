@@ -54,9 +54,12 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     }, []);
 
     const fetchNotifications = async () => {
+        const headers = getAuthHeader();
+        if (!headers.Authorization) return;
+
         try {
             const response = await fetch(`${API_URL}/api/notifications`, {
-                headers: getAuthHeader()
+                headers
             });
             if (response.ok) {
                 const data = await response.json();
@@ -152,7 +155,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         switch (theme) {
             case 'dark': return Moon;
             case 'light': return Sun;
-            default: return Monitor;
+            default: return Sun; // Default to Sun (Light) icon for System instead of Monitor
         }
     };
 

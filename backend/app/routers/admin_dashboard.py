@@ -195,8 +195,8 @@ async def get_analytics():
         pass_rate = round((passed / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
         
         # Question sets created
-        question_sets = db.get_collection("question_sets")
-        total_tests_created = question_sets.count_documents({})
+        tests_col = db.get_collection("tests")
+        total_tests_created = tests_col.count_documents({})
         
         test_stats = {
             "total_tests_created": total_tests_created,
@@ -850,13 +850,22 @@ async def reset_teacher_password(teacher_id: str):
 class GroupCreate(BaseModel):
     """Model for creating a group."""
     name: str = Field(..., min_length=2, max_length=100)
-    teacher_id: str = Field(..., description="Teacher ID is required")
+    teacher_ids: List[str] = Field(default=[], description="List of Teacher IDs")
+    # specific teacher_id field is deprecated but kept for backward compatibility if needed, though we will use teacher_ids primarily.
+    # Actually, let's just switch to teacher_ids.
     student_ids: List[str] = []
 
 
 class GroupStudentUpdate(BaseModel):
     """Model for updating group students."""
     student_ids: List[str] = []
+
+
+class GroupUpdate(BaseModel):
+    """Model for updating a group."""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    teacher_ids: Optional[List[str]] = None
+    description: Optional[str] = None
 
 
 @router.get("/groups")
@@ -867,17 +876,32 @@ async def get_groups():
         groups = []
         
         for g in cursor:
-            teacher_name = None
+            teacher_names = []
+            # Handle legacy teacher_id
             if g.get("teacher_id"):
-                teacher = db.users.find_one({"_id": ObjectId(g["teacher_id"])} if ObjectId.is_valid(g["teacher_id"]) else {"user_id": g["teacher_id"]})
-                teacher_name = teacher.get("name") if teacher else None
+                tid = g.get("teacher_id")
+                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
+                if teacher:
+                    teacher_names.append(teacher.get("name"))
+            
+            # Handle new teacher_ids
+            if g.get("teacher_ids"):
+                for tid in g.get("teacher_ids"):
+                    # Avoid duplicates if teacher_id is also present and same
+                    if g.get("teacher_id") and tid == g.get("teacher_id"):
+                        continue
+                        
+                    teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
+                    if teacher:
+                        teacher_names.append(teacher.get("name"))
             
             groups.append({
                 "id": str(g["_id"]),
-                "name": g.get("name", ""),
+                "name": g.get("name"),
                 "description": g.get("description", ""),
-                "teacher_id": g.get("teacher_id", ""),
-                "teacher_name": teacher_name,
+                "teacher_id": g.get("teacher_id"), # Keep for legacy compatibility
+                "teacher_ids": g.get("teacher_ids", [g.get("teacher_id")] if g.get("teacher_id") else []),
+                "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
                 "student_ids": g.get("student_ids", []),
                 "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
                 "student_count": len(g.get("student_ids", [])),
@@ -895,9 +919,12 @@ async def get_groups():
 async def create_group(group: GroupCreate):
     """Create a new group."""
     try:
+        # Prepare document
         group_doc = {
             "name": group.name,
-            "teacher_id": group.teacher_id,
+            "teacher_ids": group.teacher_ids,
+            # For backward compatibility, set teacher_id to the first teacher if available
+            "teacher_id": group.teacher_ids[0] if group.teacher_ids else None,
             "student_ids": group.student_ids,
             "created_at": datetime.utcnow()
         }
@@ -905,17 +932,21 @@ async def create_group(group: GroupCreate):
         result = db.groups.insert_one(group_doc)
         group_doc["_id"] = result.inserted_id
         
-        teacher_name = None
-        if group.teacher_id:
-            teacher = db.users.find_one({"_id": ObjectId(group.teacher_id)} if ObjectId.is_valid(group.teacher_id) else {"user_id": group.teacher_id})
-            teacher_name = teacher.get("name") if teacher else None
+        # Resolve teacher names
+        teacher_names = []
+        if group_doc["teacher_ids"]:
+            for tid in group_doc["teacher_ids"]:
+                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
+                if teacher:
+                    teacher_names.append(teacher.get("name"))
         
         logger.info(f"Created group: {group.name} with {len(group.student_ids)} students")
         return {
             "id": str(group_doc["_id"]),
             "name": group.name,
-            "teacher_id": group.teacher_id,
-            "teacher_name": teacher_name,
+            "teacher_id": group_doc["teacher_id"],
+            "teacher_ids": group_doc["teacher_ids"],
+            "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
             "student_ids": group.student_ids,
             "student_count": len(group.student_ids)
         }
@@ -945,6 +976,67 @@ async def delete_group(group_id: str):
     except Exception as e:
         logger.error(f"Error deleting group: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/groups/{group_id}")
+async def update_group(group_id: str, data: GroupUpdate):
+    """Update group details (name, teachers)."""
+    try:
+        if not ObjectId.is_valid(group_id):
+            raise HTTPException(status_code=400, detail="Invalid group ID")
+        
+        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        
+        # Sync legacy teacher_id if teacher_ids is present
+        if "teacher_ids" in update_data:
+            update_data["teacher_id"] = update_data["teacher_ids"][0] if update_data["teacher_ids"] else None
+            
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+            
+        update_data["updated_at"] = datetime.utcnow()
+        
+        result = db.groups.find_one_and_update(
+            {"_id": ObjectId(group_id)},
+            {"$set": update_data},
+            return_document=True
+        )
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Group not found")
+        
+        teacher_names = []
+        if result.get("teacher_ids"):
+            for tid in result.get("teacher_ids"):
+                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
+                if teacher:
+                    teacher_names.append(teacher.get("name"))
+        elif result.get("teacher_id"):
+            # Fallback for legacy data
+            tid = result.get("teacher_id")
+            teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
+            if teacher:
+                teacher_names.append(teacher.get("name"))
+            
+        logger.info(f"Updated group: {group_id}")
+        return {
+            "id": str(result["_id"]),
+            "name": result.get("name"),
+            "teacher_id": result.get("teacher_id"),
+            "teacher_ids": result.get("teacher_ids", [result.get("teacher_id")] if result.get("teacher_id") else []),
+            "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
+            "student_ids": result.get("student_ids", []),
+            "student_count": len(result.get("student_ids", []))
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 @router.put("/groups/{group_id}/students")

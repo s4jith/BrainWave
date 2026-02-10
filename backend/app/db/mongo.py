@@ -1019,7 +1019,7 @@ async def init_databases():
     await mongodb.connect()
     
     # Connect to Legacy Pinecone (textbook content) - will be deprecated
-    logger.info("\n⚠️  Legacy DB (will be deprecated):")
+    # logger.info("\n⚠️  Legacy DB (will be deprecated):")
     pinecone_db.connect()
     
     # Connect to Pinecone Web Content DB

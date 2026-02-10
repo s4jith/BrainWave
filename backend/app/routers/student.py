@@ -18,23 +18,28 @@ router = APIRouter(prefix="/api/student", tags=["student"])
 async def get_student_groups(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
     """Get groups the current student is assigned to."""
     try:
-        # Match student_id (string user_id) or _id (ObjectId string)
+        # Match student_id (string user_id) 
         # Groups store student_ids list
         groups = list(db.groups.find({
-            "student_ids": {
-                "$in": [current_user.user_id, str(current_user.mongo_id)]
-            }
+            "student_ids": current_user.user_id
         }))
         
         result = []
         for g in groups:
             # Get teacher details
             teacher = None
-            if g.get("teacher_id"):
+            # Handle teacher_ids (list) or legacy teacher_id (string)
+            tid = None
+            if g.get("teacher_ids"):
+                tid = g.get("teacher_ids")[0]
+            elif g.get("teacher_id"):
+                tid = g.get("teacher_id")
+                
+            if tid:
                 teacher_doc = db.users.find_one({
                     "$or": [
-                        {"user_id": g.get("teacher_id")},
-                        {"_id": ObjectId(g.get("teacher_id")) if ObjectId.is_valid(g.get("teacher_id")) else "invalid"}
+                        {"user_id": tid},
+                        {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "invalid"}
                     ]
                 })
                 if teacher_doc:

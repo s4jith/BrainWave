@@ -29,7 +29,7 @@ export default function GroupManagement() {
     const [studentSearchTerm, setStudentSearchTerm] = useState("");
     const [studentClassFilter, setStudentClassFilter] = useState("");
 
-    const [groupForm, setGroupForm] = useState({ name: "", teacher_id: "" });
+    const [groupForm, setGroupForm] = useState({ name: "", teacher_ids: [] });
 
     useEffect(() => {
         fetchGroups();
@@ -68,7 +68,7 @@ export default function GroupManagement() {
 
     const handleCreateGroup = async (e) => {
         e.preventDefault();
-        if (!groupForm.teacher_id) return alert("Please select a teacher for this group");
+        if (groupForm.teacher_ids.length === 0) return alert("Please select at least one teacher for this group");
         if (selectedStudentIds.length === 0) return alert("Please select at least one student");
 
         setSaving(true);
@@ -78,7 +78,7 @@ export default function GroupManagement() {
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
                     name: groupForm.name,
-                    teacher_id: groupForm.teacher_id,
+                    teacher_ids: groupForm.teacher_ids,
                     student_ids: selectedStudentIds
                 })
             });
@@ -88,9 +88,51 @@ export default function GroupManagement() {
             }
             await response.json();
             setShowAddGroup(false);
-            setGroupForm({ name: "", teacher_id: "" });
+            setGroupForm({ name: "", teacher_ids: [] });
             setSelectedStudentIds([]);
             fetchGroups();
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const [showEditGroup, setShowEditGroup] = useState(false);
+    const [editGroupForm, setEditGroupForm] = useState({ id: "", name: "", teacher_ids: [] });
+
+    const handleEditClick = (group, e) => {
+        e.stopPropagation();
+        setEditGroupForm({
+            id: group.id,
+            name: group.name,
+            teacher_ids: group.teacher_ids || (group.teacher_id ? [group.teacher_id] : [])
+        });
+        setShowEditGroup(true);
+    };
+
+    const handleUpdateGroup = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const response = await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                body: JSON.stringify({
+                    name: editGroupForm.name,
+                    teacher_ids: editGroupForm.teacher_ids
+                })
+            });
+
+            if (!response.ok) throw new Error("Failed to update group");
+
+            const updatedGroup = await response.json();
+            setGroups(groups.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
+            if (selectedGroup?.id === updatedGroup.id) {
+                setSelectedGroup(prev => ({ ...prev, ...updatedGroup }));
+            }
+
+            setShowEditGroup(false);
         } catch (err) {
             alert("Error: " + err.message);
         } finally {
@@ -241,12 +283,22 @@ export default function GroupManagement() {
                                             <p className="text-sm text-gray-500 dark:text-gray-400">Teacher: {group.teacher_name}</p>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{group.student_count || 0} students</p>
                                         </div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }}
-                                            className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={(e) => handleEditClick(group, e)}
+                                                className="p-2 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                                                title="Edit Group"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }}
+                                                className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                title="Delete Group"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -321,16 +373,30 @@ export default function GroupManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assign Teacher *</label>
-                                <select
-                                    value={groupForm.teacher_id}
-                                    onChange={(e) => setGroupForm({ ...groupForm, teacher_id: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    required
-                                >
-                                    <option value="">Select a teacher</option>
-                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assign Teachers *</label>
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto p-2">
+                                    {teachers.length === 0 ? (
+                                        <div className="text-center text-gray-500 dark:text-gray-400 py-2">No teachers found</div>
+                                    ) : (
+                                        teachers.map(teacher => (
+                                            <label key={teacher.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={groupForm.teacher_ids.includes(teacher.id)}
+                                                    onChange={() => {
+                                                        const newIds = groupForm.teacher_ids.includes(teacher.id)
+                                                            ? groupForm.teacher_ids.filter(id => id !== teacher.id)
+                                                            : [...groupForm.teacher_ids, teacher.id];
+                                                        setGroupForm({ ...groupForm, teacher_ids: newIds });
+                                                    }}
+                                                    className="w-4 h-4 text-gray-900 rounded border-gray-300"
+                                                />
+                                                <span className="text-gray-900 dark:text-white">{teacher.name} ({teacher.user_id})</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{groupForm.teacher_ids.length} teachers selected</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Select Students *</label>
@@ -423,6 +489,76 @@ export default function GroupManagement() {
                                 {saving ? "Adding..." : "Add Students"}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Edit Group Modal */}
+            {showEditGroup && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700 shadow-xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Group</h2>
+                            <button onClick={() => setShowEditGroup(false)} className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleUpdateGroup} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editGroupForm.name}
+                                    onChange={(e) => setEditGroupForm({ ...editGroupForm, name: e.target.value })}
+                                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
+                                    placeholder="e.g. Class 10 - Mathematics"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Teachers</label>
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto p-2">
+                                    {teachers.length === 0 ? (
+                                        <div className="text-center text-gray-500 dark:text-gray-400 py-2">No teachers found</div>
+                                    ) : (
+                                        teachers.map(teacher => (
+                                            <label key={teacher.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editGroupForm.teacher_ids.includes(teacher.id)}
+                                                    onChange={() => {
+                                                        const newIds = editGroupForm.teacher_ids.includes(teacher.id)
+                                                            ? editGroupForm.teacher_ids.filter(id => id !== teacher.id)
+                                                            : [...editGroupForm.teacher_ids, teacher.id];
+                                                        setEditGroupForm({ ...editGroupForm, teacher_ids: newIds });
+                                                    }}
+                                                    className="w-4 h-4 text-gray-900 rounded border-gray-300"
+                                                />
+                                                <span className="text-gray-900 dark:text-white">{teacher.name} ({teacher.user_id})</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{editGroupForm.teacher_ids.length} teachers selected</p>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditGroup(false)}
+                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition disabled:opacity-50 font-medium"
+                                >
+                                    {saving ? "Saving..." : "Save Changes"}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
