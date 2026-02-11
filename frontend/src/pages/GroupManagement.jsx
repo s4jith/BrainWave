@@ -29,7 +29,12 @@ export default function GroupManagement() {
     const [studentSearchTerm, setStudentSearchTerm] = useState("");
     const [studentClassFilter, setStudentClassFilter] = useState("");
 
-    const [groupForm, setGroupForm] = useState({ name: "", teacher_ids: [] });
+    const [groupForm, setGroupForm] = useState({
+        teacher_ids: [],
+        class_level: "",
+        subject: "",
+        batch_year: ""
+    });
 
     useEffect(() => {
         fetchGroups();
@@ -70,6 +75,7 @@ export default function GroupManagement() {
         e.preventDefault();
         if (groupForm.teacher_ids.length === 0) return alert("Please select at least one teacher for this group");
         if (selectedStudentIds.length === 0) return alert("Please select at least one student");
+        if (!groupForm.class_level || !groupForm.subject || !groupForm.batch_year) return alert("Please fill all required fields");
 
         setSaving(true);
         try {
@@ -77,7 +83,9 @@ export default function GroupManagement() {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
-                    name: groupForm.name,
+                    class_level: parseInt(groupForm.class_level),
+                    subject: groupForm.subject,
+                    batch_year: parseInt(groupForm.batch_year),
                     teacher_ids: groupForm.teacher_ids,
                     student_ids: selectedStudentIds
                 })
@@ -88,7 +96,7 @@ export default function GroupManagement() {
             }
             await response.json();
             setShowAddGroup(false);
-            setGroupForm({ name: "", teacher_ids: [] });
+            setGroupForm({ teacher_ids: [], class_level: "", subject: "", batch_year: "" });
             setSelectedStudentIds([]);
             fetchGroups();
         } catch (err) {
@@ -361,17 +369,59 @@ export default function GroupManagement() {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto border dark:border-gray-700">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New Group</h2>
                         <form onSubmit={handleCreateGroup} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Group Name *</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={groupForm.name}
-                                    onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    placeholder="e.g., Batch 2026"
-                                />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class Level *</label>
+                                    <select
+                                        required
+                                        value={groupForm.class_level}
+                                        onChange={(e) => setGroupForm({ ...groupForm, class_level: parseInt(e.target.value) })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Select Class</option>
+                                        {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject *</label>
+                                    <select
+                                        required
+                                        value={groupForm.subject}
+                                        onChange={(e) => setGroupForm({ ...groupForm, subject: e.target.value })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Select Subject</option>
+                                        {/* Ideally fetch these from backend or constants. For now hardcode common ones */}
+                                        {["Mathematics", "Science", "English", "Hindi", "Social Science", "Physics", "Chemistry", "Biology", "Computer Science"].map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Batch Year *</label>
+                                    <select
+                                        required
+                                        value={groupForm.batch_year}
+                                        onChange={(e) => setGroupForm({ ...groupForm, batch_year: parseInt(e.target.value) })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Select Year</option>
+                                        {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
                             </div>
+
+                            <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    Preview Name: <span className="font-medium text-gray-900 dark:text-white">
+                                        {groupForm.subject && groupForm.class_level && groupForm.batch_year
+                                            ? `${groupForm.subject}_Class${groupForm.class_level}_${groupForm.batch_year}`
+                                            : "Subject_Class_BatchYear"
+                                        }
+                                    </span>
+                                </p>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assign Teachers *</label>
                                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto p-2">

@@ -130,6 +130,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
         { path: "/group-management", label: "Student Groups", icon: FolderKanban },
         { path: "/book-management", label: "Books", icon: BookOpen },
+        { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/test-management", label: "Tests", icon: ClipboardList },
         { path: "/admin-reports", label: "Reports", icon: BarChart3 },
         { path: "/admin-settings", label: "Settings", icon: Settings },
@@ -138,7 +139,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     const teacherNavItems = [
         { path: "/teacher-dashboard", label: "Dashboard", icon: LayoutDashboard },
         { path: "/teacher-groups", label: "Student Groups", icon: Users },
-        { path: "/teacher-questions", label: "Questions", icon: HelpCircle },
+        { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/teacher-tests", label: "Tests", icon: ClipboardList },
         { path: "/teacher-reports", label: "Reports", icon: BarChart3 },
     ];

@@ -86,8 +86,8 @@ def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> s
     expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
     
     payload = {
-        "user_id": mongo_id,  # MongoDB _id for internal use
-        "login_id": user_id,   # Human-readable ID
+        "user_id": user_id,  # Human-readable ID (TCH...)
+        "mongo_id": mongo_id,   # MongoDB _id for internal use
         "email": email,
         "role": role,
         "exp": expire,
@@ -519,9 +519,8 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     Get current authenticated user's information.
     """
     try:
-        from bson import ObjectId
-        
-        user = db.users.find_one({"_id": ObjectId(current_user.user_id)})
+        # user_id in token is now the human-readable ID (TCH...)
+        user = db.users.find_one({"user_id": current_user.user_id})
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")

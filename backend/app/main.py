@@ -137,6 +137,10 @@ app.include_router(student.router)               # ✅ Student specific (Groups)
 app.include_router(multilingual_chat.router)     # ✅ Multilingual Chat (Indian Languages)
 app.include_router(optimized_chat.router, prefix="/api")  # ⚡ Optimized Chat (2-call max)
 
+# Question Bank
+from app.routers import question_bank
+app.include_router(question_bank.router)         # ✅ Question Bank (Centralized)
+
 # Top Questions & Recommendations
 from app.routers import top_questions
 app.include_router(top_questions.router)         # ✅ Top Questions & Recommendations

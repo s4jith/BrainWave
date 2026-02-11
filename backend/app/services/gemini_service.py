@@ -483,6 +483,105 @@ Generate {num_questions} MCQs now in valid JSON format:"""
             logger.error(f"❌ MCQ generation failed: {e}")
             raise
     
+    def generate_varied_questions(
+        self,
+        context: str,
+        config: dict,
+        class_level: int,
+        subject: str,
+        chapter: int,
+        retry_count: int = 0
+    ) -> list[dict]:
+        """
+        Generate varied questions based on a specific configuration.
+        
+        Args:
+            context: Chapter context
+            config: Dict defining requirements e.g.
+                {
+                    "easy": {"mcq": 2, "fillup": 2},
+                    "medium": {"short_answer": 3},
+                    "hard": {"long_answer": 1}
+                }
+            class_level: Student class
+            subject: Subject
+            chapter: Chapter number
+            retry_count: Retry counter
+            
+        Returns:
+            List of question dictionaries
+        """
+        try:
+            # Construct a detailed prompt based on config
+            requirements_str = ""
+            total_q = 0
+            
+            for difficulty, types in config.items():
+                for q_type, count in types.items():
+                    if count > 0:
+                        requirements_str += f"- {count} {difficulty.upper()} {q_type.upper().replace('_', ' ')} questions\n"
+                        total_q += count
+            
+            prompt = f"""You are an expert teacher creating a test for Class {class_level} {subject}, Chapter {chapter}.
+            
+STRICT REQUIREMENTS:
+1. Generate exactly {total_q} questions based on this distribution:
+{requirements_str}
+
+2. QUESTION TYPES & FORMATS:
+   - MCQ: Must have "options" (List[str]) and "correct_answer" (the text of the correct option). Marks: 1.
+   - FILLUP: Fill-in-the-blanks. "question" should have '_______' for the blank. "correct_answer" is the missing word(s). Marks: 1.
+   - SHORT_ANSWER: Conceptual questions requiring 2-3 lines. Marks: 2 or 3.
+   - LONG_ANSWER: Detailed questions requiring explanation. Marks: 5.
+
+3. CONTENT RULES:
+   - Questions must be from the provided CONTEXT only.
+   - Varied topics! Do not ask 5 questions about the same sub-topic.
+   - "Hard" questions should test application/analysis. "Easy" can be recall.
+
+CONTEXT:
+{context[:4000]}
+
+OUTPUT FORMAT (Valid JSON Array):
+[
+  {{
+    "text": "Question text here...",
+    "type": "mcq",  // mcq, fillup, short_answer, long_answer
+    "difficulty": "easy", // easy, medium, hard, advanced
+    "marks": 1,
+    "options": ["A", "B", "C", "D"], // Only for MCQ
+    "correct_answer": "Actual answer text"
+  }},
+  ...
+]
+
+Generate JSON now:"""
+
+            # Get model with available API key
+            model, key_index = self._get_model_with_available_key(retry_count)
+            response = model.generate_content(prompt)
+            
+            # Parse JSON response
+            import json
+            text = response.text
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            
+            questions = json.loads(text.strip())
+            return questions
+            
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
+                logger.warning(f"⚠️ 429 Rate limit. Retrying generate_varied_questions ({retry_count})...")
+                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
+            
+            logger.error(f"❌ Varied question generation failed: {e}")
+            raise
+
     def evaluate_assessment(
         self,
         questions_and_answers: list[dict],

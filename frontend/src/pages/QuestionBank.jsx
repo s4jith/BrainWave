@@ -1,268 +1,381 @@
-/**
- * QuestionBank - Manage questions manually
- * Uses AdminLayout
- */
 
 import React, { useState, useEffect } from "react";
-import useUserStore from "../stores/userStore";
+import { Copy, Edit, Trash2, Plus, Filter, Search, RotateCcw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { HelpCircle, Plus, Search, Filter, Edit, Trash2, Eye } from "lucide-react";
+import QuestionModal from "../components/QuestionModal";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const QuestionBank = () => {
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem("user") || "{}"));
+    const isTeacher = user.role === "teacher";
+    const Layout = AdminLayout;
 
-export default function QuestionBank() {
-    const { getAuthHeader } = useUserStore();
+    const [activeTab, setActiveTab] = useState("bank"); // "bank" or "approvals"
     const [questions, setQuestions] = useState([]);
+    const [subjects, setSubjects] = useState([]); // Dynamic subjects
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
     const [showModal, setShowModal] = useState(false);
-    const [editingQuestion, setEditingQuestion] = useState(null);
+    const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-    // Form state
-    const [formData, setFormData] = useState({
-        text: "",
-        type: "short_answer", // short_answer, multiple_choice, etc.
-        subject: "Mathematics",
-        class_level: 10,
-        chapter: 1,
-        difficulty: "medium", // easy, medium, hard
-        marks: 1
+    // Filters
+    const [filters, setFilters] = useState({
+        subject: "",
+        class_level: "",
+        type: "",
+        difficulty: "",
+        search: ""
     });
+
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 1
+    });
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    useEffect(() => {
+        fetchSubjects();
+    }, []);
 
     useEffect(() => {
         fetchQuestions();
-    }, []);
+    }, [pagination.page, filters, activeTab]);
 
-    const fetchQuestions = async () => {
+    const fetchSubjects = async () => {
         try {
-            setLoading(true);
-            const response = await fetch(`${API_URL}/api/teacher/questions`, { headers: getAuthHeader() });
+            const response = await fetch(`${apiUrl}/api/question-bank/subjects`, {
+                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+            });
             if (response.ok) {
                 const data = await response.json();
-                setQuestions(data.questions || []);
-            } else {
-                console.warn("Using mock question data");
-                setQuestions([
-                    { id: 1, text: "What is the capital of France?", subject: "Geography", class_level: 9, type: "short_answer", difficulty: "easy" },
-                    { id: 2, text: "Explain Newton's Second Law.", subject: "Physics", class_level: 10, type: "long_answer", difficulty: "medium" },
-                ]);
+                setSubjects(data.subjects || []);
             }
-        } catch (err) {
-            console.error("Error fetching questions:", err);
+        } catch (error) {
+            console.error("Error fetching subjects:", error);
+        }
+    };
+
+    const fetchQuestions = async () => {
+        setLoading(true);
+        try {
+            const status = activeTab === "approvals" ? "pending" : "approved";
+            const queryParams = new URLSearchParams({
+                limit: pagination.limit,
+                offset: (pagination.page - 1) * pagination.limit,
+                status: status,
+                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+            });
+
+            const response = await fetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
+                headers: {
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                }
+            });
+
+            if (!response.ok) throw new Error("Failed to fetch questions");
+
+            const data = await response.json();
+            setQuestions(data.questions);
+            setPagination(prev => ({ ...prev, total: data.total, pages: data.pages }));
+        } catch (error) {
+            console.error("Error fetching questions:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSave = async (e) => {
-        e.preventDefault();
-        // Implement save logic (POST/PUT)
-        console.log("Saving question:", formData);
+    const handleDelete = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this question?")) return;
 
-        // Mock update UI
-        if (editingQuestion) {
-            setQuestions(questions.map(q => q.id === editingQuestion.id ? { ...q, ...formData } : q));
-        } else {
-            setQuestions([...questions, { id: Date.now(), ...formData }]);
+        try {
+            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Failed to delete");
+            }
+            fetchQuestions();
+        } catch (err) {
+            alert(err.message);
         }
+    };
 
-        setShowModal(false);
-        setEditingQuestion(null);
-        setFormData({
-            text: "",
-            type: "short_answer",
-            subject: "Mathematics",
-            class_level: 10,
-            chapter: 1,
-            difficulty: "medium",
-            marks: 1
-        });
+    const handleApprove = async (id) => {
+        try {
+            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/approve`, {
+                method: "PUT",
+                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+            });
+            if (!response.ok) throw new Error("Failed to approve");
+            fetchQuestions();
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    const handleReject = async (id) => {
+        if (!window.confirm("Reject and delete this question?")) return;
+        try {
+            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/reject`, {
+                method: "PUT",
+                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+            });
+            if (!response.ok) throw new Error("Failed to reject");
+            fetchQuestions();
+        } catch (err) {
+            alert(err.message);
+        }
     };
 
     const handleEdit = (question) => {
-        setEditingQuestion(question);
-        setFormData({ ...question });
+        setSelectedQuestion(question);
         setShowModal(true);
     };
 
-    const handleDelete = (id) => {
-        if (confirm("Delete this question?")) {
-            setQuestions(questions.filter(q => q.id !== id));
-        }
+    const handleAddNew = () => {
+        setSelectedQuestion(null);
+        setShowModal(true);
+    }
+
+    const handleModalClose = (refresh = false) => {
+        setShowModal(false);
+        if (refresh) fetchQuestions();
     };
 
-    const filteredQuestions = questions.filter(q =>
-        q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.subject.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     return (
-        <AdminLayout title="Question Bank" icon={HelpCircle}>
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-6">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
-                    <input
-                        type="text"
-                        placeholder="Search questions..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                    />
+        <Layout>
+            <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold">Question Bank</h1>
+                        <p className="text-gray-400">Manage and organize all test questions</p>
+                    </div>
+                    <button
+                        onClick={handleAddNew}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+                    >
+                        <Plus size={20} /> Add Question
+                    </button>
                 </div>
-                <button
-                    onClick={() => { setEditingQuestion(null); setShowModal(true); }}
-                    className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition flex items-center gap-2 font-medium"
-                >
-                    <Plus className="w-4 h-4" /> Create Question
-                </button>
-            </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300">
-                            <tr>
-                                <th className="px-6 py-4 font-medium text-sm">Question</th>
-                                <th className="px-6 py-4 font-medium text-sm">Subject</th>
-                                <th className="px-6 py-4 font-medium text-sm">Class</th>
-                                <th className="px-6 py-4 font-medium text-sm">Type</th>
-                                <th className="px-6 py-4 font-medium text-sm">Difficulty</th>
-                                <th className="px-6 py-4 font-medium text-sm text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">Loading...</td>
-                                </tr>
-                            ) : filteredQuestions.length === 0 ? (
-                                <tr>
-                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">No questions found</td>
-                                </tr>
-                            ) : (
-                                filteredQuestions.map((q) => (
-                                    <tr key={q.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <p className="text-gray-900 dark:text-white font-medium line-clamp-1">{q.text}</p>
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{q.subject}</td>
-                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{q.class_level}</td>
-                                        <td className="px-6 py-4">
-                                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                                                {q.type?.replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 capitalize">{q.difficulty}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => handleEdit(q)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                {/* Tabs */}
+                <div className="flex gap-4 mb-6 border-b border-gray-700">
+                    <button
+                        onClick={() => setActiveTab("bank")}
+                        className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === "bank"
+                                ? "border-blue-500 text-blue-500"
+                                : "border-transparent text-gray-400 hover:text-gray-300"
+                            }`}
+                    >
+                        Question Bank
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("approvals")}
+                        className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === "approvals"
+                                ? "border-yellow-500 text-yellow-500"
+                                : "border-transparent text-gray-400 hover:text-gray-300"
+                            }`}
+                    >
+                        Pending Approvals
+                    </button>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 bg-gray-800 p-4 rounded-xl border border-gray-700">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search questions..."
+                            className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-blue-500"
+                            value={filters.search}
+                            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                        />
+                    </div>
+
+                    <select
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        value={filters.subject}
+                        onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
+                    >
+                        <option value="">All Subjects</option>
+                        {subjects.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        value={filters.class_level}
+                        onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
+                    >
+                        <option value="">All Classes</option>
+                        {[6, 7, 8, 9, 10, 11, 12].map(c => (
+                            <option key={c} value={c}>Class {c}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        value={filters.difficulty}
+                        onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
+                    >
+                        <option value="">All Difficulties</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+
+                    <select
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        value={filters.type}
+                        onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+                    >
+                        <option value="">All Types</option>
+                        <option value="mcq">MCQ</option>
+                        <option value="fillup">Fill-ups</option>
+                        <option value="short_answer">Short Answer</option>
+                        <option value="long_answer">Long Answer</option>
+                    </select>
+                </div>
+
+                {/* Questions List */}
+                <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                    {loading ? (
+                        <div className="p-8 text-center text-gray-400">Loading questions...</div>
+                    ) : questions.length === 0 ? (
+                        <div className="p-8 text-center text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
+                    ) : (
+                        <div className="divide-y divide-gray-700">
+                            {questions.map((q) => (
+                                <div key={q.id} className="p-4 hover:bg-gray-750 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <div className="flex gap-2 mb-2">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-medium 
+                                            ${q.difficulty === 'easy' ? 'bg-green-900 text-green-300' :
+                                                        q.difficulty === 'medium' ? 'bg-yellow-900 text-yellow-300' :
+                                                            'bg-red-900 text-red-300'}`}>
+                                                    {q.difficulty.toUpperCase()}
+                                                </span>
+                                                <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs">
+                                                    {q.type.replace('_', ' ').toUpperCase()}
+                                                </span>
+                                                <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs">
+                                                    {q.subject} • Class {q.class_level}
+                                                </span>
+                                                <span className="bg-purple-900 text-purple-300 px-2 py-0.5 rounded text-xs">
+                                                    {q.marks} Mark{q.marks > 1 ? 's' : ''}
+                                                </span>
+                                                {q.status === 'pending' && (
+                                                    <span className="bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded text-xs border border-yellow-700">
+                                                        Pending Approval
+                                                    </span>
+                                                )}
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                            <h3 className="text-lg font-medium text-white mb-2">{q.text}</h3>
 
-            {/* Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto border dark:border-gray-700">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                            {editingQuestion ? "Edit Question" : "Create Question"}
-                        </h2>
+                                            {q.type === 'mcq' && (
+                                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                                    {q.options.map((opt, idx) => (
+                                                        <div key={idx} className={`p-2 rounded text-sm ${opt === q.correct_answer ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/30'}`}>
+                                                            <span className="font-bold mr-2">{String.fromCharCode(65 + idx)}.</span> {opt}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
 
-                        <form onSubmit={handleSave} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Question Text *</label>
-                                <textarea
-                                    required
-                                    rows={3}
-                                    value={formData.text}
-                                    onChange={(e) => setFormData({ ...formData, text: e.target.value })}
-                                    className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-white outline-none"
-                                    placeholder="Enter your question here..."
-                                />
-                            </div>
+                                            {q.type !== 'mcq' && (
+                                                <div className="mt-2 text-sm text-gray-400">
+                                                    <span className="font-semibold text-gray-300">Answer:</span> {q.correct_answer}
+                                                </div>
+                                            )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject</label>
-                                    <select
-                                        value={formData.subject}
-                                        onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        <option value="Mathematics">Mathematics</option>
-                                        <option value="Science">Science</option>
-                                        <option value="English">English</option>
-                                        <option value="Social Science">Social Science</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class</label>
-                                    <select
-                                        value={formData.class_level}
-                                        onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        {[...Array(8)].map((_, i) => (
-                                            <option key={i + 5} value={i + 5}>Class {i + 5}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Type</label>
-                                    <select
-                                        value={formData.type}
-                                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        <option value="short_answer">Short Answer</option>
-                                        <option value="long_answer">Long Answer</option>
-                                        <option value="multiple_choice">Multiple Choice</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Difficulty</label>
-                                    <select
-                                        value={formData.difficulty}
-                                        onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        <option value="easy">Easy</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="hard">Hard</option>
-                                    </select>
-                                </div>
-                            </div>
+                                            <div className="mt-2 text-xs text-gray-500">
+                                                Chapter {q.chapter} • Created by {q.created_by} • {new Date(q.created_at).toLocaleDateString()}
+                                                {q.is_ai_generated && <span className="ml-2 text-blue-400 flex items-center inline-flex gap-1">✨ AI Generated</span>}
+                                            </div>
+                                        </div>
 
-                            <div className="flex gap-3 pt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-                                >
-                                    {editingQuestion ? "Update" : "Create"}
-                                </button>
-                            </div>
-                        </form>
+                                        <div className="flex gap-2 ml-4">
+                                            {activeTab === "approvals" && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleApprove(q.id)}
+                                                        className="px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs text-white transition-colors"
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReject(q.id)}
+                                                        className="px-3 py-1 bg-red-700 hover:bg-red-600 rounded text-xs text-white transition-colors"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button
+                                                onClick={() => handleEdit(q)}
+                                                className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                                                title="Edit"
+                                                disabled={isTeacher && q.created_role !== 'teacher' && q.created_by !== user.user_id}
+                                            >
+                                                <Edit size={18} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(q.id)}
+                                                className="p-2 hover:bg-red-900/30 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Pagination settings */}
+                    <div className="p-4 border-t border-gray-700 flex justify-between items-center text-sm text-gray-400">
+                        <div>Showing {questions.length} of {pagination.total} questions</div>
+                        <div className="flex gap-2">
+                            <button
+                                disabled={pagination.page === 1}
+                                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+                                className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                            >
+                                Previous
+                            </button>
+                            <span className="px-2 py-1">Page {pagination.page} of {pagination.pages}</span>
+                            <button
+                                disabled={pagination.page === pagination.pages}
+                                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+                                className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            {showModal && (
+                <QuestionModal
+                    question={selectedQuestion}
+                    onClose={handleModalClose}
+                    isTeacher={isTeacher}
+                    userSubjects={user.subjects || []}
+                    availableSubjects={subjects} // Pass dynamic subjects to modal
+                />
             )}
-        </AdminLayout>
+        </Layout>
     );
-}
+};
+
+export default QuestionBank;

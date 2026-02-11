@@ -376,7 +376,7 @@ function App() {
           }
         />
         <Route
-          path="/teacher-questions"
+          path="/question-bank"
           element={
             <StaffRoute>
               <QuestionBank />

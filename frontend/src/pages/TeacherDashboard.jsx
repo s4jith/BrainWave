@@ -90,10 +90,10 @@ export default function TeacherDashboard() {
 
     const quickActions = [
         {
-            title: "Create Question",
-            description: "Add a new question to the bank",
+            title: "Question Bank",
+            description: "Manage questions",
             icon: HelpCircle,
-            onClick: () => navigate("/teacher-questions")
+            onClick: () => navigate("/question-bank")
         },
         {
             title: "Create Test",

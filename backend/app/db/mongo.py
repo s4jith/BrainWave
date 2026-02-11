@@ -128,6 +128,11 @@ class SyncMongoDB:
         """Get teacher counters collection for ID generation."""
         return self.db.teacher_counters
     
+    @property
+    def questions(self):
+        """Get questions collection for question bank."""
+        return self.db.questions
+    
     def get_collection(self, name: str):
         """Get a collection by name."""
         return self.db[name]
