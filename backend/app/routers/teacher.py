@@ -48,12 +48,19 @@ class QuestionUpdate(BaseModel):
 async def get_teacher_groups(current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))):
     """Get groups assigned to the current teacher."""
     try:
-        # Match teacher_id (string) or teacher_ids (list)
-        # current_user.user_id is the string ID used in the system
+        # Get the teacher's MongoDB _id as well, since groups may reference either
+        teacher_doc = db.users.find_one({"user_id": current_user.user_id, "role": "teacher"})
+        teacher_id_str = str(teacher_doc["_id"]) if teacher_doc else ""
+        
+        # Match by both user_id and _id string (groups may store either)
+        match_values = [current_user.user_id]
+        if teacher_id_str:
+            match_values.append(teacher_id_str)
+        
         groups = list(db.groups.find({
             "$or": [
-                {"teacher_id": current_user.user_id},
-                {"teacher_ids": current_user.user_id}
+                {"teacher_id": {"$in": match_values}},
+                {"teacher_ids": {"$in": match_values}}
             ]
         }))
         

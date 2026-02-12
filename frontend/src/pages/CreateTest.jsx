@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
@@ -18,9 +18,15 @@ const CLASSES = [5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function CreateTest() {
   const navigate = useNavigate();
+  const { testId } = useParams();
+  const isEditMode = !!testId;
+
+  console.log("CreateTest Debug:", { testId, isEditMode });
+
   const { user, getAuthHeader } = useUserStore();
   const [activeTab, setActiveTab] = useState("details");
   const [loading, setLoading] = useState(false);
+  const [fetchingDetails, setFetchingDetails] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -67,15 +73,93 @@ export default function CreateTest() {
 
   useEffect(() => {
     fetchGroupsAndStudents();
-  }, []);
-
-  // Fetch subjects when test class_level changes
-  useEffect(() => {
-    if (formData.class_level) {
-      fetchTestSubjectsForClass(formData.class_level);
-      fetchStudentsForClass(formData.class_level);  // Refetch students when class changes
+    if (isEditMode) {
+      fetchTestDetails();
     }
-  }, [formData.class_level]);
+  }, [testId]);
+
+  const fetchTestDetails = async () => {
+    console.log("Fetching details for:", testId);
+    setFetchingDetails(true);
+    try {
+      const response = await fetch(`${API_URL}/api/assessments/${testId}`, {
+        headers: getAuthHeader()
+      });
+      if (!response.ok) throw new Error("Failed to load test details");
+
+      const data = await response.json();
+
+      // Parse dates
+      let startDate = "", startTime = "09:00", endDate = "", endTime = "12:00";
+      if (data.start_datetime) {
+        const start = new Date(data.start_datetime);
+        startDate = start.toISOString().split('T')[0];
+        startTime = start.toTimeString().slice(0, 5);
+      }
+      if (data.end_datetime) {
+        const end = new Date(data.end_datetime);
+        endDate = end.toISOString().split('T')[0];
+        endTime = end.toTimeString().slice(0, 5);
+      }
+
+      setFormData({
+        title: data.title,
+        class_level: data.class_level || 10,
+        subject: data.subject,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        duration_minutes: data.duration_minutes || 60,
+        num_attempts: data.num_attempts || 1,
+        show_results: data.show_results_immediately || false,
+        description: data.description || ""
+      });
+
+      // Transform backend questions to frontend format (options as strings, correct_answer as index)
+      const formattedQuestions = (data.questions || []).map(q => {
+        // Handle options: extract text from objects
+        const optionsText = Array.isArray(q.options)
+          ? q.options.map(opt => (typeof opt === 'object' ? (opt.text || "") : opt))
+          : [];
+
+        // Handle correct answer: find index of correct option
+        let correctIndex = 0;
+        if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'object') {
+          const foundIndex = q.options.findIndex(opt => opt.is_correct);
+          if (foundIndex !== -1) correctIndex = foundIndex;
+        } else if (q.correct_answer !== undefined) {
+          // Fallback for legacy format if any
+          correctIndex = parseInt(q.correct_answer) || 0;
+        }
+
+        return {
+          ...q,
+          text: q.question_text || q.text || "", // Map question_text to text for frontend
+          options: optionsText,
+          correct_answer: correctIndex,
+          marks: q.points || q.marks || 1
+        };
+      });
+
+      setQuestions(formattedQuestions);
+      setSelectedStudents(data.student_ids || []);
+
+      // Fetch subjects for this class to ensure subject dropdown is populated correctly
+      fetchTestSubjectsForClass(data.class_level || 10, false);
+
+      // Always fetch students for this class in edit mode
+      fetchStudentsForClass(data.class_level || 10, false);
+
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load test details");
+    } finally {
+      setFetchingDetails(false);
+    }
+  };
+
+  // Removed useEffect for formData.class_level to avoid race condition with fetchTestDetails
 
   // Fetch subjects when class changes in question modal
   useEffect(() => {
@@ -90,20 +174,16 @@ export default function CreateTest() {
       const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
       if (response.ok) {
         const data = await response.json();
-        // API returns list of {subject, total_chapters, total_questions} objects
         const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
         setAvailableSubjects(subjects);
-        // Set first subject as default if current is empty or not in list
         if (!questionForm.subject || !subjects.includes(questionForm.subject)) {
           setQuestionForm(prev => ({ ...prev, subject: subjects[0] || "" }));
         }
       } else {
-        // Fallback if API fails
         setAvailableSubjects(SUBJECTS);
       }
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
-      // Fallback to default subjects
       setAvailableSubjects(SUBJECTS);
     } finally {
       setLoadingSubjects(false);
@@ -111,16 +191,19 @@ export default function CreateTest() {
   };
 
   // Fetch subjects for Test Details tab based on class
-  const fetchTestSubjectsForClass = async (classLevel) => {
+  const fetchTestSubjectsForClass = async (classLevel, resetSubject = true) => {
     try {
       const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
       if (response.ok) {
         const data = await response.json();
         const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
         setTestSubjects(subjects);
-        // Reset subject if not in new list
-        if (!subjects.includes(formData.subject)) {
-          setFormData(prev => ({ ...prev, subject: "" }));
+        if (resetSubject) {
+          if (subjects.length === 1) {
+            setFormData(prev => ({ ...prev, subject: subjects[0] }));
+          } else if (!subjects.includes(formData.subject)) {
+            setFormData(prev => ({ ...prev, subject: "" }));
+          }
         }
       } else {
         setTestSubjects(SUBJECTS);
@@ -134,15 +217,16 @@ export default function CreateTest() {
   const fetchGroupsAndStudents = async () => {
     setLoadingGroups(true);
     try {
-      // Fetch groups
       const groupsRes = await fetch(`${API_URL}/api/admin/groups`, { headers: getAuthHeader() });
       if (groupsRes.ok) {
         const data = await groupsRes.json();
         setGroups(data.groups || []);
       }
 
-      // Fetch students for default class (10)
-      await fetchStudentsForClass(formData.class_level);
+      // Fetch students for default class (10) only if not edit mode (edit mode fetches its own class)
+      if (!isEditMode) {
+        await fetchStudentsForClass(formData.class_level);
+      }
     } catch (err) {
       console.error("Error:", err);
     } finally {
@@ -151,14 +235,16 @@ export default function CreateTest() {
   };
 
   // Fetch students filtered by class
-  const fetchStudentsForClass = async (classLevel) => {
+  const fetchStudentsForClass = async (classLevel, clearSelection = true) => {
+    if (!classLevel) return; // Prevent API call if class_level is undefined/null
     try {
       const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         setStudents(data || []);
-        // Clear selections when students change
-        setSelectedStudents([]);
+        if (clearSelection) {
+          setSelectedStudents([]);
+        }
       }
     } catch (err) {
       console.error("Error fetching students:", err);
@@ -266,18 +352,28 @@ export default function CreateTest() {
         created_by: user?.user_id || "admin"
       };
 
-      const response = await fetch(`${API_URL}/api/assessments/create`, {
-        method: "POST",
+      const url = isEditMode
+        ? `${API_URL}/api/assessments/${testId}`
+        : `${API_URL}/api/assessments`;
+
+      const method = isEditMode ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || "Failed to create test");
+        const detail = err.detail;
+        const msg = typeof detail === 'string' ? detail
+          : Array.isArray(detail) ? detail.map(e => e.msg || JSON.stringify(e)).join(', ')
+            : `Failed to ${isEditMode ? 'update' : 'create'} test`;
+        throw new Error(msg);
       }
 
-      setSuccess("Test created and published successfully!");
+      setSuccess(`Test ${isEditMode ? 'updated' : 'created'} and published successfully!`);
       setTimeout(() => navigate("/test-management"), 2000);
     } catch (err) {
       setError(err.message);
@@ -355,7 +451,7 @@ export default function CreateTest() {
   };
 
   return (
-    <AdminLayout title="Create Test" icon={ClipboardList}>
+    <AdminLayout title={isEditMode ? "Update Test" : "Create Test"} icon={ClipboardList}>
       {/* Header Actions */}
       <div className="flex justify-end gap-3 mb-6">
         <button
@@ -376,7 +472,7 @@ export default function CreateTest() {
           disabled={loading}
           className="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium disabled:opacity-50"
         >
-          {loading ? "Publishing..." : "Create & Publish"}
+          {loading ? "Processing..." : isEditMode ? "Update & Publish" : "Create & Publish"}
         </button>
       </div>
 
@@ -447,7 +543,12 @@ export default function CreateTest() {
                 </label>
                 <select
                   value={formData.class_level}
-                  onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value), subject: "" })}
+                  onChange={(e) => {
+                    const newClass = parseInt(e.target.value);
+                    setFormData({ ...formData, class_level: newClass, subject: "" });
+                    fetchTestSubjectsForClass(newClass, true);
+                    fetchStudentsForClass(newClass, true);
+                  }}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                 >
                   {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
@@ -917,11 +1018,11 @@ export default function CreateTest() {
       )}
       {/* Bank Selector Modal */}
       {showBankSelector && (
-          <QuestionBankSelector 
-            onSelect={handleAddFromBank} 
-            onClose={() => setShowBankSelector(false)}
-            preSelectedIds={questions.filter(q => q.is_bank_question).map(q => q.id)}
-          />
+        <QuestionBankSelector
+          onSelect={handleAddFromBank}
+          onClose={() => setShowBankSelector(false)}
+          preSelectedIds={questions.filter(q => q.is_bank_question).map(q => q.id)}
+        />
       )}
     </AdminLayout>
   );

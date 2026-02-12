@@ -1,10 +1,10 @@
 """
 Notifications Router
-Handles admin-specific notifications with:
-- Role-based visibility (admin-only notifications)
+Handles notifications with:
+- Role-based visibility (admin and teacher notifications)
 - Auto-delete after 7 days of reading
 - Save option for permanent storage
-- Delete option for permanent removal
+- Delete option with dismiss tracking (prevents re-creation)
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -32,8 +32,27 @@ def cleanup_old_notifications():
         })
         if result.deleted_count > 0:
             logger.info(f"Auto-deleted {result.deleted_count} old read notifications")
+        
+        # Also clean up old dismissed records (older than 2 days)
+        two_days_ago = datetime.utcnow() - timedelta(days=2)
+        db.dismissed_notifications.delete_many({
+            "dismissed_at": {"$lt": two_days_ago}
+        })
     except Exception as e:
         logger.error(f"Error cleaning up notifications: {e}")
+
+
+def is_dismissed(title: str, role: str, user_id: str = None):
+    """Check if a notification with this title was dismissed today."""
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    query = {
+        "title": title,
+        "role": role,
+        "dismissed_at": {"$gte": today_start}
+    }
+    if user_id:
+        query["user_id"] = user_id
+    return db.dismissed_notifications.find_one(query) is not None
 
 
 def generate_admin_notifications():
@@ -41,52 +60,75 @@ def generate_admin_notifications():
     try:
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        
+        week_ago = now - timedelta(days=7)
+
         notifications = []
-        
-        # Check for new users registered today
-        new_users_today = db.users.count_documents({"created_at": {"$gte": today_start}})
-        if new_users_today > 0:
-            notifications.append({
-                "title": "New User Registrations",
-                "message": f"{new_users_today} new user(s) registered today",
-                "type": "info",
-                "category": "users"
-            })
-        
-        # Check for inactive users (no login in 30 days)
-        month_ago = now - timedelta(days=30)
-        inactive_count = db.users.count_documents({
+
+        # 1. Inactive Students (no login in 7+ days)
+        inactive_students = db.users.count_documents({
             "role": "student",
+            "is_active": True,
             "$or": [
-                {"last_login": {"$lt": month_ago}},
+                {"last_login": {"$lt": week_ago}},
                 {"last_login": None}
             ]
         })
-        if inactive_count > 5:
+        if inactive_students > 0:
             notifications.append({
-                "title": "Inactive Students Alert",
-                "message": f"{inactive_count} students haven't logged in for 30+ days",
+                "title": "Inactive Students",
+                "message": f"{inactive_students} student(s) haven't logged in for 7+ days",
                 "type": "warning",
                 "category": "activity"
             })
-        
-        # Check for low-performing students
-        test_sessions = db.get_collection("test_sessions")
-        pipeline = [
-            {"$match": {"status": "completed"}},
-            {"$group": {"_id": None, "avg_score": {"$avg": "$score"}}}
-        ]
-        avg_result = list(test_sessions.aggregate(pipeline))
-        if avg_result and avg_result[0].get("avg_score", 0) < 50:
+
+        # 2. Inactive Teachers (no login in 7+ days)
+        inactive_teachers = db.users.count_documents({
+            "role": "teacher",
+            "is_active": True,
+            "$or": [
+                {"last_login": {"$lt": week_ago}},
+                {"last_login": None}
+            ]
+        })
+        if inactive_teachers > 0:
             notifications.append({
-                "title": "Platform Performance Alert",
-                "message": f"Average test score is below 50%. Consider reviewing test difficulty.",
+                "title": "Inactive Teachers",
+                "message": f"{inactive_teachers} teacher(s) haven't logged in for 7+ days",
                 "type": "warning",
+                "category": "activity"
+            })
+
+        # 3. Student Test Failures (score < 40% in last 7 days)
+        test_sessions = db.get_collection("test_sessions")
+        failed_tests = test_sessions.count_documents({
+            "status": "completed",
+            "score": {"$lt": 40},
+            "completed_at": {"$gte": week_ago}
+        })
+        if failed_tests > 0:
+            notifications.append({
+                "title": "Student Test Failures",
+                "message": f"{failed_tests} test(s) scored below 40% in the past week",
+                "type": "error",
                 "category": "performance"
             })
-        
-        # Check for tests completed today
+
+        # 4. Pending Support Queries
+        try:
+            pending_tickets = db.support_tickets.count_documents({
+                "status": {"$in": ["open", "pending"]}
+            })
+            if pending_tickets > 0:
+                notifications.append({
+                    "title": "Pending Support Queries",
+                    "message": f"{pending_tickets} unresolved support query/queries from students",
+                    "type": "info",
+                    "category": "support"
+                })
+        except Exception:
+            pass  # support_tickets collection may not exist
+
+        # 5. Tests completed today
         tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
         if tests_today > 0:
             notifications.append({
@@ -95,10 +137,97 @@ def generate_admin_notifications():
                 "type": "success",
                 "category": "tests"
             })
-        
+
         return notifications
     except Exception as e:
         logger.error(f"Error generating admin notifications: {e}")
+        return []
+
+
+def generate_teacher_notifications(teacher_user_id: str):
+    """Generate notifications for a teacher scoped to their assigned groups."""
+    try:
+        now = datetime.utcnow()
+        week_ago = now - timedelta(days=7)
+
+        # Get groups assigned to this teacher
+        teacher_groups = list(db.groups.find({
+            "$or": [
+                {"teacher_id": teacher_user_id},
+                {"teacher_ids": teacher_user_id}
+            ]
+        }))
+
+        if not teacher_groups:
+            return []
+
+        # Collect all student IDs across the teacher's groups
+        all_student_ids = []
+        for g in teacher_groups:
+            all_student_ids.extend(g.get("student_ids", []))
+        all_student_ids = list(set(all_student_ids))
+
+        if not all_student_ids:
+            return []
+
+        # Convert to ObjectIds for querying
+        student_oids = [ObjectId(sid) for sid in all_student_ids if ObjectId.is_valid(sid)]
+
+        notifications = []
+
+        # 1. Inactive students in teacher's groups
+        inactive_students = db.users.count_documents({
+            "_id": {"$in": student_oids},
+            "is_active": True,
+            "$or": [
+                {"last_login": {"$lt": week_ago}},
+                {"last_login": None}
+            ]
+        })
+        if inactive_students > 0:
+            notifications.append({
+                "title": "Inactive Students",
+                "message": f"{inactive_students} student(s) in your groups haven't logged in for 7+ days",
+                "type": "warning",
+                "category": "activity"
+            })
+
+        # 2. Student test failures in teacher's groups
+        # Get user_ids for these students
+        student_user_ids = [s.get("user_id") for s in db.users.find({"_id": {"$in": student_oids}}, {"user_id": 1}) if s.get("user_id")]
+        
+        test_sessions = db.get_collection("test_sessions")
+        failed_tests = test_sessions.count_documents({
+            "status": "completed",
+            "user_id": {"$in": student_user_ids},
+            "score": {"$lt": 40},
+            "completed_at": {"$gte": week_ago}
+        })
+        if failed_tests > 0:
+            notifications.append({
+                "title": "Student Test Failures",
+                "message": f"{failed_tests} test(s) by your students scored below 40% this week",
+                "type": "error",
+                "category": "performance"
+            })
+
+        # 3. Tests completed by students in teacher's groups today
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tests_today = test_sessions.count_documents({
+            "user_id": {"$in": student_user_ids},
+            "completed_at": {"$gte": today_start}
+        })
+        if tests_today > 0:
+            notifications.append({
+                "title": "Student Activity Today",
+                "message": f"{tests_today} test(s) completed by your students today",
+                "type": "success",
+                "category": "tests"
+            })
+
+        return notifications
+    except Exception as e:
+        logger.error(f"Error generating teacher notifications: {e}")
         return []
 
 
@@ -111,28 +240,36 @@ async def get_notifications(
     try:
         # Run cleanup of old notifications
         cleanup_old_notifications()
-        
+
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
         # Build query based on role
-        query = {"user_id": current_user.user_id}
-        
-        # Admin sees admin-specific notifications
         if current_user.role == UserRole.ADMIN:
             query = {
                 "$or": [
                     {"user_id": current_user.user_id},
                     {"role": "admin"},
-                    {"role": {"$exists": False}, "user_id": {"$exists": False}}  # System notifications
+                    {"role": {"$exists": False}, "user_id": {"$exists": False}}
                 ]
             }
-        
+        elif current_user.role == UserRole.TEACHER:
+            query = {
+                "$or": [
+                    {"user_id": current_user.user_id},
+                    {"role": "teacher", "target_user_id": current_user.user_id}
+                ]
+            }
+        else:
+            query = {"user_id": current_user.user_id}
+
         # Fetch stored notifications
         stored_notifications = list(db.notifications.find(query).sort("created_at", -1).limit(limit))
-        
+
         result = []
         for n in stored_notifications:
             created_at = n.get("created_at")
             read_at = n.get("read_at")
-            
+
             result.append({
                 "id": str(n["_id"]),
                 "title": n.get("title", ""),
@@ -145,46 +282,67 @@ async def get_notifications(
                 "read_at": read_at.isoformat() if read_at else None,
                 "expires_in_days": 7 - (datetime.utcnow() - read_at).days if read_at and not n.get("saved") else None
             })
-        
-        # For admins, also generate real-time notifications
+
+        # Generate and store live notifications based on role
         if current_user.role == UserRole.ADMIN:
             live_notifications = generate_admin_notifications()
-            for ln in live_notifications:
-                # Check if similar notification already exists today
-                existing = db.notifications.find_one({
+            role_key = "admin"
+            target_user_id = None
+        elif current_user.role == UserRole.TEACHER:
+            live_notifications = generate_teacher_notifications(current_user.user_id)
+            role_key = "teacher"
+            target_user_id = current_user.user_id
+        else:
+            live_notifications = []
+            role_key = None
+            target_user_id = None
+
+        for ln in live_notifications:
+            # Skip if dismissed today
+            if is_dismissed(ln["title"], role_key, target_user_id):
+                continue
+
+            # Check if similar notification already exists today
+            existing_query = {
+                "title": ln["title"],
+                "role": role_key,
+                "created_at": {"$gte": today_start}
+            }
+            if target_user_id:
+                existing_query["target_user_id"] = target_user_id
+
+            existing = db.notifications.find_one(existing_query)
+            if not existing:
+                new_notif = {
                     "title": ln["title"],
-                    "role": "admin",
-                    "created_at": {"$gte": datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)}
+                    "message": ln["message"],
+                    "type": ln["type"],
+                    "category": ln.get("category", "general"),
+                    "role": role_key,
+                    "read": False,
+                    "saved": False,
+                    "created_at": datetime.utcnow()
+                }
+                if target_user_id:
+                    new_notif["target_user_id"] = target_user_id
+
+                insert_result = db.notifications.insert_one(new_notif)
+                result.insert(0, {
+                    "id": str(insert_result.inserted_id),
+                    "title": ln["title"],
+                    "message": ln["message"],
+                    "type": ln["type"],
+                    "category": ln.get("category", "general"),
+                    "read": False,
+                    "saved": False,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "read_at": None,
+                    "expires_in_days": None
                 })
-                if not existing:
-                    # Store the notification
-                    new_notif = {
-                        "title": ln["title"],
-                        "message": ln["message"],
-                        "type": ln["type"],
-                        "category": ln.get("category", "general"),
-                        "role": "admin",
-                        "read": False,
-                        "saved": False,
-                        "created_at": datetime.utcnow()
-                    }
-                    insert_result = db.notifications.insert_one(new_notif)
-                    result.insert(0, {
-                        "id": str(insert_result.inserted_id),
-                        "title": ln["title"],
-                        "message": ln["message"],
-                        "type": ln["type"],
-                        "category": ln.get("category", "general"),
-                        "read": False,
-                        "saved": False,
-                        "created_at": datetime.utcnow().isoformat(),
-                        "read_at": None,
-                        "expires_in_days": None
-                    })
-        
+
         # Count unread
         unread_count = len([n for n in result if not n.get("read")])
-        
+
         return {
             "notifications": result[:limit],
             "unread_count": unread_count
@@ -206,12 +364,12 @@ async def mark_notification_read(
     try:
         if not ObjectId.is_valid(notification_id):
             raise HTTPException(status_code=400, detail="Invalid notification ID")
-        
+
         result = db.notifications.update_one(
             {"_id": ObjectId(notification_id)},
             {"$set": {"read": True, "read_at": datetime.utcnow()}}
         )
-        
+
         return {"success": True, "modified": result.modified_count > 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -226,12 +384,12 @@ async def save_notification(
     try:
         if not ObjectId.is_valid(notification_id):
             raise HTTPException(status_code=400, detail="Invalid notification ID")
-        
+
         result = db.notifications.update_one(
             {"_id": ObjectId(notification_id)},
             {"$set": {"saved": True}}
         )
-        
+
         return {"success": True, "saved": result.modified_count > 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -246,12 +404,12 @@ async def unsave_notification(
     try:
         if not ObjectId.is_valid(notification_id):
             raise HTTPException(status_code=400, detail="Invalid notification ID")
-        
+
         result = db.notifications.update_one(
             {"_id": ObjectId(notification_id)},
             {"$set": {"saved": False}}
         )
-        
+
         return {"success": True, "unsaved": result.modified_count > 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -262,13 +420,25 @@ async def delete_notification(
     notification_id: str,
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Permanently delete a notification."""
+    """Permanently delete a notification and dismiss it so it won't regenerate."""
     try:
         if not ObjectId.is_valid(notification_id):
             raise HTTPException(status_code=400, detail="Invalid notification ID")
-        
+
+        # Get the notification before deleting to record its title
+        notif = db.notifications.find_one({"_id": ObjectId(notification_id)})
+        if notif:
+            # Record the dismissal so it won't be regenerated today
+            role = notif.get("role", "admin")
+            db.dismissed_notifications.insert_one({
+                "title": notif.get("title"),
+                "role": role,
+                "user_id": notif.get("target_user_id"),
+                "dismissed_at": datetime.utcnow()
+            })
+
         result = db.notifications.delete_one({"_id": ObjectId(notification_id)})
-        
+
         return {"success": True, "deleted": result.deleted_count > 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -281,7 +451,7 @@ async def mark_all_notifications_read(
     """Mark all notifications as read for the current user."""
     try:
         now = datetime.utcnow()
-        
+
         # Build query based on role
         if current_user.role == UserRole.ADMIN:
             query = {
@@ -291,14 +461,22 @@ async def mark_all_notifications_read(
                 ],
                 "read": False
             }
+        elif current_user.role == UserRole.TEACHER:
+            query = {
+                "$or": [
+                    {"user_id": current_user.user_id},
+                    {"role": "teacher", "target_user_id": current_user.user_id}
+                ],
+                "read": False
+            }
         else:
             query = {"user_id": current_user.user_id, "read": False}
-        
+
         result = db.notifications.update_many(
             query,
             {"$set": {"read": True, "read_at": now}}
         )
-        
+
         return {"success": True, "modified_count": result.modified_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -58,17 +58,25 @@ class AssessmentService:
         """Create a new assessment."""
         try:
             doc = {
-                "course_id": request.course_id,
+                "course_id": request.course_id or "",
                 "title": request.title,
                 "description": request.description,
-                "type": request.type.value,
+                "subject": request.subject,
+                "type": request.type.value if request.type else "quiz",
                 "instructor_id": instructor_id,
+                "created_by": request.created_by or instructor_id,
                 "status": AssessmentStatus.DRAFT.value,
-                "questions": [],
+                "questions": [self._transform_question(q) for q in (request.questions or [])],
                 "settings": request.settings.model_dump(),
                 "due_date": request.due_date,
                 "available_from": request.available_from,
-                "total_points": 0,
+                "total_points": sum(q.get("marks", q.get("points", 1)) for q in (request.questions or [])),
+                "duration_minutes": request.duration_minutes,
+                "num_attempts": request.num_attempts or 1,
+                "show_results_immediately": request.show_results_immediately,
+                "start_datetime": request.start_datetime,
+                "end_datetime": request.end_datetime,
+                "student_ids": request.student_ids or [],
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
@@ -76,12 +84,120 @@ class AssessmentService:
             result = await self.assessments.insert_one(doc)
             doc["id"] = str(result.inserted_id)
             
+            
             logger.info(f"Assessment created: {doc['title']}")
+            
+            # Send notifications
+            await self._notify_users(doc)
+            
             return self._to_response(doc)
             
         except Exception as e:
             logger.error(f"Create assessment error: {e}")
             raise
+
+    async def _notify_users(self, assessment: dict):
+        """Send notifications to relevant users."""
+        try:
+            notifications = []
+            created_at = datetime.utcnow()
+            title = assessment["title"]
+            assessment_id = str(assessment.get("_id", assessment.get("id"))) # Handle both
+            
+            # 1. Notify Students
+            student_ids = assessment.get("student_ids", [])
+            for sid in student_ids:
+                notifications.append({
+                    "title": f"New Test: {title}",
+                    "message": f"A new test '{title}' is available for you.",
+                    "type": "test_assigned",
+                    "recipient_id": sid,
+                    "role": "student",
+                    "link": f"/student/test/{assessment_id}",
+                    "created_at": created_at,
+                    "is_read": False
+                })
+                
+            # 2. Determine Creator Role to notify others
+            creator_id = assessment.get("created_by", assessment.get("instructor_id"))
+            creator = await mongodb.db.users.find_one({"user_id": creator_id})
+            creator_role = creator.get("role") if creator else "admin" # Default to admin if not found
+            
+            # If created by Teacher -> Notify Admins
+            if creator_role == "teacher":
+                admins = mongodb.db.users.find({"role": "admin"})
+                async for admin in admins:
+                    notifications.append({
+                        "title": f"New Test Created: {title}",
+                        "message": f"Teacher {creator.get('name', creator_id)} created a new test.",
+                        "type": "info",
+                        "recipient_id": admin["user_id"],
+                        "role": "admin",
+                        "link": "/test-management",
+                        "created_at": created_at,
+                        "is_read": False
+                    })
+            
+            # If created by Admin -> Notify Teachers of that Class/Subject
+            elif creator_role == "admin":
+                # Find teachers for this subject and class
+                # Logic: Find groups with this subject/class, then get their teachers
+                subject = assessment.get("subject")
+                # Class level might be in settings or we can inferred? 
+                # CreateTest doesn't send explicit class_level in root, but maybe in title or we search groups.
+                # Actually CreateTest sends student_ids.
+                # Let's try to match subject if available.
+                
+                if subject:
+                    # Find teachers with this subject
+                    # This is loose matching but better than nothing
+                    teachers = mongodb.db.users.find({
+                        "role": "teacher",
+                        "subjects": subject # Assuming subjects array exists or we default to all
+                    })
+                    # Better: Find groups that match subject (and class if we had it)
+                    # For now just notify teachers who have this subject in their profile if available,
+                    # OR notify all teachers if we can't be specific.
+                    # Let's just notify all teachers for now as a fallback, or if we can find specific ones.
+                    pass 
+
+                    # Correct approach: Notify teachers linked to the students? 
+                    # Too complex. Let's stick to subject match or generic "Admin created test"
+                    
+                    # Let's search for groups matching the subject
+                    groups = await mongodb.db.groups.find({"subject": subject}).to_list(length=100)
+                    teacher_ids = set()
+                    for g in groups:
+                        if g.get("teacher_id"): teacher_ids.add(g.get("teacher_id"))
+                        for tid in g.get("teacher_ids", []): teacher_ids.add(tid)
+                    
+                    # Convert IDs (could be user_id or ObjectId str) to user_ids
+                    # This is tricky because of the ID mixup we fixed earlier.
+                    # Let's just query users by _id or user_id
+                    
+                    for tid in teacher_ids:
+                        # Try to find user to get correct user_id string
+                        t_user = await mongodb.db.users.find_one({
+                            "$or": [{"user_id": tid}, {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "dummy"}]
+                        })
+                        if t_user:
+                            notifications.append({
+                                "title": f"New Test Created: {title}",
+                                "message": f"Admin created a new test for {subject}.",
+                                "type": "info",
+                                "recipient_id": t_user["user_id"],
+                                "role": "teacher",
+                                "link": "/teacher-dashboard",
+                                "created_at": created_at,
+                                "is_read": False
+                            })
+
+            if notifications:
+                await mongodb.db.notifications.insert_many(notifications)
+                
+        except Exception as e:
+            logger.error(f"Failed to send notifications: {e}")
+            # Don't fail the assessment creation just because of notifications
     
     async def get_assessment(
         self,
@@ -103,20 +219,64 @@ class AssessmentService:
         course_id: str = None,
         instructor_id: str = None,
         status: str = None,
-        student_id: str = None
+        student_id: str = None,
+        teacher_id: str = None
     ) -> AssessmentListResponse:
         """List assessments with filters."""
         try:
             query = {}
             if course_id:
                 query["course_id"] = course_id
+            
+            # If explicit instructor_id is provided, use it (Admins filtering by specific teacher, or old behavior)
             if instructor_id:
                 query["instructor_id"] = instructor_id
+            
+            # Teacher View Logic: Own tests + Admin tests for their subjects/classes
+            elif teacher_id:
+                # 1. Fetch teacher's groups to find relevant (class, subject) pairs
+                # Match teacher_id in teacher_ids array or teacher_id field
+                group_query = {
+                    "$or": [
+                        {"teacher_ids": teacher_id},
+                        {"teacher_id": teacher_id}
+                    ]
+                }
+                groups = await mongodb.db.groups.find(group_query).to_list(length=100)
+                
+                criteria = []
+                for g in groups:
+                    if g.get("class_level") and g.get("subject"):
+                        criteria.append({
+                            "class_level": g.get("class_level"),
+                            "subject": g.get("subject")
+                        })
+                
+                # 2. Fetch Admin IDs to filter admin-created tests
+                admins = await mongodb.db.users.find({"role": "admin"}, {"user_id": 1}).to_list(length=100)
+                admin_ids = [a["user_id"] for a in admins]
+                
+                # 3. Build OR query
+                # - Tests created by this teacher
+                # - OR Tests created by an Admin AND matching one of the group criteria
+                
+                teacher_own_query = {"instructor_id": teacher_id}
+                
+                if criteria and admin_ids:
+                    admin_tests_query = {
+                        "instructor_id": {"$in": admin_ids},
+                        "$or": criteria
+                    }
+                    query["$or"] = [teacher_own_query, admin_tests_query]
+                else:
+                    # Fallback if no groups assigned or no admins found -> show only own tests
+                    query["instructor_id"] = teacher_id
+
             if status:
                 query["status"] = status
             else:
                 # Default: published only for students
-                if student_id and not instructor_id:
+                if student_id and not instructor_id and not teacher_id:
                     query["status"] = AssessmentStatus.PUBLISHED.value
             
             total = await self.assessments.count_documents(query)
@@ -181,6 +341,12 @@ class AssessmentService:
                 update_data["available_from"] = request.available_from
             if request.status:
                 update_data["status"] = request.status.value
+            
+            if request.questions is not None:
+                # Transform and update questions
+                questions = [self._transform_question(q) for q in request.questions]
+                update_data["questions"] = questions
+                update_data["total_points"] = sum(q.get("points", 1) for q in questions)
             
             await self.assessments.update_one(
                 {"_id": ObjectId(assessment_id)},
@@ -750,12 +916,14 @@ class AssessmentService:
         settings = AssessmentSettings(**settings_data) if settings_data else AssessmentSettings()
         
         return AssessmentResponse(
-            id=str(doc["_id"]),
-            course_id=doc["course_id"],
+            id=str(doc.get("_id", doc.get("id", ""))),
+            course_id=doc.get("course_id", ""),
             title=doc["title"],
             description=doc.get("description"),
             type=doc["type"],
             instructor_id=doc["instructor_id"],
+            subject=doc.get("subject"),
+            class_level=doc.get("class_level", 10),
             status=doc["status"],
             question_count=len(doc.get("questions", [])),
             total_points=doc.get("total_points", 0),
@@ -767,8 +935,98 @@ class AssessmentService:
     
     def _to_detail_response(self, doc: dict) -> AssessmentDetailResponse:
         base = self._to_response(doc)
-        questions = [Question(**q) for q in doc.get("questions", [])]
-        return AssessmentDetailResponse(**base.model_dump(), questions=questions)
+        questions = []
+        for q in doc.get("questions", []):
+            try:
+                # Try validation
+                questions.append(Question(**q))
+            except Exception:
+                try:
+                    # Try transformation for compatibility
+                    transformed = self._transform_question(q.copy())
+                    questions.append(Question(**transformed))
+                except Exception as e:
+                    logger.warning(f"Skipping invalid question in assessment {doc.get('_id')}: {e}")
+        
+        return AssessmentDetailResponse(
+            **base.model_dump(), 
+            questions=questions, 
+            student_ids=doc.get("student_ids", [])
+        )
+
+    def _transform_question(self, q: dict) -> dict:
+        """Transform frontend/question-bank question format to backend Question model format."""
+        import uuid
+        
+        # 1. Handle question_text
+        # DEBUGLOG: Print incoming question payload
+        logger.info(f"Transforming question payload: {q}")
+        
+        # Prioritize 'text' from frontend/question bank if present, as it contains updated content
+        if "text" in q:
+            q["question_text"] = q["text"]
+            
+        if "question_text" not in q:
+            q["question_text"] = "Question Text Missing"
+            
+        # 2. Normalize and Prepare Options
+        # We need to handle both strings and objects to find the correct index if answer is text
+        raw_options = q.get("options", [])
+        options_text = []
+        
+        if raw_options and isinstance(raw_options, list):
+            if len(raw_options) > 0:
+                if isinstance(raw_options[0], str):
+                    options_text = [str(opt) for opt in raw_options]
+                elif isinstance(raw_options[0], dict):
+                    options_text = [str(opt.get("text", "")) for opt in raw_options]
+        
+        # 3. Determine Correct Index
+        correct_idx = -1
+        raw_correct = q.get("correct_answer")
+        
+        # Try as index (int or valid integer string)
+        try:
+            correct_idx = int(raw_correct)
+        except (ValueError, TypeError):
+            # Failed to parse as int, try matching text
+            if isinstance(raw_correct, str) and raw_correct in options_text:
+                correct_idx = options_text.index(raw_correct)
+        
+        # 4. Construct QuestionOption objects
+        new_options = []
+        for idx, text in enumerate(options_text):
+            is_correct = (idx == correct_idx)
+            
+            # Preserve existing ID if available in object source
+            opt_id = str(uuid.uuid4())
+            if raw_options and isinstance(raw_options[0], dict) and idx < len(raw_options):
+                opt_id = str(raw_options[idx].get("id", opt_id))
+
+            new_options.append({
+                "id": opt_id,
+                "text": text,
+                "is_correct": is_correct
+            })
+            
+        q["options"] = new_options
+            
+        # 5. Ensure ID
+        if "id" not in q:
+            q["id"] = str(uuid.uuid4())
+        
+        # 6. Default Type
+        if "type" not in q:
+            q["type"] = "mcq"
+
+        # 7. Map marks to points
+        if "points" not in q:
+            try:
+                q["points"] = int(q.get("marks", 1))
+            except (ValueError, TypeError):
+                q["points"] = 1
+
+        return q
     
     def _submission_to_response(self, doc: dict) -> SubmissionResponse:
         return SubmissionResponse(

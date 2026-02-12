@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users } from "lucide-react";
+import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -22,6 +22,7 @@ export default function TeacherManagement() {
     const [selectedTeacher, setSelectedTeacher] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [saving, setSaving] = useState(false);
+    const [expandedTeacherGroups, setExpandedTeacherGroups] = useState({});
 
     const [formData, setFormData] = useState({
         name: "",
@@ -276,10 +277,32 @@ export default function TeacherManagement() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {teacher.group_count > 0 ? (
-                                                <span className="text-sm px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                                                    {teacher.group_count} group(s)
-                                                </span>
+                                            {teacher.group_names && teacher.group_names.length > 0 ? (
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-sm px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md font-medium">
+                                                            {teacher.group_names[0]}
+                                                        </span>
+                                                        {teacher.group_names.length > 1 && (
+                                                            <button
+                                                                onClick={() => setExpandedTeacherGroups(prev => ({ ...prev, [teacher.id]: !prev[teacher.id] }))}
+                                                                className="text-xs px-1.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center gap-0.5"
+                                                            >
+                                                                +{teacher.group_names.length - 1}
+                                                                {expandedTeacherGroups[teacher.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {expandedTeacherGroups[teacher.id] && teacher.group_names.length > 1 && (
+                                                        <div className="mt-1.5 flex flex-col gap-1">
+                                                            {teacher.group_names.slice(1).map((gn, i) => (
+                                                                <span key={i} className="text-sm px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md font-medium w-fit">
+                                                                    {gn}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="text-sm text-gray-400 dark:text-gray-500 italic">No groups assigned</span>
                                             )}

@@ -6,8 +6,6 @@ import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
-const ADMIN_EMAIL = "admin1@gmail.com";
-const ADMIN_PASSWORD = "admin1234";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -33,23 +31,7 @@ export default function Login() {
     setIsLoading(true);
     setError("");
 
-    // Check for hardcoded admin credentials (admin can use email or user_id)
-    if ((userId === ADMIN_EMAIL || userId === "admin1") && password === ADMIN_PASSWORD) {
-      setUser({
-        id: "admin-root",
-        user_id: "ADMIN_ROOT",
-        name: "Administrator",
-        email: ADMIN_EMAIL,
-        role: "admin",
-        classLevel: null,
-        isOnboarded: true
-      });
-      navigate("/admin-dashboard");
-      setIsLoading(false);
-      return;
-    }
-
-    // Unified login - backend returns the user's role
+    // Unified login - backend handles admin AND regular users
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",

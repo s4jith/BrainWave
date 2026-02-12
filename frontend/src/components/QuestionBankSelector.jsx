@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Filter, Search, Plus, Check } from "lucide-react";
+import useUserStore from "../stores/userStore";
 
 const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
     const [questions, setQuestions] = useState([]);
@@ -33,7 +34,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
 
             const response = await fetch(`http://localhost:8000/api/question-bank/questions?${queryParams}`, {
                 headers: {
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    "Authorization": `Bearer ${useUserStore.getState().accessToken}`
                 }
             });
 

@@ -54,6 +54,7 @@ async def list_assessments(
 ):
     """
     List assessments.
+    Admins see all assessments.
     Teachers see their own assessments.
     Students see published assessments for enrolled courses.
     """
@@ -61,15 +62,25 @@ async def list_assessments(
         instructor_id = None
         student_id = None
         
-        if current_user.role in [UserRole.TEACHER, UserRole.ADMIN]:
-            instructor_id = current_user.user_id
+        # Determine filters based on role
+        teacher_id = None
+        
+        if current_user.role == UserRole.ADMIN:
+            # Admin sees everything - no filter
+            pass
+        elif current_user.role == UserRole.TEACHER:
+            # Pass teacher_id to service to enable visibility of:
+            # 1. Own tests
+            # 2. Admin tests matching assigned groups
+            teacher_id = current_user.user_id
         else:
             student_id = current_user.user_id
         
         return await assessment_service.list_assessments(
             course_id=course_id,
             instructor_id=instructor_id,
-            student_id=student_id
+            student_id=student_id,
+            teacher_id=teacher_id
         )
     except Exception as e:
         logger.error(f"List assessments error: {e}")

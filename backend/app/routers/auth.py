@@ -98,6 +98,37 @@ def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> s
     return token
 
 
+# Admin token endpoint for client-side admin login
+class AdminTokenRequest(BaseModel):
+    email: str
+    password: str
+
+@router.post("/admin-token")
+async def get_admin_token(request: AdminTokenRequest):
+    """
+    Generate a JWT token for the hardcoded admin account.
+    This is used by the frontend when admin logs in with the client-side credentials.
+    """
+    # Validate against hardcoded admin credentials
+    ADMIN_EMAIL = "admin1@gmail.com"
+    ADMIN_PASSWORD = "admin1234"
+    
+    if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    # Generate token with admin role
+    expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
+    payload = {
+        "user_id": "ADMIN_ROOT",
+        "email": ADMIN_EMAIL,
+        "role": "admin",
+        "exp": expire,
+        "iat": datetime.utcnow()
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    
+    return {"access_token": token, "token_type": "bearer"}
+
 def generate_teacher_id() -> str:
     """Generate unique teacher ID like TCH2026001"""
     year = datetime.now().year
@@ -124,6 +155,43 @@ async def login(request: LoginRequest):
     Returns user data, session token, and JWT access token.
     """
     try:
+        # === Hardcoded Admin Login ===
+        ADMIN_EMAIL = "admin1@gmail.com"
+        ADMIN_PASSWORD = "admin1234"
+        ADMIN_IDS = ["admin1", ADMIN_EMAIL, "ADMIN_ROOT"]
+        
+        if request.user_id in ADMIN_IDS and request.password == ADMIN_PASSWORD:
+            # Generate admin JWT token
+            access_token = create_access_token(
+                user_id="ADMIN_ROOT",
+                email=ADMIN_EMAIL,
+                role="admin",
+                mongo_id="admin-root"
+            )
+            role_enum = UserRole("admin")
+            permissions = [p.value for p in get_role_permissions(role_enum)]
+            
+            return {
+                "success": True,
+                "first_login": False,
+                "user_id": "ADMIN_ROOT",
+                "session_id": str(uuid.uuid4()),
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user": {
+                    "id": "admin-root",
+                    "user_id": "ADMIN_ROOT",
+                    "name": "Administrator",
+                    "email": ADMIN_EMAIL,
+                    "role": "admin",
+                    "class_level": None,
+                    "subjects": [],
+                    "is_onboarded": True,
+                    "permissions": permissions
+                }
+            }
+        
+        # === Normal DB Login ===
         # Pydantic validation handles missing fields for us if they were required
         # Since role is optional, we build query dynamically
         query = {"user_id": request.user_id}

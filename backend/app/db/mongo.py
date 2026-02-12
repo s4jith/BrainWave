@@ -109,6 +109,11 @@ class SyncMongoDB:
         return self.db.notifications
     
     @property
+    def dismissed_notifications(self):
+        """Get dismissed notifications collection."""
+        return self.db.dismissed_notifications
+    
+    @property
     def books(self):
         """Get books collection for book management."""
         return self.db.books

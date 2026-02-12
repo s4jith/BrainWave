@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Sparkles, Loader2, Plus, Trash } from "lucide-react";
+import useUserStore from "../stores/userStore";
 
 /**
  * QuestionModal Component
@@ -20,26 +21,34 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     // Determine subject list based on role
     const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : ["Mathematics", "Science", "English", "Hindi", "Social Science"]);
 
+    // Load saved form defaults from localStorage
+    const savedDefaults = (() => {
+        try {
+            const saved = localStorage.getItem("questionFormDefaults");
+            return saved ? JSON.parse(saved) : {};
+        } catch { return {}; }
+    })();
+
     // Manual Form State
     const [formData, setFormData] = useState({
         text: "",
-        subject: subjectList[0] || "",
-        class_level: 10,
-        chapter: 1,
+        subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
+        class_level: savedDefaults.class_level || 10,
+        chapter: savedDefaults.chapter || 1,
         topic: "",
-        type: "mcq",
-        difficulty: "medium",
+        type: savedDefaults.type || "mcq",
+        difficulty: savedDefaults.difficulty || "medium",
         marks: 1,
         options: ["", "", "", ""],
         correct_answer: "",
-        status: "approved" // Default to approved for manual, can be changed if needed
+        status: "approved"
     });
 
     // AI Gen State
     const [aiConfig, setAiConfig] = useState({
-        subject: subjectList[0] || "",
-        class_level: 10,
-        chapter: 1,
+        subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
+        class_level: savedDefaults.class_level || 10,
+        chapter: savedDefaults.chapter || 1,
         difficulty_dist: {
             easy: { mcq: 2, fillup: 0, short_answer: 0, long_answer: 0 },
             medium: { mcq: 0, fillup: 0, short_answer: 0, long_answer: 0 },
@@ -87,7 +96,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 method,
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    "Authorization": `Bearer ${useUserStore.getState().accessToken}`
                 },
                 body: JSON.stringify(payload)
             });
@@ -98,6 +107,17 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             }
 
             onClose(true); // refresh
+
+            // Save form defaults for next time
+            try {
+                localStorage.setItem("questionFormDefaults", JSON.stringify({
+                    subject: formData.subject,
+                    class_level: formData.class_level,
+                    chapter: formData.chapter,
+                    type: formData.type,
+                    difficulty: formData.difficulty
+                }));
+            } catch { }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -122,7 +142,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    "Authorization": `Bearer ${useUserStore.getState().accessToken}`
                 },
                 body: JSON.stringify(payload)
             });

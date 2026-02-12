@@ -27,7 +27,8 @@ class QuestionBankService:
         status: Optional[str] = "approved", # Default to approved
         created_by: Optional[str] = None,  # For teacher-specific view
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        group_filters: Optional[list] = None  # List of {subject, class_level} dicts
     ) -> Dict:
         """Get questions with filters."""
         query = {}
@@ -44,6 +45,22 @@ class QuestionBankService:
         # Approval Status Filter
         if status:
              query["status"] = status
+        
+        # Group-based filtering for teachers
+        # Only show questions matching teacher's assigned group subjects/classes
+        if group_filters is not None:
+            group_or = []
+            for gf in group_filters:
+                group_or.append({
+                    "subject": {"$regex": f"^{gf['subject']}$", "$options": "i"},
+                    "class_level": gf["class_level"]
+                })
+            if group_or:
+                # If user also specified subject/class filters, combine with group restriction
+                if "$or" not in query:
+                    query["$and"] = [{"$or": group_or}]
+                else:
+                    query["$and"] = [{"$or": group_or}]
              
         # Teacher can only see questions for their subjects OR created by them
         # But per requirements: "Staff can create questions for subjects which they are allocated but admin can... 
@@ -54,10 +71,14 @@ class QuestionBankService:
         # But for general bank access, we probably filter by subject.
         
         if search:
-            query["$or"] = [
+            search_or = [
                 {"text": {"$regex": search, "$options": "i"}},
                 {"topic": {"$regex": search, "$options": "i"}}
             ]
+            if "$and" in query:
+                query["$and"].append({"$or": search_or})
+            else:
+                query["$or"] = search_or
             
         total = self.collection.count_documents(query)
         cursor = self.collection.find(query).sort("created_at", -1).skip(offset).limit(limit)

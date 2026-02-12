@@ -106,13 +106,23 @@ class AssessmentSettings(BaseModel):
 
 class AssessmentCreateRequest(BaseModel):
     """Request to create an assessment."""
-    course_id: str
     title: str = Field(..., min_length=3)
     description: Optional[str] = None
-    type: AssessmentType = AssessmentType.QUIZ
+    subject: Optional[str] = None
+    type: Optional[AssessmentType] = AssessmentType.QUIZ
+    course_id: Optional[str] = None
     settings: AssessmentSettings = Field(default_factory=AssessmentSettings)
     due_date: Optional[datetime] = None
     available_from: Optional[datetime] = None
+    # Fields from CreateTest.jsx
+    duration_minutes: Optional[int] = None
+    num_attempts: Optional[int] = 1
+    show_results_immediately: Optional[bool] = True
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+    student_ids: Optional[List[str]] = Field(default_factory=list)
+    questions: Optional[List[dict]] = Field(default_factory=list)
+    created_by: Optional[str] = None
 
 
 class AssessmentUpdateRequest(BaseModel):
@@ -124,6 +134,7 @@ class AssessmentUpdateRequest(BaseModel):
     due_date: Optional[datetime] = None
     available_from: Optional[datetime] = None
     status: Optional[AssessmentStatus] = None
+    questions: Optional[List[dict]] = None # Allow updating questions via PUT
 
 
 class QuestionCreateRequest(BaseModel):
@@ -167,7 +178,7 @@ class GradeSubmissionRequest(BaseModel):
 class AssessmentInDB(BaseModel):
     """Assessment as stored in MongoDB."""
     id: Optional[str] = None
-    course_id: str
+    course_id: Optional[str] = None
     title: str
     description: Optional[str] = None
     type: AssessmentType
@@ -222,11 +233,13 @@ class SubmissionInDB(BaseModel):
 class AssessmentResponse(BaseModel):
     """Assessment response for API (without questions for list view)."""
     id: str
-    course_id: str
+    course_id: Optional[str] = None
     title: str
     description: Optional[str] = None
     type: str
     instructor_id: str
+    subject: Optional[str] = None
+    class_level: int = 10
     status: str
     question_count: int = 0
     total_points: int = 0
@@ -244,6 +257,7 @@ class AssessmentResponse(BaseModel):
 class AssessmentDetailResponse(AssessmentResponse):
     """Detailed assessment response including questions."""
     questions: List[Question] = []
+    student_ids: List[str] = []
 
 
 class StudentAssessmentView(BaseModel):

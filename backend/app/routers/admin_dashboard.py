@@ -404,7 +404,18 @@ async def get_students(
         
         # Query students
         cursor = db.users.find(filter_query).skip(skip).limit(limit).sort("created_at", -1)
-        students = [serialize_student(s) for s in cursor]
+        students = []
+        for s in cursor:
+            student_data = serialize_student(s)
+            # Find groups this student belongs to
+            sid = str(s["_id"])
+            student_groups = list(db.groups.find(
+                {"student_ids": sid},
+                {"name": 1}
+            ))
+            student_data["group_count"] = len(student_groups)
+            student_data["group_names"] = [g.get("name", "Unnamed") for g in student_groups]
+            students.append(student_data)
         
         return students
         
@@ -448,7 +459,8 @@ async def create_student(student: StudentCreate):
             "created_at": datetime.utcnow(),
             "last_login": None,
             "tests_completed": 0,
-            "avg_score": 0.0
+            "avg_score": 0.0,
+            "created_by": "admin"
         }
         
         # Insert into database
@@ -614,28 +626,58 @@ async def reset_student_password(student_id: str):
 @router.get("/teachers")
 async def get_teachers(
     limit: int = Query(100, ge=1, le=500),
-    is_active: Optional[bool] = None
+    is_active: Optional[bool] = None,
+    search: Optional[str] = None,
+    subject: Optional[str] = None
 ):
     """
-    Get list of all teachers.
+    Get list of all teachers with optional filters.
     """
     try:
         filter_query = {"role": "teacher"}
         
         if is_active is not None:
             filter_query["is_active"] = is_active
+            
+        if search:
+            filter_query["$or"] = [
+                {"name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+                {"user_id": {"$regex": search, "$options": "i"}}
+            ]
+            
+        if subject:
+            # Case-insensitive match for subject in subjects array
+            filter_query["subjects"] = {"$regex": f"^{subject}$", "$options": "i"}
         
         cursor = db.users.find(filter_query).limit(limit).sort("created_at", -1)
         teachers = []
         
         for t in cursor:
+            teacher_id_str = str(t.get("_id", ""))
+            teacher_user_id = t.get("user_id", "")
+            
+            # Count groups and get group names for this teacher
+            teacher_groups = list(db.groups.find({
+                "$or": [
+                    {"teacher_id": teacher_user_id},
+                    {"teacher_id": teacher_id_str},
+                    {"teacher_ids": teacher_user_id},
+                    {"teacher_ids": teacher_id_str}
+                ]
+            }, {"name": 1}))
+            group_count = len(teacher_groups)
+            group_names = [g.get("name", "Unnamed") for g in teacher_groups]
+            
             teachers.append({
-                "id": str(t.get("_id", "")),
-                "user_id": t.get("user_id", ""),
+                "id": teacher_id_str,
+                "user_id": teacher_user_id,
                 "name": t.get("name", ""),
                 "email": t.get("email", ""),
                 "mobile": t.get("mobile", ""),
                 "subjects": t.get("subjects", []),
+                "group_count": group_count,
+                "group_names": group_names,
                 "is_active": t.get("is_active", True),
                 "created_at": t.get("created_at", datetime.utcnow()).isoformat() if t.get("created_at") else None,
                 "last_login": t.get("last_login").isoformat() if t.get("last_login") else None
@@ -712,6 +754,7 @@ async def create_teacher(teacher: TeacherCreate):
             "role": "teacher",
             "is_active": True,
             "created_at": datetime.utcnow(),
+            "created_by": "admin",
             "last_login": None
         }
         

@@ -163,9 +163,9 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     const ThemeIcon = getThemeIcon();
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black flex transition-colors duration-200">
+        <div className="h-screen bg-gray-50 dark:bg-black flex transition-colors duration-200 overflow-hidden">
             {/* Left Sidebar */}
-            <aside className="w-64 bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-200">
+            <aside className="w-64 h-screen bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-200">
                 {/* Logo */}
                 <div className="h-16 flex items-center px-4 border-b border-gray-100 dark:border-zinc-800">
                     <div className="flex items-center gap-3">
@@ -183,7 +183,10 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
                     {navItems.map((item) => {
                         const ItemIcon = item.icon;
-                        const isActive = currentPath === item.path;
+                        // Enhanced active check for sub-routes
+                        const isActive = currentPath === item.path ||
+                            (item.path === "/test-management" && (currentPath === "/create-test" || currentPath.startsWith("/test/edit/")));
+
                         return (
                             <button
                                 key={item.path}
@@ -239,7 +242,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* Top Header */}
                 <header className="h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-6 flex-shrink-0 transition-colors duration-200">
                     <div className="flex items-center gap-3">

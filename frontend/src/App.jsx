@@ -310,6 +310,14 @@ function App() {
           }
         />
         <Route
+          path="/test/edit/:testId"
+          element={
+            <StaffRoute>
+              <CreateTest />
+            </StaffRoute>
+          }
+        />
+        <Route
           path="/test-management"
           element={
             <StaffRoute>

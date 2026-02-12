@@ -70,26 +70,31 @@ async def get_subjects(
         from app.db.mongo import db # Use Sync DB (more reliable in current env)
         
         if current_user.role == UserRole.TEACHER:
-            user = db.users.find_one({"user_id": current_user.user_id})
-            if not user:
-                return {"subjects": []}
-            return {"subjects": user.get("subjects", [])}
+            # Derive subjects from groups assigned to the teacher
+            teacher_groups = list(db.groups.find({
+                "$or": [
+                    {"teacher_id": current_user.user_id},
+                    {"teacher_ids": current_user.user_id}
+                ]
+            }, {"subject": 1}))
+            
+            subjects = sorted(list(set(
+                g.get("subject") for g in teacher_groups if g.get("subject")
+            )))
+            return {"subjects": subjects}
         
         # Admin: Fetch distinct subjects from questions AND books collections
         # Sync DB calls (no await)
         q_subjects = db.questions.distinct("subject")
         b_subjects = db.books.distinct("subject")
         
-        default_subjects = ["Mathematics", "Science", "English", "Hindi", "Social Science", "Physics", "Chemistry", "Biology", "Computer Science"]
-        
-        # Merge and sort
-        all_subjects = sorted(list(set(q_subjects + b_subjects + default_subjects)))
+        # Only show subjects that actually exist in the system
+        all_subjects = sorted(list(set(q_subjects + b_subjects)))
         
         return {"subjects": all_subjects}
     except Exception as e:
-        # Return defaults on error to avoid empty dropdown
-        default_subjects = ["Mathematics", "Science", "English", "Hindi", "Social Science", "Physics", "Chemistry", "Biology", "Computer Science"]
-        return {"subjects": sorted(default_subjects)}
+        logger.error(f"Error fetching subjects: {e}")
+        return {"subjects": []}
 
 @router.get("/questions")
 async def get_questions(
@@ -106,30 +111,42 @@ async def get_questions(
     """
     Get questions from bank.
     - Admins: See all.
-    - Teachers: See only questions for their assigned subjects.
+    - Teachers: See only questions matching their assigned groups' subject/class.
     """
     try:
-        # RBAC: If teacher, restrict subject filter
+        group_filters = None  # None means no restriction (admin)
+        
+        # RBAC: If teacher, restrict to their assigned group subjects/classes
         if current_user.role == UserRole.TEACHER:
             from app.db.mongo import db
-            user = db.users.find_one({"user_id": current_user.user_id})
-            if not user:
+            
+            # Get the teacher's MongoDB _id
+            teacher_doc = db.users.find_one({"user_id": current_user.user_id, "role": "teacher"})
+            if not teacher_doc:
                 raise HTTPException(status_code=401, detail="User data not found")
-                
-            allowed_subjects = user.get("subjects", [])
             
-            # If subject is requested, check if it's allowed
-            if subject and subject not in allowed_subjects:
-                raise HTTPException(status_code=403, detail=f"Access denied for subject: {subject}")
+            teacher_id_str = str(teacher_doc["_id"])
+            match_values = [current_user.user_id, teacher_id_str]
             
-            # If no subject, we implicitly restrict to allowed_subjects in service or here?
-            # For strictness, let's pass allowed_subjects to service if subject is None
-            if not subject:
-                # We should filter by allowed subjects but service get_questions doesn't natively support list of subjects yet
-                # For now, we rely on the fact that if they search specific subject disallowed, we block.
-                # If they list all, we should probably filter result.
-                # TODO: Implement multi-subject filter in service.
-                pass 
+            # Get groups assigned to this teacher
+            teacher_groups = list(db.groups.find({
+                "$or": [
+                    {"teacher_id": {"$in": match_values}},
+                    {"teacher_ids": {"$in": match_values}}
+                ]
+            }))
+            
+            # Extract (subject, class_level) pairs from groups
+            group_filters = []
+            for g in teacher_groups:
+                g_subject = g.get("subject")
+                g_class = g.get("class_level")
+                if g_subject and g_class:
+                    group_filters.append({"subject": g_subject, "class_level": g_class})
+            
+            # If teacher has no groups, return empty
+            if not group_filters:
+                return {"questions": [], "total": 0, "page": 1, "pages": 0}
                 
         result = await question_bank_service.get_questions(
             class_level=class_level,
@@ -139,7 +156,8 @@ async def get_questions(
             difficulty=difficulty,
             status=status,
             limit=limit,
-            offset=offset
+            offset=offset,
+            group_filters=group_filters
         )
         return result
     except HTTPException:

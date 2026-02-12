@@ -7,13 +7,13 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { ClipboardList, Plus, Trash2, FileText, MessageSquare, Search, ExternalLink } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, Search, ExternalLink } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function TestManagement() {
   const navigate = useNavigate();
-  const { user } = useUserStore();
+  const { user, getAuthHeader } = useUserStore();
   const [tests, setTests] = useState([]);
   const [selectedTest, setSelectedTest] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -38,23 +38,33 @@ export default function TestManagement() {
   const fetchTests = async () => {
     try {
       setLoading(true);
-      let url = `${API_URL}/api/tests/admin?`;
+      let url = `${API_URL}/api/assessments?`; // Changed from /api/tests/admin
       if (filterClass) url += `class_level=${filterClass}&`;
       if (filterSubject) url += `subject=${filterSubject}&`;
       if (filterStatus) url += `status=${filterStatus}&`;
-      const response = await fetch(url);
+
+      const response = await fetch(url, {
+        headers: getAuthHeader()
+      });
+
       if (!response.ok) throw new Error("Failed to fetch tests");
-      setTests(await response.json());
+      const data = await response.json();
+      setTests(data.assessments || []); // Handle { assessments: [], total: 0 } structure
     } catch (err) {
       console.error(err);
+      setTests([]);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchStats = async () => {
+    // Stats endpoint might also need updating or removal if not available in assessments
+    // For now keeping catch block to avoid crash
     try {
-      const response = await fetch(`${API_URL}/api/tests/stats/overview`);
+      const response = await fetch(`${API_URL}/api/tests/stats/overview`, {
+        headers: getAuthHeader()
+      });
       if (response.ok) setStats(await response.json());
     } catch (err) {
       console.error(err);
@@ -64,10 +74,15 @@ export default function TestManagement() {
   const fetchSubmissions = async (testId) => {
     try {
       setLoadingSubmissions(true);
-      const response = await fetch(`${API_URL}/api/tests/submissions/${testId}`);
+      // Using new assessment submissions endpoint
+      const response = await fetch(`${API_URL}/api/assessments/${testId}/submissions`, {
+        headers: getAuthHeader()
+      });
       if (!response.ok) throw new Error("Failed to fetch submissions");
-      setSubmissions(await response.json());
+      const data = await response.json();
+      setSubmissions(data.submissions || []);
     } catch (err) {
+      console.error(err);
       setSubmissions([]);
     } finally {
       setLoadingSubmissions(false);
@@ -201,10 +216,14 @@ export default function TestManagement() {
                     <p>{test.submission_count} submissions</p>
                   </div>
                   <div className="flex gap-2 mt-3">
-                    <a href={`${API_URL}${test.pdf_url}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                      className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1">
-                      <FileText className="w-3 h-3" /> PDF
-                    </a>
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      console.log("Edit clicked:", test.id);
+                      navigate(`/test/edit/${test.id}`);
+                    }}
+                      className="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 flex items-center gap-1">
+                      <Edit2 className="w-3 h-3" /> Edit
+                    </button>
                     <button onClick={e => { e.stopPropagation(); handleDeleteTest(test.id); }}
                       className="text-xs px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-1">
                       <Trash2 className="w-3 h-3" /> Delete

@@ -3,9 +3,10 @@ import React, { useState, useEffect } from "react";
 import { Copy, Edit, Trash2, Plus, Filter, Search, RotateCcw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import QuestionModal from "../components/QuestionModal";
+import useUserStore from "../stores/userStore";
 
 const QuestionBank = () => {
-    const [user, setUser] = useState(JSON.parse(localStorage.getItem("user") || "{}"));
+    const { user, accessToken } = useUserStore();
     const isTeacher = user.role === "teacher";
     const Layout = AdminLayout;
 
@@ -45,7 +46,7 @@ const QuestionBank = () => {
     const fetchSubjects = async () => {
         try {
             const response = await fetch(`${apiUrl}/api/question-bank/subjects`, {
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (response.ok) {
                 const data = await response.json();
@@ -69,7 +70,7 @@ const QuestionBank = () => {
 
             const response = await fetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
                 headers: {
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    "Authorization": `Bearer ${accessToken}`
                 }
             });
 
@@ -91,7 +92,7 @@ const QuestionBank = () => {
         try {
             const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}`, {
                 method: "DELETE",
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                headers: { "Authorization": `Bearer ${accessToken}` }
             });
 
             if (!response.ok) {
@@ -108,7 +109,7 @@ const QuestionBank = () => {
         try {
             const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/approve`, {
                 method: "PUT",
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (!response.ok) throw new Error("Failed to approve");
             fetchQuestions();
@@ -122,7 +123,7 @@ const QuestionBank = () => {
         try {
             const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/reject`, {
                 method: "PUT",
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (!response.ok) throw new Error("Failed to reject");
             fetchQuestions();
@@ -167,8 +168,8 @@ const QuestionBank = () => {
                     <button
                         onClick={() => setActiveTab("bank")}
                         className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === "bank"
-                                ? "border-blue-500 text-blue-500"
-                                : "border-transparent text-gray-400 hover:text-gray-300"
+                            ? "border-blue-500 text-blue-500"
+                            : "border-transparent text-gray-400 hover:text-gray-300"
                             }`}
                     >
                         Question Bank
@@ -176,8 +177,8 @@ const QuestionBank = () => {
                     <button
                         onClick={() => setActiveTab("approvals")}
                         className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === "approvals"
-                                ? "border-yellow-500 text-yellow-500"
-                                : "border-transparent text-gray-400 hover:text-gray-300"
+                            ? "border-yellow-500 text-yellow-500"
+                            : "border-transparent text-gray-400 hover:text-gray-300"
                             }`}
                     >
                         Pending Approvals

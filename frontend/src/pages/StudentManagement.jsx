@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus } from "lucide-react";
+import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -24,6 +24,7 @@ export default function StudentManagement() {
   const [filterActive, setFilterActive] = useState("all");
   const [filterClass, setFilterClass] = useState("all");
   const [saving, setSaving] = useState(false);
+  const [expandedStudentGroups, setExpandedStudentGroups] = useState({});
 
   const [formData, setFormData] = useState({
     name: "",
@@ -183,9 +184,9 @@ export default function StudentManagement() {
 
   const stats = {
     total: students.length,
-    active: students.filter(s => s.is_active).length,
-    onboarded: students.filter(s => s.has_completed_onboarding).length,
-    inactive: students.filter(s => !s.is_active).length
+    assignedToGroups: students.filter(s => s.group_names && s.group_names.length > 0).length,
+    notAssigned: students.filter(s => !s.group_names || s.group_names.length === 0).length,
+    active: students.filter(s => s.is_active).length
   };
 
   return (
@@ -233,23 +234,34 @@ export default function StudentManagement() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Total Users</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total}</p>
             </div>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Admins</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">1</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">In Groups</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.assignedToGroups}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Not Assigned</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.notAssigned}</p>
             </div>
           </div>
         </div>
@@ -259,18 +271,7 @@ export default function StudentManagement() {
               <Users className="w-5 h-5 text-teal-600 dark:text-teal-400" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Teachers</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.onboarded}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.active}</p>
             </div>
           </div>
@@ -323,7 +324,35 @@ export default function StudentManagement() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">-</p>
+                      {student.group_names && student.group_names.length > 0 ? (
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md font-medium">
+                              {student.group_names[0]}
+                            </span>
+                            {student.group_names.length > 1 && (
+                              <button
+                                onClick={() => setExpandedStudentGroups(prev => ({ ...prev, [student.id]: !prev[student.id] }))}
+                                className="text-xs px-1.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center gap-0.5"
+                              >
+                                +{student.group_names.length - 1}
+                                {expandedStudentGroups[student.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                            )}
+                          </div>
+                          {expandedStudentGroups[student.id] && student.group_names.length > 1 && (
+                            <div className="mt-1.5 flex flex-col gap-1">
+                              {student.group_names.slice(1).map((gn, i) => (
+                                <span key={i} className="text-sm px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md font-medium w-fit">
+                                  {gn}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500 italic">No groups assigned</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-600 dark:text-gray-300">
