@@ -23,6 +23,8 @@ export default function BookManagement() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [pineconeStats, setPineconeStats] = useState(null);
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
+  const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedClasses, setExpandedClasses] = useState({});
@@ -45,6 +47,7 @@ export default function BookManagement() {
   useEffect(() => {
     fetchHierarchicalStructure();
     fetchPineconeStats();
+    fetchCurriculumSubjects();
   }, []);
 
   const fetchHierarchicalStructure = async () => {
@@ -62,6 +65,27 @@ export default function BookManagement() {
       if (response.ok) setPineconeStats((await response.json()).stats);
     } catch (err) { console.error(err); }
   };
+
+  const fetchCurriculumSubjects = async () => {
+    setLoadingCurriculum(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
+      if (response.ok) {
+        const data = await response.json();
+        setCurriculumSubjects(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Error fetching curriculum subjects:", error);
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
+
+  // Generate class-subject options from curriculum
+  const classSubjectOptions = curriculumSubjects.map(subj => ({
+    value: `${subj.class_level}-${subj.subject_name}`,
+    label: `Class ${subj.class_level} - ${subj.subject_name}`
+  })).sort((a, b) => a.label.localeCompare(b.label));
 
   const toggleSubject = (subject) => setExpandedSubjects(prev => ({ ...prev, [subject]: !prev[subject] }));
   const toggleClass = (subject, classLevel) => setExpandedClasses(prev => ({ ...prev, [`${subject}-${classLevel}`]: !prev[`${subject}-${classLevel}`] }));
@@ -312,7 +336,13 @@ export default function BookManagement() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class & Subject *</label>
                 <select value={uploadForm.classSubject} onChange={(e) => setUploadForm({ ...uploadForm, classSubject: e.target.value })}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
-                  {getCombinedClassSubjectOptions().map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  {loadingCurriculum ? (
+                    <option disabled>Loading...</option>
+                  ) : classSubjectOptions.length === 0 ? (
+                    <option disabled>No subjects found</option>
+                  ) : (
+                    classSubjectOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                  )}
                 </select>
               </div>
               <div>

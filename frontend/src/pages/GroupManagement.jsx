@@ -17,6 +17,8 @@ export default function GroupManagement() {
     const [teachers, setTeachers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
     const [showAddGroup, setShowAddGroup] = useState(false);
     const [showAssignStudents, setShowAssignStudents] = useState(false);
@@ -40,6 +42,7 @@ export default function GroupManagement() {
         fetchGroups();
         fetchTeachers();
         fetchAvailableStudents();
+        fetchCurriculumSubjects();
     }, []);
 
     // Auto-refresh on window focus
@@ -80,6 +83,31 @@ export default function GroupManagement() {
             if (response.ok) setAvailableStudents(await response.json());
         } catch (err) { console.error(err); }
     };
+
+    const fetchCurriculumSubjects = async () => {
+        setLoadingCurriculum(true);
+        try {
+            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+                headers: getAuthHeader()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCurriculumSubjects(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error("Error fetching curriculum subjects:", error);
+        } finally {
+            setLoadingCurriculum(false);
+        }
+    };
+
+    // Generate class-subject options from curriculum
+    const classSubjectOptions = React.useMemo(() => {
+        return curriculumSubjects.map(subj => ({
+            value: `${subj.class_level}-${subj.subject_name}`,
+            label: `Class ${subj.class_level} - ${subj.subject_name}`
+        })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [curriculumSubjects]);
 
     const handleCreateGroup = async (e) => {
         e.preventDefault();
@@ -425,7 +453,13 @@ export default function GroupManagement() {
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                                     >
                                         <option value="">Select Class & Subject</option>
-                                        {getCombinedClassSubjectOptions().map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                        {loadingCurriculum ? (
+                                            <option disabled>Loading...</option>
+                                        ) : classSubjectOptions.length === 0 ? (
+                                            <option disabled>No subjects found</option>
+                                        ) : (
+                                            classSubjectOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                                        )}
                                     </select>
                                 </div>
                                 <div>

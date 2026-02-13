@@ -15,7 +15,10 @@ import {
     BarChart3,
     CheckCircle,
     Calendar,
-    Users
+    Users,
+    FileText,
+    MessageCircle,
+    GraduationCap
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import useCourseStore from "../stores/courseStore";
@@ -35,12 +38,14 @@ export default function StudentDashboard() {
     });
     const [recentGrades, setRecentGrades] = useState([]);
     const [groups, setGroups] = useState([]);
+    const [subjects, setSubjects] = useState([]);
 
     useEffect(() => {
         fetchEnrolledCourses();
         fetchStudentStats();
         fetchRecentGrades();
         fetchGroups();
+        fetchSubjects();
     }, []);
 
     const fetchGroups = async () => {
@@ -90,6 +95,20 @@ export default function StudentDashboard() {
         }
     };
 
+    const fetchSubjects = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/student/my-subjects`, {
+                headers: getAuthHeader()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSubjects(data.subjects || []);
+            }
+        } catch (err) {
+            console.error("Subjects error:", err);
+        }
+    };
+
     const quickActions = [
         {
             title: "My Courses",
@@ -97,6 +116,13 @@ export default function StudentDashboard() {
             icon: BookOpen,
             color: "bg-blue-500",
             onClick: () => navigate("/my-courses")
+        },
+        {
+            title: "My Groups",
+            description: "View your groups",
+            icon: Users,
+            color: "bg-indigo-500",
+            onClick: () => navigate("/my-groups")
         },
         {
             title: "My Grades",
@@ -113,11 +139,32 @@ export default function StudentDashboard() {
             onClick: () => navigate("/my-tests")
         },
         {
+            title: "Book to Bot",
+            description: "AI-powered learning",
+            icon: BookOpen,
+            color: "bg-orange-500",
+            onClick: () => navigate("/book-to-bot")
+        },
+        {
             title: "Notes",
             description: "AI-powered notes",
             icon: BarChart3,
             color: "bg-amber-500",
             onClick: () => navigate("/notes")
+        },
+        {
+            title: "Help & Support",
+            description: "Get help from staff",
+            icon: MessageCircle,
+            color: "bg-rose-500",
+            onClick: () => navigate("/support-tickets")
+        },
+        {
+            title: "Statistics",
+            description: "View your stats",
+            icon: TrendingUp,
+            color: "bg-cyan-500",
+            onClick: () => navigate("/report-card")
         }
     ];
 
@@ -184,7 +231,15 @@ export default function StudentDashboard() {
 
                 {/* My Groups */}
                 <section className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4">My Groups</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-semibold">My Groups</h2>
+                        <button
+                            onClick={() => navigate("/my-groups")}
+                            className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+                        >
+                            View All <ChevronRight size={16} />
+                        </button>
+                    </div>
                     {groups.length === 0 ? (
                         <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 text-center text-gray-400">
                             <Users size={32} className="mx-auto mb-2 opacity-50" />
@@ -193,24 +248,83 @@ export default function StudentDashboard() {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {groups.map(group => (
-                                <div key={group.id} className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-blue-500/50 transition-colors">
+                                <div
+                                    key={group.id}
+                                    onClick={() => navigate("/my-groups")}
+                                    className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-blue-500/50 transition-colors cursor-pointer"
+                                >
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="bg-blue-500/10 p-2 rounded-lg">
                                             <Users size={20} className="text-blue-400" />
                                         </div>
                                         {group.teacher && (
                                             <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">
+                                                <GraduationCap size={12} className="inline mr-1" />
                                                 {group.teacher.name}
                                             </span>
                                         )}
                                     </div>
                                     <h3 className="font-semibold text-lg text-white mb-1">{group.name}</h3>
-                                    <p className="text-sm text-gray-400 line-clamp-2">{group.description}</p>
+                                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                                        {group.subject && (
+                                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded text-xs">
+                                                {group.subject}
+                                            </span>
+                                        )}
+                                        {group.class_level && (
+                                            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-xs">
+                                                Class {group.class_level}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {group.description && (
+                                        <p className="text-sm text-gray-400 line-clamp-2 mt-2">{group.description}</p>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     )}
                 </section>
+
+                {/* My Subjects */}
+                {subjects.length > 0 && (
+                    <section className="mb-8">
+                        <h2 className="text-xl font-semibold mb-4">My Subjects</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {subjects.map(subject => (
+                                <div key={subject.id} className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="bg-emerald-500/10 p-2 rounded-lg">
+                                            <BookOpen size={20} className="text-emerald-400" />
+                                        </div>
+                                        <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">
+                                            Class {subject.class_level}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-semibold text-lg text-white mb-1">{subject.subject_name}</h3>
+                                    <p className="text-sm text-gray-400">
+                                        {subject.total_chapters} chapter{subject.total_chapters !== 1 ? 's' : ''}
+                                    </p>
+                                    {subject.chapters && subject.chapters.length > 0 && (
+                                        <div className="mt-3 space-y-1">
+                                            {subject.chapters.slice(0, 3).map((ch, idx) => (
+                                                <div key={idx} className="text-xs text-gray-500 flex items-center gap-1">
+                                                    <FileText size={10} />
+                                                    Ch {ch.chapter_number}: {ch.title}
+                                                </div>
+                                            ))}
+                                            {subject.chapters.length > 3 && (
+                                                <div className="text-xs text-blue-400">
+                                                    +{subject.chapters.length - 3} more
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Recent Grades */}

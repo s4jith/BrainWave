@@ -201,12 +201,43 @@ async def create_question(
         # RBAC: Teacher can only create for their subjects
         if current_user.role == UserRole.TEACHER:
             from app.db.mongo import db
+            
+            # Get teacher's user document
             user = db.users.find_one({"user_id": current_user.user_id})
             if not user:
                 raise HTTPException(status_code=401, detail="User data not found")
-                
-            if question.subject not in user.get("subjects", []):
-                 raise HTTPException(status_code=403, detail="You can only create questions for your allocated subjects")
+            
+            # Teachers are assigned to groups, not directly to subjects
+            # Get subjects from teacher's groups
+            teacher_id_str = str(user["_id"])
+            match_values = [current_user.user_id, teacher_id_str]
+            
+            groups = list(db.groups.find({
+                "$or": [
+                    {"teacher_id": {"$in": match_values}},
+                    {"teacher_ids": {"$in": match_values}}
+                ]
+            }))
+            
+            # Extract unique subjects from groups
+            teacher_subjects = set()
+            for group in groups:
+                if "subject" in group:
+                    teacher_subjects.add(group["subject"].lower())
+            
+            # If teacher has no groups, deny access
+            if not teacher_subjects:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You are not assigned to any groups. Please contact admin."
+                )
+            
+            # Check if question subject matches any of teacher's group subjects (case-insensitive)
+            if question.subject.lower() not in teacher_subjects:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"You can only create questions for your allocated subjects: {', '.join(teacher_subjects)}"
+                )
 
         # Force status to 'pending' for manual creation based on user request?
         # "even the admin or staff logout it need to be waited in created section for approval"

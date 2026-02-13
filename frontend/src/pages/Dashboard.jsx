@@ -49,7 +49,7 @@ const quickActions = [
     color: "bg-orange-600",
     bgColor: "bg-orange-50",
     textColor: "text-orange-600",
-    route: "/test"
+    route: "/my-tests"
   },
   {
     id: 2,
@@ -63,6 +63,16 @@ const quickActions = [
   },
   {
     id: 3,
+    title: "My Groups",
+    description: "View your assigned groups, teachers and upcoming tests",
+    icon: Users,
+    color: "bg-orange-500",
+    bgColor: "bg-orange-50",
+    textColor: "text-orange-600",
+    route: "/my-groups"
+  },
+  {
+    id: 4,
     title: "AI Helper",
     description: "Get instant answers and explanations from our AI assistant",
     icon: MessageCircle,
@@ -163,63 +173,96 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch available subjects for this student's class
+  // Fetch available subjects from curriculum API for this student's class
   const fetchAvailableSubjects = async () => {
     try {
-      console.log(`📚 Fetching subjects for class ${user.classLevel || 10}`);
-      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}&student_id=${user.id}`);
+      const classLevel = user.classLevel || 10;
+      console.log(`📚 Fetching subjects for class ${classLevel}`);
+      
+      // Try curriculum API first
+      const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true&class_level=${classLevel}`);
       if (response.ok) {
         const data = await response.json();
-        console.log("📚 Subjects API response:", data);
-
-        // API returns {subjects: [...], class_level}
-        const subjectList = data.subjects || [];
-
+        const subjectList = Array.isArray(data) ? data : [];
+        
         if (subjectList.length === 0) {
-          console.log("📚 No subjects found for this class level");
+          console.log("📚 No subjects found in curriculum for this class level, trying books API");
+          // Fallback: try books API
+          await fetchSubjectsFromBooks();
           return;
         }
 
-        // Map subjects to course cards with icons
+        // Map curriculum subjects to course cards with icons
         const iconMap = {
-          'Physics': BookOpen,
-          'Chemistry': BarChart3,
-          'Mathematics': BarChart3,
-          'Hindi': Target,
-          'English': FileText,
-          'Social Science': Users,
-          'Biology': Heart,
-          'Science': BookOpen,
-          'Maths': BarChart3
+          'Physics': BookOpen, 'Chemistry': BarChart3, 'Mathematics': BarChart3,
+          'Hindi': Target, 'English': FileText, 'Social Science': Users,
+          'Biology': Heart, 'Science': BookOpen, 'Maths': BarChart3
         };
         const colorMap = {
-          'Physics': 'bg-orange-100 text-orange-700',
-          'Chemistry': 'bg-orange-200 text-orange-800',
-          'Mathematics': 'bg-orange-100 text-orange-600',
-          'Hindi': 'bg-orange-50 text-orange-500',
-          'English': 'bg-orange-100 text-orange-700',
-          'Social Science': 'bg-orange-300 text-orange-900',
-          'Biology': 'bg-orange-100 text-orange-600',
-          'Science': 'bg-orange-200 text-orange-700',
+          'Physics': 'bg-orange-100 text-orange-700', 'Chemistry': 'bg-orange-200 text-orange-800',
+          'Mathematics': 'bg-orange-100 text-orange-600', 'Hindi': 'bg-orange-50 text-orange-500',
+          'English': 'bg-orange-100 text-orange-700', 'Social Science': 'bg-orange-300 text-orange-900',
+          'Biology': 'bg-orange-100 text-orange-600', 'Science': 'bg-orange-200 text-orange-700',
+          'Maths': 'bg-orange-100 text-orange-600'
+        };
+
+        const mappedCourses = subjectList.map((s, i) => ({
+          id: i + 1,
+          title: s.subject_name || s.name,
+          watched: 0,
+          total: s.chapters?.filter(ch => ch.is_active !== false)?.length || 1,
+          icon: iconMap[s.subject_name] || BookOpen,
+          color: colorMap[s.subject_name] || 'bg-gray-100 text-gray-600'
+        }));
+
+        console.log("📚 Mapped curriculum courses:", mappedCourses);
+        setDynamicCourses(mappedCourses);
+      } else {
+        // Fallback to books API
+        await fetchSubjectsFromBooks();
+      }
+    } catch (err) {
+      console.error("📚 Failed to fetch subjects:", err);
+      await fetchSubjectsFromBooks();
+    }
+  };
+
+  // Fallback: fetch subjects from books API  
+  const fetchSubjectsFromBooks = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}&student_id=${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        const subjectList = data.subjects || [];
+
+        if (subjectList.length === 0) return;
+
+        const iconMap = {
+          'Physics': BookOpen, 'Chemistry': BarChart3, 'Mathematics': BarChart3,
+          'Hindi': Target, 'English': FileText, 'Social Science': Users,
+          'Biology': Heart, 'Science': BookOpen, 'Maths': BarChart3
+        };
+        const colorMap = {
+          'Physics': 'bg-orange-100 text-orange-700', 'Chemistry': 'bg-orange-200 text-orange-800',
+          'Mathematics': 'bg-orange-100 text-orange-600', 'Hindi': 'bg-orange-50 text-orange-500',
+          'English': 'bg-orange-100 text-orange-700', 'Social Science': 'bg-orange-300 text-orange-900',
+          'Biology': 'bg-orange-100 text-orange-600', 'Science': 'bg-orange-200 text-orange-700',
           'Maths': 'bg-orange-100 text-orange-600'
         };
 
         const mappedCourses = subjectList.map((s, i) => ({
           id: i + 1,
           title: s.name || s.subject || s.namespace,
-          watched: s.chapters_completed || 0,  // Default to 0 for new students
-          total: s.total_chapters || 1,  // Use dynamic from API
+          watched: s.chapters_completed || 0,
+          total: s.total_chapters || 1,
           icon: iconMap[s.name] || BookOpen,
           color: colorMap[s.name] || 'bg-gray-100 text-gray-600'
         }));
 
-        console.log("📚 Mapped courses:", mappedCourses);
         setDynamicCourses(mappedCourses);
-      } else {
-        console.error("📚 Failed to fetch subjects:", response.status);
       }
     } catch (err) {
-      console.error("📚 Failed to fetch subjects:", err);
+      console.error("📚 Failed to fetch subjects from books:", err);
     }
   };
 
@@ -365,7 +408,7 @@ export default function Dashboard() {
                 <h3 className="text-lg font-semibold text-gray-800">Quick Actions</h3>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {quickActions.map(item => (
                   <div
                     key={item.id}

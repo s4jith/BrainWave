@@ -17,7 +17,9 @@ import {
   StickyNote,
   Calendar,
   Award,
-  ClipboardCheck
+  ClipboardCheck,
+  Users,
+  MessageCircle
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import ChatbotPanel from "./ChatbotPanel";
@@ -42,6 +44,12 @@ const navItems = [
     label: "My Courses",
     icon: GraduationCap,
     path: "/my-courses"
+  },
+  {
+    id: "groups",
+    label: "My Groups",
+    icon: Users,
+    path: "/my-groups"
   },
   {
     id: "grades",
@@ -74,6 +82,12 @@ const navItems = [
     icon: BarChart3,
     path: "/report-card",
     badge: "PRO"
+  },
+  {
+    id: "support",
+    label: "Help & Support",
+    icon: MessageCircle,
+    path: "/support-tickets"
   },
   {
     id: "about-you",

@@ -50,22 +50,35 @@ export default function CreateTest() {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
+  const [mainFormCurriculumSubjects, setMainFormCurriculumSubjects] = useState([]); // Curriculum subjects for main form
+  const [loadingMainFormCurriculum, setLoadingMainFormCurriculum] = useState(true);
 
-  // Generate combined options from user's groups
+  // Generate combined options from user's groups or curriculum subjects
   const combinedOptions = React.useMemo(() => {
-    if (!groups || groups.length === 0) return getCombinedClassSubjectOptions();
+    // If groups exist (teacher with assigned groups), use them
+    if (groups && groups.length > 0) {
+      return groups.map(group => ({
+        value: group.name,  // Use group name as value
+        label: group.name,  // Display group name
+        class: group.class_level,
+        subject: group.subject
+      })).sort((a, b) => {
+        if (a.class !== b.class) return a.class - b.class;
+        return a.subject.localeCompare(b.subject);
+      });
+    }
     
-    // Use group names directly as options
-    return groups.map(group => ({
-      value: group.name,  // Use group name as value
-      label: group.name,  // Display group name
-      class: group.class_level,
-      subject: group.subject
+    // Otherwise use curriculum subjects from database
+    return mainFormCurriculumSubjects.map(subj => ({
+      value: `${subj.class_level}-${subj.subject_name}`,
+      label: `Class ${subj.class_level} - ${subj.subject_name}`,
+      class: subj.class_level,
+      subject: subj.subject_name
     })).sort((a, b) => {
       if (a.class !== b.class) return a.class - b.class;
       return a.subject.localeCompare(b.subject);
     });
-  }, [groups]);
+  }, [groups, mainFormCurriculumSubjects]);
 
   // Helper to find group name from class and subject
   const getGroupNameValue = React.useCallback((classLevel, subject) => {
@@ -132,8 +145,16 @@ export default function CreateTest() {
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [testSubjects, setTestSubjects] = useState([]);  // For Test Details tab
 
+  // Curriculum data for question modal
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+  const [questionCurrSubject, setQuestionCurrSubject] = useState(null); // full subject detail
+  const [loadingCurriculum, setLoadingCurriculum] = useState(true);
+  const [loadingCurrDetail, setLoadingCurrDetail] = useState(false);
+
   useEffect(() => {
     fetchGroupsAndStudents();
+    fetchCurriculumSubjects();
+    fetchMainFormCurriculumSubjects();
     if (isEditMode) {
       fetchTestDetails();
     } else {
@@ -141,6 +162,80 @@ export default function CreateTest() {
       fetchTestSubjectsForClass(formData.class_level, false);
     }
   }, [testId]);
+
+  const fetchCurriculumSubjects = async () => {
+    setLoadingCurriculum(true);
+    try {
+      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
+      if (response.ok) {
+        const data = await response.json();
+        setCurriculumSubjects(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch curriculum:", err);
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
+
+  const fetchMainFormCurriculumSubjects = async () => {
+    setLoadingMainFormCurriculum(true);
+    try {
+      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+        headers: getAuthHeader()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMainFormCurriculumSubjects(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Error fetching curriculum subjects for main form:", error);
+    } finally {
+      setLoadingMainFormCurriculum(false);
+    }
+  };
+
+  // Fetch curriculum subject details when question modal subject/class changes
+  useEffect(() => {
+    if (!showQuestionModal || !questionForm.subject || !questionForm.class_level) {
+      setQuestionCurrSubject(null);
+      return;
+    }
+    
+    const subjectId = `${questionForm.subject.toLowerCase().replace(/\s+/g, '_')}_${questionForm.class_level}`;
+    const fetchDetail = async () => {
+      setLoadingCurrDetail(true);
+      try {
+        const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setQuestionCurrSubject(data);
+        } else {
+          setQuestionCurrSubject(null);
+        }
+      } catch (err) {
+        setQuestionCurrSubject(null);
+      } finally {
+        setLoadingCurrDetail(false);
+      }
+    };
+    fetchDetail();
+  }, [showQuestionModal, questionForm.subject, questionForm.class_level]);
+
+  // Derived: chapters and topics for question modal
+  const questionChapters = questionCurrSubject?.chapters?.filter(ch => ch.is_active !== false) || [];
+  const questionSelectedChapter = questionChapters.find(ch => ch.chapter_number === questionForm.chapter);
+  const questionTopics = questionSelectedChapter?.topics?.filter(t => t.is_active !== false) || [];
+
+  // Unique curriculum subject names and class levels
+  const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
+  const currClassLevels = [...new Set(
+    curriculumSubjects
+      .filter(s => s.subject_name === questionForm.subject)
+      .map(s => s.class_level)
+  )].sort((a, b) => a - b);
+  // All available class levels from curriculum (not subject-specific)
+  const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
   const fetchTestDetails = async () => {
     console.log("Fetching details for:", testId);
@@ -461,7 +556,10 @@ export default function CreateTest() {
   const openAddQuestion = () => {
     setQuestionForm({
       class_level: 10,
-      subject: "",  // Will be set by useEffect when subjects are fetched
+      subject: "",
+      chapter: "",
+      chapter_name: "",
+      topic: "",
       marks: 1,
       type: "mcq",
       text: "",
@@ -619,14 +717,18 @@ export default function CreateTest() {
                 <select
                   value={getGroupNameValue(formData.class_level, formData.subject)}
                   onChange={(e) => {
-                    const groupName = e.target.value;
-                    if (!groupName) {
+                    const value = e.target.value;
+                    if (!value) {
                       setFormData({ ...formData, class_level: null, subject: '' });
                       return;
                     }
                     
-                    // Parse group name to get class and subject
-                    const parsed = parseGroupName(groupName);
+                    // Parse: try group name format first, then combined value format
+                    let parsed = parseGroupName(value);
+                    if (!parsed.class) {
+                      // Not a group name, try combined value format (e.g., "10-Maths")
+                      parsed = parseCombinedValue(value);
+                    }
                     if (parsed.class && parsed.subject) {
                       setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
                       fetchTestSubjectsForClass(parsed.class, true);
@@ -636,10 +738,10 @@ export default function CreateTest() {
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                 >
                   <option value="">Select Class & Subject</option>
-                  {loadingGroups ? (
+                  {(loadingGroups || loadingMainFormCurriculum) ? (
                     <option disabled>Loading...</option>
                   ) : combinedOptions.length === 0 ? (
-                    <option disabled>No groups assigned</option>
+                    <option disabled>No subjects available</option>
                   ) : (
                     combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
                   )}
@@ -949,35 +1051,101 @@ export default function CreateTest() {
 
             {/* Modal Body */}
             <div className="p-4 space-y-4">
-              {/* Class and Subject Combined */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class & Subject</label>
-                <select
-                  value={getGroupNameValue(questionForm.class_level, questionForm.subject)}
-                  onChange={(e) => {
-                    const groupName = e.target.value;
-                    if (!groupName) {
-                      setQuestionForm(prev => ({ ...prev, class_level: null, subject: '' }));
-                      return;
-                    }
-                    
-                    // Parse group name to get class and subject
-                    const parsed = parseGroupName(groupName);
-                    if (parsed.class && parsed.subject) {
-                      setQuestionForm(prev => ({ ...prev, class_level: parsed.class, subject: parsed.subject }));
-                    }
-                  }}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                >
-                  <option value="">Select Class & Subject</option>
-                  {loadingGroups ? (
-                    <option disabled>Loading...</option>
-                  ) : combinedOptions.length === 0 ? (
-                    <option disabled>No groups assigned</option>
+              {/* Subject and Class */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject <span className="text-red-500">*</span></label>
+                  {loadingCurriculum ? (
+                    <div className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 text-sm">Loading subjects...</div>
                   ) : (
-                    combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                    <select
+                      value={questionForm.subject}
+                      onChange={(e) => {
+                        setQuestionForm(prev => ({ ...prev, subject: e.target.value, chapter: "", chapter_name: "", topic: "" }));
+                        setQuestionCurrSubject(null);
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select Subject</option>
+                      {currSubjectNames.length > 0 ? (
+                        currSubjectNames.map(s => <option key={s} value={s}>{s}</option>)
+                      ) : (
+                        SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)
+                      )}
+                    </select>
                   )}
-                </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class <span className="text-red-500">*</span></label>
+                  <select
+                    value={questionForm.class_level}
+                    onChange={(e) => {
+                      setQuestionForm(prev => ({ ...prev, class_level: parseInt(e.target.value), chapter: "", chapter_name: "", topic: "" }));
+                      setQuestionCurrSubject(null);
+                    }}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select Class</option>
+                    {(currClassLevels.length > 0 ? currClassLevels : allAvailableClassLevels).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Chapter and Topic */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chapter <span className="text-red-500">*</span></label>
+                  {loadingCurrDetail ? (
+                    <div className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 text-sm">Loading chapters...</div>
+                  ) : (
+                    <select
+                      value={questionForm.chapter}
+                      onChange={(e) => {
+                        const chNum = parseInt(e.target.value);
+                        const ch = questionChapters.find(c => c.chapter_number === chNum);
+                        setQuestionForm(prev => ({
+                          ...prev,
+                          chapter: chNum || "",
+                          chapter_name: ch?.chapter_name || "",
+                          topic: ""
+                        }));
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select Chapter</option>
+                      {questionChapters.length > 0 ? (
+                        questionChapters.map(ch => (
+                          <option key={ch.chapter_number} value={ch.chapter_number}>
+                            Ch {ch.chapter_number}: {ch.chapter_name}
+                          </option>
+                        ))
+                      ) : (
+                        <option disabled>{questionForm.subject && questionForm.class_level ? "No chapters – add in Subjects page" : "Select subject & class first"}</option>
+                      )}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Topic <span className="text-red-500">*</span></label>
+                  <select
+                    value={questionForm.topic}
+                    onChange={(e) => setQuestionForm(prev => ({ ...prev, topic: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select Topic</option>
+                    {questionTopics.length > 0 ? (
+                      questionTopics.map(t => (
+                        <option key={t.topic_id} value={t.topic_name}>
+                          {t.topic_name}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>{questionForm.chapter ? "No topics – add in Subjects page" : "Select chapter first"}</option>
+                    )}
+                  </select>
+                </div>
               </div>
 
               {/* Marks */}

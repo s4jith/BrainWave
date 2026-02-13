@@ -18,16 +18,15 @@ import {
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import useCourseStore from "../stores/courseStore";
+import DashboardLayout from "../components/dashboard/DashboardLayout";
 
 export default function MyCourses() {
     const navigate = useNavigate();
     const { user, isTeacher, isAdmin } = useUserStore();
     const {
         courses,
-        enrolledCourses,
         myCourses,
         fetchCourses,
-        fetchEnrolledCourses,
         fetchMyCourses,
         enrollInCourse,
         loading,
@@ -40,17 +39,15 @@ export default function MyCourses() {
     const isInstructor = isTeacher() || isAdmin();
 
     useEffect(() => {
-        if (isInstructor) {
-            fetchMyCourses();
-        } else {
-            fetchEnrolledCourses();
-            fetchCourses(); // For browsing
+        fetchMyCourses();
+        if (!isInstructor) {
+            fetchCourses(); // For browsing all
         }
     }, []);
 
     const displayedCourses = isInstructor
         ? myCourses
-        : (activeTab === "enrolled" ? enrolledCourses : courses);
+        : (activeTab === "enrolled" ? myCourses : courses);
 
     const filteredCourses = displayedCourses?.filter(course =>
         course.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -59,18 +56,19 @@ export default function MyCourses() {
 
     const handleEnroll = async (courseId) => {
         await enrollInCourse(courseId);
-        fetchEnrolledCourses();
+        fetchMyCourses();
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white">
+        <DashboardLayout>
+        <div className="min-h-screen bg-white">
             {/* Header */}
-            <header className="bg-gray-800/50 border-b border-gray-700 px-6 py-4">
+            <header className="border-b border-gray-200 px-6 py-4">
                 <div className="max-w-6xl mx-auto">
-                    <h1 className="text-2xl font-bold">
+                    <h1 className="text-2xl font-bold text-gray-900">
                         {isInstructor ? "My Courses" : "Courses"}
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1">
+                    <p className="text-gray-500 text-sm mt-1">
                         {isInstructor
                             ? "Manage and view your created courses"
                             : "Browse and access your learning materials"
@@ -89,17 +87,17 @@ export default function MyCourses() {
                             placeholder="Search courses..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white border border-gray-300 rounded-lg pl-10 pr-4 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500"
                         />
                     </div>
 
                     {!isInstructor && (
-                        <div className="flex bg-gray-800 rounded-lg p-1">
+                        <div className="flex bg-gray-100 rounded-lg p-1">
                             <button
                                 onClick={() => setActiveTab("enrolled")}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "enrolled"
-                                        ? "bg-blue-600 text-white"
-                                        : "text-gray-400 hover:text-white"
+                                        ? "bg-orange-500 text-white"
+                                        : "text-gray-500 hover:text-gray-800"
                                     }`}
                             >
                                 My Courses
@@ -107,8 +105,8 @@ export default function MyCourses() {
                             <button
                                 onClick={() => setActiveTab("browse")}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "browse"
-                                        ? "bg-blue-600 text-white"
-                                        : "text-gray-400 hover:text-white"
+                                        ? "bg-orange-500 text-white"
+                                        : "text-gray-500 hover:text-gray-800"
                                     }`}
                             >
                                 Browse All
@@ -119,7 +117,7 @@ export default function MyCourses() {
                     {isInstructor && (
                         <button
                             onClick={() => navigate("/course-builder")}
-                            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center gap-2"
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                         >
                             <BookOpen size={18} />
                             Create Course
@@ -130,25 +128,25 @@ export default function MyCourses() {
                 {/* Loading State */}
                 {loading && (
                     <div className="flex justify-center py-12">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
                     </div>
                 )}
 
                 {/* Error State */}
                 {error && (
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 mb-6">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 mb-6">
                         {error}
                     </div>
                 )}
 
                 {/* Empty State */}
                 {!loading && filteredCourses.length === 0 && (
-                    <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
-                        <GraduationCap size={48} className="mx-auto text-gray-600 mb-4" />
-                        <h3 className="text-lg font-medium mb-2">
+                    <div className="bg-gray-50 rounded-xl border border-gray-200 p-12 text-center">
+                        <GraduationCap size={48} className="mx-auto text-gray-400 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
                             {activeTab === "browse" ? "No courses available" : "No courses yet"}
                         </h3>
-                        <p className="text-gray-400 mb-4">
+                        <p className="text-gray-500 mb-4">
                             {isInstructor
                                 ? "Create your first course to get started"
                                 : activeTab === "enrolled"
@@ -159,14 +157,14 @@ export default function MyCourses() {
                         {isInstructor ? (
                             <button
                                 onClick={() => navigate("/course-builder")}
-                                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
                             >
                                 Create Course
                             </button>
                         ) : activeTab === "enrolled" && (
                             <button
                                 onClick={() => setActiveTab("browse")}
-                                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
                             >
                                 Browse Courses
                             </button>
@@ -181,7 +179,7 @@ export default function MyCourses() {
                             <CourseCard
                                 key={course.id}
                                 course={course}
-                                isEnrolled={enrolledCourses?.some(c => c.id === course.id)}
+                                isEnrolled={myCourses?.some(c => c.id === course.id)}
                                 isInstructor={isInstructor}
                                 onEnroll={() => handleEnroll(course.id)}
                                 onView={() => navigate(`/courses/${course.id}`)}
@@ -193,18 +191,19 @@ export default function MyCourses() {
                 )}
             </main>
         </div>
+        </DashboardLayout>
     );
 }
 
 function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit, onGradebook }) {
     const statusColors = {
-        draft: "bg-yellow-500/20 text-yellow-400",
-        published: "bg-emerald-500/20 text-emerald-400",
-        archived: "bg-gray-500/20 text-gray-400"
+        draft: "bg-yellow-100 text-yellow-700",
+        published: "bg-emerald-100 text-emerald-700",
+        archived: "bg-gray-100 text-gray-500"
     };
 
     return (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden hover:border-blue-500/30 transition-all group">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-orange-300 hover:shadow-md transition-all group">
             {/* Cover Image */}
             {course.thumbnail_url ? (
                 <img
@@ -213,8 +212,8 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                     className="w-full h-36 object-cover"
                 />
             ) : (
-                <div className="w-full h-36 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center">
-                    <BookOpen size={40} className="text-white/50" />
+                <div className="w-full h-36 bg-gradient-to-br from-orange-400 via-orange-500 to-amber-500 flex items-center justify-center">
+                    <BookOpen size={40} className="text-white/60" />
                 </div>
             )}
 
@@ -226,11 +225,11 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                     </span>
                 )}
 
-                <h3 className="font-semibold text-lg mt-2 line-clamp-1">{course.title}</h3>
-                <p className="text-sm text-gray-400 line-clamp-2 mt-1">{course.description}</p>
+                <h3 className="font-semibold text-lg mt-2 line-clamp-1 text-gray-900">{course.title}</h3>
+                <p className="text-sm text-gray-500 line-clamp-2 mt-1">{course.description}</p>
 
                 {/* Meta Info */}
-                <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
+                <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                     <span className="flex items-center gap-1">
                         <Users size={14} />
                         {course.total_enrollments || 0}
@@ -243,7 +242,7 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                     )}
                     {course.average_rating > 0 && (
                         <span className="flex items-center gap-1">
-                            <Star size={14} className="text-yellow-400" />
+                            <Star size={14} className="text-yellow-500" />
                             {course.average_rating.toFixed(1)}
                         </span>
                     )}
@@ -255,13 +254,13 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                         <>
                             <button
                                 onClick={onEdit}
-                                className="flex-1 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition-colors"
+                                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm transition-colors"
                             >
                                 Edit
                             </button>
                             <button
                                 onClick={onGradebook}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition-colors"
+                                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-sm transition-colors"
                             >
                                 Gradebook
                             </button>
@@ -269,7 +268,7 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                     ) : isEnrolled ? (
                         <button
                             onClick={onView}
-                            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
+                            className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors"
                         >
                             <Play size={16} />
                             Continue Learning
@@ -277,7 +276,7 @@ function CourseCard({ course, isEnrolled, isInstructor, onEnroll, onView, onEdit
                     ) : (
                         <button
                             onClick={onEnroll}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg transition-colors"
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors"
                         >
                             Enroll Now
                         </button>

@@ -114,10 +114,11 @@ async def create_subject(request: CreateSubjectRequest):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Check if subject already exists for this class
+        # Check if active subject already exists for this class
         existing = await collection.find_one({
             "subject_name": request.subject_name,
-            "class_level": request.class_level
+            "class_level": request.class_level,
+            "is_active": True
         })
         
         if existing:
@@ -125,6 +126,48 @@ async def create_subject(request: CreateSubjectRequest):
                 status_code=400,
                 detail=f"Subject '{request.subject_name}' already exists for Class {request.class_level}"
             )
+        
+        # Check if there's an inactive subject - reactivate it instead
+        inactive_subject = await collection.find_one({
+            "subject_name": request.subject_name,
+            "class_level": request.class_level,
+            "is_active": False
+        })
+        
+        if inactive_subject:
+            # Reactivate the existing subject
+            subject_id = inactive_subject["subject_id"]
+            await collection.update_one(
+                {"subject_id": subject_id},
+                {
+                    "$set": {
+                        "is_active": True,
+                        "icon": request.icon or inactive_subject.get("icon", "📚"),
+                        "color": request.color or inactive_subject.get("color", "#3B82F6"),
+                        "description": request.description or inactive_subject.get("description", ""),
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✅ Reactivated subject: {request.subject_name} for Class {request.class_level}")
+            # Return the reactivated subject
+            updated_subject = await collection.find_one({"subject_id": subject_id})
+            subject_data = {
+                "subject_id": updated_subject["subject_id"],
+                "subject_name": updated_subject["subject_name"],
+                "class_level": updated_subject["class_level"],
+                "board": updated_subject.get("board", "CBSE"),
+                "description": updated_subject.get("description", ""),
+                "icon": updated_subject.get("icon", "📚"),
+                "color": updated_subject.get("color", "#3B82F6"),
+                "chapters": updated_subject.get("chapters", []),
+                "total_topics": sum(len(ch.get("topics", [])) for ch in updated_subject.get("chapters", [])),
+                "total_chapters": len(updated_subject.get("chapters", [])),
+                "is_active": updated_subject.get("is_active", True),
+                "created_at": updated_subject.get("created_at", datetime.utcnow()),
+                "updated_at": updated_subject.get("updated_at", datetime.utcnow())
+            }
+            return Subject(**subject_data)
         
         # Create subject document
         subject_id = f"{request.subject_name.lower().replace(' ', '_')}_{request.class_level}"

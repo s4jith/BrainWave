@@ -31,6 +31,7 @@ import StudentDashboard from "./pages/StudentDashboard";
 import MyCourses from "./pages/MyCourses";
 import TeacherManagement from "./pages/TeacherManagement";
 import GroupManagement from "./pages/GroupManagement";
+import StudentGroups from "./pages/StudentGroups";
 import AdminSettings from "./pages/AdminSettings";
 import AdminReports from "./pages/AdminReports";
 import TeacherGroups from "./pages/TeacherGroups";
@@ -477,12 +478,12 @@ function App() {
           }
         />
 
-        {/* Student Test Routes */}
+        {/* Student Groups */}
         <Route
-          path="/my-tests"
+          path="/my-groups"
           element={
             <ProtectedRoute>
-              <StudentTests />
+              <StudentGroups />
             </ProtectedRoute>
           }
         />

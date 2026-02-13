@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { X, Sparkles, Loader2, Plus, Trash } from "lucide-react";
 import useUserStore from "../stores/userStore";
 
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 /**
  * QuestionModal Component
  * Handles creating and editing questions (manual and AI).
@@ -18,7 +20,13 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    // Determine subject list based on role
+    // Curriculum data from API
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+    const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); // full subject detail obj
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true);
+    const [loadingSubjectDetail, setLoadingSubjectDetail] = useState(false);
+
+    // Determine subject list based on role (fallback for AI tab etc)
     const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : ["Mathematics", "Science", "English", "Hindi", "Social Science"]);
 
     // Load saved form defaults from localStorage
@@ -35,6 +43,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
         class_level: savedDefaults.class_level || 10,
         chapter: savedDefaults.chapter || 1,
+        chapter_name: "",
         topic: "",
         type: savedDefaults.type || "mcq",
         difficulty: savedDefaults.difficulty || "medium",
@@ -56,6 +65,75 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             advanced: { mcq: 0, fillup: 0, short_answer: 0, long_answer: 0 }
         }
     });
+
+    // Fetch curriculum subjects on mount
+    useEffect(() => {
+        const fetchCurriculum = async () => {
+            setLoadingCurriculum(true);
+            try {
+                const response = await fetch(`${apiUrl}/api/curriculum/subjects?is_active=true`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setCurriculumSubjects(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch curriculum:", err);
+            } finally {
+                setLoadingCurriculum(false);
+            }
+        };
+        fetchCurriculum();
+    }, []);
+
+    // Fetch subject details when subject+class changes (for chapters & topics)
+    // Uses the active tab's subject/class
+    const activeSubject = activeTab === 'ai' ? aiConfig.subject : formData.subject;
+    const activeClassLevel = activeTab === 'ai' ? aiConfig.class_level : formData.class_level;
+
+    useEffect(() => {
+        if (!activeSubject || !activeClassLevel) {
+            setSelectedCurrSubject(null);
+            return;
+        }
+
+        const subjectId = `${activeSubject.toLowerCase().replace(/\s+/g, '_')}_${activeClassLevel}`;
+        const fetchSubjectDetail = async () => {
+            setLoadingSubjectDetail(true);
+            try {
+                const response = await fetch(`${apiUrl}/api/curriculum/subjects/${subjectId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setSelectedCurrSubject(data);
+                } else {
+                    setSelectedCurrSubject(null);
+                }
+            } catch (err) {
+                setSelectedCurrSubject(null);
+            } finally {
+                setLoadingSubjectDetail(false);
+            }
+        };
+
+        fetchSubjectDetail();
+    }, [activeSubject, activeClassLevel]);
+
+    // Get chapters for current subject
+    const availableChapters = selectedCurrSubject?.chapters?.filter(ch => ch.is_active !== false) || [];
+
+    // Get topics for currently selected chapter
+    const selectedChapterObj = availableChapters.find(ch => ch.chapter_number === formData.chapter);
+    const availableTopics = selectedChapterObj?.topics?.filter(t => t.is_active !== false) || [];
+
+    // Get unique subject names from curriculum
+    const curriculumSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
+    // Get unique class levels for selected subject
+    const curriculumClassLevels = [...new Set(
+        curriculumSubjects
+            .filter(s => s.subject_name === activeSubject)
+            .map(s => s.class_level)
+    )].sort((a, b) => a - b);
+    // Get all available class levels from curriculum (not subject-specific)
+    const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
     useEffect(() => {
         if (question) {
@@ -220,45 +298,105 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         <form onSubmit={handleManualSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Subject</label>
+                                    <label className="block text-sm text-gray-400 mb-1">Subject <span className="text-red-400">*</span></label>
+                                    {loadingCurriculum ? (
+                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                            <Loader2 size={14} className="animate-spin" /> Loading subjects...
+                                        </div>
+                                    ) : (
+                                        <select
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            value={formData.subject}
+                                            onChange={e => {
+                                                setFormData({ ...formData, subject: e.target.value, chapter: "", chapter_name: "", topic: "" });
+                                                setSelectedCurrSubject(null);
+                                            }}
+                                            required
+                                        >
+                                            <option value="">Select Subject</option>
+                                            {curriculumSubjectNames.length > 0 ? (
+                                                curriculumSubjectNames.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))
+                                            ) : (
+                                                subjectList.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))
+                                            )}
+                                        </select>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
                                     <select
                                         className="w-full bg-gray-900 border border-gray-700 rounded p-2"
-                                        value={formData.subject}
-                                        onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                                        disabled={isTeacher} // Teacher locked to assigned? Maybe let them pick from assigned.
+                                        value={formData.class_level}
+                                        onChange={e => {
+                                            setFormData({ ...formData, class_level: parseInt(e.target.value), chapter: "", chapter_name: "", topic: "" });
+                                            setSelectedCurrSubject(null);
+                                        }}
+                                        required
                                     >
-                                        {subjectList.map(s => (
-                                            <option key={s} value={s}>{s}</option>
+                                        <option value="">Select Class</option>
+                                        {(curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels).map(c => (
+                                            <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Class</label>
+                                    <label className="block text-sm text-gray-400 mb-1">Chapter <span className="text-red-400">*</span></label>
+                                    {loadingSubjectDetail ? (
+                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                            <Loader2 size={14} className="animate-spin" /> Loading chapters...
+                                        </div>
+                                    ) : (
+                                        <select
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            value={formData.chapter}
+                                            onChange={e => {
+                                                const chNum = parseInt(e.target.value);
+                                                const ch = availableChapters.find(c => c.chapter_number === chNum);
+                                                setFormData({
+                                                    ...formData,
+                                                    chapter: chNum || "",
+                                                    chapter_name: ch?.chapter_name || "",
+                                                    topic: ""
+                                                });
+                                            }}
+                                            required
+                                        >
+                                            <option value="">Select Chapter</option>
+                                            {availableChapters.length > 0 ? (
+                                                availableChapters.map(ch => (
+                                                    <option key={ch.chapter_number} value={ch.chapter_number}>
+                                                        Ch {ch.chapter_number}: {ch.chapter_name}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option disabled>{formData.subject && formData.class_level ? "No chapters found – add in Subjects page" : "Select subject & class first"}</option>
+                                            )}
+                                        </select>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Topic <span className="text-red-400">*</span></label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
-                                        value={formData.class_level}
-                                        onChange={e => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
-                                    >
-                                        {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Chapter</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
-                                        value={formData.chapter}
-                                        onChange={e => setFormData({ ...formData, chapter: parseInt(e.target.value) })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Topic (Optional)</label>
-                                    <input
-                                        type="text"
                                         className="w-full bg-gray-900 border border-gray-700 rounded p-2"
                                         value={formData.topic}
                                         onChange={e => setFormData({ ...formData, topic: e.target.value })}
-                                    />
+                                        required
+                                    >
+                                        <option value="">Select Topic</option>
+                                        {availableTopics.length > 0 ? (
+                                            availableTopics.map(t => (
+                                                <option key={t.topic_id} value={t.topic_name}>
+                                                    {t.topic_name}
+                                                </option>
+                                            ))
+                                        ) : (
+                                            <option disabled>{formData.chapter ? "No topics found – add in Subjects page" : "Select chapter first"}</option>
+                                        )}
+                                    </select>
                                 </div>
                             </div>
 
@@ -369,35 +507,59 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         <div className="space-y-6">
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Subject</label>
-                                    <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
-                                        value={aiConfig.subject}
-                                        onChange={e => setAiConfig({ ...aiConfig, subject: e.target.value })}
-                                    >
-                                        {subjectList.map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                        ))}
-                                    </select>
+                                    <label className="block text-sm text-gray-400 mb-1">Subject <span className="text-red-400">*</span></label>
+                                    {loadingCurriculum ? (
+                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                            <Loader2 size={14} className="animate-spin" /> Loading...
+                                        </div>
+                                    ) : (
+                                        <select
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            value={aiConfig.subject}
+                                            onChange={e => setAiConfig({ ...aiConfig, subject: e.target.value, chapter: "" })}
+                                        >
+                                            <option value="">Select Subject</option>
+                                            {curriculumSubjectNames.length > 0 ? (
+                                                curriculumSubjectNames.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))
+                                            ) : (
+                                                subjectList.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))
+                                            )}
+                                        </select>
+                                    )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Class</label>
+                                    <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
                                     <select
                                         className="w-full bg-gray-900 border border-gray-700 rounded p-2"
                                         value={aiConfig.class_level}
-                                        onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value) })}
+                                        onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value), chapter: "" })}
                                     >
-                                        {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>{c}</option>)}
+                                        <option value="">Select Class</option>
+                                        {(curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels).map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Chapter Number</label>
-                                    <input
-                                        type="number"
+                                    <label className="block text-sm text-gray-400 mb-1">Chapter <span className="text-red-400">*</span></label>
+                                    <select
                                         className="w-full bg-gray-900 border border-gray-700 rounded p-2"
                                         value={aiConfig.chapter}
-                                        onChange={e => setAiConfig({ ...aiConfig, chapter: parseInt(e.target.value) })}
-                                    />
+                                        onChange={e => setAiConfig({ ...aiConfig, chapter: parseInt(e.target.value) || "" })}
+                                    >
+                                        <option value="">Select Chapter</option>
+                                        {availableChapters.length > 0 ? (
+                                            availableChapters.map(ch => (
+                                                <option key={ch.chapter_number} value={ch.chapter_number}>
+                                                    Ch {ch.chapter_number}: {ch.chapter_name}
+                                                </option>
+                                            ))
+                                        ) : (
+                                            <option disabled>Select subject & class first</option>
+                                        )}
+                                    </select>
                                 </div>
                             </div>
 

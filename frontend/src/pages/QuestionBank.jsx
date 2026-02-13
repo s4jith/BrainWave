@@ -15,12 +15,14 @@ const QuestionBank = () => {
     const [questions, setQuestions] = useState([]);
     const [subjects, setSubjects] = useState([]); // Dynamic subjects
     const [groups, setGroups] = useState([]); // User's groups
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
     const [loadingGroups, setLoadingGroups] = useState(true); // Loading state for groups
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true); // Loading state for curriculum
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-    // Generate combined options from user's groups (for teachers) or all combinations (for admin)
+    // Generate combined options from user's groups (for teachers) or curriculum subjects (for admin)
     const combinedOptions = React.useMemo(() => {
         if (isTeacher && groups.length > 0) {
             // Use group names directly as options
@@ -34,9 +36,17 @@ const QuestionBank = () => {
                 return a.subject.localeCompare(b.subject);
             });
         }
-        // Admin sees all combinations
-        return getCombinedClassSubjectOptions();
-    }, [isTeacher, groups]);
+        // Admin sees curriculum subjects from database
+        return curriculumSubjects.map(subj => ({
+            value: `${subj.class_level}-${subj.subject_name}`,
+            label: `Class ${subj.class_level} - ${subj.subject_name}`,
+            class: subj.class_level,
+            subject: subj.subject_name
+        })).sort((a, b) => {
+            if (a.class !== b.class) return a.class - b.class;
+            return a.subject.localeCompare(b.subject);
+        });
+    }, [isTeacher, groups, curriculumSubjects]);
 
     // Filters
     const [filters, setFilters] = useState({
@@ -57,6 +67,7 @@ const QuestionBank = () => {
 
     useEffect(() => {
         fetchSubjects();
+        fetchCurriculumSubjects();
         if (isTeacher) {
             fetchGroups();
         }
@@ -94,6 +105,23 @@ const QuestionBank = () => {
             }
         } catch (error) {
             console.error("Error fetching subjects:", error);
+        }
+    };
+
+    const fetchCurriculumSubjects = async () => {
+        setLoadingCurriculum(true);
+        try {
+            const response = await fetch(`${apiUrl}/api/curriculum/subjects`, {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCurriculumSubjects(data || []);
+            }
+        } catch (error) {
+            console.error("Error fetching curriculum subjects:", error);
+        } finally {
+            setLoadingCurriculum(false);
         }
     };
 
@@ -269,10 +297,10 @@ const QuestionBank = () => {
                         onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
                     >
                         <option value="">All Classes & Subjects</option>
-                        {isTeacher && loadingGroups ? (
+                        {(isTeacher ? loadingGroups : loadingCurriculum) ? (
                             <option disabled>Loading...</option>
-                        ) : isTeacher && combinedOptions.length === 0 ? (
-                            <option disabled>No groups assigned</option>
+                        ) : combinedOptions.length === 0 ? (
+                            <option disabled>{isTeacher ? "No groups assigned" : "No subjects found"}</option>
                         ) : (
                             combinedOptions.map(opt => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
