@@ -21,6 +21,7 @@ import TestManagement from "./pages/TestManagement";
 import StudentTests from "./pages/StudentTests";
 import Notes from "./pages/Notes";
 import BookManagement from "./pages/BookManagementHierarchical";
+import SubjectsManagement from "./pages/SubjectsManagement";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import CourseBuilder from "./pages/CourseBuilder";
 import AssessmentBuilder from "./pages/AssessmentBuilder";
@@ -52,7 +53,7 @@ function ProtectedRoute({ children }) {
   // Admin should only access admin routes
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -64,9 +65,9 @@ function ProtectedRoute({ children }) {
   if (user.role === "teacher") {
     const path = window.location.pathname;
     const teacherRoutes = [
-      "/staff-tests", "/teacher-dashboard", "/course-builder",
-      "/my-courses", "/courses/", "/support-tickets",
-      "/assessment-builder", "/assessments/"
+      "/staff-tests", "/teacher-dashboard", "/teacher-tests", "/course-builder",
+      "/my-courses", "/courses/", "/support-tickets", "/create-test",
+      "/assessment-builder", "/assessments/", "/question-bank"
     ];
     const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
     if (!isTeacherRoute) {
@@ -310,6 +311,14 @@ function App() {
           }
         />
         <Route
+          path="/create-test/:testId"
+          element={
+            <StaffRoute>
+              <CreateTest />
+            </StaffRoute>
+          }
+        />
+        <Route
           path="/test/edit/:testId"
           element={
             <StaffRoute>
@@ -330,6 +339,14 @@ function App() {
           element={
             <StaffRoute>
               <BookManagement />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/subjects-management"
+          element={
+            <StaffRoute>
+              <SubjectsManagement />
             </StaffRoute>
           }
         />

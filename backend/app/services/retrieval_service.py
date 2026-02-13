@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from app.utils.performance_logger import measure_latency, IntelOptimizedConfig
 from app.db.mongo import pinecone_db, pinecone_web_db, pinecone_llm_db
 from app.services.gemini_key_manager import gemini_key_manager
+from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
 import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class RetrievalConfig(IntelOptimizedConfig):
     description: str = "OPEA-style retrieval: Multi-index semantic search"
     
     # Retrieval settings
-    embedding_model: str = "models/text-embedding-004"
+    embedding_model: str = EMBEDDING_MODEL
     chunks_per_class: int = 5
     web_top_k: int = 10
     llm_top_k: int = 3
@@ -95,7 +96,7 @@ class RetrievalService:
     @measure_latency("embedding_generation")
     def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate embedding using Gemini text-embedding-004.
+        Generate embedding using Gemini gemini-embedding-001 via REST API.
         
         Args:
             text: Input text to embed
@@ -104,14 +105,12 @@ class RetrievalService:
             768-dimensional embedding vector
         """
         api_key = gemini_key_manager.get_available_key()
-        genai.configure(api_key=api_key)
         
-        result = genai.embed_content(
-            model=self.config.embedding_model,
-            content=text,
-            task_type="retrieval_query"
+        return _embed_rest(
+            text=text,
+            api_key=api_key,
+            task_type="RETRIEVAL_QUERY"
         )
-        return result['embedding']
     
     def get_namespace(self, subject: str) -> str:
         """Get Pinecone namespace for subject."""

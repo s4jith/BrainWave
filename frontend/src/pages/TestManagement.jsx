@@ -32,7 +32,15 @@ export default function TestManagement() {
 
   useEffect(() => {
     fetchTests();
-    fetchStats();
+  }, [filterClass, filterSubject, filterStatus]);
+
+  // Auto-refresh on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchTests();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [filterClass, filterSubject, filterStatus]);
 
   const fetchTests = async () => {
@@ -49,26 +57,43 @@ export default function TestManagement() {
 
       if (!response.ok) throw new Error("Failed to fetch tests");
       const data = await response.json();
-      setTests(data.assessments || []); // Handle { assessments: [], total: 0 } structure
+      const testsData = data.assessments || [];
+      setTests(testsData);
+      calculateStats(testsData);
     } catch (err) {
       console.error(err);
       setTests([]);
+      setStats({ total_tests: 0, active_tests: 0, total_submissions: 0, pending_review: 0 });
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStats = async () => {
-    // Stats endpoint might also need updating or removal if not available in assessments
-    // For now keeping catch block to avoid crash
-    try {
-      const response = await fetch(`${API_URL}/api/tests/stats/overview`, {
-        headers: getAuthHeader()
-      });
-      if (response.ok) setStats(await response.json());
-    } catch (err) {
-      console.error(err);
+  const calculateStats = (testsData) => {
+    if (!testsData || testsData.length === 0) {
+      setStats({ total_tests: 0, active_tests: 0, total_submissions: 0, pending_review: 0 });
+      return;
     }
+
+    const now = new Date();
+    let active_tests = 0;
+    let total_submissions = 0;
+    let pending_review = 0;
+
+    testsData.forEach(test => {
+      const status = getTestStatus(test);
+      if (status === 'active') active_tests++;
+      total_submissions += test.submission_count || 0;
+      // Count pending review (submitted but not graded)
+      // This would need actual submission data, for now using placeholder
+    });
+
+    setStats({
+      total_tests: testsData.length,
+      active_tests,
+      total_submissions,
+      pending_review // We'd need to fetch actual submission statuses for this
+    });
   };
 
   const fetchSubmissions = async (testId) => {
@@ -96,13 +121,34 @@ export default function TestManagement() {
 
   const handleDeleteTest = async (testId) => {
     if (!confirm("Delete this test and all submissions?")) return;
+    
+    // Optimistic update: Remove immediately from UI
+    const deletedTest = tests.find(t => t.id === testId);
+    const updatedTests = tests.filter(t => t.id !== testId);
+    setTests(updatedTests);
+    calculateStats(updatedTests);
+    if (selectedTest?.id === testId) {
+      setSelectedTest(null);
+      setSubmissions([]);
+    }
+    
     try {
-      const response = await fetch(`${API_URL}/api/tests/${testId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Failed");
-      setTests(tests.filter(t => t.id !== testId));
-      if (selectedTest?.id === testId) { setSelectedTest(null); setSubmissions([]); }
+      const response = await fetch(`${API_URL}/api/assessments/${testId}`, { 
+        method: "DELETE",
+        headers: getAuthHeader()
+      });
+      if (!response.ok) {
+        // Revert on failure
+        throw new Error("Failed to delete test");
+      }
     } catch (err) {
+      // Revert optimistic update
       alert("Error: " + err.message);
+      const revertedTests = [...updatedTests, deletedTest].sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      );
+      setTests(revertedTests);
+      calculateStats(revertedTests);
     }
   };
 
@@ -126,13 +172,30 @@ export default function TestManagement() {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getTestStatus = (test) => {
+    if (!test.start_datetime || !test.end_datetime) {
+      return test.status === 'published' ? 'active' : test.status;
+    }
+    
+    const now = new Date();
+    const start = new Date(test.start_datetime);
+    const end = new Date(test.end_datetime);
+    
+    if (now < start) return 'upcoming';
+    if (now > end) return 'completed';
+    return 'active';
+  };
+
+  const getStatusBadge = (testStatus) => {
     const styles = {
       active: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
       upcoming: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
-      closed: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+      completed: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300",
+      closed: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300",
+      published: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+      draft: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
     };
-    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.closed}`}>{status}</span>;
+    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[testStatus] || styles.closed}`}>{testStatus}</span>;
   };
 
   return (
@@ -209,7 +272,7 @@ export default function TestManagement() {
                     ${selectedTest?.id === test.id ? "border-gray-900 dark:border-white ring-1 ring-gray-900 dark:ring-white" : "border-gray-200 dark:border-gray-700"}`}>
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-medium text-gray-900 dark:text-white">{test.title}</h3>
-                    {getStatusBadge(test.status)}
+                    {getStatusBadge(getTestStatus(test))}
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
                     <p>Class {test.class_level} • {test.subject}</p>
@@ -239,15 +302,9 @@ export default function TestManagement() {
         <div className="lg:col-span-2">
           {selectedTest ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedTest.title}</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">Class {selectedTest.class_level} • {selectedTest.subject}</p>
-                </div>
-                <a href={`${API_URL}${selectedTest.pdf_url}`} target="_blank" rel="noopener noreferrer"
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 text-sm font-medium">
-                  <FileText className="w-4 h-4" /> View PDF
-                </a>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedTest.title}</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Class {selectedTest.class_level} • {selectedTest.subject}</p>
               </div>
               <h3 className="font-medium text-gray-900 dark:text-white mb-4">Submissions ({submissions.length})</h3>
               {loadingSubmissions ? (

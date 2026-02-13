@@ -173,30 +173,84 @@ async def get_analytics():
             "new_users_this_month": new_users_this_month
         }
         
-        # Test Statistics - Use test_sessions collection (where tests are actually stored)
+        # Test Statistics - Use BOTH old and new systems
+        # Old system: tests collection and test_sessions
+        # New system: assessments collection and submissions
+        
+        # Old collections
         test_sessions = db.get_collection("test_sessions")
-        total_tests_taken = test_sessions.count_documents({"status": "completed"})
-        tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
-        tests_this_week = test_sessions.count_documents({"completed_at": {"$gte": week_ago}})
-        
-        # Also check tests in progress
-        tests_in_progress = test_sessions.count_documents({"status": "in_progress"})
-        
-        # Calculate average score from test_sessions (score)
-        pipeline = [
-            {"$match": {"status": "completed", "score": {"$exists": True}}},
-            {"$group": {"_id": None, "avg_score": {"$avg": "$score"}}}
-        ]
-        avg_result = list(test_sessions.aggregate(pipeline))
-        average_score = round(avg_result[0]["avg_score"], 1) if avg_result and avg_result[0].get("avg_score") else 0
-        
-        # Pass rate (score >= 60%)
-        passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
-        pass_rate = round((passed / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
-        
-        # Question sets created
         tests_col = db.get_collection("tests")
-        total_tests_created = tests_col.count_documents({})
+        
+        # New collections
+        assessments_col = db.get_collection("assessments")
+        submissions_col = db.get_collection("submissions")
+        
+        # Total tests created (from both systems)
+        old_tests_created = tests_col.count_documents({})
+        new_tests_created = assessments_col.count_documents({})
+        total_tests_created = old_tests_created + new_tests_created
+        
+        # Total tests taken/completed (from both systems)
+        old_tests_taken = test_sessions.count_documents({"status": "completed"})
+        new_tests_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
+        total_tests_taken = old_tests_taken + new_tests_taken
+        
+        # Tests today (from both systems)
+        old_tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
+        new_tests_today = submissions_col.count_documents({
+            "submitted_at": {"$gte": today_start},
+            "status": {"$in": ["submitted", "graded"]}
+        })
+        tests_today = old_tests_today + new_tests_today
+        
+        # Tests this week (from both systems)
+        old_tests_week = test_sessions.count_documents({"completed_at": {"$gte": week_ago}})
+        new_tests_week = submissions_col.count_documents({
+            "submitted_at": {"$gte": week_ago},
+            "status": {"$in": ["submitted", "graded"]}
+        })
+        tests_this_week = old_tests_week + new_tests_week
+        
+        # Tests in progress (from both systems)
+        old_in_progress = test_sessions.count_documents({"status": "in_progress"})
+        new_in_progress = submissions_col.count_documents({"status": "in_progress"})
+        tests_in_progress = old_in_progress + new_in_progress
+        
+        # Calculate average score from both systems
+        # Old system scores
+        old_pipeline = [
+            {"$match": {"status": "completed", "score": {"$exists": True}}},
+            {"$group": {"_id": None, "avg_score": {"$avg": "$score"}, "count": {"$sum": 1}}}
+        ]
+        old_avg_result = list(test_sessions.aggregate(old_pipeline))
+        old_avg = old_avg_result[0] if old_avg_result else {"avg_score": 0, "count": 0}
+        
+        # New system scores (using percentage field)
+        new_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}, "percentage": {"$exists": True}}},
+            {"$group": {"_id": None, "avg_score": {"$avg": "$percentage"}, "count": {"$sum": 1}}}
+        ]
+        new_avg_result = list(submissions_col.aggregate(new_pipeline))
+        new_avg = new_avg_result[0] if new_avg_result else {"avg_score": 0, "count": 0}
+        
+        # Weighted average
+        total_count = old_avg["count"] + new_avg["count"]
+        if total_count > 0:
+            average_score = round(
+                (old_avg["avg_score"] * old_avg["count"] + new_avg["avg_score"] * new_avg["count"]) / total_count,
+                1
+            )
+        else:
+            average_score = 0
+        
+        # Pass rate (score >= 60%) from both systems
+        old_passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
+        new_passed = submissions_col.count_documents({
+            "status": {"$in": ["submitted", "graded"]}, 
+            "percentage": {"$gte": 60}
+        })
+        total_passed = old_passed + new_passed
+        pass_rate = round((total_passed / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
         
         test_stats = {
             "total_tests_created": total_tests_created,
@@ -209,7 +263,7 @@ async def get_analytics():
             "tests_this_week": tests_this_week
         }
         
-        # Activity Trend (last 14 days)
+        # Activity Trend (last 14 days) - Include both systems
         activity_trend = []
         for i in range(13, -1, -1):
             date = today_start - timedelta(days=i)
@@ -218,9 +272,16 @@ async def get_analytics():
             active_users = db.users.count_documents({
                 "last_login": {"$gte": date, "$lt": next_date}
             })
-            tests_taken = test_sessions.count_documents({
+            
+            # Tests taken from both systems
+            old_tests = test_sessions.count_documents({
                 "completed_at": {"$gte": date, "$lt": next_date}
             })
+            new_tests = submissions_col.count_documents({
+                "submitted_at": {"$gte": date, "$lt": next_date},
+                "status": {"$in": ["submitted", "graded"]}
+            })
+            tests_taken = old_tests + new_tests
             
             activity_trend.append({
                 "date": date.strftime("%Y-%m-%d"),
@@ -228,12 +289,28 @@ async def get_analytics():
                 "tests_taken": tests_taken
             })
         
-        # Subject-wise Performance
-        subject_pipeline = [
-            {"$match": {"status": "completed"}},
+        # Subject-wise Performance - From new assessments system primarily
+        # (Old system may not have consistent subject field)
+        subject_pipeline = []
+        
+        # Try to get from new submissions (linked to assessments with subjects)
+        # Note: assessment_id in submissions is stored as string, need to convert
+        new_subject_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}}},
+            {"$addFields": {
+                "assessment_oid": {"$toObjectId": "$assessment_id"}
+            }},
+            {"$lookup": {
+                "from": "assessments",
+                "localField": "assessment_oid",
+                "foreignField": "_id",
+                "as": "assessment"
+            }},
+            {"$unwind": {"path": "$assessment", "preserveNullAndEmptyArrays": True}},
+            {"$match": {"assessment.subject": {"$exists": True, "$ne": None}}},
             {"$group": {
-                "_id": "$subject",
-                "avg_score": {"$avg": "$score"},
+                "_id": "$assessment.subject",
+                "avg_score": {"$avg": "$percentage"},
                 "total_tests": {"$sum": 1},
                 "total_students": {"$addToSet": "$student_id"}
             }},
@@ -245,21 +322,74 @@ async def get_analytics():
                 "total_students": {"$size": "$total_students"}
             }}
         ]
-        subject_stats = list(test_sessions.aggregate(subject_pipeline))
         
-        # Top Performers
-        performer_pipeline = [
+        try:
+            subject_stats = list(submissions_col.aggregate(new_subject_pipeline))
+        except Exception as e:
+            # Fallback if aggregation fails
+            print(f"Subject stats aggregation error: {e}")
+            subject_stats = []
+        
+        # Top Performers - Combine both systems
+        # Get from new system
+        new_performer_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}}},
+            {"$group": {
+                "_id": "$student_id",
+                "avg_score": {"$avg": "$percentage"},
+                "tests_completed": {"$sum": 1}
+            }},
+            {"$match": {"tests_completed": {"$gte": 1}}}
+        ]
+        new_performers = list(submissions_col.aggregate(new_performer_pipeline))
+        
+        # Get from old system
+        old_performer_pipeline = [
             {"$match": {"status": "completed"}},
             {"$group": {
                 "_id": "$student_id",
                 "avg_score": {"$avg": "$score"},
                 "tests_completed": {"$sum": 1}
             }},
-            {"$match": {"tests_completed": {"$gte": 1}}},
-            {"$sort": {"avg_score": -1}},
-            {"$limit": 5}
+            {"$match": {"tests_completed": {"$gte": 1}}}
         ]
-        top_performers_raw = list(test_sessions.aggregate(performer_pipeline))
+        old_performers = list(test_sessions.aggregate(old_performer_pipeline))
+        
+        # Merge performers by student_id
+        performers_dict = {}
+        for p in new_performers:
+            student_id = str(p["_id"])
+            performers_dict[student_id] = {
+                "avg_score": p["avg_score"],
+                "tests_completed": p["tests_completed"]
+            }
+        
+        for p in old_performers:
+            student_id = str(p["_id"])
+            if student_id in performers_dict:
+                # Weighted average
+                existing = performers_dict[student_id]
+                total_tests = existing["tests_completed"] + p["tests_completed"]
+                weighted_avg = (
+                    existing["avg_score"] * existing["tests_completed"] +
+                    p["avg_score"] * p["tests_completed"]
+                ) / total_tests
+                performers_dict[student_id] = {
+                    "avg_score": weighted_avg,
+                    "tests_completed": total_tests
+                }
+            else:
+                performers_dict[student_id] = {
+                    "avg_score": p["avg_score"],
+                    "tests_completed": p["tests_completed"]
+                }
+        
+        # Sort and get top 5
+        top_performers_raw = sorted(
+            [{"_id": k, **v} for k, v in performers_dict.items()],
+            key=lambda x: x["avg_score"],
+            reverse=True
+        )[:5]
         
         top_performers = []
         for p in top_performers_raw:
@@ -271,19 +401,64 @@ async def get_analytics():
                 "tests_completed": p["tests_completed"]
             })
         
-        # Weak Students (low scores or inactive)
-        weak_pipeline = [
+        # Weak Students (low scores or inactive) - Combine both systems
+        # Get from new system
+        new_weak_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}}},
+            {"$group": {
+                "_id": "$student_id",
+                "avg_score": {"$avg": "$percentage"},
+                "tests_completed": {"$sum": 1}
+            }},
+            {"$match": {"avg_score": {"$lt": 50}}}
+        ]
+        new_weak = list(submissions_col.aggregate(new_weak_pipeline))
+        
+        # Get from old system
+        old_weak_pipeline = [
             {"$match": {"status": "completed"}},
             {"$group": {
                 "_id": "$student_id",
                 "avg_score": {"$avg": "$score"},
                 "tests_completed": {"$sum": 1}
             }},
-            {"$match": {"avg_score": {"$lt": 50}}},
-            {"$sort": {"avg_score": 1}},
-            {"$limit": 5}
+            {"$match": {"avg_score": {"$lt": 50}}}
         ]
-        weak_students_raw = list(test_sessions.aggregate(weak_pipeline))
+        old_weak = list(test_sessions.aggregate(old_weak_pipeline))
+        
+        # Merge weak students by student_id (same logic as performers)
+        weak_dict = {}
+        for w in new_weak:
+            student_id = str(w["_id"])
+            weak_dict[student_id] = {
+                "avg_score": w["avg_score"],
+                "tests_completed": w["tests_completed"]
+            }
+        
+        for w in old_weak:
+            student_id = str(w["_id"])
+            if student_id in weak_dict:
+                existing = weak_dict[student_id]
+                total_tests = existing["tests_completed"] + w["tests_completed"]
+                weighted_avg = (
+                    existing["avg_score"] * existing["tests_completed"] +
+                    w["avg_score"] * w["tests_completed"]
+                ) / total_tests
+                weak_dict[student_id] = {
+                    "avg_score": weighted_avg,
+                    "tests_completed": total_tests
+                }
+            else:
+                weak_dict[student_id] = {
+                    "avg_score": w["avg_score"],
+                    "tests_completed": w["tests_completed"]
+                }
+        
+        # Sort and get bottom 5
+        weak_students_raw = sorted(
+            [{"_id": k, **v} for k, v in weak_dict.items()],
+            key=lambda x: x["avg_score"]
+        )[:5]
         
         weak_students = []
         for w in weak_students_raw:
@@ -298,8 +473,9 @@ async def get_analytics():
                 "days_inactive": days_inactive
             })
         
-        # Recent Activities
-        recent_pipeline = [
+        # Recent Activities - Combine both systems
+        # Get from old system
+        old_recent_pipeline = [
             {"$match": {"status": "completed"}},
             {"$sort": {"completed_at": -1}},
             {"$limit": 10},
@@ -311,7 +487,42 @@ async def get_analytics():
                 "created_at": "$completed_at"
             }}
         ]
-        recent_activities_raw = list(test_sessions.aggregate(recent_pipeline))
+        old_recent = list(test_sessions.aggregate(old_recent_pipeline))
+        
+        # Get from new system
+        new_recent_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}}},
+            {"$sort": {"submitted_at": -1}},
+            {"$limit": 10},
+            {"$addFields": {
+                "assessment_oid": {"$toObjectId": "$assessment_id"}
+            }},
+            {"$lookup": {
+                "from": "assessments",
+                "localField": "assessment_oid",
+                "foreignField": "_id",
+                "as": "assessment"
+            }},
+            {"$unwind": {"path": "$assessment", "preserveNullAndEmptyArrays": True}},
+            {"$project": {
+                "_id": 0,
+                "student_id": 1,
+                "subject": "$assessment.subject",
+                "score": "$percentage",
+                "created_at": "$submitted_at"
+            }}
+        ]
+        
+        try:
+            new_recent = list(submissions_col.aggregate(new_recent_pipeline))
+        except Exception as e:
+            print(f"Recent activities aggregation error: {e}")
+            new_recent = []
+        
+        # Combine and sort by date, take top 10
+        all_recent = old_recent + new_recent
+        all_recent.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
+        recent_activities_raw = all_recent[:10]
         
         # Serialize recent_activities and look up student names
         recent_activities = []

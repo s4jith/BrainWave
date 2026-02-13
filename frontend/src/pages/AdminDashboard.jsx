@@ -26,6 +26,15 @@ export default function AdminDashboard() {
     fetchAnalytics();
   }, []);
 
+  // Auto-refresh on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchAnalytics();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   const fetchAnalytics = async () => {
     try {
       setLoading(true);

@@ -21,7 +21,7 @@ class GeminiService:
         logger.info(f"🔑 Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
         
         # Initialize embedding model
-        self.embedding_model = 'models/text-embedding-004'
+        self.embedding_model = 'models/gemini-embedding-001'
     
     def _get_model_with_available_key(self, retry_count: int = 0):
         """
@@ -78,17 +78,17 @@ class GeminiService:
             Embedding vector (list of floats)
         """
         try:
-            # Configure API key before embedding generation
+            # Use REST API for embedding generation
             from app.services.gemini_key_manager import gemini_key_manager
-            api_key = gemini_key_manager.get_available_key()
-            genai.configure(api_key=api_key)
+            from app.utils.embedding_helper import generate_embedding as _embed_rest
             
-            result = genai.embed_content(
-                model=self.embedding_model,
-                content=text,
-                task_type="retrieval_query"
+            api_key = gemini_key_manager.get_available_key()
+            
+            return _embed_rest(
+                text=text,
+                api_key=api_key,
+                task_type="RETRIEVAL_QUERY"
             )
-            return result['embedding']
         
         except Exception as e:
             logger.error(f"❌ Embedding generation failed: {e}")

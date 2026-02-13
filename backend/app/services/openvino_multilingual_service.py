@@ -237,18 +237,16 @@ class OpenVinoMultilingualService:
     def _fallback_embedding(self, text: str) -> List[float]:
         """Fallback to Gemini embeddings when OpenVINO unavailable."""
         try:
-            import google.generativeai as genai
             from app.services.gemini_key_manager import gemini_key_manager
+            from app.utils.embedding_helper import generate_embedding as _embed_rest
             
             api_key = gemini_key_manager.get_available_key()
-            genai.configure(api_key=api_key)
             
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_query"
+            return _embed_rest(
+                text=text,
+                api_key=api_key,
+                task_type="RETRIEVAL_QUERY"
             )
-            return result['embedding']
         except Exception as e:
             logger.error(f"Fallback embedding failed: {e}")
             return [0.0] * 768  # Return zero vector

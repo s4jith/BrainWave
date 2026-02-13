@@ -38,6 +38,15 @@ export default function StudentManagement() {
     fetchStudents();
   }, [filterActive, filterClass]);
 
+  // Auto-refresh on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchStudents();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [filterActive, filterClass]);
+
   const fetchStudents = async () => {
     try {
       setLoading(true);
@@ -59,6 +68,22 @@ export default function StudentManagement() {
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
+    
+    // Create optimistic student with temporary ID
+    const tempId = `temp_${Date.now()}`;
+    const optimisticStudent = {
+      id: tempId,
+      ...formData,
+      is_active: true,
+      groups: [],
+      group_names: [],
+      created_at: new Date().toISOString()
+    };
+    
+    // Add optimistically
+    setStudents([optimisticStudent, ...students]);
+    setShowAddModal(false);
+    
     try {
       setSaving(true);
       const response = await fetch(`${API_URL}/api/admin/students`, {
@@ -71,14 +96,19 @@ export default function StudentManagement() {
         throw new Error(err.detail || "Failed to add student");
       }
       const newStudent = await response.json();
+      
+      // Replace temp student with real one
+      setStudents(prev => prev.map(s => s.id === tempId ? newStudent : s));
+      
       if (newStudent.generated_credentials) {
         setNewCredentials(newStudent.generated_credentials);
         setShowCredentialsModal(true);
       }
-      setStudents([newStudent, ...students]);
-      setShowAddModal(false);
       resetForm();
     } catch (err) {
+      // Remove optimistic student on error
+      setStudents(prev => prev.filter(s => s.id !== tempId));
+      setShowAddModal(true);
       alert("Error: " + err.message);
     } finally {
       setSaving(false);
@@ -109,14 +139,23 @@ export default function StudentManagement() {
 
   const handleDeleteStudent = async (studentId) => {
     if (!confirm("Are you sure you want to delete this student?")) return;
+    
+    // Optimistic update
+    const deletedStudent = students.find(s => s.id === studentId);
+    const updatedStudents = students.filter(s => s.id !== studentId);
+    setStudents(updatedStudents);
+    
     try {
       const response = await fetch(`${API_URL}/api/admin/students/${studentId}`, {
         method: "DELETE"
       });
-      if (!response.ok) throw new Error("Failed to delete student");
-      setStudents(students.filter(s => s.id !== studentId));
+      if (!response.ok) {
+        throw new Error("Failed to delete student");
+      }
     } catch (err) {
+      // Revert on failure
       alert("Error: " + err.message);
+      setStudents([...updatedStudents, deletedStudent]);
     }
   };
 

@@ -10,6 +10,7 @@ import {
   BookOpen, Upload, Trash2, Database, Loader2, Plus, ChevronDown, ChevronRight,
   RefreshCw, CheckCircle, FileText, Layers, Book, GraduationCap, FileQuestion
 } from "lucide-react";
+import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -32,7 +33,11 @@ export default function BookManagement() {
   const [deleting, setDeleting] = useState(false);
 
   const [uploadForm, setUploadForm] = useState({
-    title: "", subject: "Mathematics", class_level: 6, chapter_number: 1, description: "", pdf_file: null
+    title: "",
+    classSubject: "6-Mathematics",  // Combined class-subject
+    chapter_number: 1,
+    description: "",
+    pdf_file: null
   });
 
   const subjects = ["Mathematics", "Science", "Physics", "Chemistry", "Biology", "Social Science", "English", "Hindi"];
@@ -66,12 +71,20 @@ export default function BookManagement() {
     if (!uploadForm.pdf_file) return alert("Please select a PDF file");
     if (!uploadForm.title.trim()) return alert("Please enter a title");
 
+    const { class: classLevel, subject } = parseCombinedValue(uploadForm.classSubject);
+    if (!classLevel || !subject) return alert("Please select class and subject");
+
     setUploading(true);
     setUploadProgress({ stage: "uploading", message: "Uploading...", percent: 10 });
 
     try {
       const formData = new FormData();
-      Object.entries(uploadForm).forEach(([k, v]) => formData.append(k, v));
+      formData.append('title', uploadForm.title);
+      formData.append('subject', subject);
+      formData.append('class_level', classLevel);
+      formData.append('chapter_number', uploadForm.chapter_number);
+      formData.append('description', uploadForm.description);
+      formData.append('pdf_file', uploadForm.pdf_file);
       formData.append("generate_embeddings", "true");
 
       setUploadProgress({ stage: "processing", message: "Processing...", percent: 30 });
@@ -82,7 +95,7 @@ export default function BookManagement() {
         setUploadProgress({ stage: "complete", message: "Done!", percent: 100 });
         alert("Chapter uploaded successfully!");
         setShowUploadModal(false);
-        setUploadForm({ title: "", subject: "Mathematics", class_level: 6, chapter_number: 1, description: "", pdf_file: null });
+        setUploadForm({ title: "", classSubject: "6-Mathematics", chapter_number: 1, description: "", pdf_file: null });
         setUploadProgress(null);
         fetchHierarchicalStructure();
         fetchPineconeStats();
@@ -296,26 +309,17 @@ export default function BookManagement() {
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject *</label>
-                <select value={uploadForm.subject} onChange={(e) => setUploadForm({ ...uploadForm, subject: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class & Subject *</label>
+                <select value={uploadForm.classSubject} onChange={(e) => setUploadForm({ ...uploadForm, classSubject: e.target.value })}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
-                  {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  {getCombinedClassSubjectOptions().map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class Level *</label>
-                  <select value={uploadForm.class_level} onChange={(e) => setUploadForm({ ...uploadForm, class_level: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
-                    {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Chapter Number *</label>
-                  <input type="number" min="1" max="30" value={uploadForm.chapter_number}
-                    onChange={(e) => setUploadForm({ ...uploadForm, chapter_number: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white" required />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Chapter Number *</label>
+                <input type="number" min="1" max="30" value={uploadForm.chapter_number}
+                  onChange={(e) => setUploadForm({ ...uploadForm, chapter_number: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white" required />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">PDF File *</label>
@@ -348,34 +352,35 @@ export default function BookManagement() {
 
       {/* Delete Modal */}
       {showDeleteModal && deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full border dark:border-gray-700">
-            <div className="bg-red-600 text-white p-6 rounded-t-2xl">
-              <h2 className="text-xl font-bold flex items-center gap-3"><Trash2 className="w-5 h-5" /> Confirm Deletion</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                <p className="text-red-800 dark:text-red-300 text-sm">This action cannot be undone.</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Type <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-red-600 dark:text-red-400">{getDeleteConfirmationText()}</code> to confirm:
-                </label>
-                <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-mono" />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setShowDeleteModal(false)} disabled={deleting}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300">Cancel</button>
-                <button onClick={handleDelete} disabled={deleting || deleteConfirmText !== getDeleteConfirmationText()}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-                  {deleting ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</> : <><Trash2 className="w-4 h-4" /> Delete</>}
-                </button>
-              </div>
-            </div>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full border dark:border-gray-700">
+        <div className="bg-red-600 text-white p-6 rounded-t-2xl">
+          <h2 className="text-xl font-bold flex items-center gap-3"><Trash2 className="w-5 h-5" /> Confirm Deletion</h2>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-red-800 dark:text-red-300 text-sm">This action cannot be undone.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Type <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-red-600 dark:text-red-400">{getDeleteConfirmationText()}</code> to confirm:
+            </label>
+            <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-mono" />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={() => setShowDeleteModal(false)} disabled={deleting}
+              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300">Cancel</button>
+            <button onClick={handleDelete} disabled={deleting || deleteConfirmText !== getDeleteConfirmationText()}
+              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+              {deleting ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</> : <><Trash2 className="w-4 h-4" /> Delete</>}
+            </button>
           </div>
         </div>
-      )}
-    </AdminLayout>
+      </div>
+    </div>
+  )
+}
+    </AdminLayout >
   );
 }

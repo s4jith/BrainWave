@@ -34,11 +34,18 @@ import numpy as np
 # Intel OpenVINO OCR (replaces Tesseract for Intel optimization)
 from app.services.openvino_ocr_service import get_openvino_ocr_service
 
-# Google Gemini for embeddings and image understanding
+# Google Gemini for image understanding
 import google.generativeai as genai
 
 # Pinecone
 from pinecone import Pinecone
+
+# Direct REST API embedding helper (bypasses broken genai.embed_content)
+from app.utils.embedding_helper import (
+    generate_embedding as _generate_embedding_rest,
+    generate_embeddings_batch as _generate_embeddings_batch_rest,
+    EMBEDDING_MODEL
+)
 
 from app.core.config import settings
 
@@ -108,8 +115,8 @@ class AdvancedPDFProcessor:
         # Initialize Gemini
         genai.configure(api_key=settings.GEMINI_API_KEY)
         
-        # Gemini models - Updated to use latest available models
-        self.embedding_model = "models/text-embedding-004"
+        # Gemini models
+        self.embedding_model = EMBEDDING_MODEL  # gemini-embedding-001 via REST API
         self.vision_model = genai.GenerativeModel("gemini-2.5-flash")  
         
         # Circuit breaker flag for Vision API
@@ -652,32 +659,30 @@ class PineconeEmbeddingUploader:
     
     def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate embedding using Gemini text-embedding-004.
+        Generate embedding using Gemini gemini-embedding-001 via REST API.
+        Returns 768-dimensional vector for Pinecone compatibility.
         """
         try:
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_document"
+            return _generate_embedding_rest(
+                text=text,
+                api_key=settings.GEMINI_API_KEY,
+                task_type="RETRIEVAL_DOCUMENT"
             )
-            return result['embedding']
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             raise
 
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for a batch of texts using Gemini.
-        Optimized to reduce API calls.
+        Generate embeddings for a batch of texts using Gemini REST API.
+        Uses batch endpoint for efficiency.
         """
         try:
-            # Gemini supports batching via list of content
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=texts,
-                task_type="retrieval_document"
+            return _generate_embeddings_batch_rest(
+                texts=texts,
+                api_key=settings.GEMINI_API_KEY,
+                task_type="RETRIEVAL_DOCUMENT"
             )
-            return result['embedding']
         except Exception as e:
             logger.warning(f"Batch embedding failed, falling back to single: {e}")
             # Fallback to single generation
@@ -686,7 +691,7 @@ class PineconeEmbeddingUploader:
                 try:
                     embeddings.append(self.generate_embedding(text))
                 except Exception:
-                    embeddings.append([]) # Handle individual failures
+                    embeddings.append([])  # Handle individual failures
             return embeddings
     
     def upload_chunks(

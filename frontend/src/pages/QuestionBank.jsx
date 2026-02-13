@@ -4,6 +4,7 @@ import { Copy, Edit, Trash2, Plus, Filter, Search, RotateCcw } from "lucide-reac
 import AdminLayout from "../components/AdminLayout";
 import QuestionModal from "../components/QuestionModal";
 import useUserStore from "../stores/userStore";
+import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
 
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
@@ -13,14 +14,33 @@ const QuestionBank = () => {
     const [activeTab, setActiveTab] = useState("bank"); // "bank" or "approvals"
     const [questions, setQuestions] = useState([]);
     const [subjects, setSubjects] = useState([]); // Dynamic subjects
+    const [groups, setGroups] = useState([]); // User's groups
+    const [loadingGroups, setLoadingGroups] = useState(true); // Loading state for groups
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
 
+    // Generate combined options from user's groups (for teachers) or all combinations (for admin)
+    const combinedOptions = React.useMemo(() => {
+        if (isTeacher && groups.length > 0) {
+            // Use group names directly as options
+            return groups.map(group => ({
+                value: group.name,  // Use group name as value
+                label: group.name,  // Display group name
+                class: group.class_level,
+                subject: group.subject
+            })).sort((a, b) => {
+                if (a.class !== b.class) return a.class - b.class;
+                return a.subject.localeCompare(b.subject);
+            });
+        }
+        // Admin sees all combinations
+        return getCombinedClassSubjectOptions();
+    }, [isTeacher, groups]);
+
     // Filters
     const [filters, setFilters] = useState({
-        subject: "",
-        class_level: "",
+        groupName: "",  // Group name filter (for teachers) or class-subject (for admins)
         type: "",
         difficulty: "",
         search: ""
@@ -37,11 +57,31 @@ const QuestionBank = () => {
 
     useEffect(() => {
         fetchSubjects();
+        if (isTeacher) {
+            fetchGroups();
+        }
     }, []);
 
     useEffect(() => {
         fetchQuestions();
     }, [pagination.page, filters, activeTab]);
+
+    const fetchGroups = async () => {
+        setLoadingGroups(true);
+        try {
+            const response = await fetch(`${apiUrl}/api/teacher/groups`, {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setGroups(data.groups || []);
+            }
+        } catch (error) {
+            console.error("Error fetching groups:", error);
+        } finally {
+            setLoadingGroups(false);
+        }
+    };
 
     const fetchSubjects = async () => {
         try {
@@ -61,12 +101,37 @@ const QuestionBank = () => {
         setLoading(true);
         try {
             const status = activeTab === "approvals" ? "pending" : "approved";
+            
+            // Parse filter value
+            let classLevel = null;
+            let subject = null;
+            
+            if (filters.groupName) {
+                if (isTeacher && groups.length > 0) {
+                    // For teachers, groupName is the actual group name
+                    const parsed = parseGroupName(filters.groupName);
+                    classLevel = parsed.class;
+                    subject = parsed.subject;
+                } else {
+                    // For admins, it's the combined value format
+                    const parsed = parseCombinedValue(filters.groupName);
+                    classLevel = parsed.class;
+                    subject = parsed.subject;
+                }
+            }
+            
             const queryParams = new URLSearchParams({
                 limit: pagination.limit,
                 offset: (pagination.page - 1) * pagination.limit,
-                status: status,
-                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+                status: status
             });
+            
+            // Add individual filters
+            if (classLevel) queryParams.append('class_level', classLevel);
+            if (subject) queryParams.append('subject', subject);
+            if (filters.type) queryParams.append('type', filters.type);
+            if (filters.difficulty) queryParams.append('difficulty', filters.difficulty);
+            if (filters.search) queryParams.append('search', filters.search);
 
             const response = await fetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
                 headers: {
@@ -186,7 +251,7 @@ const QuestionBank = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-gray-800 p-4 rounded-xl border border-gray-700">
                     <div className="relative">
                         <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                         <input
@@ -200,24 +265,19 @@ const QuestionBank = () => {
 
                     <select
                         className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
-                        value={filters.subject}
-                        onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
+                        value={filters.groupName}
+                        onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
                     >
-                        <option value="">All Subjects</option>
-                        {subjects.map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
-                    </select>
-
-                    <select
-                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
-                        value={filters.class_level}
-                        onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
-                    >
-                        <option value="">All Classes</option>
-                        {[6, 7, 8, 9, 10, 11, 12].map(c => (
-                            <option key={c} value={c}>Class {c}</option>
-                        ))}
+                        <option value="">All Classes & Subjects</option>
+                        {isTeacher && loadingGroups ? (
+                            <option disabled>Loading...</option>
+                        ) : isTeacher && combinedOptions.length === 0 ? (
+                            <option disabled>No groups assigned</option>
+                        ) : (
+                            combinedOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))
+                        )}
                     </select>
 
                     <select

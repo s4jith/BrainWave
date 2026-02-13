@@ -164,6 +164,30 @@ async def publish_assessment(
         raise HTTPException(status_code=500, detail="Failed to publish")
 
 
+@router.delete("/{assessment_id}")
+async def delete_assessment(
+    assessment_id: str,
+    current_user: TokenData = Depends(require_permission(Permission.DELETE_ASSESSMENT))
+):
+    """Delete an assessment and all related submissions."""
+    try:
+        success = await assessment_service.delete_assessment(
+            assessment_id=assessment_id,
+            instructor_id=current_user.user_id
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Assessment not found or access denied")
+        
+        return {"success": True, "message": "Assessment deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete assessment error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete assessment")
+
+
 # === Question Management ===
 
 @router.post("/{assessment_id}/questions", response_model=Question)

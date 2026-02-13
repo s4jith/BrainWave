@@ -260,12 +260,19 @@ class PineconeUploader:
             Embedding vector (768 dimensions)
         """
         try:
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_document"
-            )
-            return result['embedding']
+            import requests as req
+            api_key = os.getenv("GEMINI_API_KEY")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
+            payload = {
+                "model": "models/gemini-embedding-001",
+                "content": {"parts": [{"text": text}]},
+                "taskType": "RETRIEVAL_DOCUMENT",
+                "outputDimensionality": 768
+            }
+            resp = req.post(url, json=payload, timeout=30)
+            if resp.status_code != 200:
+                raise Exception(f"API error: {resp.text}")
+            return resp.json()["embedding"]["values"]
         except Exception as e:
             print(f"    ✗ Embedding error: {str(e)}")
             raise

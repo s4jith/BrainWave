@@ -35,6 +35,16 @@ export default function TeacherDashboard() {
         fetchGroups();
     }, []);
 
+    // Auto-refresh on window focus
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchDashboardStats();
+            fetchGroups();
+        };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+
     const fetchGroups = async () => {
         try {
             const response = await fetch(`${API_URL}/api/teacher/groups`, {

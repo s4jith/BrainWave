@@ -80,7 +80,7 @@ def setup_namespace_architecture():
             # Create master index
             pc.create_index(
                 name=MASTER_INDEX_NAME,
-                dimension=768,  # Gemini text-embedding-004
+                dimension=768,  # Gemini embedding-001
                 metric="cosine",
                 spec=ServerlessSpec(
                     cloud="aws",

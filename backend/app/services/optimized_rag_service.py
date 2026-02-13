@@ -327,18 +327,16 @@ class OptimizedRagService:
         # Fallback to Gemini (1 call)
         if self.config.fallback_to_gemini_embed:
             try:
-                import google.generativeai as genai
                 from app.services.gemini_key_manager import gemini_key_manager
+                from app.utils.embedding_helper import generate_embedding as _embed_rest
                 
                 api_key = gemini_key_manager.get_available_key()
-                genai.configure(api_key=api_key)
                 
-                result = genai.embed_content(
-                    model="models/text-embedding-004",
-                    content=text,
-                    task_type="retrieval_query"
+                embedding = _embed_rest(
+                    text=text,
+                    api_key=api_key,
+                    task_type="RETRIEVAL_QUERY"
                 )
-                embedding = result['embedding']
                 
                 api_tracker.record_call("embedding")
                 

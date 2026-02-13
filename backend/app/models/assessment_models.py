@@ -121,6 +121,7 @@ class AssessmentCreateRequest(BaseModel):
     start_datetime: Optional[str] = None
     end_datetime: Optional[str] = None
     student_ids: Optional[List[str]] = Field(default_factory=list)
+    group_ids: Optional[List[str]] = Field(default_factory=list, description="Group IDs assigned to this assessment")
     questions: Optional[List[dict]] = Field(default_factory=list)
     created_by: Optional[str] = None
 
@@ -135,6 +136,8 @@ class AssessmentUpdateRequest(BaseModel):
     available_from: Optional[datetime] = None
     status: Optional[AssessmentStatus] = None
     questions: Optional[List[dict]] = None # Allow updating questions via PUT
+    student_ids: Optional[List[str]] = None
+    group_ids: Optional[List[str]] = None
 
 
 class QuestionCreateRequest(BaseModel):
@@ -189,6 +192,8 @@ class AssessmentInDB(BaseModel):
     due_date: Optional[datetime] = None
     available_from: Optional[datetime] = None
     total_points: int = 0
+    student_ids: List[str] = Field(default_factory=list)
+    group_ids: List[str] = Field(default_factory=list, description="Group IDs assigned to this assessment")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -246,6 +251,9 @@ class AssessmentResponse(BaseModel):
     settings: AssessmentSettings
     due_date: Optional[datetime] = None
     available_from: Optional[datetime] = None
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+    submission_count: int = 0
     created_at: datetime
     
     # For students
@@ -258,6 +266,7 @@ class AssessmentDetailResponse(AssessmentResponse):
     """Detailed assessment response including questions."""
     questions: List[Question] = []
     student_ids: List[str] = []
+    group_ids: List[str] = Field(default_factory=list, description="Group IDs assigned to this assessment")
 
 
 class StudentAssessmentView(BaseModel):

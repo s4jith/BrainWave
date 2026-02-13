@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check } from "lucide-react";
+import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -31,8 +32,7 @@ export default function GroupManagement() {
 
     const [groupForm, setGroupForm] = useState({
         teacher_ids: [],
-        class_level: "",
-        subject: "",
+        classSubject: "",  // Combined class-subject
         batch_year: ""
     });
 
@@ -40,6 +40,16 @@ export default function GroupManagement() {
         fetchGroups();
         fetchTeachers();
         fetchAvailableStudents();
+    }, []);
+
+    // Auto-refresh on window focus
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchGroups();
+            fetchAvailableStudents();
+        };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
     }, []);
 
     const fetchGroups = async () => {
@@ -75,7 +85,30 @@ export default function GroupManagement() {
         e.preventDefault();
         if (groupForm.teacher_ids.length === 0) return alert("Please select at least one teacher for this group");
         if (selectedStudentIds.length === 0) return alert("Please select at least one student");
-        if (!groupForm.class_level || !groupForm.subject || !groupForm.batch_year) return alert("Please fill all required fields");
+        
+        const { class: classLevel, subject } = parseCombinedValue(groupForm.classSubject);
+        if (!classLevel || !subject || !groupForm.batch_year) return alert("Please fill all required fields");
+
+        // Create optimistic group
+        const tempId = `temp_${Date.now()}`;
+        const teacherNames = teachers
+            .filter(t => groupForm.teacher_ids.includes(t.id))
+            .map(t => t.name)
+            .join(", ");
+        const optimisticGroup = {
+            id: tempId,
+            class_level: classLevel,
+            subject: subject,
+            batch_year: parseInt(groupForm.batch_year),
+            teacher_ids: groupForm.teacher_ids,
+            teacher_name: teacherNames,
+            student_count: selectedStudentIds.length,
+            students: []
+        };
+        
+        // Add optimistically
+        setGroups([optimisticGroup, ...groups]);
+        setShowAddGroup(false);
 
         setSaving(true);
         try {
@@ -83,8 +116,8 @@ export default function GroupManagement() {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
-                    class_level: parseInt(groupForm.class_level),
-                    subject: groupForm.subject,
+                    class_level: classLevel,
+                    subject: subject,
                     batch_year: parseInt(groupForm.batch_year),
                     teacher_ids: groupForm.teacher_ids,
                     student_ids: selectedStudentIds
@@ -94,12 +127,16 @@ export default function GroupManagement() {
                 const err = await response.json();
                 throw new Error(err.detail || "Failed to create group");
             }
-            await response.json();
-            setShowAddGroup(false);
-            setGroupForm({ teacher_ids: [], class_level: "", subject: "", batch_year: "" });
+            const newGroup = await response.json();
+            
+            // Replace temp group with real one
+            setGroups(prev => prev.map(g => g.id === tempId ? newGroup : g));
+            setGroupForm({ teacher_ids: [], classSubject: "", batch_year: "" });
             setSelectedStudentIds([]);
-            fetchGroups();
         } catch (err) {
+            // Remove optimistic group on error
+            setGroups(prev => prev.filter(g => g.id !== tempId));
+            setShowAddGroup(true);
             alert("Error: " + err.message);
         } finally {
             setSaving(false);
@@ -150,16 +187,25 @@ export default function GroupManagement() {
 
     const handleDeleteGroup = async (groupId) => {
         if (!confirm("Are you sure you want to delete this group?")) return;
+        
+        // Optimistic update
+        const deletedGroup = groups.find(g => g.id === groupId);
+        const updatedGroups = groups.filter(g => g.id !== groupId);
+        setGroups(updatedGroups);
+        if (selectedGroup?.id === groupId) setSelectedGroup(null);
+        
         try {
             const response = await fetch(`${API_URL}/api/admin/groups/${groupId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
-            if (!response.ok) throw new Error("Failed to delete group");
-            setGroups(groups.filter(g => g.id !== groupId));
-            if (selectedGroup?.id === groupId) setSelectedGroup(null);
+            if (!response.ok) {
+                throw new Error("Failed to delete group");
+            }
         } catch (err) {
+            // Revert on failure
             alert("Error: " + err.message);
+            setGroups([...updatedGroups, deletedGroup]);
         }
     };
 
@@ -369,32 +415,17 @@ export default function GroupManagement() {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto border dark:border-gray-700">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New Group</h2>
                         <form onSubmit={handleCreateGroup} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class Level *</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class & Subject *</label>
                                     <select
                                         required
-                                        value={groupForm.class_level}
-                                        onChange={(e) => setGroupForm({ ...groupForm, class_level: parseInt(e.target.value) })}
+                                        value={groupForm.classSubject}
+                                        onChange={(e) => setGroupForm({ ...groupForm, classSubject: e.target.value })}
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                                     >
-                                        <option value="">Select Class</option>
-                                        {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject *</label>
-                                    <select
-                                        required
-                                        value={groupForm.subject}
-                                        onChange={(e) => setGroupForm({ ...groupForm, subject: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">Select Subject</option>
-                                        {/* Ideally fetch these from backend or constants. For now hardcode common ones */}
-                                        {["Mathematics", "Science", "English", "Hindi", "Social Science", "Physics", "Chemistry", "Biology", "Computer Science"].map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                        ))}
+                                        <option value="">Select Class & Subject</option>
+                                        {getCombinedClassSubjectOptions().map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -414,10 +445,12 @@ export default function GroupManagement() {
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                     Preview Name: <span className="font-medium text-gray-900 dark:text-white">
-                                        {groupForm.subject && groupForm.class_level && groupForm.batch_year
-                                            ? `${groupForm.subject}_Class${groupForm.class_level}_${groupForm.batch_year}`
-                                            : "Subject_Class_BatchYear"
-                                        }
+                                        {(() => {
+                                            const { class: classLevel, subject } = parseCombinedValue(groupForm.classSubject);
+                                            return (groupForm.classSubject && groupForm.batch_year)
+                                                ? `${subject}_Class${classLevel}_${groupForm.batch_year}`
+                                                : "Subject_Class_BatchYear";
+                                        })()}
                                     </span>
                                 </p>
                             </div>

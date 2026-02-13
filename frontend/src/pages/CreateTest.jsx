@@ -10,11 +10,9 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
 import QuestionBankSelector from "../components/QuestionBankSelector";
+import { SUBJECTS, CLASSES, getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-const SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Hindi", "Physics", "Chemistry", "Biology"];
-const CLASSES = [5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function CreateTest() {
   const navigate = useNavigate();
@@ -53,6 +51,69 @@ export default function CreateTest() {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
 
+  // Generate combined options from user's groups
+  const combinedOptions = React.useMemo(() => {
+    if (!groups || groups.length === 0) return getCombinedClassSubjectOptions();
+    
+    // Use group names directly as options
+    return groups.map(group => ({
+      value: group.name,  // Use group name as value
+      label: group.name,  // Display group name
+      class: group.class_level,
+      subject: group.subject
+    })).sort((a, b) => {
+      if (a.class !== b.class) return a.class - b.class;
+      return a.subject.localeCompare(b.subject);
+    });
+  }, [groups]);
+
+  // Helper to find group name from class and subject
+  const getGroupNameValue = React.useCallback((classLevel, subject) => {
+    if (!classLevel || !subject) return '';
+    const matchingOption = combinedOptions.find(opt => opt.class === classLevel && opt.subject === subject);
+    return matchingOption ? matchingOption.value : '';
+  }, [combinedOptions]);
+
+  // Filter groups by class and subject
+  const filteredGroups = React.useMemo(() => {
+    if (!formData.class_level) return groups;
+    
+    return groups.filter(g => {
+      const matchesClass = g.class_level === formData.class_level;
+      const matchesSubject = !formData.subject || g.subject === formData.subject;
+      return matchesClass && matchesSubject;
+    });
+  }, [groups, formData.class_level, formData.subject]);
+
+  // Get unique students from filtered groups
+  const groupStudents = React.useMemo(() => {
+    const studentMap = new Map();
+    filteredGroups.forEach(group => {
+      // Add students from the students array if available
+      if (group.students && Array.isArray(group.students)) {
+        group.students.forEach(student => {
+          if (student.id && !studentMap.has(student.id)) {
+            studentMap.set(student.id, student);
+          }
+        });
+      }
+    });
+    return Array.from(studentMap.values());
+  }, [filteredGroups]);
+
+  // Combine group students with individually fetched students
+  const displayedStudents = React.useMemo(() => {
+    const studentMap = new Map();
+    
+    // Add group students first
+    groupStudents.forEach(s => studentMap.set(s.id, s));
+    
+    // Add fetched students (they might overlap, which is fine)
+    students.forEach(s => studentMap.set(s.id, s));
+    
+    return Array.from(studentMap.values());
+  }, [groupStudents, students]);
+
   // Questions (for tab 2)
   const [questions, setQuestions] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -75,6 +136,9 @@ export default function CreateTest() {
     fetchGroupsAndStudents();
     if (isEditMode) {
       fetchTestDetails();
+    } else {
+      // In create mode, fetch subjects for the default class
+      fetchTestSubjectsForClass(formData.class_level, false);
     }
   }, [testId]);
 
@@ -144,6 +208,7 @@ export default function CreateTest() {
 
       setQuestions(formattedQuestions);
       setSelectedStudents(data.student_ids || []);
+      setSelectedGroups(data.group_ids || []); // Restore selected groups
 
       // Fetch subjects for this class to ensure subject dropdown is populated correctly
       fetchTestSubjectsForClass(data.class_level || 10, false);
@@ -255,19 +320,28 @@ export default function CreateTest() {
 
   const handleGroupToggle = (groupId) => {
     const group = groups.find(g => g.id === groupId);
+    console.log('Group toggled:', group);
+    console.log('Group student_ids:', group?.student_ids);
+    console.log('Group students:', group?.students);
+    
     if (selectedGroups.includes(groupId)) {
       setSelectedGroups(prev => prev.filter(id => id !== groupId));
-      // Remove students from this group
-      if (group?.students) {
-        const groupStudentIds = group.students.map(s => s.id);
-        setSelectedStudents(prev => prev.filter(id => !groupStudentIds.includes(id)));
+      // Remove students from this group - try both student_ids and students array
+      const studentIdsToRemove = group?.student_ids || group?.students?.map(s => s.id) || [];
+      if (studentIdsToRemove.length > 0) {
+        setSelectedStudents(prev => prev.filter(id => !studentIdsToRemove.includes(id)));
       }
     } else {
       setSelectedGroups(prev => [...prev, groupId]);
-      // Add students from this group
-      if (group?.students) {
-        const groupStudentIds = group.students.map(s => s.id);
-        setSelectedStudents(prev => [...new Set([...prev, ...groupStudentIds])]);
+      // Add students from this group - try both student_ids and students array
+      const studentIdsToAdd = group?.student_ids || group?.students?.map(s => s.id) || [];
+      console.log('Adding student IDs:', studentIdsToAdd);
+      if (studentIdsToAdd.length > 0) {
+        setSelectedStudents(prev => {
+          const newSelected = [...new Set([...prev, ...studentIdsToAdd])];
+          console.log('New selected students:', newSelected);
+          return newSelected;
+        });
       }
     }
   };
@@ -279,10 +353,10 @@ export default function CreateTest() {
   };
 
   const selectAllGroups = () => {
-    const allGroupIds = groups.map(g => g.id);
+    const allGroupIds = filteredGroups.map(g => g.id);
     setSelectedGroups(allGroupIds);
-    // Add all students from all groups
-    const allStudentIds = groups.flatMap(g => g.students?.map(s => s.id) || []);
+    // Add all students from all filtered groups
+    const allStudentIds = filteredGroups.flatMap(g => g.student_ids || []);
     setSelectedStudents([...new Set(allStudentIds)]);
   };
 
@@ -291,7 +365,7 @@ export default function CreateTest() {
   };
 
   const selectAllStudents = () => {
-    setSelectedStudents(students.map(s => s.id));
+    setSelectedStudents(displayedStudents.map(s => s.id));
   };
 
   const clearAllStudents = () => {
@@ -348,6 +422,7 @@ export default function CreateTest() {
         start_datetime: startDateTime,
         end_datetime: endDateTime,
         student_ids: selectedStudents,
+        group_ids: selectedGroups, // Include selected group IDs
         questions: questions,
         created_by: user?.user_id || "admin"
       };
@@ -536,37 +611,38 @@ export default function CreateTest() {
                 />
               </div>
 
-              {/* Class */}
-              <div>
+              {/* Class & Subject Combined */}
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Class <span className="text-red-500">*</span>
+                  Class & Subject <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.class_level}
+                  value={getGroupNameValue(formData.class_level, formData.subject)}
                   onChange={(e) => {
-                    const newClass = parseInt(e.target.value);
-                    setFormData({ ...formData, class_level: newClass, subject: "" });
-                    fetchTestSubjectsForClass(newClass, true);
-                    fetchStudentsForClass(newClass, true);
+                    const groupName = e.target.value;
+                    if (!groupName) {
+                      setFormData({ ...formData, class_level: null, subject: '' });
+                      return;
+                    }
+                    
+                    // Parse group name to get class and subject
+                    const parsed = parseGroupName(groupName);
+                    if (parsed.class && parsed.subject) {
+                      setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
+                      fetchTestSubjectsForClass(parsed.class, true);
+                      fetchStudentsForClass(parsed.class, true);
+                    }
                   }}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                 >
-                  {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
-                </select>
-              </div>
-
-              {/* Subject */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Subject <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
-                >
-                  <option value="">Select a subject</option>
-                  {testSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="">Select Class & Subject</option>
+                  {loadingGroups ? (
+                    <option disabled>Loading...</option>
+                  ) : combinedOptions.length === 0 ? (
+                    <option disabled>No groups assigned</option>
+                  ) : (
+                    combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                  )}
                 </select>
               </div>
 
@@ -701,10 +777,10 @@ export default function CreateTest() {
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
                   {loadingGroups ? (
                     <div className="p-4 text-center text-gray-500 dark:text-gray-400">Loading groups...</div>
-                  ) : groups.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">No groups found</div>
+                  ) : filteredGroups.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">No groups found for Class {formData.class_level}{formData.subject ? ` - ${formData.subject}` : ''}</div>
                   ) : (
-                    groups.map(group => (
+                    filteredGroups.map(group => (
                       <label
                         key={group.id}
                         className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
@@ -717,7 +793,12 @@ export default function CreateTest() {
                         />
                         <div className="flex-1">
                           <p className="font-medium text-gray-900 dark:text-white">{group.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{group.student_count || 0} students</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {group.student_count || 0} students
+                            {group.teacher_name && group.teacher_name !== 'No Teacher' && (
+                              <span> • Teacher: {group.teacher_name}</span>
+                            )}
+                          </p>
                         </div>
                       </label>
                     ))
@@ -738,10 +819,10 @@ export default function CreateTest() {
                   </div>
                 </div>
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
-                  {students.length === 0 ? (
+                  {displayedStudents.length === 0 ? (
                     <div className="p-4 text-center text-gray-500 dark:text-gray-400">No students found</div>
                   ) : (
-                    students.slice(0, 20).map(student => (
+                    displayedStudents.map(student => (
                       <label
                         key={student.id}
                         className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
@@ -868,36 +949,35 @@ export default function CreateTest() {
 
             {/* Modal Body */}
             <div className="p-4 space-y-4">
-              {/* Class and Subject */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class</label>
-                  <select
-                    value={questionForm.class_level}
-                    onChange={(e) => {
-                      const cl = parseInt(e.target.value);
-                      setQuestionForm(prev => ({ ...prev, class_level: cl, subject: "" }));
-                    }}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                  >
-                    {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                  <select
-                    value={questionForm.subject}
-                    onChange={(e) => setQuestionForm(prev => ({ ...prev, subject: e.target.value }))}
-                    disabled={loadingSubjects}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {loadingSubjects ? (
-                      <option>Loading...</option>
-                    ) : (
-                      availableSubjects.map(s => <option key={s} value={s}>{s}</option>)
-                    )}
-                  </select>
-                </div>
+              {/* Class and Subject Combined */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class & Subject</label>
+                <select
+                  value={getGroupNameValue(questionForm.class_level, questionForm.subject)}
+                  onChange={(e) => {
+                    const groupName = e.target.value;
+                    if (!groupName) {
+                      setQuestionForm(prev => ({ ...prev, class_level: null, subject: '' }));
+                      return;
+                    }
+                    
+                    // Parse group name to get class and subject
+                    const parsed = parseGroupName(groupName);
+                    if (parsed.class && parsed.subject) {
+                      setQuestionForm(prev => ({ ...prev, class_level: parsed.class, subject: parsed.subject }));
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                >
+                  <option value="">Select Class & Subject</option>
+                  {loadingGroups ? (
+                    <option disabled>Loading...</option>
+                  ) : combinedOptions.length === 0 ? (
+                    <option disabled>No groups assigned</option>
+                  ) : (
+                    combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                  )}
+                </select>
               </div>
 
               {/* Marks */}

@@ -209,33 +209,78 @@ async def delete_question(
 
 @router.get("/stats")
 async def get_teacher_stats(current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))):
-    """Get dashboard stats for teacher."""
+    """Get dashboard stats for teacher (supports both old tests and new assessments)."""
     try:
-        # My Questions
-        # My Questions
+        # Get teacher's MongoDB _id for dual-ID queries
+        teacher_doc = db.users.find_one({"user_id": current_user.user_id})
+        teacher_mongo_id = str(teacher_doc["_id"]) if teacher_doc else None
+        
+        # My Questions - count from questions collection
         my_questions = db.questions.count_documents({"created_by": current_user.user_id})
         
-        # My Tests (Tests)
-        # Using db.tests instead of assessments, and checking created_by
-        my_tests = db.tests.count_documents({"created_by": current_user.user_id, "is_active": True})
+        # My Tests - count from BOTH old tests and new assessments
+        old_tests = db.tests.count_documents({"created_by": current_user.user_id, "is_active": True})
         
-        # Evaluated and Pending (from test_submissions)
-        # First get all test IDs created by this teacher
-        my_test_ids = [str(t["_id"]) for t in db.tests.find({"created_by": current_user.user_id}, {"_id": 1})]
+        # New assessments - query by instructor_id (could be user_id or MongoDB _id)
+        new_assessments_query = {"instructor_id": current_user.user_id}
+        if teacher_mongo_id:
+            new_assessments_query = {
+                "$or": [
+                    {"instructor_id": current_user.user_id},
+                    {"instructor_id": teacher_mongo_id}
+                ]
+            }
+        new_assessments = db.assessments.count_documents(new_assessments_query)
         
+        my_tests = old_tests + new_assessments
+        
+        # Evaluated and Pending - check BOTH systems
         evaluated = 0
         pending = 0
         
-        if my_test_ids:
-            # Evaluated = is_reviewed is True
-            evaluated = db.test_submissions.count_documents({
-                "test_id": {"$in": my_test_ids},
+        # OLD SYSTEM: test_submissions
+        old_test_ids = [str(t["_id"]) for t in db.tests.find({"created_by": current_user.user_id}, {"_id": 1})]
+        if old_test_ids:
+            evaluated += db.test_submissions.count_documents({
+                "test_id": {"$in": old_test_ids},
                 "is_reviewed": True
             })
-            # Pending = is_reviewed is False
-            pending = db.test_submissions.count_documents({
-                "test_id": {"$in": my_test_ids},
+            pending += db.test_submissions.count_documents({
+                "test_id": {"$in": old_test_ids},
                 "is_reviewed": False
+            })
+        
+        # NEW SYSTEM: submissions (for assessments)
+        new_assessment_ids = []
+        if teacher_mongo_id:
+            new_assessment_ids = [
+                str(a["_id"]) for a in db.assessments.find(
+                    {"$or": [
+                        {"instructor_id": current_user.user_id},
+                        {"instructor_id": teacher_mongo_id}
+                    ]},
+                    {"_id": 1}
+                )
+            ]
+        else:
+            new_assessment_ids = [
+                str(a["_id"]) for a in db.assessments.find(
+                    {"instructor_id": current_user.user_id},
+                    {"_id": 1}
+                )
+            ]
+        
+        if new_assessment_ids:
+            # For new assessments, check if submissions have been graded
+            # A submission is "evaluated" if it has a score/feedback
+            # A submission is "pending" if submitted but not graded
+            evaluated += db.submissions.count_documents({
+                "assessment_id": {"$in": new_assessment_ids},
+                "score": {"$ne": None}  # Has been scored
+            })
+            pending += db.submissions.count_documents({
+                "assessment_id": {"$in": new_assessment_ids},
+                "score": None  # Not yet scored
             })
             
         return {
@@ -245,6 +290,7 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
             "pending": pending
         }
     except Exception as e:
+        logger.error(f"Get teacher stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

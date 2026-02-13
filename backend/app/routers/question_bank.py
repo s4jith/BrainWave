@@ -9,6 +9,9 @@ from app.services.question_bank_service import question_bank_service
 from app.core.permissions import get_current_user, require_role
 from app.models.rbac_models import UserRole, TokenData
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/question-bank", tags=["question-bank"])
 
@@ -66,21 +69,44 @@ async def get_subjects(
     - Admin: All unique subjects in DB (Questions + Books) + defaults.
     - Teacher: Only assigned subjects.
     """
+
     try:
         from app.db.mongo import db # Use Sync DB (more reliable in current env)
         
         if current_user.role == UserRole.TEACHER:
-            # Derive subjects from groups assigned to the teacher
-            teacher_groups = list(db.groups.find({
+            logger.info(f"\ud83d\udd0d Question Bank subjects for teacher: {current_user.user_id}")
+            
+            # Get teacher's MongoDB _id (groups might store _id instead of user_id)
+            teacher_user = db.users.find_one({"user_id": current_user.user_id})
+            teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
+            
+            # Build query to support BOTH user_id and MongoDB _id
+            group_query = {
                 "$or": [
                     {"teacher_id": current_user.user_id},
                     {"teacher_ids": current_user.user_id}
                 ]
-            }, {"subject": 1}))
+            }
+            
+            # Also search by MongoDB _id if different
+            if teacher_mongo_id and teacher_mongo_id != current_user.user_id:
+                group_query["$or"].extend([
+                    {"teacher_id": teacher_mongo_id},
+                    {"teacher_ids": teacher_mongo_id}
+                ])
+            
+            # Derive subjects from groups assigned to the teacher
+            teacher_groups = list(db.groups.find(group_query, {"subject": 1, "name": 1}))
+            
+            logger.info(f"   - Found {len(teacher_groups)} groups:")
+            for g in teacher_groups:
+                logger.info(f"      * {g.get('name')}: {g.get('subject')}")
             
             subjects = sorted(list(set(
                 g.get("subject") for g in teacher_groups if g.get("subject")
             )))
+            
+            logger.info(f"   - Unique subjects: {subjects}")
             return {"subjects": subjects}
         
         # Admin: Fetch distinct subjects from questions AND books collections

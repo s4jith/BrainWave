@@ -57,6 +57,10 @@ class AssessmentService:
     ) -> AssessmentResponse:
         """Create a new assessment."""
         try:
+            # Auto-publish if there are questions, otherwise save as draft
+            questions_list = request.questions or []
+            status = AssessmentStatus.PUBLISHED.value if len(questions_list) > 0 else AssessmentStatus.DRAFT.value
+            
             doc = {
                 "course_id": request.course_id or "",
                 "title": request.title,
@@ -65,18 +69,19 @@ class AssessmentService:
                 "type": request.type.value if request.type else "quiz",
                 "instructor_id": instructor_id,
                 "created_by": request.created_by or instructor_id,
-                "status": AssessmentStatus.DRAFT.value,
-                "questions": [self._transform_question(q) for q in (request.questions or [])],
+                "status": status,
+                "questions": [self._transform_question(q) for q in questions_list],
                 "settings": request.settings.model_dump(),
                 "due_date": request.due_date,
                 "available_from": request.available_from,
-                "total_points": sum(q.get("marks", q.get("points", 1)) for q in (request.questions or [])),
+                "total_points": sum(q.get("marks", q.get("points", 1)) for q in questions_list),
                 "duration_minutes": request.duration_minutes,
                 "num_attempts": request.num_attempts or 1,
                 "show_results_immediately": request.show_results_immediately,
                 "start_datetime": request.start_datetime,
                 "end_datetime": request.end_datetime,
                 "student_ids": request.student_ids or [],
+                "group_ids": request.group_ids or [],
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
@@ -85,7 +90,7 @@ class AssessmentService:
             doc["id"] = str(result.inserted_id)
             
             
-            logger.info(f"Assessment created: {doc['title']}")
+            logger.info(f"Assessment created: {doc['title']} with status: {status}")
             
             # Send notifications
             await self._notify_users(doc)
@@ -117,8 +122,44 @@ class AssessmentService:
                     "created_at": created_at,
                     "is_read": False
                 })
+            
+            # 2. Notify Teachers of assigned groups
+            group_ids = assessment.get("group_ids", [])
+            teacher_ids_set = set()
+            
+            if group_ids:
+                # Find all groups and extract teacher IDs
+                groups = await mongodb.db.groups.find({
+                    "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
+                }).to_list(length=100)
                 
-            # 2. Determine Creator Role to notify others
+                for group in groups:
+                    # Handle both teacher_id (legacy) and teacher_ids (new)
+                    if group.get("teacher_id"):
+                        teacher_ids_set.add(group.get("teacher_id"))
+                    if group.get("teacher_ids"):
+                        for tid in group.get("teacher_ids"):
+                            teacher_ids_set.add(tid)
+                
+                # Notify each teacher
+                for tid in teacher_ids_set:
+                    # Get teacher user_id for notification
+                    teacher_user = await mongodb.db.users.find_one({
+                        "$or": [{"user_id": tid}, {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "dummy"}]
+                    })
+                    if teacher_user:
+                        notifications.append({
+                            "title": f"New Test Assigned: {title}",
+                            "message": f"A new test '{title}' has been assigned to your group. You can now edit and manage questions.",
+                            "type": "test_assigned",
+                            "recipient_id": teacher_user["user_id"],
+                            "role": "teacher",
+                            "link": f"/teacher-tests",
+                            "created_at": created_at,
+                            "is_read": False
+                        })
+                
+            # 3. Determine Creator Role to notify others
             creator_id = assessment.get("created_by", assessment.get("instructor_id"))
             creator = await mongodb.db.users.find_one({"user_id": creator_id})
             creator_role = creator.get("role") if creator else "admin" # Default to admin if not found
@@ -137,60 +178,6 @@ class AssessmentService:
                         "created_at": created_at,
                         "is_read": False
                     })
-            
-            # If created by Admin -> Notify Teachers of that Class/Subject
-            elif creator_role == "admin":
-                # Find teachers for this subject and class
-                # Logic: Find groups with this subject/class, then get their teachers
-                subject = assessment.get("subject")
-                # Class level might be in settings or we can inferred? 
-                # CreateTest doesn't send explicit class_level in root, but maybe in title or we search groups.
-                # Actually CreateTest sends student_ids.
-                # Let's try to match subject if available.
-                
-                if subject:
-                    # Find teachers with this subject
-                    # This is loose matching but better than nothing
-                    teachers = mongodb.db.users.find({
-                        "role": "teacher",
-                        "subjects": subject # Assuming subjects array exists or we default to all
-                    })
-                    # Better: Find groups that match subject (and class if we had it)
-                    # For now just notify teachers who have this subject in their profile if available,
-                    # OR notify all teachers if we can't be specific.
-                    # Let's just notify all teachers for now as a fallback, or if we can find specific ones.
-                    pass 
-
-                    # Correct approach: Notify teachers linked to the students? 
-                    # Too complex. Let's stick to subject match or generic "Admin created test"
-                    
-                    # Let's search for groups matching the subject
-                    groups = await mongodb.db.groups.find({"subject": subject}).to_list(length=100)
-                    teacher_ids = set()
-                    for g in groups:
-                        if g.get("teacher_id"): teacher_ids.add(g.get("teacher_id"))
-                        for tid in g.get("teacher_ids", []): teacher_ids.add(tid)
-                    
-                    # Convert IDs (could be user_id or ObjectId str) to user_ids
-                    # This is tricky because of the ID mixup we fixed earlier.
-                    # Let's just query users by _id or user_id
-                    
-                    for tid in teacher_ids:
-                        # Try to find user to get correct user_id string
-                        t_user = await mongodb.db.users.find_one({
-                            "$or": [{"user_id": tid}, {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "dummy"}]
-                        })
-                        if t_user:
-                            notifications.append({
-                                "title": f"New Test Created: {title}",
-                                "message": f"Admin created a new test for {subject}.",
-                                "type": "info",
-                                "recipient_id": t_user["user_id"],
-                                "role": "teacher",
-                                "link": "/teacher-dashboard",
-                                "created_at": created_at,
-                                "is_read": False
-                            })
 
             if notifications:
                 await mongodb.db.notifications.insert_many(notifications)
@@ -232,17 +219,39 @@ class AssessmentService:
             if instructor_id:
                 query["instructor_id"] = instructor_id
             
-            # Teacher View Logic: Own tests + Admin tests for their subjects/classes
+            # Teacher View Logic: Own tests + Admin tests for their subjects/classes + Tests assigned to their groups
             elif teacher_id:
+                # 0. Get teacher's MongoDB _id (groups might store _id instead of user_id)
+                teacher_user = await mongodb.db.users.find_one({"user_id": teacher_id})
+                teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
+                
                 # 1. Fetch teacher's groups to find relevant (class, subject) pairs
                 # Match teacher_id in teacher_ids array or teacher_id field
+                # Support BOTH user_id and MongoDB _id for backward compatibility
                 group_query = {
                     "$or": [
                         {"teacher_ids": teacher_id},
                         {"teacher_id": teacher_id}
                     ]
                 }
+                
+                # Also search by MongoDB _id if different from user_id
+                if teacher_mongo_id and teacher_mongo_id != teacher_id:
+                    group_query["$or"].extend([
+                        {"teacher_ids": teacher_mongo_id},
+                        {"teacher_id": teacher_mongo_id}
+                    ])
+                
                 groups = await mongodb.db.groups.find(group_query).to_list(length=100)
+                teacher_group_ids = [str(g["_id"]) for g in groups]
+                
+                logger.info(f"🔍 Teacher {teacher_id} filter debug:")
+                logger.info(f"   - Teacher user_id: {teacher_id}")
+                logger.info(f"   - Teacher MongoDB _id: {teacher_mongo_id}")
+                logger.info(f"   - Found {len(groups)} groups")
+                logger.info(f"   - Group IDs: {teacher_group_ids}")
+                for g in groups:
+                    logger.info(f"   - Group: {g.get('name')} (class={g.get('class_level')}, subject={g.get('subject')})")
                 
                 criteria = []
                 for g in groups:
@@ -259,18 +268,25 @@ class AssessmentService:
                 # 3. Build OR query
                 # - Tests created by this teacher
                 # - OR Tests created by an Admin AND matching one of the group criteria
+                # - OR Tests that have this teacher's groups in group_ids
                 
-                teacher_own_query = {"instructor_id": teacher_id}
+                or_queries = [{"instructor_id": teacher_id}]
                 
+                # Tests assigned to teacher's groups
+                if teacher_group_ids:
+                    or_queries.append({"group_ids": {"$in": teacher_group_ids}})
+                
+                # Admin tests matching subject/class criteria
                 if criteria and admin_ids:
                     admin_tests_query = {
                         "instructor_id": {"$in": admin_ids},
                         "$or": criteria
                     }
-                    query["$or"] = [teacher_own_query, admin_tests_query]
-                else:
-                    # Fallback if no groups assigned or no admins found -> show only own tests
-                    query["instructor_id"] = teacher_id
+                    or_queries.append(admin_tests_query)
+                
+                query["$or"] = or_queries
+                logger.info(f"   - Final query: {query}")
+                logger.info(f"   - OR conditions: {len(or_queries)}")
 
             if status:
                 query["status"] = status
@@ -280,16 +296,23 @@ class AssessmentService:
                     query["status"] = AssessmentStatus.PUBLISHED.value
             
             total = await self.assessments.count_documents(query)
+            logger.info(f"   - Found {total} matching assessments")
             cursor = self.assessments.find(query).sort("created_at", -1)
             
             assessments = []
             async for doc in cursor:
-                response = self._to_response(doc)
+                if teacher_id:
+                    logger.info(f"   - Assessment: {doc.get('title')} | group_ids: {doc.get('group_ids', [])} | instructor: {doc.get('instructor_id')}")
+                # Count submissions for this assessment
+                assessment_id = str(doc["_id"])
+                submission_count = await self.submissions.count_documents({"assessment_id": assessment_id})
+                
+                response = self._to_response(doc, submission_count)
                 
                 # Add student-specific data
                 if student_id:
                     submissions = await self.submissions.find({
-                        "assessment_id": str(doc["_id"]),
+                        "assessment_id": assessment_id,
                         "student_id": student_id
                     }).to_list(length=100)
                     
@@ -315,15 +338,36 @@ class AssessmentService:
         request: AssessmentUpdateRequest,
         instructor_id: str
     ) -> Optional[AssessmentResponse]:
-        """Update an assessment."""
+        """Update an assessment. Teachers can edit if assigned to the test's groups, regardless of status."""
         try:
-            existing = await self.assessments.find_one({
-                "_id": ObjectId(assessment_id),
-                "instructor_id": instructor_id
-            })
+            # Check if user is the original instructor OR a teacher assigned to one of the groups
+            existing = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
             
             if not existing:
                 return None
+            
+            # Check permissions
+            is_instructor = existing.get("instructor_id") == instructor_id
+            is_assigned_teacher = False
+            
+            if not is_instructor:
+                # Check if this teacher is assigned to any of the test's groups
+                group_ids = existing.get("group_ids", [])
+                if group_ids:
+                    teacher_groups = await mongodb.db.groups.find({
+                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
+                        "$or": [
+                            {"teacher_ids": instructor_id},
+                            {"teacher_id": instructor_id}
+                        ]
+                    }).to_list(length=100)
+                    is_assigned_teacher = len(teacher_groups) > 0
+            
+            if not is_instructor and not is_assigned_teacher:
+                logger.warning(f"User {instructor_id} denied access to update assessment {assessment_id}")
+                return None
+            
+            logger.info(f"User {instructor_id} updating assessment {assessment_id} - Instructor: {is_instructor}, Assigned Teacher: {is_assigned_teacher}")
             
             update_data = {"updated_at": datetime.utcnow()}
             
@@ -347,6 +391,16 @@ class AssessmentService:
                 questions = [self._transform_question(q) for q in request.questions]
                 update_data["questions"] = questions
                 update_data["total_points"] = sum(q.get("points", 1) for q in questions)
+                # Auto-publish if adding questions to a draft
+                if existing.get("status") == AssessmentStatus.DRAFT.value and len(questions) > 0:
+                    update_data["status"] = AssessmentStatus.PUBLISHED.value
+                    logger.info(f"Auto-publishing assessment {assessment_id} after adding questions")
+            
+            if request.student_ids is not None:
+                update_data["student_ids"] = request.student_ids
+            
+            if request.group_ids is not None:
+                update_data["group_ids"] = request.group_ids
             
             await self.assessments.update_one(
                 {"_id": ObjectId(assessment_id)},
@@ -365,14 +419,39 @@ class AssessmentService:
         assessment_id: str,
         instructor_id: str
     ) -> Optional[AssessmentResponse]:
-        """Publish a draft assessment."""
+        """Publish a draft assessment. Teachers can publish if assigned to groups."""
         try:
+            assessment = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
+            
+            if not assessment:
+                return None
+            
+            # Check permissions
+            is_instructor = assessment.get("instructor_id") == instructor_id
+            is_assigned_teacher = False
+            
+            if not is_instructor:
+                # Check if this teacher is assigned to any of the test's groups
+                group_ids = assessment.get("group_ids", [])
+                if group_ids:
+                    teacher_groups = await mongodb.db.groups.find({
+                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
+                        "$or": [
+                            {"teacher_ids": instructor_id},
+                            {"teacher_id": instructor_id}
+                        ]
+                    }).to_list(length=100)
+                    is_assigned_teacher = len(teacher_groups) > 0
+            
+            if not is_instructor and not is_assigned_teacher:
+                return None
+            
+            # Only proceed if status is draft
+            if assessment.get("status") != AssessmentStatus.DRAFT.value:
+                return None
+            
             result = await self.assessments.update_one(
-                {
-                    "_id": ObjectId(assessment_id),
-                    "instructor_id": instructor_id,
-                    "status": AssessmentStatus.DRAFT.value
-                },
+                {"_id": ObjectId(assessment_id)},
                 {"$set": {
                     "status": AssessmentStatus.PUBLISHED.value,
                     "updated_at": datetime.utcnow()
@@ -389,6 +468,59 @@ class AssessmentService:
             logger.error(f"Publish assessment error: {e}")
             return None
     
+    async def delete_assessment(
+        self,
+        assessment_id: str,
+        instructor_id: str
+    ) -> bool:
+        """Delete an assessment. Teachers can delete if assigned to groups or if creator."""
+        try:
+            assessment = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
+            
+            if not assessment:
+                return False
+            
+            # Check permissions
+            is_instructor = assessment.get("instructor_id") == instructor_id
+            is_assigned_teacher = False
+            
+            if not is_instructor:
+                # Check if this teacher is assigned to any of the test's groups
+                group_ids = assessment.get("group_ids", [])
+                if group_ids:
+                    teacher_groups = await mongodb.db.groups.find({
+                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
+                        "$or": [
+                            {"teacher_ids": instructor_id},
+                            {"teacher_id": instructor_id}
+                        ]
+                    }).to_list(length=100)
+                    is_assigned_teacher = len(teacher_groups) > 0
+            
+            if not is_instructor and not is_assigned_teacher:
+                logger.warning(f"User {instructor_id} denied access to delete assessment {assessment_id}")
+                return False
+            
+            # Delete all submissions for this assessment
+            deleted_submissions = await self.submissions.delete_many({"assessment_id": assessment_id})
+            logger.info(f"Deleted {deleted_submissions.deleted_count} submissions for assessment {assessment_id}")
+            
+            # Delete the assessment
+            result = await self.assessments.delete_one({"_id": ObjectId(assessment_id)})
+            
+            if result.deleted_count == 0:
+                return False
+            
+            # Delete related notifications
+            await mongodb.db.notifications.delete_many({"assessment_id": assessment_id})
+            
+            logger.info(f"Deleted assessment: {assessment_id} by user {instructor_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Delete assessment error: {e}")
+            return False
+    
     # === Question Management ===
     
     async def add_question(
@@ -397,14 +529,31 @@ class AssessmentService:
         request: QuestionCreateRequest,
         instructor_id: str
     ) -> Optional[Question]:
-        """Add a question to an assessment."""
+        """Add a question to an assessment. Teachers can edit if assigned to the test's groups."""
         try:
-            assessment = await self.assessments.find_one({
-                "_id": ObjectId(assessment_id),
-                "instructor_id": instructor_id
-            })
+            assessment = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
             
             if not assessment:
+                return None
+            
+            # Check permissions
+            is_instructor = assessment.get("instructor_id") == instructor_id
+            is_assigned_teacher = False
+            
+            if not is_instructor:
+                # Check if this teacher is assigned to any of the test's groups
+                group_ids = assessment.get("group_ids", [])
+                if group_ids:
+                    teacher_groups = await mongodb.db.groups.find({
+                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
+                        "$or": [
+                            {"teacher_ids": instructor_id},
+                            {"teacher_id": instructor_id}
+                        ]
+                    }).to_list(length=100)
+                    is_assigned_teacher = len(teacher_groups) > 0
+            
+            if not is_instructor and not is_assigned_teacher:
                 return None
             
             question_id = str(uuid.uuid4())
@@ -909,7 +1058,7 @@ class AssessmentService:
     
     # === Helper Methods ===
     
-    def _to_response(self, doc: dict) -> AssessmentResponse:
+    def _to_response(self, doc: dict, submission_count: int = 0) -> AssessmentResponse:
         from app.models.assessment_models import AssessmentSettings
         
         settings_data = doc.get("settings", {})
@@ -930,6 +1079,9 @@ class AssessmentService:
             settings=settings,
             due_date=doc.get("due_date"),
             available_from=doc.get("available_from"),
+            start_datetime=doc.get("start_datetime"),
+            end_datetime=doc.get("end_datetime"),
+            submission_count=submission_count,
             created_at=doc.get("created_at", datetime.utcnow())
         )
     
@@ -951,7 +1103,8 @@ class AssessmentService:
         return AssessmentDetailResponse(
             **base.model_dump(), 
             questions=questions, 
-            student_ids=doc.get("student_ids", [])
+            student_ids=doc.get("student_ids", []),
+            group_ids=doc.get("group_ids", [])
         )
 
     def _transform_question(self, q: dict) -> dict:

@@ -17,6 +17,7 @@ import re
 import asyncio
 from typing import List, Dict, Tuple, Optional
 import google.generativeai as genai
+from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,8 @@ class EnhancedRAGService:
         
         # CRITICAL FIX: Use same embedding model as data upload
         # Data was uploaded using sentence-transformers, so we must use it for queries too!
-        self.embedding_model_name = 'models/text-embedding-004'
-        logger.info("✅ RAG Service: Using Gemini text-embedding-004 for embeddings")
+        self.embedding_model_name = EMBEDDING_MODEL
+        logger.info("✅ RAG Service: Using Gemini gemini-embedding-001 for embeddings")
         logger.info("✅ Triple-Index System: Textbook + Web + LLM content")
         
         # Subject to namespace mapping for ncert-all-subjects index
@@ -78,23 +79,20 @@ class EnhancedRAGService:
         }
 
     def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding using Gemini text-embedding-004.
+        """Generate embedding using Gemini gemini-embedding-001 via REST API.
         
         CRITICAL: Must use same model as PDF upload for retrieval to work!
         Returns 768-dimensional embedding vector.
         """
         try:
-            # Configure API key before embedding generation
             from app.services.gemini_key_manager import gemini_key_manager
             api_key = gemini_key_manager.get_available_key()
-            genai.configure(api_key=api_key)
             
-            result = genai.embed_content(
-                model=self.embedding_model_name,
-                content=text,
-                task_type="retrieval_query"
+            return _embed_rest(
+                text=text,
+                api_key=api_key,
+                task_type="RETRIEVAL_QUERY"
             )
-            return result['embedding']
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             raise

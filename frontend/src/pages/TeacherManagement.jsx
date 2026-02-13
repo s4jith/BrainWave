@@ -36,6 +36,15 @@ export default function TeacherManagement() {
         fetchTeachers();
     }, []);
 
+    // Auto-refresh on window focus
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchTeachers();
+        };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+
     const fetchTeachers = async () => {
         try {
             setLoading(true);
@@ -105,15 +114,24 @@ export default function TeacherManagement() {
 
     const handleDeleteTeacher = async (teacherId) => {
         if (!confirm("Are you sure you want to delete this teacher?")) return;
+        
+        // Optimistic update
+        const deletedTeacher = teachers.find(t => t.id === teacherId);
+        const updatedTeachers = teachers.filter(t => t.id !== teacherId);
+        setTeachers(updatedTeachers);
+        
         try {
             const response = await fetch(`${API_URL}/api/admin/teachers/${teacherId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
-            if (!response.ok) throw new Error("Failed to delete teacher");
-            setTeachers(teachers.filter(t => t.id !== teacherId));
+            if (!response.ok) {
+                throw new Error("Failed to delete teacher");
+            }
         } catch (err) {
+            // Revert on failure
             alert("Error: " + err.message);
+            setTeachers([...updatedTeachers, deletedTeacher]);
         }
     };
 

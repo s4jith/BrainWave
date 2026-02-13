@@ -10,7 +10,7 @@ import useThemeStore from "../stores/themeStore";
 import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
-    FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X
+    FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -129,6 +129,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/student-management", label: "Students", icon: Users },
         { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
         { path: "/group-management", label: "Student Groups", icon: FolderKanban },
+        { path: "/subjects-management", label: "Subjects", icon: Layers },
         { path: "/book-management", label: "Books", icon: BookOpen },
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/test-management", label: "Tests", icon: ClipboardList },

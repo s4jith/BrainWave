@@ -52,7 +52,7 @@ class IngestionService:
         1. PDF loading and page extraction
         2. OCR text extraction (OpenVINO-accelerated)
         3. Content chunking with metadata
-        4. Embedding generation (Gemini text-embedding-004)
+        4. Embedding generation (Gemini embedding-001)
         5. Vector upsert to Pinecone
     
     This component maps to OPEA's "Ingestion Microservice" pattern.
@@ -211,7 +211,7 @@ class IngestionService:
             "service": self.config.component_name,
             "intel_optimized": self.config.intel_optimized,
             "ocr_backend": "OpenVINO + EasyOCR",
-            "embedding_model": "Gemini text-embedding-004",
+            "embedding_model": "Gemini embedding-001",
             "vector_db": "Pinecone",
             "multilingual_ocr": multilingual_status
         }

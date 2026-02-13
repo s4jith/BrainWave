@@ -73,7 +73,7 @@ app = FastAPI(
     
     ### Tech Stack:
     - **Backend**: FastAPI + Python 3
-    - **AI**: Google Gemini 1.5 Flash + text-embedding-004
+    - **AI**: Google Gemini 1.5 Flash + embedding-001
     - **Vector DB**: Pinecone
     - **Database**: MongoDB Atlas
     
@@ -107,7 +107,7 @@ app.include_router(history.router, prefix="/api")     # ✅ Annotation History
 # Import admin and user routers
 from app.routers import admin, user, test, auth
 from app.routers import admin_dashboard, support, support_tickets, test_management
-from app.routers import book_management
+from app.routers import book_management, curriculum
 from app.routers import admin_intel  # Intel OPEA-style admin endpoint
 app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
 app.include_router(admin_intel.router)           # ✅ Intel Status Endpoint
@@ -119,6 +119,7 @@ app.include_router(support.router)               # ✅ Support (FAQs, Contact, F
 app.include_router(support_tickets.router)       # ✅ Support Tickets
 app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
 app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
+app.include_router(curriculum.router)            # ✅ Curriculum Management (Subjects, Chapters, Topics)
 
 # Teacher specific router
 from app.routers import teacher

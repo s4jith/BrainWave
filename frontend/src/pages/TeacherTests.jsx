@@ -28,24 +28,43 @@ export default function TeacherTests() {
             const response = await fetch(`${API_URL}/api/assessments`, { headers: getAuthHeader() });
             if (response.ok) {
                 const data = await response.json();
-                setTests(data.assessments || []); // Adjust based on actual API response structure
+                console.log("Fetched tests:", data.assessments); // Debug log
+                setTests(data.assessments || []);
             } else {
-                console.warn("Using mock test data");
-                setTests([
-                    { id: 1, title: "Mid-Term Mathematics", subject: "Math", class_level: 10, created_at: "2026-02-01", status: "published", questions_count: 20 },
-                    { id: 2, title: "Physics Unit 1 Quiz", subject: "Science", class_level: 9, created_at: "2026-02-03", status: "draft", questions_count: 10 },
-                ]);
+                console.error("Failed to fetch tests:", response.status);
+                setTests([]);
             }
         } catch (err) {
             console.error("Error fetching tests:", err);
+            setTests([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = (id) => {
-        if (confirm("Delete this test?")) {
-            setTests(tests.filter(t => t.id !== id));
+    const handleDelete = async (test) => {
+        if (!window.confirm(`Are you sure you want to delete "${test.title}"?`)) {
+            return;
+        }
+
+        // Optimistic update - remove from UI immediately
+        const previousTests = [...tests];
+        setTests(tests.filter(t => t.id !== test.id));
+
+        try {
+            const response = await fetch(`${API_URL}/api/assessments/${test.id}`, {
+                method: 'DELETE',
+                headers: getAuthHeader()
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete test');
+            }
+        } catch (err) {
+            // Revert on error
+            console.error("Delete failed:", err);
+            setTests(previousTests);
+            alert("Failed to delete test. Please try again.");
         }
     };
 
@@ -123,10 +142,10 @@ export default function TeacherTests() {
                                     <tr key={test.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                         <td className="px-6 py-4">
                                             <p className="text-gray-900 dark:text-white font-medium">{test.title}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">Class {test.class_level}</p>
+                                            {test.class_level && <p className="text-xs text-gray-500 dark:text-gray-400">Class {test.class_level}</p>}
                                         </td>
                                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{test.subject}</td>
-                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{test.questions_count}</td>
+                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{test.questions?.length || test.questions_count || 0}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${test.status === 'published'
                                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
@@ -138,15 +157,23 @@ export default function TeacherTests() {
                                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
                                             <div className="flex items-center gap-1.5 text-sm">
                                                 <Calendar className="w-3.5 h-3.5" />
-                                                {test.created_at}
+                                                {test.created_at ? new Date(test.created_at).toLocaleDateString() : '-'}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => navigate(`/create-test/${test.id}`)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                                                <button 
+                                                    onClick={() => navigate(`/create-test/${test.id}`)} 
+                                                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                    title="Edit Test"
+                                                >
                                                     <Edit className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDelete(test.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                                <button 
+                                                    onClick={() => handleDelete(test)} 
+                                                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                    title="Delete Test"
+                                                >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>

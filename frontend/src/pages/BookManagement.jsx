@@ -70,6 +70,16 @@ export default function BookManagement() {
     fetchPineconeStats();
   }, []);
 
+  // Auto-refresh on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchBooks();
+      fetchPineconeStats();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   const fetchBooks = async () => {
     setLoading(true);
     try {
@@ -77,19 +87,13 @@ export default function BookManagement() {
       if (response.ok) {
         const data = await response.json();
         setBooks(data.books || []);
-      } else if (response.status === 500) {
-        // If list fails, try to fix missing fields first
-        console.log("List failed, attempting to fix missing fields...");
-        await handleFixMissingFields(true);
-        // Try fetching again
-        const retryResponse = await fetch(`${API_BASE}/api/books/admin/list`);
-        if (retryResponse.ok) {
-          const data = await retryResponse.json();
-          setBooks(data.books || []);
-        }
+      } else {
+        console.error("Failed to fetch books:", response.status);
+        setBooks([]);
       }
     } catch (err) {
       console.error("Failed to fetch books:", err);
+      setBooks([]);
     } finally {
       setLoading(false);
     }
@@ -230,8 +234,10 @@ export default function BookManagement() {
 
       if (response.ok) {
         const data = await response.json();
-        if (!silent) alert(data.message);
-        fetchBooks();
+        if (!silent) {
+          alert(data.message);
+          fetchBooks();
+        }
         return true;
       } else {
         const error = await response.json();
