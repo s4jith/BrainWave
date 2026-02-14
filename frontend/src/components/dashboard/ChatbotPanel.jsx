@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Send, Plus, Clock, Search, Share2, LayoutGrid, ArrowUp,
   ChevronLeft, Settings, Sparkles, Zap, Brain,
-  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon, XCircle
+  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon, XCircle,
+  Sun, Moon, Monitor
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import useUserStore from "../../stores/userStore";
+import useThemeStore from "../../stores/themeStore";
 import { chatService, userStatsService, topQuestionsService } from "../../services/api";
 import { exportChatAsDoc } from "../../utils/chatExport";
 import remarkMath from 'remark-math';
@@ -18,6 +20,7 @@ import 'katex/dist/katex.min.css';
 
 export default function ChatbotPanel({ isOpen, onClose }) {
   const { user } = useUserStore();
+  const { theme, setTheme } = useThemeStore();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,6 +29,46 @@ export default function ChatbotPanel({ isOpen, onClose }) {
   const imageInputRef = useRef(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [streamingMessageId, setStreamingMessageId] = useState(null);
+  const abortStreamRef = useRef(null);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef(null);
+
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      if (abortStreamRef.current) {
+        abortStreamRef.current();
+      }
+    };
+  }, []);
+
+  // Close theme menu on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const themeOptions = [
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
+  ];
+
+  const getThemeIcon = () => {
+    switch (theme) {
+      case 'dark': return Moon;
+      case 'light': return Sun;
+      default: return Sun;
+    }
+  };
+
+  const ThemeIcon = getThemeIcon();
 
   // Dynamic subjects from database
   const [subjects, setSubjects] = useState([]);
@@ -175,55 +218,107 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     setIsLoading(true);
 
     try {
-      let result;
-
       if (currentImage) {
-        // Image chat (with optional text)
-        result = await chatService.imageChat(
+        // Image chat - non-streaming (keep existing behavior)
+        const result = await chatService.imageChat(
           currentImage,
           user.classLevel || 6,
           activeSubject,
           1,
           chatMode,
-          currentMessage // Pass text as userQuery
+          currentMessage
         );
+
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          role: "assistant",
+          content: result.answer,
+          timestamp: new Date(),
+          mode: chatMode,
+          imageAnalysis: result.imageAnalysis,
+        }]);
+        setIsLoading(false);
       } else {
-        // Text-only chat
-        result = await chatService.studentChat(
+        // Text chat - use STREAMING for real-time token display
+        const messageId = Date.now();
+        setStreamingMessageId(messageId);
+
+        // Add empty assistant message that will fill in real-time
+        setMessages(prev => [...prev, {
+          id: messageId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          mode: chatMode,
+          isStreaming: true
+        }]);
+        setIsLoading(false); // Hide loading dots, show streaming message
+
+        let fullAnswer = "";
+
+        // Cancel any existing stream
+        if (abortStreamRef.current) {
+          abortStreamRef.current();
+        }
+
+        const abort = chatService.studentChatStream(
           currentMessage,
           user.classLevel || 6,
           activeSubject,
-          1, chatMode
+          1,
+          chatMode,
+          // onChunk - append each token as it arrives
+          (text) => {
+            fullAnswer += text;
+            setMessages(prev => prev.map(msg =>
+              msg.id === messageId
+                ? { ...msg, content: fullAnswer }
+                : msg
+            ));
+          },
+          // onComplete
+          (data) => {
+            setStreamingMessageId(null);
+            abortStreamRef.current = null;
+            setMessages(prev => prev.map(msg =>
+              msg.id === messageId
+                ? { ...msg, isStreaming: false }
+                : msg
+            ));
+
+            // Track the question (non-blocking)
+            topQuestionsService.trackQuestion({
+              question: currentMessage,
+              answer: fullAnswer,
+              subject: activeSubject,
+              class_level: user.classLevel || 7,
+              mode: chatMode === "deepdive" ? "deep" : "quick",
+              user_id: user.id || "guest",
+              session_id: `${user.id || "guest"}_${Date.now()}`
+            }).catch(err => console.log("Question tracking failed:", err));
+          },
+          // onError
+          (error) => {
+            console.error("Stream error:", error);
+            setStreamingMessageId(null);
+            abortStreamRef.current = null;
+            setMessages(prev => prev.map(msg =>
+              msg.id === messageId
+                ? { ...msg, content: fullAnswer || "Sorry, I couldn't process that.", isStreaming: false, isError: !fullAnswer }
+                : msg
+            ));
+          }
         );
+
+        abortStreamRef.current = abort;
       }
 
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: result.answer,
-        timestamp: new Date(),
-        mode: chatMode,
-        imageAnalysis: result.imageAnalysis
-      }]);
       userStatsService.logActivity(user.id || "guest", 0.1);
-
-      // Track the question for top questions feature (non-blocking)
-      if (currentMessage.trim() && !currentImage) {
-        topQuestionsService.trackQuestion({
-          question: currentMessage,
-          answer: result.answer,
-          subject: activeSubject,
-          class_level: user.classLevel || 7,
-          mode: chatMode === "deepdive" ? "deep" : "quick",
-          user_id: user.id || "guest",
-          session_id: `${user.id || "guest"}_${Date.now()}`
-        }).catch(err => console.log("Question tracking failed:", err));
-      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages(prev => [...prev, {
         role: "assistant", content: "Sorry, I couldn't process that.", timestamp: new Date(), isError: true
       }]);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -283,31 +378,31 @@ export default function ChatbotPanel({ isOpen, onClose }) {
       <div className="absolute inset-0 flex" onClick={e => e.stopPropagation()}>
 
         {/* Left Sidebar */}
-        <div className="w-72 bg-white border-r border-gray-200 flex flex-col">
+        <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
           {/* Profile */}
-          <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-            <img src={getAvatarUrl()} alt="" className="w-10 h-10 rounded-full bg-gray-200" />
+          <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+            <img src={getAvatarUrl()} alt="" className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{user.name || 'Student'}</p>
-              <p className="text-xs text-gray-500">Class {user.classLevel}</p>
+              <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{user.name || 'Student'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Class {user.classLevel}</p>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
-              <ChevronLeft className="w-4 h-4 text-gray-500" />
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+              <ChevronLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
             </button>
           </div>
 
           {/* Subject Selector */}
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-xs font-medium text-gray-500 mb-2">Subject</p>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Subject</p>
             {subjectsLoading ? (
-              <div className="w-full p-2 rounded-lg bg-gray-50 border border-gray-200 animate-pulse">
-                <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+              <div className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 animate-pulse">
+                <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
               </div>
             ) : (
               <select
                 value={activeSubject}
                 onChange={(e) => setActiveSubject(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-600"
                 disabled={subjects.length === 0}
               >
                 {subjects.length === 0 ? (
@@ -322,16 +417,16 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           </div>
 
           {/* Mode Toggle */}
-          <div className="p-3 border-b border-gray-100">
-            <p className="text-xs font-medium text-gray-500 mb-2 px-1">Mode</p>
+          <div className="p-3 border-b border-gray-100 dark:border-gray-800">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">Mode</p>
             <div className="flex gap-2">
               <button onClick={() => handleModeChange("quick")}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "quick" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "quick" ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                   }`}>
                 <Zap className="w-3.5 h-3.5" /> Quick
               </button>
               <button onClick={() => handleModeChange("deepdive")}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "deepdive" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "deepdive" ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                   }`}>
                 <Brain className="w-3.5 h-3.5" /> Deep
               </button>
@@ -340,23 +435,23 @@ export default function ChatbotPanel({ isOpen, onClose }) {
 
           {/* Top Questions */}
           <div className="flex-1 overflow-y-auto p-3">
-            <p className="text-xs font-medium text-gray-500 mb-3 px-1">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3 px-1">
               Top Questions {activeSubject && `- ${activeSubject.charAt(0).toUpperCase() + activeSubject.slice(1)}`}
             </p>
             <div className="space-y-2">
               {topQuestionsLoading ? (
                 // Loading skeleton
                 [...Array(5)].map((_, i) => (
-                  <div key={i} className="w-full p-3 rounded-lg bg-gray-50 animate-pulse">
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                  <div key={i} className="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 animate-pulse">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
                   </div>
                 ))
               ) : topQuestions.length > 0 ? (
                 topQuestions.map(q => (
                   <button key={q.id} onClick={() => setMessage(q.text)}
-                    className="w-full text-left p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <p className="text-sm text-gray-800 font-medium line-clamp-2">{q.text}</p>
+                    className="w-full text-left p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <p className="text-sm text-gray-800 dark:text-gray-200 font-medium line-clamp-2">{q.text}</p>
                     <div className="flex justify-between items-center mt-1">
                       <p className="text-xs text-gray-400">{q.category}</p>
                       {q.askCount > 0 && (
@@ -368,7 +463,41 @@ export default function ChatbotPanel({ isOpen, onClose }) {
               ) : (
                 <div className="text-center py-6">
                   <p className="text-sm text-gray-400 mb-2">No questions asked yet</p>
-                  <p className="text-xs text-gray-300">Be the first to ask about {activeSubject || 'this subject'}!</p>
+                  <p className="text-xs text-gray-300 dark:text-gray-500">Be the first to ask about {activeSubject || 'this subject'}!</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Theme Toggle */}
+          <div className="p-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="relative" ref={themeMenuRef}>
+              <button
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
+              >
+                <ThemeIcon className="w-4 h-4" />
+                <span>Theme</span>
+              </button>
+              {showThemeMenu && (
+                <div className="absolute left-0 bottom-full mb-1 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                  {themeOptions.map((option) => {
+                    const OptionIcon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                          theme === option.value
+                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        }`}
+                      >
+                        <OptionIcon className="w-4 h-4" />
+                        {option.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -378,22 +507,22 @@ export default function ChatbotPanel({ isOpen, onClose }) {
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-[#fafafa] relative overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[#fafafa] dark:bg-gray-950 relative overflow-hidden">
 
           {/* Animated Grid Background */}
-          <div className="absolute inset-0 opacity-[0.15]" style={{
+          <div className="absolute inset-0 opacity-[0.15] dark:opacity-[0.08]" style={{
             backgroundImage: 'linear-gradient(to right, #6b7280 1px, transparent 1px), linear-gradient(to bottom, #6b7280 1px, transparent 1px)',
             backgroundSize: '50px 50px',
             animation: 'gridScroll 8s linear infinite'
           }} />
-          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/40" />
-          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-orange-300/30" />
+          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/40 dark:bg-orange-500/10" />
+          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-orange-300/30 dark:bg-orange-500/10" />
 
           {/* Header */}
-          <div className="relative z-10 h-14 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6">
+          <div className="relative z-10 h-14 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex items-center justify-between px-6">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMessages([])} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
-                <Plus className="w-4 h-4 text-gray-600" /><span className="text-sm font-medium text-gray-700">New Chat</span>
+              <button onClick={() => setMessages([])} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <Plus className="w-4 h-4 text-gray-600 dark:text-gray-400" /><span className="text-sm font-medium text-gray-700 dark:text-gray-300">New Chat</span>
               </button>
             </div>
             <div className="flex items-center gap-2">
@@ -408,12 +537,12 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                     });
                   }
                 }}
-                className={`flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg ${messages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${messages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 disabled={messages.length === 0}
               >
-                <Share2 className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-600">Share</span>
+                <Share2 className="w-4 h-4 text-gray-500 dark:text-gray-400" /><span className="text-sm text-gray-600 dark:text-gray-400">Share</span>
               </button>
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg ml-2"><X className="w-5 h-5 text-gray-500" /></button>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ml-2"><X className="w-5 h-5 text-gray-500 dark:text-gray-400" /></button>
             </div>
           </div>
 
@@ -422,25 +551,25 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             {messages.length === 0 ? (
               /* Welcome State */
               <div className="h-full flex flex-col items-center justify-center px-6 pb-32">
-                <div className="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-6 shadow-sm">
-                  <Sparkles className="w-7 h-7 text-gray-700" />
+                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center mb-6 shadow-sm">
+                  <Sparkles className="w-7 h-7 text-gray-700 dark:text-gray-300" />
                 </div>
-                <h1 className="text-3xl font-semibold text-gray-900 mb-2">
-                  {getGreeting()}, <span className="text-gray-500">{user.name || 'Student'}</span>
+                <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
+                  {getGreeting()}, <span className="text-gray-500 dark:text-gray-400">{user.name || 'Student'}</span>
                 </h1>
-                <p className="text-gray-500 mb-12">Hey there! What can I do for your studies today?</p>
+                <p className="text-gray-500 dark:text-gray-400 mb-12">Hey there! What can I do for your studies today?</p>
                 <div className="grid grid-cols-3 gap-4 max-w-4xl w-full">
                   {starterCards.map(card => {
                     const Icon = card.icon;
                     return (
-                      <div key={card.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg transition-all">
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-                          <Icon className="w-5 h-5 text-gray-600" />
+                      <div key={card.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg transition-all">
+                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                          <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                         </div>
-                        <h3 className="font-semibold text-gray-900 mb-2">{card.title}</h3>
-                        <p className="text-sm text-gray-500 mb-4 leading-relaxed">{card.description}</p>
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{card.title}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">{card.description}</p>
                         <button onClick={() => setMessage(card.title)}
-                          className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                          className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                           {card.action}
                         </button>
                       </div>
@@ -454,32 +583,39 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-4 h-4 text-white" />
+                      <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-gray-200 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-4 h-4 text-white dark:text-gray-900" />
                       </div>
                     )}
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-gray-900 text-white'
-                      : msg.isError ? 'bg-red-50 text-red-800 border border-red-200'
-                        : 'bg-white text-gray-800 border border-gray-200'
+                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900'
+                      : msg.isError ? 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+                        : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700'
                       }`}>
                       <div className="text-sm leading-relaxed">
-                        {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
+                        {msg.role === 'assistant' ? (
+                          <div className="relative">
+                            {renderMarkdown(msg.content)}
+                            {msg.isStreaming && (
+                              <span className="inline-block w-0.5 h-4 bg-gray-900 dark:bg-gray-200 ml-0.5 animate-pulse" />
+                            )}
+                          </div>
+                        ) : msg.content}
                       </div>
-                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <img src={getAvatarUrl()} alt="" className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0" />
+                      <img src={getAvatarUrl()} alt="" className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
                     )}
                   </div>
                 ))}
                 {isLoading && (
                   <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-gray-200 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white dark:text-gray-900" />
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3">
                       <div className="flex gap-1">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -494,12 +630,12 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           </div>
 
           {/* Input - Fixed at Bottom */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-[#fafafa] via-[#fafafa] to-transparent pt-12">
+          <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-[#fafafa] dark:from-gray-950 via-[#fafafa] dark:via-gray-950 to-transparent pt-12">
             <div className="max-w-3xl mx-auto">
               {/* Image Preview */}
               {selectedImage && (
-                <div className="mb-2 flex items-center gap-2 bg-white p-2 rounded-xl border border-gray-200 w-fit shadow-sm">
-                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100">
+                <div className="mb-2 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 w-fit shadow-sm">
+                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                     <img
                       src={URL.createObjectURL(selectedImage)}
                       alt="Preview"
@@ -507,23 +643,23 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                     />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-medium text-gray-700 truncate max-w-[150px]">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]">
                       {selectedImage.name}
                     </span>
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
                       {(selectedImage.size / 1024).toFixed(1)} KB
                     </span>
                   </div>
                   <button
                     onClick={removeSelectedImage}
-                    className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
 
-              <div className="flex items-center gap-3 bg-white rounded-full border border-gray-200 px-4 py-2 shadow-sm">
+              <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 px-4 py-2 shadow-sm">
                 <input
                   type="file"
                   ref={imageInputRef}
@@ -534,7 +670,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={isLoading || uploadingImage}
-                  className="p-2 rounded-full hover:bg-gray-100 text-gray-400 disabled:opacity-50"
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 disabled:opacity-50"
                   title="Upload image of textbook/question"
                 >
                   <Camera className="w-5 h-5" />
@@ -544,11 +680,11 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                   onChange={e => setMessage(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                   placeholder={selectedImage ? "Add a question about this image..." : "Write a message here..."}
-                  className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-400 text-sm"
+                  className="flex-1 bg-transparent border-none outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-sm"
                   disabled={isLoading}
                 />
                 <button onClick={handleSend} disabled={(!message.trim() && !selectedImage) || isLoading}
-                  className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 disabled:opacity-50 hover:bg-gray-200">
+                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600">
                   <ArrowUp className="w-5 h-5" />
                 </button>
               </div>

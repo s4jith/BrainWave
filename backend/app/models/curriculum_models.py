@@ -180,3 +180,56 @@ class TopicSummary(BaseModel):
     difficulty_level: str
     question_count: int
     is_active: bool
+
+
+# ==================== AI Extraction Models ====================
+
+class ExtractedTopic(BaseModel):
+    """Topic extracted from PDF/image by AI"""
+    topic_name: str
+    page_range: Optional[str] = ""
+    description: Optional[str] = ""
+
+
+class ExtractedChapter(BaseModel):
+    """Chapter extracted from PDF/image by AI"""
+    chapter_number: int
+    chapter_name: str
+    author: Optional[str] = ""
+    page_number: Optional[int] = None
+    topics: List[ExtractedTopic] = Field(default_factory=list)
+
+
+class PendingCurriculumItem(BaseModel):
+    """Pending curriculum item awaiting admin approval"""
+    pending_id: str = Field(..., description="Unique pending item identifier")
+    subject_name: str = Field(..., description="Subject name")
+    class_level: int = Field(..., description="Class level (5-12)")
+    board: str = Field(default="CBSE", description="Educational board")
+    extracted_chapters: List[ExtractedChapter] = Field(default_factory=list)
+    source_file_name: str = Field(..., description="Original file name")
+    source_file_url: Optional[str] = Field("", description="URL of uploaded file if stored")
+    extraction_method: str = Field(default="ai", description="'ai' or 'manual'")
+    status: str = Field(default="pending", description="pending, approved, rejected")
+    uploaded_by: str = Field(..., description="Admin user who uploaded")
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_by: Optional[str] = Field(None, description="Admin who reviewed")
+    reviewed_at: Optional[datetime] = Field(None, description="Review timestamp")
+    rejection_reason: Optional[str] = Field("", description="Reason if rejected")
+
+
+class UploadCurriculumRequest(BaseModel):
+    """Request to upload PDF/image for curriculum extraction"""
+    subject_name: str = Field(..., min_length=1, max_length=100)
+    class_level: int = Field(..., ge=5, le=12)
+    board: str = Field(default="CBSE")
+
+
+class ApprovePendingItemRequest(BaseModel):
+    """Request to approve or reject a pending curriculum item"""
+    action: str = Field(..., description="'approve' or 'reject'")
+    rejection_reason: Optional[str] = Field("", description="Required if action is reject")
+    # Optional modifications before approval
+    subject_name_override: Optional[str] = None
+    icon: Optional[str] = "📚"
+    color: Optional[str] = "#3B82F6"

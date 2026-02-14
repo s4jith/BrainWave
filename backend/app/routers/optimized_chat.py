@@ -1,7 +1,7 @@
 """
 Optimized Chat Router - 2-Call Maximum for Sustainable Deployment
 
-Intel-optimized: Uses OpenVINO for embeddings, eliminates 60% of Gemini API calls.
+Uses Gemini embeddings with caching to minimize API calls.
 
 Endpoints:
 - POST /api/v1/chat/optimized - Main optimized chat (2 calls max)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/v1",
-    tags=["Optimized Chat (Intel)"]
+    tags=["Optimized Chat"]
 )
 
 
@@ -62,16 +62,11 @@ async def optimized_chat(request: OptimizedChatRequest):
     """
     ⚡ Optimized Chat - Maximum 2 Gemini API Calls
     
-    **Intel-Optimized Flow:**
+    **Optimized Flow:**
     1. Language detection → langdetect library (0 Gemini calls)
-    2. Query embedding → OpenVINO LaBSE (0 Gemini calls)
+    2. Query embedding → Gemini with caching
     3. Batch Pinecone retrieval → Multi-namespace search (0 calls)
     4. Answer generation → Single Gemini call
-    
-    **Result:** 60% reduction in API quota usage
-    
-    **Before:** 5 Gemini calls per Hindi annotation
-    **After:** 1-2 Gemini calls per query
     
     **Supports:** Hindi, Urdu, Tamil, Telugu, Bengali, Marathi, Gujarati,
                   Kannada, Malayalam, Punjabi, English
@@ -145,11 +140,9 @@ async def get_api_stats():
     
     Returns:
     - Total queries processed
-    - Gemini calls saved by OpenVINO embeddings
+    - Gemini calls saved by caching
     - Cache hit rates (embedding + answer)
     - Optimization savings percentage
-    
-    **Intel Optimization:** OpenVINO LaBSE embeddings eliminate 60% of Gemini calls.
     """
     try:
         stats = optimized_rag_service.get_stats()

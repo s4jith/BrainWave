@@ -41,7 +41,7 @@ const PRIORITIES = [
 export default function SupportTickets() {
   const navigate = useNavigate();
   const { user, logout } = useUserStore();
-  const isAdmin = user?.role === "admin" || user?.role === "teacher";
+  const isAdmin = user?.role === "admin";
 
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState({ total: 0, open: 0, in_progress: 0, resolved: 0 });
@@ -354,7 +354,7 @@ export default function SupportTickets() {
                           </div>
                           <h3 className="font-medium text-gray-800">{ticket.title}</h3>
                           <p className="text-sm text-gray-500">
-                            by {ticket.created_by_name} • {new Date(ticket.created_at).toLocaleDateString()}
+                            by {ticket.created_by_name} ï¿½ {new Date(ticket.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
@@ -384,7 +384,7 @@ export default function SupportTickets() {
                           <Eye className="w-4 h-4" />
                           <span>Admin has viewed your ticket</span>
                           {ticket.read_at && (
-                            <span className="text-gray-400">• {new Date(ticket.read_at).toLocaleString()}</span>
+                            <span className="text-gray-400">ï¿½ {new Date(ticket.read_at).toLocaleString()}</span>
                           )}
                         </div>
                       )}
@@ -767,7 +767,7 @@ export default function SupportTickets() {
                   <Eye className="w-4 h-4" />
                   <span>Admin has viewed your ticket</span>
                   {selectedTicket.read_at && (
-                    <span className="text-gray-400">• {new Date(selectedTicket.read_at).toLocaleString()}</span>
+                    <span className="text-gray-400">ï¿½ {new Date(selectedTicket.read_at).toLocaleString()}</span>
                   )}
                 </div>
               )}

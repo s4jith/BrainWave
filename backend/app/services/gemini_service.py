@@ -143,20 +143,40 @@ class GeminiService:
             logger.error(f"❌ Gemini explanation failed: {e}")
             raise
     
-    def generate_response(self, prompt: str, retry_count: int = 0) -> str:
+    def generate_response(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500) -> str:
         """
         Generate a simple text response from Gemini with automatic retry on 429 and expired key errors.
         
         Args:
             prompt: Input prompt
             retry_count: Number of retries attempted (internal use)
+            max_output_tokens: Maximum tokens for response (default: 1500)
         
         Returns:
             Generated text response
         """
         try:
-            # Get model with available API key
-            model, key_index = self._get_model_with_available_key(retry_count)
+            # Get API key
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                raise Exception("No API key available")
+            
+            # Configure Gemini with the available key
+            genai.configure(api_key=api_key)
+            
+            # Custom generation config with specified max tokens
+            generation_config = {
+                "max_output_tokens": max_output_tokens,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "top_k": 40,
+            }
+            
+            # Create model with custom config
+            model = genai.GenerativeModel(
+                self.model_name,
+                generation_config=generation_config
+            )
             
             response = model.generate_content(prompt)
             return response.text
@@ -187,7 +207,7 @@ class GeminiService:
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
                 # Retry with next key
-                return self.generate_response(prompt, retry_count + 1)
+                return self.generate_response(prompt, retry_count + 1, max_output_tokens)
             
             logger.error(f"❌ Gemini generation failed: {e}")
             raise
@@ -250,7 +270,8 @@ class GeminiService:
         prompt: str, 
         image_bytes: bytes, 
         mime_type: str = "image/png",
-        retry_count: int = 0
+        retry_count: int = 0,
+        max_output_tokens: int = 1500
     ) -> str:
         """
         Generate response from Gemini using both text and image input (Vision).
@@ -261,6 +282,7 @@ class GeminiService:
             image_bytes: Raw image bytes
             mime_type: Image MIME type (default: image/png)
             retry_count: Number of retries attempted (internal use)
+            max_output_tokens: Maximum tokens for response (default: 1500)
         
         Returns:
             Generated text response
@@ -268,8 +290,27 @@ class GeminiService:
         try:
             import base64
             
-            # Get model with available API key
-            model, key_index = self._get_model_with_available_key(retry_count)
+            # Get API key
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                raise Exception("No API key available")
+            
+            # Configure Gemini with the available key
+            genai.configure(api_key=api_key)
+            
+            # Custom generation config with specified max tokens
+            generation_config = {
+                "max_output_tokens": max_output_tokens,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "top_k": 40,
+            }
+            
+            # Create model with custom config
+            model = genai.GenerativeModel(
+                self.model_name,
+                generation_config=generation_config
+            )
             
             # Create the image part for Gemini
             image_part = {
@@ -292,7 +333,7 @@ class GeminiService:
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
                 # Retry with next key
-                return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1)
+                return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1, max_output_tokens)
             
             logger.error(f"❌ Gemini vision failed: {e}")
             raise
@@ -316,14 +357,14 @@ class GeminiService:
 
 CRITICAL RULES - STRICT RAG (Retrieval-Augmented Generation):
 1. ⚠️ ONLY use information from the CONTEXT below - DO NOT use your general knowledge
-2. ⚠️ If the context doesn't have the answer, say: "I couldn't find this information in your textbook."
+2. ⚠️ If the context doesn't have the answer, say: "I don't have enough information to answer this. Try asking about a specific topic."
 3. ⚠️ DO NOT make up facts, dates, names, or examples that aren't in the context
 4. ⚠️ If you're unsure, say so - don't guess or hallucinate
 
 LANGUAGE LEVEL (Class {class_level}):
 {language_instruction}
 
-CONTEXT FROM TEXTBOOK:
+REFERENCE CONTENT:
 {context}
 
 STUDENT'S QUESTION:

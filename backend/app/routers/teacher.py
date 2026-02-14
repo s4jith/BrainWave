@@ -10,11 +10,14 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
+import logging
 
 from app.db.mongo import db
 from app.core.permissions import get_current_user, require_role
 from app.models.rbac_models import UserRole, TokenData
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
 
@@ -89,6 +92,9 @@ async def get_teacher_groups(current_user: TokenData = Depends(require_role([Use
             result.append({
                 "id": str(g["_id"]),
                 "name": g.get("name"),
+                "subject": g.get("subject"),
+                "class_level": g.get("class_level"),
+                "batch_year": g.get("batch_year"),
                 "student_count": len(students),
                 "teacher_id": g.get("teacher_id"),
                 "students": students

@@ -1,8 +1,6 @@
 """
 Multilingual Chat Router for NCERT AI Learning Platform
 
-Intel-optimized: Uses OpenVINO LaBSE for cross-lingual embeddings.
-
 Supports Indian languages:
 - Hindi, Tamil, Urdu, Bengali, Marathi, Kannada, Telugu, Malayalam,
   Gujarati, Punjabi, Odia, Assamese, Sanskrit, Nepali
@@ -17,8 +15,10 @@ from typing import Optional, Literal
 import logging
 
 from app.services.orchestrator_service import orchestrator_service
-from app.services.openvino_multilingual_service import (
-    multilingual_service, 
+from app.utils.language_detection import (
+    detect_language_with_confidence,
+    get_language_name,
+    is_indic_language,
     SUPPORTED_LANGUAGES
 )
 from app.utils.performance_logger import measure_latency
@@ -53,7 +53,7 @@ async def multilingual_chat(request: MultilingualChatRequest):
     """
     Multilingual chat endpoint for Indian language NCERT questions.
     
-    Intel-optimized: Uses OpenVINO LaBSE for cross-lingual embeddings.
+    Supports cross-lingual retrieval for Indian languages.
     
     Supported Languages:
     - English (en), Hindi (hi), Tamil (ta), Urdu (ur), Bengali (bn)
@@ -86,14 +86,14 @@ async def multilingual_chat(request: MultilingualChatRequest):
             detected_lang = request.preferred_lang
             logger.info(f"🌐 Using preferred language: {detected_lang}")
         else:
-            detected_lang, confidence = multilingual_service.detect_language_with_confidence(question)
+            detected_lang, confidence = detect_language_with_confidence(question)
             logger.info(f"🌐 Detected language: {detected_lang} (confidence: {confidence:.2f})")
         
-        language_name = multilingual_service.get_language_name(detected_lang)
+        language_name = get_language_name(detected_lang)
         
         # Determine retrieval mode based on language
         # For Indic languages, we use cross-lingual retrieval
-        if multilingual_service.is_indic_language(detected_lang):
+        if is_indic_language(detected_lang):
             mode = "multilingual"
             logger.info(f"   Using multilingual retrieval for {language_name}")
         else:
@@ -175,14 +175,14 @@ async def detect_language(text: str):
     Returns:
         Detected language code and confidence
     """
-    lang, confidence = multilingual_service.detect_language_with_confidence(text)
+    lang, confidence = detect_language_with_confidence(text)
     
     return {
         "text": text[:100] + "..." if len(text) > 100 else text,
         "language_code": lang,
-        "language_name": multilingual_service.get_language_name(lang),
+        "language_name": get_language_name(lang),
         "confidence": round(confidence, 2),
-        "is_indic": multilingual_service.is_indic_language(lang)
+        "is_indic": is_indic_language(lang)
     }
 
 

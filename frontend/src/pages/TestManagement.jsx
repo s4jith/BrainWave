@@ -30,9 +30,25 @@ export default function TestManagement() {
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
+  // Teacher's groups and subjects
+  const [teacherGroups, setTeacherGroups] = useState([]);
+  const [teacherSubjects, setTeacherSubjects] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(true);
+
+  useEffect(() => {
+    fetchTeacherGroups();
+  }, []);
+
   useEffect(() => {
     fetchTests();
   }, [filterClass, filterSubject, filterStatus]);
+
+  // Recalculate stats when teacher groups change
+  useEffect(() => {
+    if (tests.length > 0 && teacherGroups.length > 0) {
+      calculateStats(tests);
+    }
+  }, [teacherGroups]);
 
   // Auto-refresh on window focus
   useEffect(() => {
@@ -42,6 +58,28 @@ export default function TestManagement() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [filterClass, filterSubject, filterStatus]);
+
+  const fetchTeacherGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const response = await fetch(`${API_URL}/api/teacher/groups`, {
+        headers: getAuthHeader()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const groups = data.groups || [];
+        setTeacherGroups(groups);
+        
+        // Extract unique subjects from groups
+        const subjects = [...new Set(groups.map(g => g.subject).filter(Boolean))];
+        setTeacherSubjects(subjects.sort());
+      }
+    } catch (err) {
+      console.error("Failed to fetch teacher groups:", err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
 
   const fetchTests = async () => {
     try {
@@ -71,28 +109,28 @@ export default function TestManagement() {
 
   const calculateStats = (testsData) => {
     if (!testsData || testsData.length === 0) {
-      setStats({ total_tests: 0, active_tests: 0, total_submissions: 0, pending_review: 0 });
+      setStats({ total_tests: 0, active_tests: 0, total_submissions: 0, total_students: 0 });
       return;
     }
 
     const now = new Date();
     let active_tests = 0;
     let total_submissions = 0;
-    let pending_review = 0;
 
     testsData.forEach(test => {
       const status = getTestStatus(test);
       if (status === 'active') active_tests++;
       total_submissions += test.submission_count || 0;
-      // Count pending review (submitted but not graded)
-      // This would need actual submission data, for now using placeholder
     });
+
+    // Count total students from teacher's groups
+    const totalStudents = teacherGroups.reduce((sum, group) => sum + (group.student_count || 0), 0);
 
     setStats({
       total_tests: testsData.length,
       active_tests,
       total_submissions,
-      pending_review // We'd need to fetch actual submission statuses for this
+      total_students: totalStudents
     });
   };
 
@@ -216,8 +254,8 @@ export default function TestManagement() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Submissions</p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.pending_review}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pending Review</p>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total_students}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Students</p>
           </div>
         </div>
       )}
@@ -234,7 +272,13 @@ export default function TestManagement() {
             <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
               <option value="">All Subjects</option>
-              {["Mathematics", "Science", "English", "Hindi", "Physics", "Chemistry", "Biology"].map(s => <option key={s} value={s}>{s}</option>)}
+              {loadingGroups ? (
+                <option disabled>Loading...</option>
+              ) : teacherSubjects.length > 0 ? (
+                teacherSubjects.map(s => <option key={s} value={s}>{s}</option>)
+              ) : (
+                <option disabled>No subjects assigned</option>
+              )}
             </select>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">

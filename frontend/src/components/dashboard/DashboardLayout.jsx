@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Menu,
@@ -19,9 +19,14 @@ import {
   Award,
   ClipboardCheck,
   Users,
-  MessageCircle
+  MessageCircle,
+  Home,
+  Sun,
+  Moon,
+  Monitor
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
+import useThemeStore from "../../stores/themeStore";
 import ChatbotPanel from "./ChatbotPanel";
 
 /**
@@ -32,18 +37,17 @@ import ChatbotPanel from "./ChatbotPanel";
 
 const navItems = [
   {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: Home,
+    path: "/dashboard"
+  },
+  {
     id: "ai-chat",
     label: "AI Chat Helper",
     icon: MessageSquare,
     path: null,
-    isChat: true,
-    highlight: true
-  },
-  {
-    id: "courses",
-    label: "My Courses",
-    icon: GraduationCap,
-    path: "/my-courses"
+    isChat: true
   },
   {
     id: "groups",
@@ -94,16 +98,34 @@ const navItems = [
     label: "Settings",
     icon: Settings,
     path: "/about-you"
-  },
-
+  }
 ];
 
 export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, calendar, logout } = useUserStore();
+  const { theme, setTheme, initTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatbotOpen, setChatbotOpen] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef(null);
+
+  // Initialize theme on mount
+  useEffect(() => {
+    initTheme();
+  }, []);
+
+  // Close theme menu on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -120,11 +142,27 @@ export default function DashboardLayout({ children }) {
 
   const isActive = (path) => location.pathname === path;
 
+  const themeOptions = [
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
+  ];
+
+  const getThemeIcon = () => {
+    switch (theme) {
+      case 'dark': return Moon;
+      case 'light': return Sun;
+      default: return Sun;
+    }
+  };
+
+  const ThemeIcon = getThemeIcon();
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
-      {/* Sidebar - Light Theme */}
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+      {/* Sidebar */}
       <aside
-        className={`flex-shrink-0 transition-all duration-300 bg-white border-r border-gray-100 flex flex-col ${sidebarOpen ? "w-64" : "w-20"
+        className={`flex-shrink-0 transition-all duration-300 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col ${sidebarOpen ? "w-64" : "w-20"
           }`}
       >
         {/* Logo */}
@@ -135,14 +173,14 @@ export default function DashboardLayout({ children }) {
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-gray-900 text-lg">The brainwave</span>
+                <span className="font-bold text-gray-900 dark:text-white text-lg">The brainwave</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 title="Collapse sidebar"
               >
-                <Menu className="w-5 h-5 text-gray-600" />
+                <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
             </>
           ) : (
@@ -161,26 +199,26 @@ export default function DashboardLayout({ children }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.path && isActive(item.path);
+            const isChatActive = item.isChat && chatbotOpen;
 
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${item.highlight
-                  ? "bg-gray-100 border border-gray-200 text-gray-900"
-                  : active
-                    ? "bg-gray-100 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
+                  isChatActive || active
+                    ? "bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
                   }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-5 h-5 ${item.highlight || active ? 'text-gray-900' : 'text-gray-400'}`} />
+                  <Icon className={`w-5 h-5 ${isChatActive || active ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`} />
                   {sidebarOpen && (
                     <span className="font-medium text-sm">{item.label}</span>
                   )}
                 </div>
                 {sidebarOpen && item.badge && (
-                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-600 border border-orange-200">
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
                     {item.badge}
                   </span>
                 )}
@@ -267,29 +305,73 @@ export default function DashboardLayout({ children }) {
         }
 
         {/* Logout */}
-        <div className="p-3 border-t border-gray-100">
+        <div className="p-3 border-t border-gray-100 dark:border-gray-800">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
-            <span className="font-medium text-sm">Log out</span>
-            <LogOut className="w-5 h-5" />
+            <div className="flex items-center gap-3">
+              <LogOut className="w-5 h-5" />
+              {sidebarOpen && <span className="font-medium text-sm">Log out</span>}
+            </div>
           </button>
         </div>
       </aside >
 
       {/* Main Content Area */}
-      < main className="flex-1 flex flex-col overflow-hidden" >
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header with Theme Toggle */}
+        <header className="flex-shrink-0 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 flex items-center justify-between transition-colors">
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {user?.name || 'Student Dashboard'}
+            </h2>
+          </div>
+          
+          {/* Theme Switcher in Header */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setShowThemeMenu(!showThemeMenu)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-200 dark:border-gray-700"
+              title="Change theme"
+            >
+              <ThemeIcon className="w-5 h-5" />
+              <span className="text-sm font-medium hidden sm:inline">Theme</span>
+            </button>
+            {showThemeMenu && (
+              <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                {themeOptions.map((option) => {
+                  const OptionIcon = option.icon;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                        theme === option.value
+                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <OptionIcon className="w-4 h-4" />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </header>
+
         {/* Page Content */}
-        < div className="flex-1 overflow-y-auto p-6" >
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
           {children}
-        </div >
-      </main >
+        </div>
+      </main>
 
       {/* Mobile Menu Toggle */}
       < button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed bottom-4 left-4 z-40 lg:hidden p-3 rounded-full bg-white text-gray-900 shadow-lg border border-gray-200"
+        className="fixed bottom-4 left-4 z-40 lg:hidden p-3 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-lg border border-gray-200 dark:border-gray-700"
       >
         {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button >

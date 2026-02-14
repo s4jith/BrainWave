@@ -28,7 +28,6 @@ import AssessmentBuilder from "./pages/AssessmentBuilder";
 import AssessmentTaker from "./pages/AssessmentTaker";
 import Gradebook from "./pages/Gradebook";
 import StudentDashboard from "./pages/StudentDashboard";
-import MyCourses from "./pages/MyCourses";
 import TeacherManagement from "./pages/TeacherManagement";
 import GroupManagement from "./pages/GroupManagement";
 import StudentGroups from "./pages/StudentGroups";
@@ -67,8 +66,9 @@ function ProtectedRoute({ children }) {
     const path = window.location.pathname;
     const teacherRoutes = [
       "/staff-tests", "/teacher-dashboard", "/teacher-tests", "/course-builder",
-      "/my-courses", "/courses/", "/support-tickets", "/create-test",
-      "/assessment-builder", "/assessments/", "/question-bank"
+      "/courses/", "/create-test",
+      "/assessment-builder", "/assessments/", "/question-bank", "/teacher-groups",
+      "/teacher-reports"
     ];
     const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
     if (!isTeacherRoute) {
@@ -512,14 +512,6 @@ function App() {
           element={
             <ProtectedRoute>
               <Gradebook />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/my-courses"
-          element={
-            <ProtectedRoute>
-              <MyCourses />
             </ProtectedRoute>
           }
         />

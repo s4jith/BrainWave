@@ -138,6 +138,21 @@ class SyncMongoDB:
         """Get questions collection for question bank."""
         return self.db.questions
     
+    @property
+    def assessments(self):
+        """Get assessments collection."""
+        return self.db.assessments
+    
+    @property
+    def submissions(self):
+        """Get submissions collection (for assessment submissions)."""
+        return self.db.submissions
+    
+    @property
+    def subjects(self):
+        """Get subjects collection (for curriculum)."""
+        return self.db.subjects
+    
     def get_collection(self, name: str):
         """Get a collection by name."""
         return self.db[name]

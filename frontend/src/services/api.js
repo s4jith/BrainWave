@@ -961,6 +961,37 @@ export const testService = {
   },
 
   /**
+   * Start an AI test with topic-level analytics support
+   * @param {object} params - Test parameters
+   * @returns {Promise<{session_id, chapter_name, questions, topics_covered}>}
+   */
+  async startAITest(params) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: params.studentId,
+          class_level: params.classLevel || 10,
+          subject: params.subject,
+          chapter_number: params.chapter_number,
+          num_questions: params.num_questions || 15
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Start AI Test Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Start AI Test Error:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Check if questions are available for a chapter
    * @param {number} classLevel
    * @param {string} subject

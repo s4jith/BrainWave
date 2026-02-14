@@ -1,20 +1,18 @@
 """
 Optimized RAG Service - 2-Call Maximum for Sustainable Deployment
 
-Intel-optimized: Uses OpenVINO LaBSE for embeddings (eliminates Gemini embedding calls).
+Uses Gemini embeddings with caching to minimize API calls.
 
 CRITICAL OPTIMIZATION:
 - Before: 5 Gemini calls per query (quota exhausted in 40 chats/day)
-- After: 2 calls max (embedding via OpenVINO + 1 generation)
+- After: 2 calls max (1 embedding + 1 generation)
 - Result: 200+ chats/day sustainable
 
 Flow:
 1. Language detection → langdetect library (0 Gemini calls)
-2. Query embedding → OpenVINO LaBSE (0 Gemini calls)
+2. Query embedding → Gemini (1 call, cached)
 3. Batch Pinecone retrieval → Multi-namespace search
 4. Answer generation → 1 Gemini call with all chunks
-
-Maps to OPEA OrchestratorService with quota optimization.
 """
 
 import logging
@@ -212,7 +210,6 @@ class OptimizedConfig:
     max_gemini_calls: int = 2
     skip_web_for_annotation: bool = True
     skip_web_for_literature: bool = True
-    use_openvino_embeddings: bool = True
     cache_enabled: bool = True
     fallback_to_gemini_embed: bool = True
 
@@ -221,23 +218,20 @@ class OptimizedRagService:
     """
     Optimized RAG Service with 2-call maximum.
     
-    Intel-optimized: Uses OpenVINO LaBSE for embeddings.
-    
     Key optimizations:
     1. Language detection via langdetect (0 Gemini calls)
-    2. Embeddings via OpenVINO LaBSE (0 Gemini calls)
+    2. Embeddings via Gemini with caching
     3. Batch Pinecone retrieval across namespaces
     4. Single Gemini call for answer generation
     5. In-memory caching for frequent queries
     
-    Result: 60% reduction in Gemini API calls.
+    Result: Sustainable API usage with caching.
     """
     
     def __init__(self, config: Optional[OptimizedConfig] = None):
         self.config = config or OptimizedConfig()
         
         # Services - lazy loaded
-        self._multilingual_service = None
         self._gemini_service = None
         self._pinecone_index = None
         
@@ -246,17 +240,6 @@ class OptimizedRagService:
         self.gemini_calls_saved = 0
         
         logger.info("✅ OptimizedRagService initialized (max 2 Gemini calls/query)")
-    
-    @property
-    def multilingual_service(self):
-        """Lazy load multilingual service."""
-        if self._multilingual_service is None:
-            try:
-                from app.services.openvino_multilingual_service import multilingual_service
-                self._multilingual_service = multilingual_service
-            except Exception as e:
-                logger.warning(f"Multilingual service not available: {e}")
-        return self._multilingual_service
     
     @property
     def gemini_service(self):
@@ -289,10 +272,6 @@ class OptimizedRagService:
             if lang in supported:
                 return lang
             
-            # Fallback: check for Hindi/Urdu scripts
-            if self.multilingual_service:
-                return self.multilingual_service.detect_language(text)
-            
             return "en"
         except Exception as e:
             logger.debug(f"Language detection failed: {e}")
@@ -300,9 +279,7 @@ class OptimizedRagService:
     
     def get_embedding(self, text: str, lang: str = "en") -> List[float]:
         """
-        Get embedding using OpenVINO LaBSE (0 Gemini calls) or cache.
-        
-        Falls back to Gemini embeddings if OpenVINO unavailable.
+        Get embedding using Gemini with caching.
         """
         # Check cache first
         if self.config.cache_enabled:
@@ -311,20 +288,7 @@ class OptimizedRagService:
                 logger.debug("📦 Embedding cache hit")
                 return cached
         
-        # Try OpenVINO LaBSE (Intel-optimized, 0 Gemini calls)
-        if self.config.use_openvino_embeddings and self.multilingual_service:
-            try:
-                if self.multilingual_service.is_available():
-                    embedding = self.multilingual_service.generate_embedding(text, lang)
-                    if embedding and len(embedding) > 0:
-                        if self.config.cache_enabled:
-                            embedding_cache.set(text, lang, embedding)
-                        self.gemini_calls_saved += 1
-                        return embedding
-            except Exception as e:
-                logger.debug(f"OpenVINO embedding failed: {e}")
-        
-        # Fallback to Gemini (1 call)
+        # Use Gemini embeddings
         if self.config.fallback_to_gemini_embed:
             try:
                 from app.services.gemini_key_manager import gemini_key_manager
@@ -392,7 +356,7 @@ class OptimizedRagService:
         all_chunks.sort(key=lambda x: x['score'], reverse=True)
         
         # CONFIDENCE THRESHOLD: Filter out low relevance chunks to prevent hallucination
-        # OpenVINO LaBSE scores: >0.7 is good, <0.6 is usually irrelevant
+        # Scores: >0.7 is good, <0.6 is usually irrelevant
         CONFIDENCE_THRESHOLD = 0.68
         
         high_confidence_chunks = [c for c in all_chunks if c['score'] >= CONFIDENCE_THRESHOLD]
@@ -500,11 +464,9 @@ Answer:"""
         """
         Optimized chat with maximum 2 Gemini API calls.
         
-        Intel-optimized: Uses OpenVINO for embeddings.
-        
         Flow:
         1. Language detection (langdetect, 0 calls)
-        2. Embedding (OpenVINO LaBSE or 1 Gemini call)
+        2. Embedding (Gemini, 1 call, cached)
         3. Batch Pinecone retrieval (0 calls)
         4. Answer generation (1 Gemini call)
         
@@ -561,7 +523,7 @@ Answer:"""
         lang = self.detect_language(question)
         logger.info(f"🌐 Detected language: {lang}")
         
-        # STEP 2: Get embedding (OpenVINO = 0 calls, fallback = 1 call)
+        # STEP 2: Get embedding (Gemini, cached)
         query_embedding = self.get_embedding(question, lang)
         
         # STEP 3: Batch retrieve from relevant namespaces
@@ -626,7 +588,6 @@ Answer:"""
             "api_tracker": api_tracker.get_stats(),
             "config": {
                 "max_calls": self.config.max_gemini_calls,
-                "openvino_embeddings": self.config.use_openvino_embeddings,
                 "caching": self.config.cache_enabled
             }
         }

@@ -48,14 +48,14 @@ class MCQGenerationRequest(BaseModel):
     chapter: int = Field(..., ge=1, description="Chapter number")
     num_questions: int = Field(5, ge=1, le=20, description="Number of MCQs to generate")
     page_range: Optional[tuple[int, int]] = Field(None, description="Optional page range (start, end)")
-    use_local_model: bool = Field(False, description="Use Intel OpenVINO local model for generation")
+    use_local_model: bool = Field(False, description="Use local model for generation")
 
 
 class MCQGenerationResponse(BaseModel):
     """Response schema for MCQ generation."""
     mcqs: List[MCQ] = Field(..., description="Generated MCQs")
     metadata: dict = Field(..., description="Generation metadata (class, subject, chapter)")
-    used_pipeline: str = Field("gemini", description="Pipeline used: gemini, openvino, or openvino-hybrid")
+    used_pipeline: str = Field("gemini", description="Pipeline used for generation")
     inference_time_ms: Optional[float] = Field(None, description="Inference time in milliseconds")
 
 

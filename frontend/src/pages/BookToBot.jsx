@@ -4,6 +4,7 @@ import PDFViewer from "../features/pdf/PDFViewer";
 import LessonNavigation from "../features/lessons/LessonNavigation";
 import UserSettingsPanel from "../components/UserSettingsPanel";
 import ChatbotPanel from "../components/dashboard/ChatbotPanel";
+import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { SUBJECTS_WITH_RAG } from "../constants/lessons";
 import { Menu, X, Settings, MessageCircle, AlertTriangle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -133,23 +134,7 @@ function BookToBot() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="text-center">
-          {/* Animated Book Loading */}
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            {/* Book base */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <BookOpen className="h-16 w-16 text-orange-500 animate-pulse" />
-            </div>
-            {/* Rotating ring around book */}
-            <div className="absolute inset-0 border-4 border-orange-200 border-t-violet-500 rounded-full animate-spin"></div>
-          </div>
-          <p className="text-lg font-medium text-orange-600">Loading your books...</p>
-          <p className="text-sm text-muted-foreground mt-1">Preparing your learning materials</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading your books..." submessage="Preparing your learning materials" />;
   }
 
   return (

@@ -156,8 +156,12 @@ class RAGEvaluationService:
             chapter_number=chapter_number,
             topic_name=topic_name,
             total_questions=len(questions),
-            correct_count=correct_count
+            correct_count=correct_count,
+            topic_analytics=topic_analytics  # Pass topic analytics
         )
+        
+        # Calculate topic-level analytics
+        topic_analytics = self._calculate_topic_analytics(questions, evaluations)
         
         logger.info(f"✅ Evaluation complete: {percentage_score}% ({correct_count}/{len(questions)} correct)")
         
@@ -172,6 +176,7 @@ class RAGEvaluationService:
             "improvements": overall_feedback["improvements"],
             "topics_to_review": weak_areas,
             "topics_to_study": overall_feedback.get("topics_to_study", []),
+            "topic_analytics": topic_analytics,  # NEW: Topic-level performance breakdown
             "subject": subject,
             "chapter_number": chapter_number,
             "topic_name": topic_name,
@@ -454,6 +459,96 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
                 "encouragement": "📚 Every expert was once a beginner. Review the chapter and try again!"
             }
     
+    def _calculate_topic_analytics(self, questions: List[Dict], evaluations: List[Dict]) -> Dict:
+        """
+        Calculate topic-level performance analytics.
+        Groups questions by topic and calculates scores for each.
+        """
+        topic_performance = {}
+        
+        # Match questions with evaluations and group by topic
+        for i, q in enumerate(questions):
+            topic_id = q.get("topic_id")
+            topic_name = q.get("topic_name", "General")
+            
+            # If no topic info, use chapter-level
+            if not topic_id or not topic_name:
+                topic_id = "chapter_general"
+                topic_name = "General Concepts"
+            
+            # Initialize topic if not seen
+            if topic_id not in topic_performance:
+                topic_performance[topic_id] = {
+                    "topic_id": topic_id,
+                    "topic_name": topic_name,
+                    "total_questions": 0,
+                    "correct_answers": 0,
+                    "total_score": 0,
+                    "max_score": 0,
+                    "questions": []
+                }
+            
+            # Find matching evaluation
+            eval_item = None
+            if i < len(evaluations):
+                eval_item = evaluations[i]
+            else:
+                # Try to match by question_id
+                question_id = q.get("question_id")
+                if question_id:
+                    eval_item = next((e for e in evaluations if e.get("question_id") == question_id), None)
+            
+            if eval_item:
+                topic_performance[topic_id]["total_questions"] += 1
+                topic_performance[topic_id]["correct_answers"] += 1 if eval_item.get("is_correct") else 0
+                topic_performance[topic_id]["total_score"] += eval_item.get("score", 0)
+                topic_performance[topic_id]["max_score"] += eval_item.get("max_score", 10)
+                topic_performance[topic_id]["questions"].append({
+                    "question_number": i + 1,
+                    "is_correct": eval_item.get("is_correct"),
+                    "score": eval_item.get("score", 0)
+                })
+        
+        # Calculate percentages and categorize
+        topics_list = []
+        strong_topics = []
+        weak_topics = []
+        
+        for topic_id, data in topic_performance.items():
+            if data["max_score"] > 0:
+                percentage = round((data["total_score"] / data["max_score"]) * 100, 1)
+            else:
+                percentage = 0
+            
+            topic_summary = {
+                "topic_id": topic_id,
+                "topic_name": data["topic_name"],
+                "total_questions": data["total_questions"],
+                "correct_answers": data["correct_answers"],
+                "score_percentage": percentage,
+                "questions_detail": data["questions"]
+            }
+            
+            topics_list.append(topic_summary)
+            
+            # Categorize topics
+            if percentage >= 70:
+                strong_topics.append({"name": data["topic_name"], "score": percentage})
+            elif percentage < 50:
+                weak_topics.append({"name": data["topic_name"], "score": percentage})
+        
+        # Sort topics by score
+        topics_list.sort(key=lambda x: x["score_percentage"], reverse=True)
+        strong_topics.sort(key=lambda x: x["score"], reverse=True)
+        weak_topics.sort(key=lambda x: x["score"])
+        
+        return {
+            "topics": topics_list,
+            "strong_topics": strong_topics,
+            "weak_topics": weak_topics,
+            "total_topics_covered": len(topics_list)
+        }
+    
     def _identify_weak_areas(self, evaluations: List[Dict]) -> List[str]:
         """Identify topics/areas where student needs improvement."""
         weak_areas = []
@@ -490,27 +585,34 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         chapter_number: int = 0,
         topic_name: str = "",
         total_questions: int = 0,
-        correct_count: int = 0
+        correct_count: int = 0,
+        topic_analytics: Dict = None
     ):
         """Save test session results to MongoDB."""
         try:
             collection = mongodb.db[self.SESSIONS_COLLECTION]
             
+            update_data = {
+                "status": "completed",
+                "score": score,
+                "subject": subject,
+                "chapter_number": chapter_number,
+                "topic_name": topic_name,
+                "total_questions": total_questions,
+                "correct_count": correct_count,
+                "evaluation_details": evaluations,
+                "overall_feedback": overall_feedback,
+                "topics_to_review": weak_areas,
+                "completed_at": datetime.utcnow()
+            }
+            
+            # Add topic analytics if provided
+            if topic_analytics:
+                update_data["topic_analytics"] = topic_analytics
+            
             await collection.update_one(
                 {"session_id": session_id},
-                {"$set": {
-                    "status": "completed",
-                    "score": score,
-                    "subject": subject,
-                    "chapter_number": chapter_number,
-                    "topic_name": topic_name,
-                    "total_questions": total_questions,
-                    "correct_count": correct_count,
-                    "evaluation_details": evaluations,
-                    "overall_feedback": overall_feedback,
-                    "topics_to_review": weak_areas,
-                    "completed_at": datetime.utcnow()
-                }}
+                {"$set": update_data}
             )
             logger.info(f"Saved session results for {session_id}")
         except Exception as e:

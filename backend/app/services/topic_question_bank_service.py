@@ -10,6 +10,7 @@ from bson import ObjectId
 import logging
 import json
 import re
+import uuid
 
 from app.db.mongo import mongodb
 from app.services.gemini_service import gemini_service
@@ -1786,6 +1787,186 @@ Output ONLY the JSON array, no other text."""
             "one_mark_count": 10,
             "two_mark_count": 5
         }
+    
+    # ==================== TOPIC-TAGGED QUESTION GENERATION ====================
+    
+    async def generate_questions_with_topic_tagging(
+        self,
+        class_level: int,
+        subject: str,
+        chapter_number: int,
+        num_questions: int = 15
+    ) -> Dict:
+        """
+        Generate questions with automatic topic tagging for AI tests.
+        This method:
+        1. Retrieves chapter content from Pinecone
+        2. Asks Gemini to identify main topics in the chapter
+        3. Generates questions and tags each with its relevant topic
+        4. Returns questions with topic metadata for topic-level analytics
+        
+        Returns questions with topic_id and topic_name for each question.
+        """
+        logger.info(f"📚 Generating topic-tagged questions for {subject} Ch.{chapter_number}")
+        
+        try:
+            # Step 1: Retrieve content
+            content = await self._retrieve_chapter_content(class_level, subject, chapter_number)
+            
+            if not content:
+                return {
+                    "status": "no_content",
+                    "questions": [],
+                    "error": "No content available for this chapter"
+                }
+            
+            chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
+            content_text = content.get("text", "")
+            
+            # Step 2: Generate questions with topic tagging
+            questions_with_topics = await self._generate_topic_tagged_questions(
+                content_text=content_text,
+                class_level=class_level,
+                subject=subject,
+                chapter_number=chapter_number,
+                chapter_name=chapter_name,
+                num_questions=num_questions
+            )
+            
+            if not questions_with_topics:
+                return {
+                    "status": "generation_failed",
+                    "questions": [],
+                    "error": "Failed to generate questions"
+                }
+            
+            # Extract unique topics
+            unique_topics = {}
+            for q in questions_with_topics:
+                topic_id = q.get("topic_id")
+                if topic_id and topic_id not in unique_topics:
+                    unique_topics[topic_id] = q.get("topic_name", "Unknown Topic")
+            
+            logger.info(f"✅ Generated {len(questions_with_topics)} questions covering {len(unique_topics)} topics")
+            
+            return {
+                "status": "generated",
+                "questions": questions_with_topics,
+                "total_questions": len(questions_with_topics),
+                "chapter_name": chapter_name,
+                "topics_covered": [{"topic_id": tid, "topic_name": tname} for tid, tname in unique_topics.items()],
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating topic-tagged questions: {e}")
+            return {
+                "status": "error",
+                "questions": [],
+                "error": str(e)
+            }
+    
+    async def _generate_topic_tagged_questions(
+        self,
+        content_text: str,
+        class_level: int,
+        subject: str,
+        chapter_number: int,
+        chapter_name: str,
+        num_questions: int
+    ) -> List[Dict]:
+        """
+        Generate questions with Gemini and auto-assign topics to each question.
+        Uses a single API call to be efficient.
+        """
+        
+        prompt = f"""Analyze this Class {class_level} {subject} chapter content and generate {num_questions} questions.
+
+**Chapter:** {chapter_name}
+
+**Content:**
+{content_text[:12000]}
+
+**TASK:**
+1. Identify 3-5 main TOPICS/CONCEPTS covered in this content
+2. Generate {num_questions} questions (mix of easy/medium/hard)
+3. Tag EACH question with the topic it belongs to
+
+**QUESTION DISTRIBUTION:**
+- {int(num_questions * 0.4)} EASY questions (recall, definitions)
+- {int(num_questions * 0.4)} MEDIUM questions (application, understanding)
+- {int(num_questions * 0.2)} HARD questions (analysis, problem-solving)
+
+**OUTPUT FORMAT (JSON):**
+{{
+  "topics": [
+    {{"topic_id": "topic_1", "topic_name": "Introduction to {subject}"}},
+    {{"topic_id": "topic_2", "topic_name": "Basic Concepts"}},
+    ...
+  ],
+  "questions": [
+    {{
+      "question_text": "What is...?",
+      "topic_id": "topic_1",
+      "topic_name": "Introduction to {subject}",
+      "difficulty": "easy",
+      "question_type": "recall",
+      "expected_answer": "...",
+      "keywords": ["..."],
+      "marks": 5,
+      "time_estimate_seconds": 60
+    }},
+    ...
+  ]
+}}
+
+**CRITICAL RULES:**
+1. Each question MUST have a topic_id and topic_name
+2. Topics should be specific (e.g., "Photosynthesis" not "Biology Concepts")  
+3. Questions must be answerable from the content
+4. Distribute questions across ALL identified topics
+5. Include detailed expected_answer for evaluation
+
+Output ONLY the JSON object."""
+
+        try:
+            response = self.gemini.generate_response(prompt)
+            
+            # Parse JSON
+            json_match = re.search(r'\\{.*\\}', response, re.DOTALL)
+            if not json_match:
+                logger.error("Could not parse JSON from Gemini response")
+                return []
+            
+            data = json.loads(json_match.group())
+            questions_data = data.get("questions", [])
+            topics = data.get("topics", [])
+            
+            logger.info(f"Gemini identified {len(topics)} topics: {[t['topic_name'] for t in topics]}")
+            
+            # Format questions
+            formatted_questions = []
+            for i, q in enumerate(questions_data):
+                formatted_questions.append({
+                    "question_id": f"{subject}_{chapter_number}_{i}_{uuid.uuid4().hex[:6]}",
+                    "question_text": q.get("question_text", ""),
+                    "topic_id": q.get("topic_id", "general"),
+                    "topic_name": q.get("topic_name", "General"),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": q.get("question_type", "conceptual"),
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "marks": q.get("marks", 5),
+                    "time_estimate_seconds": q.get("time_estimate_seconds", 90),
+                    "chapter_number": chapter_number,
+                    "chapter_name": chapter_name
+                })
+            
+            return formatted_questions
+            
+        except Exception as e:
+            logger.error(f"Error in topic-tagged question generation: {e}")
+            return []
 
 
 # Global instance

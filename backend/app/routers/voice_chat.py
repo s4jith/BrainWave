@@ -1,8 +1,6 @@
 """
 Voice Chat Router for NCERT AI Learning Platform
 
-Intel-optimized: Voice support at interface level; core RAG and Intel optimization remain same.
-
 Provides voice-to-text chat endpoint that accepts audio input and processes through
 the existing RAG pipeline after speech-to-text conversion.
 """
@@ -33,8 +31,8 @@ async def voice_chat(
     """
     Voice-based chat endpoint.
     
-    Intel-optimized: Voice support at interface level. Core RAG pipeline and
-    Intel OpenVINO optimizations remain unchanged.
+    Voice support at interface level. Core RAG pipeline
+    processes the transcribed text.
     
     This endpoint:
     1. Accepts audio file (WAV, MP3, WebM)
@@ -63,7 +61,6 @@ async def voice_chat(
         
         # Speech-to-text conversion
         # Note: In production, integrate with:
-        # - Intel OpenVINO speech recognition models
         # - Google Speech-to-Text API
         # - Azure Speech Services
         # - Browser Web Speech API (client-side)
@@ -115,11 +112,8 @@ async def _transcribe_audio(audio_content: bytes, content_type: str) -> str:
     Transcribe audio to text.
     
     Note: This is a placeholder implementation. In production:
-    - Use Intel OpenVINO speech models for on-device processing
-    - Or integrate with cloud STT services (Google, Azure)
+    - Integrate with cloud STT services (Google, Azure)
     - Or rely on browser Web Speech API (client-side)
-    
-    For Intel Unnati demo, voice is supported at interface level.
     """
     # Placeholder: Return instruction for demo
     # In production, integrate actual STT here

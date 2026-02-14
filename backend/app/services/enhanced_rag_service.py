@@ -202,61 +202,87 @@ class EnhancedRAGService:
             all_chunks = []
             class_distribution = {}
             
-            # SIMPLIFIED: Query ALL vectors in namespace without class_level filter
-            # Different books may have different metadata formats, so we filter in Python
-            logger.info(f"   Querying namespace: {namespace} without metadata filters")
+            # === STAGE 1: PRE-FILTER (Indexed Metadata) ===
+            # Build metadata filter for class levels (handles both int and string storage)
+            class_filter_values = []
+            for c in classes_to_search:
+                class_filter_values.extend([c, str(c)])
+            
+            metadata_filter = {"class": {"$in": class_filter_values}}
+            
+            # Optional: add chapter filter if provided
+            if chapter is not None:
+                metadata_filter["chapter_number"] = chapter
+            
+            logger.info(f"   Stage 1 Pre-filter: namespace={namespace}, class={list(classes_to_search)}, chapter={chapter}")
             
             try:
-                # Query textbook index with namespace only (no metadata filter)
+                # === STAGE 2: ANN VECTOR SEARCH (on pre-filtered subset) ===
                 results = self.textbook_db.index.query(
                     namespace=namespace,
                     vector=query_embedding,
-                    top_k=25,  # Get more chunks, we'll filter by relevance
-                    include_metadata=True
+                    top_k=5,
+                    include_metadata=True,
+                    filter=metadata_filter
                 )
                 
-                # Extract matches
                 matches = results.get('matches', [])
-                logger.info(f"   🔍 Found {len(matches)} total matches in namespace")
+                logger.info(f"   Stage 2 ANN search: {len(matches)} matches from filtered subset")
+                
+                # FALLBACK: If pre-filter is too restrictive, retry without filter
+                if len(matches) == 0:
+                    logger.info(f"   ⚠️ No matches with filter, retrying without metadata filter...")
+                    results = self.textbook_db.index.query(
+                        namespace=namespace,
+                        vector=query_embedding,
+                        top_k=5,
+                        include_metadata=True
+                    )
+                    matches = results.get('matches', [])
+                    logger.info(f"   🔄 Fallback: {len(matches)} matches without filter")
+                
+                # === STAGE 3: POST-FILTER (Score Threshold + Class Boost) ===
+                threshold = 0.3 if mode == "basic" else 0.2
                 
                 for match in matches:
                     score = match.get('score', 0)
                     
-                    # Dynamic threshold based on mode
-                    threshold = 0.3 if mode == "basic" else 0.2
-                    
                     if score >= threshold:
                         metadata = match.get('metadata', {})
-                        chunk_class = metadata.get('class_level', 0)
+                        # Read class from correct key ('class' is what upload scripts store)
+                        chunk_class = metadata.get('class', metadata.get('class_level', 0))
                         
-                        # Try to parse class_level as int (might be stored as string)
                         try:
                             chunk_class = int(chunk_class) if chunk_class else 0
                         except (ValueError, TypeError):
                             chunk_class = 0
                         
-                        # Filter by class in Python (if needed)
-                        # For now, accept all chunks from the namespace
+                        # Class-boost: prefer chunks from student's exact class
+                        effective_score = score * 1.1 if chunk_class == student_class else score
+                        
                         chunk_data = {
                             'text': metadata.get('text', ''),
                             'class': chunk_class,
                             'subject': subject,
                             'chapter': metadata.get('chapter_number', metadata.get('chapter')),
                             'page': metadata.get('page_number', metadata.get('page')),
-                            'score': score,
+                            'score': effective_score,
                             'source': 'textbook'
                         }
                         all_chunks.append(chunk_data)
+                        
+                        # Track class distribution
+                        class_distribution[chunk_class] = class_distribution.get(chunk_class, 0) + 1
                 
-                logger.info(f"   ✓ {len(all_chunks)} chunks passed threshold")
+                logger.info(f"   Stage 3 Post-filter: {len(all_chunks)} chunks passed threshold (≥{threshold})")
                         
             except Exception as query_error:
                 logger.warning(f"  ✗ Query failed: {query_error}")
             
-            # Sort by score (highest first)
+            # Sort by effective score (highest first)
             all_chunks.sort(key=lambda x: -x['score'])
             
-            logger.info(f"📊 Total chunks retrieved: {len(all_chunks)}")
+            logger.info(f"📊 Total chunks retrieved: {len(all_chunks)} | Classes: {dict(class_distribution)}")
             
             return all_chunks, class_distribution
             
@@ -426,10 +452,10 @@ class EnhancedRAGService:
             fallback_prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
             The student asked: "{question}"
             
-            I could not find specific textbook content for this query in the vector database.
-            Please answer the question using your general knowledge. 
-            Start by saying: "I couldn't find this specific topic in your uploaded textbooks, but here is a general explanation:"
-            Keep it simple and suitable for Class {student_class}.
+            Answer the question directly using your general knowledge.
+            Do NOT start with any preamble like "Based on your textbook" or "I couldn't find this topic".
+            Just give the answer directly, clearly and simply.
+            Keep it suitable for Class {student_class}.
             """
             return self.gemini.generate_response(fallback_prompt)
         
@@ -462,8 +488,8 @@ class EnhancedRAGService:
         # Detect language of question for multilingual response
         lang_instruction = ""
         try:
-            from app.services.openvino_multilingual_service import multilingual_service
-            lang, confidence = multilingual_service.detect_language_with_confidence(question)
+            from app.utils.language_detection import detect_language_with_confidence
+            lang, confidence = detect_language_with_confidence(question)
             lang_names = {"hi": "Hindi", "ur": "Urdu", "ta": "Tamil", "te": "Telugu", "bn": "Bengali", "mr": "Marathi", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam", "pa": "Punjabi"}
             if lang != "en" and confidence > 0.5 and lang in lang_names:
                 lang_instruction = f"\n6. IMPORTANT: The question is in {lang_names[lang]}. You MUST respond entirely in {lang_names[lang]} using the same script."
@@ -476,21 +502,19 @@ class EnhancedRAGService:
 
 STUDENT QUESTION: {question}
 
-TEXTBOOK CONTENT (Multiple Classes):
+REFERENCE CONTENT:
 {combined_context}
 
 {progressive_note}
 
 INSTRUCTIONS:
-1. Answer the question using ONLY the textbook content provided
-2. If content is from multiple classes, build the answer progressively:
-   - Start with foundational concepts from earlier classes
-   - Build up to current class level understanding
-3. Keep the answer clear and appropriate for Class {student_class} students
-4. Use examples from the textbook if available
-5. If the content from earlier classes helps explain basics, mention it naturally{lang_instruction}
+1. Answer the question directly using the content provided
+2. Do NOT start with any preamble like "Based on your textbook" or "According to the textbook"
+3. Just give the answer directly - start with the actual answer content
+4. Keep the answer clear and appropriate for Class {student_class} students
+5. Use examples if available{lang_instruction}
 
-Generate a clear, helpful answer:"""
+Generate a clear, direct answer:"""
         
         answer = self.gemini.generate_response(prompt)
         logger.info(f"✓ Basic answer generated ({len(answer)} chars)")
@@ -564,8 +588,8 @@ Generate a clear, helpful answer:"""
         # Detect language of question for multilingual response
         lang_instruction = ""
         try:
-            from app.services.openvino_multilingual_service import multilingual_service
-            lang, confidence = multilingual_service.detect_language_with_confidence(question)
+            from app.utils.language_detection import detect_language_with_confidence
+            lang, confidence = detect_language_with_confidence(question)
             lang_names = {"hi": "Hindi", "ur": "Urdu", "ta": "Tamil", "te": "Telugu", "bn": "Bengali", "mr": "Marathi", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam", "pa": "Punjabi"}
             if lang != "en" and confidence > 0.5 and lang in lang_names:
                 lang_instruction = f"\n7. IMPORTANT: The question is in {lang_names[lang]}. You MUST respond entirely in {lang_names[lang]} using the same script."
@@ -772,18 +796,21 @@ Generate your answer using ONLY the textbook content provided:"""
         logger.info(f"📚 BASIC MODE (Triple-Index): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
         
-        # 0. Generate embedding ONCE for all queries
+        # 0. Generate embedding AND validate subject IN PARALLEL to save ~2s
         try:
-            query_embedding = self.generate_embedding(question)
+            async def gen_embedding_async():
+                return await asyncio.to_thread(self.generate_embedding, question)
+            
+            query_embedding, validation = await asyncio.gather(
+                gen_embedding_async(),
+                subject_classifier.classify(question)
+            )
         except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}")
+            logger.error(f"Failed parallel init: {e}")
             return "I'm having trouble understanding that right now. Please try again.", []
 
-        # 🔍 STRICT SUBJECT VALIDATION
+        # 🔍 STRICT SUBJECT VALIDATION (result from parallel call above)
         try:
-            # Run classification in parallel with other tasks if possible (sync here for safety)
-            # Use lower threshold (0.60) as requested for strict enforcement
-            validation = await subject_classifier.classify(question)
             detected_subject = validation.get("detected_subject", "Unknown")
             confidence = validation.get("confidence", 0.0)
             
@@ -904,17 +931,21 @@ Generate your answer using ONLY the textbook content provided:"""
         Returns:
             Tuple of (answer, source_chunks)
         """
-        logger.info(f"📝 ANNOTATION MODE (Lower threshold): Class {student_class} {subject}")
+        logger.info(f"📝 ANNOTATION MODE (Optimized): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
         
-        # 1. Query textbook content (primary source)
+        # OPTIMIZATION: Generate embedding ONCE and reuse for all queries
+        query_embedding = self.generate_embedding(question)
+        
+        # 1. Query textbook content (primary source) - reduced to top 3 chunks
         textbook_chunks, class_dist = self.query_multi_class(
             query_text=question,
             subject=subject,
             student_class=student_class,
             chapter=chapter,
             mode="basic",
-            chunks_per_class=5
+            chunks_per_class=3,
+            query_embedding=query_embedding
         )
         
         # 2. Query stored LLM answers with LOWER threshold for annotations
@@ -922,11 +953,12 @@ Generate your answer using ONLY the textbook content provided:"""
             query_text=question,
             subject=subject,
             top_k=3,
-            similarity_threshold=0.65  # Lower threshold for annotation reuse
+            similarity_threshold=0.35,  # Much lower threshold (0.35 vs 0.65) for better cache reuse
+            query_embedding=query_embedding
         )
         
-        # 🎯 CACHE HIT: Return cached answer directly if high similarity
-        if llm_chunks and llm_chunks[0]['score'] >= 0.90:  # Slightly lower for annotations (0.90 vs 0.95)
+        # 🎯 CACHE HIT: Return cached answer directly if reasonable similarity
+        if llm_chunks and llm_chunks[0]['score'] >= 0.75:  # Still high bar for direct use
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
@@ -945,28 +977,26 @@ Generate your answer using ONLY the textbook content provided:"""
         web_chunks = []  # Web scraping disabled to reduce Gemini API usage
         logger.info("🌐 Web content: DISABLED (saving API calls)")
         
-        # EDGE CASE 1: No content found - Try progressive search (earlier classes)
+        # EDGE CASE 1: No content found - Try ONE previous class only (optimized)
         if not textbook_chunks and not llm_chunks:
             logger.warning(f"⚠️ EDGE CASE: No content found for '{question[:50]}...' in Class {student_class}")
-            logger.info(f"🔄 Attempting progressive search in Classes {max(5, student_class-3)}-{student_class-1}...")
-            
-            # Try searching previous 3 classes for foundational content
-            for prev_class in range(student_class - 1, max(4, student_class - 4), -1):
-                logger.info(f"   Searching Class {prev_class}...")
+            prev_class = student_class - 1
+            if prev_class >= 5:
+                logger.info(f"🔄 Searching Class {prev_class} (one-step fallback)...")
                 prev_chunks, prev_dist = self.query_multi_class(
                     query_text=question,
                     subject=subject,
                     student_class=prev_class,
                     chapter=None,  # Remove chapter filter for broader search
                     mode="basic",
-                    chunks_per_class=5
+                    chunks_per_class=3,
+                    query_embedding=query_embedding
                 )
                 
                 if prev_chunks:
                     logger.info(f"✅ Found {len(prev_chunks)} chunks in Class {prev_class} (foundation content)")
                     textbook_chunks = prev_chunks
                     class_dist = prev_dist
-                    break
         
         # Combine all sources
         all_chunks = textbook_chunks + llm_chunks + web_chunks
@@ -1006,8 +1036,9 @@ Keep it under 200 words and student-friendly."""
             mode="basic"
         )
         
-        # Store answer if high quality (with textbook verification)
-        if self.llm_storage._should_store_answer(answer, textbook_chunks):
+        # Store answer for future reuse (even fallback answers, for better caching)
+        # Simplified: Store if answer is reasonable length and not obviously broken
+        if answer and len(answer.strip()) > 100:
             topic = self.llm_storage._extract_topic(question)
             self.llm_storage.store_answer(
                 question=question,
@@ -1015,9 +1046,10 @@ Keep it under 200 words and student-friendly."""
                 subject=subject,
                 class_level=student_class,
                 topic=topic,
-                quality_score=0.9,
+                quality_score=0.9 if textbook_chunks else 0.7,  # Lower score for fallback
                 textbook_chunks=textbook_chunks
             )
+            logger.info(f"✓ Answer stored for future reuse (quality: {'high' if textbook_chunks else 'fallback'})")
         
         return answer, all_chunks
     

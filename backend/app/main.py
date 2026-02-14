@@ -108,9 +108,7 @@ app.include_router(history.router, prefix="/api")     # ✅ Annotation History
 from app.routers import admin, user, test, auth
 from app.routers import admin_dashboard, support, support_tickets, test_management
 from app.routers import book_management, curriculum
-from app.routers import admin_intel  # Intel OPEA-style admin endpoint
 app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
-app.include_router(admin_intel.router)           # ✅ Intel Status Endpoint
 app.include_router(user.router, prefix="/api")   # ✅ User Stats (Dashboard)
 app.include_router(test.router, prefix="/api")   # ✅ Tests (Staff + AI)
 app.include_router(auth.router)                  # ✅ Authentication (Login/Password)
@@ -129,8 +127,7 @@ app.include_router(teacher.router)               # ✅ Teacher specific (Groups,
 from app.routers import notifications
 app.include_router(notifications.router)         # ✅ Notifications
 
-# Stretch goal routers (Intel Unnati)
-# Stretch goal routers (Intel Unnati)
+# Stretch goal routers
 from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat, student
 app.include_router(voice_chat.router)            # ✅ Voice Chat (Stretch Goal)
 app.include_router(student_level.router)         # ✅ Adaptive Explanations (Stretch Goal)

@@ -65,6 +65,7 @@ export default function TestCenter() {
         testConfig: {
           student_id: user.id,
           class_level: user.classLevel || 10,
+          test_type: 'ai_with_analytics',  // NEW: Enable topic-level analytics
           ...config
         }
       }

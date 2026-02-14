@@ -1,8 +1,8 @@
 """
-Performance Logger for Intel Optimization Metrics
+Performance Logger
 
-Intel-optimized: Provides latency tracking for OPEA-style RAG components.
-Logs execution times to console and MongoDB for Intel evaluation metrics.
+Provides latency tracking for RAG pipeline components.
+Logs execution times to console and MongoDB.
 """
 
 import time
@@ -14,14 +14,6 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class IntelOptimizedConfig:
-    """Configuration for Intel-optimized components."""
-    intel_optimized: bool = True
-    component_name: str = ""
-    description: str = ""
 
 
 @dataclass
@@ -47,10 +39,8 @@ class LatencyMetrics:
 
 class PerformanceLogger:
     """
-    Performance logger for tracking Intel-optimized component latencies.
-    
-    Intel-optimized: Provides evidence of Intel acceleration and RAG latency
-    for OPEA-style pipeline evaluation (target: ≤3-5s for full RAG query).
+    Performance logger for tracking component latencies.
+    Target: ≤3-5s for full RAG query.
     """
     
     _instance = None
@@ -80,7 +70,6 @@ class PerformanceLogger:
         """Record a latency measurement."""
         cls._metrics[component_name].record(time_ms)
         
-        # Log to console with Intel branding
         logger.info(f"[PERF] {component_name}: {time_ms:.2f}ms")
         
         # Optionally log to MongoDB
@@ -108,7 +97,7 @@ class PerformanceLogger:
     
     @classmethod
     def get_avg_latencies(cls) -> Dict[str, float]:
-        """Get average latencies for Intel status endpoint."""
+        """Get average latencies."""
         return {
             name: round(metrics.avg_time_ms, 2)
             for name, metrics in cls._metrics.items()
@@ -117,17 +106,15 @@ class PerformanceLogger:
 
 def measure_latency(component_name: str):
     """
-    Decorator to measure execution latency of Intel-optimized components.
-    
-    Intel-optimized: Tracks performance for OPEA-style pipeline evaluation.
+    Decorator to measure execution latency of components.
     
     Usage:
-        @measure_latency("ocr_openvino")
-        def extract_text(image):
+        @measure_latency("rag_query")
+        def query_vectors(text):
             ...
     
     Args:
-        component_name: Name of the component (e.g., "ocr_openvino", "rag_query")
+        component_name: Name of the component (e.g., "ocr_gemini", "rag_query")
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)

@@ -114,83 +114,37 @@ class LLMStorageService:
         """
         Check if answer meets quality criteria for storage.
         
-        Criteria:
-        - Sufficient length (>200 characters)
-        - No hallucination markers
-        - Contains educational content
+        Simplified criteria for better cache reuse:
+        - Sufficient length (>100 characters)
         - Not error messages
+        - Not obvious failure responses
         
         Args:
             answer: Generated answer text
+            textbook_chunks: Optional textbook chunks (not required for storage)
         
         Returns:
             True if answer should be stored
         """
-        if not answer or len(answer) < 200:
+        if not answer or len(answer) < 100:
             return False
         
-        # Check for hallucination markers
-        hallucination_markers = [
-            "i don't have information",
-            "i cannot find",
-            "no information available",
-            "not mentioned in the context",
-            "according to my knowledge",
-            "as an ai",
-            "i apologize",
-            "i'm sorry"
+        # Check for obvious error/failure markers
+        failure_markers = [
+            "i cannot",
+            "i'm unable to",
+            "error occurred",
+            "failed to",
+            "exception",
+            "something went wrong"
         ]
         
         answer_lower = answer.lower()
-        for marker in hallucination_markers:
+        for marker in failure_markers:
             if marker in answer_lower:
                 return False
         
-        # Check for error patterns
-        error_patterns = [
-            "error",
-            "failed",
-            "exception",
-            "not found"
-        ]
-        
-        # Allow if error patterns are in educational context
-        has_errors = any(pattern in answer_lower for pattern in error_patterns)
-        if has_errors and len(answer) < 500:
-            return False
-        
-        # Check for educational content indicators
-        educational_indicators = [
-            "formula",
-            "theorem",
-            "definition",
-            "example",
-            "step",
-            "method",
-            "property",
-            "rule",
-            "concept",
-            "understand",
-            "calculate",
-            "solve",
-            "equation"
-        ]
-        
-        has_educational_content = any(indicator in answer_lower for indicator in educational_indicators)
-        
-        # Must have educational content
-        if not has_educational_content:
-            logger.debug("Answer lacks educational content indicators")
-            return False
-        
-        # NEW: Textbook grounding verification
-        if textbook_chunks:
-            grounding_score = self._verify_textbook_grounding(answer, textbook_chunks)
-            if grounding_score < 0.3:  # Less than 30% overlap
-                logger.warning(f"⚠️ Answer not grounded in textbook (score: {grounding_score:.2f}) - NOT storing")
-                return False
-            logger.info(f"✅ Answer grounding verified (score: {grounding_score:.2f})")
-        
+        # Store all reasonable answers (textbook-based or fallback)
         return True
     
     def _verify_textbook_grounding(self, answer: str, textbook_chunks: list) -> float:

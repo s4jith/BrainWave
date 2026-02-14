@@ -153,6 +153,7 @@ class CompleteTestResponse(BaseModel):
     strengths: List[str]
     improvements: List[str]
     topics_to_review: List[str]
+    topic_analytics: Optional[Dict] = None  # NEW: Topic-level performance breakdown
     completed_at: str
 
 
@@ -881,6 +882,119 @@ async def start_test_v2(request: StartTestRequestV2):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== AI TEST WITH TOPIC ANALYTICS ====================
+
+class StartAITestRequest(BaseModel):
+    """Request to start an AI test with topic-level analytics."""
+    student_id: str = Field(..., description="Student ID")
+    class_level: int = Field(default=10, description="Class level")
+    subject: str = Field(..., description="Subject name")
+    chapter_number: int = Field(..., description="Chapter number")
+    num_questions: int = Field(default=15, ge=5, le=20, description="Number of questions")
+
+
+class StartAITestResponse(BaseModel):
+    """Response after starting an AI test."""
+    session_id: str
+    chapter_name: str
+    questions: List[TestQuestionItem]
+    total_questions: int
+    time_limit_minutes: int
+    started_at: str
+    topics_covered: List[Dict]
+
+
+@router.post("/ai-test/start", response_model=StartAITestResponse)
+async def start_ai_test_with_topics(request: StartAITestRequest):
+    """
+    Start an AI test with topic-level analytics support.
+    
+    Flow:
+    1. Generate questions with automatic topic tagging
+    2. Each question is tagged with topic_id and topic_name
+    3. After completion, evaluation provides topic-level performance breakdown
+    4. Students see strong topics and weak topics in results
+    """
+    try:
+        logger.info(f"📝 Starting AI test for {request.subject} Ch.{request.chapter_number}")
+        
+        # Generate questions with topic tagging
+        result = await topic_question_bank_service.generate_questions_with_topic_tagging(
+            class_level=request.class_level,
+            subject=request.subject,
+            chapter_number=request.chapter_number,
+            num_questions=request.num_questions
+        )
+        
+        if result.get("status") in ["error", "no_content", "generation_failed"]:
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Failed to generate questions")
+            )
+        
+        questions = result.get("questions", [])
+        if not questions:
+            raise HTTPException(
+                status_code=404,
+                detail="No questions generated for this chapter"
+            )
+        
+        # Create test session
+        session_id = str(uuid.uuid4())
+        time_limit_minutes = max(20, len(questions) * 2)  # 2 min per question
+        
+        session_doc = {
+            "session_id": session_id,
+            "student_id": request.student_id,
+            "class_level": request.class_level,
+            "subject": request.subject,
+            "chapter_number": request.chapter_number,
+            "chapter_name": result.get("chapter_name", f"Chapter {request.chapter_number}"),
+            "test_type": "ai_with_topics",
+            "num_questions": len(questions),
+            "questions_served": questions,  # Includes topic_id and topic_name for each question
+            "topics_covered": result.get("topics_covered", []),
+            "answers": [],
+            "status": "started",
+            "started_at": datetime.utcnow(),
+            "time_limit_minutes": time_limit_minutes
+        }
+        
+        await mongodb.db.test_sessions.insert_one(session_doc)
+        
+        # Format questions for response (exclude expected answers)
+        response_questions = [
+            TestQuestionItem(
+                question_number=i + 1,
+                question_id=q.get("question_id", f"q_{i}"),
+                question_text=q.get("question_text", ""),
+                difficulty=q.get("difficulty", "medium"),
+                question_type=q.get("question_type", "conceptual"),
+                marks=q.get("marks", 5),
+                time_estimate=q.get("time_estimate_seconds", 90)
+            )
+            for i, q in enumerate(questions)
+        ]
+        
+        logger.info(f"✅ Started AI test {session_id} with {len(questions)} topic-tagged questions")
+        
+        return StartAITestResponse(
+            session_id=session_id,
+            chapter_name=session_doc["chapter_name"],
+            questions=response_questions,
+            total_questions=len(questions),
+            time_limit_minutes=time_limit_minutes,
+            started_at=session_doc["started_at"].isoformat(),
+            topics_covered=result.get("topics_covered", [])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting AI test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/answer")
 async def submit_answer(request: SubmitAnswerRequest):
     """
@@ -939,6 +1053,7 @@ async def complete_test(request: CompleteTestRequest):
                 strengths=session.get("overall_feedback", {}).get("strengths", []),
                 improvements=session.get("overall_feedback", {}).get("improvements", []),
                 topics_to_review=session.get("topics_to_review", []),
+                topic_analytics=session.get("topic_analytics"),
                 completed_at=session.get("completed_at", datetime.utcnow()).isoformat()
             )
         
@@ -965,6 +1080,7 @@ async def complete_test(request: CompleteTestRequest):
             strengths=evaluation_result["strengths"],
             improvements=evaluation_result["improvements"],
             topics_to_review=evaluation_result["topics_to_review"],
+            topic_analytics=evaluation_result.get("topic_analytics"),
             completed_at=evaluation_result["completed_at"]
         )
         

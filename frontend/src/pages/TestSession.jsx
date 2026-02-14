@@ -74,8 +74,18 @@ export default function TestSession() {
 
         let newSession;
 
-        // Check if using new fixed-format chapter test
-        if (testConfig.use_chapter_test) {
+        // Check test type
+        if (testConfig.test_type === 'ai_with_analytics') {
+          // New AI test with topic-level analytics
+          newSession = await testService.startAITest({
+            studentId: user?.id || user?.sub || "guest",
+            classLevel: testConfig.class_level || user?.classLevel || 11,
+            subject: testConfig.subject,
+            chapter_number: testConfig.chapter_number,
+            num_questions: testConfig.num_questions || 15
+          });
+        } else if (testConfig.use_chapter_test) {
+          // Fixed-format chapter test
           newSession = await testService.startChapterTest({
             studentId: user?.id || user?.sub || "guest",
             classLevel: testConfig.class_level || user?.classLevel || 11,

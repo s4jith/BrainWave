@@ -29,7 +29,7 @@ PyJWT>=2.8.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 
-# PDF Processing & OCR (Intel OpenVINO optimized)
+# PDF Processing & OCR
 PyPDF2==3.0.1
 pdf2image==1.17.0
 # NOTE: pdf2image requires Poppler to be installed as a SYSTEM DEPENDENCY.
@@ -41,18 +41,14 @@ Pillow>=10.2.0
 opencv-python-headless>=4.9.0.80
 numpy>=1.24.0
 
-# Intel OpenVINO OCR (replaces Tesseract)
-openvino>=2024.0.0
 requests>=2.31.0
 
-# Intel OpenVINO Local LLM for MCQ Generation
+# NLP & ML
 transformers>=4.35.0
-# optimum[openvino]>=1.14.0
 sentencepiece>=0.1.99
 
 # Multilingual Support & API Optimization
 langdetect>=1.0.9
-easyocr>=1.7.0  # Note: Tamil has model issues in 1.7.x, service falls back to English
 
 # PDF Rendering (PyMuPDF - provides 'fitz' module)
 PyMuPDF>=1.23.0

@@ -332,7 +332,7 @@ Action: ${actionLabel}`,
                     <div className="pr-4">
                       <div
                         className="max-w-none text-base leading-relaxed 
-     text-black
+     text-foreground
      [&_strong]:font-bold 
      [&_em]:italic 
      [&_li]:list-disc [&_li]:ml-4"

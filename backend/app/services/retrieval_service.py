@@ -1,22 +1,14 @@
 """
-OPEA-style Retrieval Service
+Retrieval Service
 
-Intel-optimized: Uses Gemini embeddings for semantic search across multiple indices.
-
-This service wraps the multi-index retrieval logic following OPEA architecture:
-- Query embedding generation
-- Multi-class Pinecone search
-- Web content retrieval
-- LLM-generated content retrieval
-
-Maps to OPEA's "Retrieval Microservice" in the Enterprise RAG reference.
+Multi-index semantic search using Gemini embeddings and Pinecone.
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from app.utils.performance_logger import measure_latency, IntelOptimizedConfig
+from app.utils.performance_logger import measure_latency
 from app.db.mongo import pinecone_db, pinecone_web_db, pinecone_llm_db
 from app.services.gemini_key_manager import gemini_key_manager
 from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
@@ -26,11 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class RetrievalConfig(IntelOptimizedConfig):
+class RetrievalConfig:
     """Configuration for Retrieval Service."""
-    intel_optimized: bool = True
     component_name: str = "RetrievalService"
-    description: str = "OPEA-style retrieval: Multi-index semantic search"
     
     # Retrieval settings
     embedding_model: str = EMBEDDING_MODEL
@@ -42,16 +32,12 @@ class RetrievalConfig(IntelOptimizedConfig):
 
 class RetrievalService:
     """
-    OPEA-style Retrieval Service for semantic search across multiple indices.
-    
-    Intel-optimized: Uses efficient embedding generation and parallel index queries.
+    Retrieval Service for semantic search across multiple Pinecone indices.
     
     Indices:
         1. Textbook Index (ncert-all-subjects) - Primary source
         2. Web Content Index (ncert-web-content) - Supplementary
         3. LLM Generated Index (ncert-llm) - Cached answers
-    
-    This component maps to OPEA's "Retrieval Microservice" pattern.
     """
     
     def __init__(self, config: Optional[RetrievalConfig] = None):
@@ -91,7 +77,7 @@ class RetrievalService:
             "Hindi": list(range(5, 13))
         }
         
-        logger.info(f"✅ {self.config.component_name} initialized (Intel-optimized: {self.config.intel_optimized})")
+        logger.info(f"✅ {self.config.component_name} initialized")
     
     @measure_latency("embedding_generation")
     def generate_embedding(self, text: str) -> List[float]:
@@ -140,7 +126,7 @@ class RetrievalService:
         """
         Retrieve relevant content from all indices.
         
-        Intel-optimized: Single embedding generation, parallel index queries.
+        Single embedding generation, parallel index queries.
         
         Args:
             query_text: Student's question
@@ -295,10 +281,9 @@ class RetrievalService:
             return []
     
     def get_status(self) -> Dict:
-        """Get service status for Intel endpoint."""
+        """Get service status."""
         return {
             "service": self.config.component_name,
-            "intel_optimized": self.config.intel_optimized,
             "embedding_model": self.config.embedding_model,
             "indices": ["textbook", "web", "llm_cache"]
         }

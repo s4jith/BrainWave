@@ -6,9 +6,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
+import AIExtractionModal from "../components/AIExtractionModal";
+import PendingCurriculumReview from "../components/PendingCurriculumReview";
 import {
   BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight,
-  Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle
+  Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle, Sparkles, Clock
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -25,14 +27,14 @@ export default function SubjectsManagement() {
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
+  const [showAIExtractionModal, setShowAIExtractionModal] = useState(false);
+  const [showPendingReview, setShowPendingReview] = useState(false);
   
   // Forms
   const [subjectForm, setSubjectForm] = useState({
     subject_name: "",
     class_level: 10,
-    description: "",
-    icon: "📚",
-    color: "#3B82F6"
+    description: ""
   });
   
   const [chapterForm, setChapterForm] = useState({
@@ -259,18 +261,6 @@ export default function SubjectsManagement() {
     subject.subject_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const iconOptions = ["📚", "📖", "🔬", "🧪", "🌍", "🎨", "💻", "📐", "🌟"];
-  const colorOptions = [
-    "#3B82F6", // Blue
-    "#10B981", // Green
-    "#F59E0B", // Orange
-    "#EF4444", // Red
-    "#8B5CF6", // Purple
-    "#EC4899", // Pink
-    "#14B8A6", // Teal
-    "#F97316"  // Orange-dark
-  ];
-
   if (loading) {
     return (
       <AdminLayout title="Subjects, Chapters and Topics" icon={BookOpen}>
@@ -308,10 +298,24 @@ export default function SubjectsManagement() {
         </select>
         
         <button
+          onClick={() => setShowPendingReview(true)}
+          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
+        >
+          <Clock className="w-5 h-5" /> Pending Review
+        </button>
+        
+        <button
+          onClick={() => setShowAIExtractionModal(true)}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
+        >
+          <Sparkles className="w-5 h-5" /> AI Extract
+        </button>
+        
+        <button
           onClick={() => setShowAddSubjectModal(true)}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
         >
-          <Plus className="w-5 h-5" /> Add Subject
+          <Plus className="w-5 h-5" /> Add Manual
         </button>
       </div>
 
@@ -396,7 +400,7 @@ export default function SubjectsManagement() {
                   onChange={(e) => setSubjectForm({ ...subjectForm, subject_name: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                  placeholder="e.g., Mathematics"
+                  placeholder="e.g., Mathematics, Physics, English"
                 />
               </div>
               
@@ -426,49 +430,6 @@ export default function SubjectsManagement() {
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   placeholder="Brief description..."
                 />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Icon
-                </label>
-                <div className="flex gap-2">
-                  {iconOptions.map(icon => (
-                    <button
-                      key={icon}
-                      type="button"
-                      onClick={() => setSubjectForm({ ...subjectForm, icon })}
-                      className={`text-2xl p-2 rounded-lg border-2 transition ${
-                        subjectForm.icon === icon
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Color
-                </label>
-                <div className="flex gap-2">
-                  {colorOptions.map(color => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setSubjectForm({ ...subjectForm, color })}
-                      className={`w-8 h-8 rounded-lg border-2 transition ${
-                        subjectForm.color === color
-                          ? "border-gray-900 dark:border-white scale-110"
-                          : "border-gray-200 dark:border-gray-700"
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
               </div>
               
               <div className="flex gap-3 pt-4">
@@ -673,6 +634,25 @@ export default function SubjectsManagement() {
           </div>
         </div>
       )}
+      
+      {/* AI Extraction Modal */}
+      <AIExtractionModal
+        isOpen={showAIExtractionModal}
+        onClose={() => setShowAIExtractionModal(false)}
+        onSuccess={() => {
+          setShowAIExtractionModal(false);
+          setShowPendingReview(true);
+        }}
+      />
+      
+      {/* Pending Review Modal */}
+      <PendingCurriculumReview
+        isOpen={showPendingReview}
+        onClose={() => setShowPendingReview(false)}
+        onApproved={() => {
+          fetchSubjects();
+        }}
+      />
     </AdminLayout>
   );
 }

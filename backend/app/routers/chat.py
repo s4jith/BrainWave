@@ -9,7 +9,6 @@ from app.models.schemas import ChatRequest, ChatResponse, ErrorResponse
 from app.services.rag_service import rag_service
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
-from app.services.openvino_vision_service import get_openvino_vision_service
 from app.services.top_question_service import top_question_service
 import logging
 import numpy as np
@@ -323,7 +322,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 student_class=request.class_level,
                 chapter=request.chapter,
                 mode=request.mode,
-                chunks_per_class=5,
+                chunks_per_class=3,
                 query_embedding=query_embedding
             )
             
@@ -352,16 +351,16 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 yield f"data: {json.dumps({'done': True, 'sources': source_texts, 'cached': True})}\n\n"
                 return
             
-            # Step 2: Build context for Gemini
+            # Step 2: Build context for Gemini (top 3 chunks for speed)
             context_parts = []
-            for chunk in textbook_chunks[:10]:
+            for chunk in textbook_chunks[:3]:
                 class_level = chunk.get('class', request.class_level)
                 context_parts.append(f"[Class {class_level}] {chunk['text']}")
             
             combined_context = "\n\n".join(context_parts)
             
             if not combined_context:
-                no_content_msg = "I couldn't find relevant content in your textbook for this question."
+                no_content_msg = "I couldn't find relevant content for this question. Please try rephrasing or ask about a specific topic."
                 yield f"data: {json.dumps({'text': no_content_msg})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
                 return
@@ -371,16 +370,17 @@ async def student_chatbot_stream(request: StreamingChatRequest):
 
 STUDENT QUESTION: {request.question}
 
-TEXTBOOK CONTENT:
+REFERENCE CONTENT:
 {combined_context}
 
 INSTRUCTIONS:
-1. Answer using ONLY the textbook content provided
-2. Keep the answer clear and appropriate for Class {request.class_level}
-3. Use examples from the textbook if available
-4. If information is not in the context, say so
+1. Answer the question directly using the content provided
+2. Do NOT start with any preamble like "Based on your textbook" or "According to the textbook"
+3. Just give the answer directly - start with the actual answer content
+4. Keep the answer clear and appropriate for Class {request.class_level}
+5. Use examples if available
 
-Generate a clear, helpful answer:"""
+Generate a clear, direct answer:"""
             
             # Step 4: Stream response from Gemini
             logger.info("📡 Starting Gemini streaming...")
@@ -463,10 +463,9 @@ async def image_chat(
     
     **Flow:**
     1. Validate and preprocess image
-    2. Extract text using Intel OpenVINO OCR
-    3. Classify image type (textbook/diagram/handwritten/formula)
-    4. Generate query from extracted text AND user input
-    5. Run RAG pipeline for answer generation
+    2. Extract text using Gemini Vision OCR
+    3. Generate query from extracted text AND user input
+    4. Run RAG pipeline for answer generation
     
     **Supported formats:** JPEG, PNG, WebP (max 5MB)
     """
@@ -495,25 +494,40 @@ async def image_chat(
         
         logger.info(f"   Image: {image.filename}, {len(image_bytes) / 1024:.1f}KB, {image.content_type}")
         
-        # 2. Convert to OpenCV numpy array
+        # 2. Convert to PIL image
         try:
-            # Use PIL to open image, then convert to numpy array
             pil_image = Image.open(io.BytesIO(image_bytes))
-            pil_image = pil_image.convert("RGB")  # Ensure RGB format
-            image_array = np.array(pil_image)
-            logger.info(f"   Converted to array: {image_array.shape}")
+            pil_image = pil_image.convert("RGB")
+            logger.info(f"   Image loaded: {pil_image.size}")
         except Exception as e:
             logger.error(f"Failed to parse image: {e}")
             raise HTTPException(status_code=400, detail=f"Failed to parse image: {str(e)}")
         
-        # 3. Analyze image with OpenVINO Vision Service
-        vision_service = get_openvino_vision_service()
-        image_analysis = vision_service.analyze_image(image_array)
+        # 3. Extract text using Gemini Vision
+        import base64
+        image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+        vision_prompt = """Extract the main educational text from this image.
+        Return ONLY the extracted text, no explanations.
+        If there are mathematical formulas, express them in plain text."""
         
-        ocr_text = image_analysis.get("text", "").strip()
-        image_type = image_analysis.get("image_type", "unknown")
+        try:
+            ocr_text = gemini_service.analyze_image(
+                image_data=image_b64,
+                prompt=vision_prompt,
+                mime_type=image.content_type or "image/jpeg"
+            )
+        except Exception as e:
+            logger.warning(f"Gemini Vision OCR failed: {e}")
+            ocr_text = ""
         
-        logger.info(f"   OCR extracted: {len(ocr_text)} chars, Type: {image_type}")
+        image_analysis = {
+            "text": ocr_text,
+            "image_type": "textbook",
+            "source": "gemini_vision"
+        }
+        image_type = "textbook"
+        
+        logger.info(f"   OCR extracted: {len(ocr_text)} chars")
         
         # 4. Generate query from OCR text AND user input
         

@@ -17,10 +17,37 @@ export default function TeacherTests() {
     const [tests, setTests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+    
+    // Teacher's subjects from groups
+    const [teacherSubjects, setTeacherSubjects] = useState([]);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
+    const [selectedSubject, setSelectedSubject] = useState("");
+    const [selectedStatus, setSelectedStatus] = useState("");
 
     useEffect(() => {
+        fetchTeacherGroups();
+        fetchTeacherGroups();
         fetchTests();
     }, []);
+
+    const fetchTeacherGroups = async () => {
+        try {
+            setLoadingSubjects(true);
+            const response = await fetch(`${API_URL}/api/teacher/groups`, { headers: getAuthHeader() });
+            if (response.ok) {
+                const data = await response.json();
+                const groups = data.groups || [];
+                
+                // Extract unique subjects
+                const subjects = [...new Set(groups.map(g => g.subject).filter(Boolean))];
+                setTeacherSubjects(subjects.sort());
+            }
+        } catch (err) {
+            console.error("Failed to fetch teacher groups:", err);
+        } finally {
+            setLoadingSubjects(false);
+        }
+    };
 
     const fetchTests = async () => {
         try {
@@ -68,10 +95,13 @@ export default function TeacherTests() {
         }
     };
 
-    const filteredTests = tests.filter(t =>
-        t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.subject.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredTests = tests.filter(t => {
+        const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.subject.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSubject = !selectedSubject || t.subject === selectedSubject;
+        const matchesStatus = !selectedStatus || t.status === selectedStatus.toLowerCase();
+        return matchesSearch && matchesSubject && matchesStatus;
+    });
 
     return (
         <AdminLayout title="Tests Management" icon={ClipboardList}>
@@ -88,15 +118,28 @@ export default function TeacherTests() {
                 </div>
 
                 <div className="flex gap-2">
-                    <select className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm">
-                        <option>All Subjects</option>
-                        <option>Mathematics</option>
-                        <option>Science</option>
+                    <select 
+                        value={selectedSubject} 
+                        onChange={(e) => setSelectedSubject(e.target.value)}
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm"
+                    >
+                        <option value="">All Subjects</option>
+                        {loadingSubjects ? (
+                            <option disabled>Loading...</option>
+                        ) : teacherSubjects.length > 0 ? (
+                            teacherSubjects.map(s => <option key={s} value={s}>{s}</option>)
+                        ) : (
+                            <option disabled>No subjects assigned</option>
+                        )}
                     </select>
-                    <select className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm">
-                        <option>All Status</option>
-                        <option>Published</option>
-                        <option>Draft</option>
+                    <select 
+                        value={selectedStatus} 
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm"
+                    >
+                        <option value="">All Status</option>
+                        <option value="Published">Published</option>
+                        <option value="Draft">Draft</option>
                     </select>
                     <button
                         onClick={() => navigate("/create-test")} // Redirect to existing builder or new one

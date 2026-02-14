@@ -1,22 +1,14 @@
 """
-OPEA-style Orchestrator Service
+Orchestrator Service
 
-Intel-optimized: Coordinates the full RAG pipeline with performance tracking.
-
-This service orchestrates the complete RAG flow following OPEA architecture:
-- User query intake
-- Retrieval coordination
-- Generation invocation
-- Response caching
-
-Maps to OPEA's "Orchestrator/Gateway" in the Enterprise RAG reference.
+Coordinates the full RAG pipeline with performance tracking.
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from app.utils.performance_logger import measure_latency, LatencyContext, IntelOptimizedConfig
+from app.utils.performance_logger import measure_latency, LatencyContext
 from app.services.retrieval_service import retrieval_service, RetrievalService
 from app.services.generation_service import generation_service, GenerationService
 from app.services.llm_storage_service import llm_storage_service
@@ -25,11 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class OrchestratorConfig(IntelOptimizedConfig):
+class OrchestratorConfig:
     """Configuration for Orchestrator Service."""
-    intel_optimized: bool = True
     component_name: str = "OrchestratorService"
-    description: str = "OPEA-style orchestrator: Coordinates RAG pipeline flow"
     
     # Cache settings
     cache_similarity_threshold: float = 0.95
@@ -38,9 +28,8 @@ class OrchestratorConfig(IntelOptimizedConfig):
 
 class OrchestratorService:
     """
-    OPEA-style Orchestrator Service for RAG pipeline coordination.
+    Orchestrator Service for RAG pipeline coordination.
     
-    Intel-optimized: End-to-end pipeline with performance tracking.
     Target latency: ≤3-5 seconds for full RAG query.
     
     Pipeline:
@@ -49,8 +38,6 @@ class OrchestratorService:
         3. Cache check (LLM answers)
         4. Generation (if cache miss)
         5. Answer caching
-    
-    This component maps to OPEA's "Orchestrator/Gateway" pattern.
     """
     
     def __init__(
@@ -64,7 +51,7 @@ class OrchestratorService:
         self.generation = generation or generation_service
         self.llm_storage = llm_storage_service
         
-        logger.info(f"✅ {self.config.component_name} initialized (Intel-optimized: {self.config.intel_optimized})")
+        logger.info(f"✅ {self.config.component_name} initialized")
     
     @measure_latency("rag_full_pipeline")
     def answer_question(
@@ -78,7 +65,7 @@ class OrchestratorService:
         """
         Answer a student's question using the full RAG pipeline.
         
-        Intel-optimized: Full pipeline with ≤3-5s target latency.
+        Full pipeline with ≤3-5s target latency.
         
         Args:
             question: Student's question
@@ -223,10 +210,9 @@ class OrchestratorService:
             logger.warning(f"Failed to store answer: {e}")
     
     def get_status(self) -> Dict:
-        """Get service status for Intel endpoint."""
+        """Get service status."""
         return {
             "service": self.config.component_name,
-            "intel_optimized": self.config.intel_optimized,
             "pipeline_components": [
                 self.retrieval.get_status(),
                 self.generation.get_status()
@@ -236,7 +222,7 @@ class OrchestratorService:
         }
     
     def get_all_service_statuses(self) -> Dict:
-        """Get status of all OPEA-style services."""
+        """Get status of all services."""
         return {
             "orchestrator": self.get_status(),
             "retrieval": self.retrieval.get_status(),

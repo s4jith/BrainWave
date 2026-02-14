@@ -17,8 +17,24 @@ import {
     Award
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import LoadingSpinner from "../components/ui/LoadingSpinner";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// StatCard Component for displaying grade statistics
+function StatCard({ icon: Icon, label, value, color }) {
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-colors">
+            <div className="flex items-center gap-3 mb-2">
+                <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 ${color}`}>
+                    <Icon size={20} />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
+            </div>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+        </div>
+    );
+}
 
 export default function Gradebook() {
     const { courseId } = useParams();
@@ -108,19 +124,15 @@ export default function Gradebook() {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
-            </div>
-        );
+        return <LoadingSpinner message="Loading grades..." submessage="Fetching your assessment data" />;
     }
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center transition-colors">
                 <div className="text-center">
-                    <p className="text-red-400 mb-4">{error}</p>
-                    <button onClick={() => navigate(-1)} className="text-blue-400">Go Back</button>
+                    <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+                    <button onClick={() => navigate(-1)} className="text-blue-600 dark:text-blue-400">Go Back</button>
                 </div>
             </div>
         );
@@ -129,10 +141,10 @@ export default function Gradebook() {
     // Student view
     if (!isInstructor) {
         return (
-            <div className="min-h-screen bg-gray-900 text-white">
-                <header className="bg-gray-800/50 border-b border-gray-700 px-6 py-4">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors">
+                <header className="bg-white dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="max-w-4xl mx-auto flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-700 rounded-lg">
+                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <ArrowLeft size={20} />
                         </button>
                         <h1 className="text-xl font-bold">My Grades</h1>
@@ -146,51 +158,51 @@ export default function Gradebook() {
                             icon={Award}
                             label="Overall"
                             value={`${myGrades?.overall_percentage || 0}%`}
-                            color="text-emerald-400"
+                            color="text-emerald-500 dark:text-emerald-400"
                         />
                         <StatCard
                             icon={BookOpen}
                             label="Assessments"
                             value={myGrades?.grade_count || 0}
-                            color="text-blue-400"
+                            color="text-blue-500 dark:text-blue-400"
                         />
                         <StatCard
                             icon={TrendingUp}
                             label="Total Points"
                             value={`${myGrades?.total_score || 0}/${myGrades?.total_max_score || 0}`}
-                            color="text-purple-400"
+                            color="text-purple-500 dark:text-purple-400"
                         />
                     </div>
 
                     {/* Grades List */}
-                    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                        <div className="px-4 py-3 border-b border-gray-700">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                             <h2 className="font-semibold">Assessment Grades</h2>
                         </div>
 
                         {myGrades?.grades?.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400">
+                            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                                 No grades yet
                             </div>
                         ) : (
-                            <div className="divide-y divide-gray-700">
+                            <div className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {myGrades?.grades?.map((grade) => (
-                                    <div key={grade.submission_id} className="px-4 py-3 flex items-center justify-between">
+                                    <div key={grade.submission_id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                         <div>
                                             <p className="font-medium">{grade.assessment_title}</p>
-                                            <p className="text-sm text-gray-400 capitalize">{grade.assessment_type}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{grade.assessment_type}</p>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className="text-right">
-                                                <p className={`font-bold ${grade.passed ? "text-emerald-400" : "text-red-400"}`}>
+                                                <p className={`font-bold ${grade.passed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                                     {grade.percentage}%
                                                 </p>
-                                                <p className="text-sm text-gray-400">{grade.score}/{grade.max_score}</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">{grade.score}/{grade.max_score}</p>
                                             </div>
                                             {grade.passed ? (
-                                                <CheckCircle className="text-emerald-400" size={20} />
+                                                <CheckCircle className="text-emerald-600 dark:text-emerald-400" size={20} />
                                             ) : (
-                                                <XCircle className="text-red-400" size={20} />
+                                                <XCircle className="text-red-600 dark:text-red-400" size={20} />
                                             )}
                                         </div>
                                     </div>
@@ -205,37 +217,37 @@ export default function Gradebook() {
 
     // Instructor view
     return (
-        <div className="min-h-screen bg-gray-900 text-white">
-            <header className="bg-gray-800/50 border-b border-gray-700 px-6 py-4">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors">
+            <header className="bg-white dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                 <div className="max-w-6xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-700 rounded-lg">
+                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <ArrowLeft size={20} />
                         </button>
                         <div>
                             <h1 className="text-xl font-bold">{gradebook?.course_title || "Gradebook"}</h1>
-                            <p className="text-sm text-gray-400">{gradebook?.total_students || 0} students</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{gradebook?.total_students || 0} students</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="flex bg-gray-700 rounded-lg p-1">
+                        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                             <button
                                 onClick={() => setViewMode("gradebook")}
-                                className={`px-3 py-1 rounded text-sm ${viewMode === "gradebook" ? "bg-blue-600" : ""}`}
+                                className={`px-3 py-1 rounded text-sm transition-colors ${viewMode === "gradebook" ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300"}`}
                             >
                                 Gradebook
                             </button>
                             <button
                                 onClick={() => setViewMode("analytics")}
-                                className={`px-3 py-1 rounded text-sm ${viewMode === "analytics" ? "bg-blue-600" : ""}`}
+                                className={`px-3 py-1 rounded text-sm transition-colors ${viewMode === "analytics" ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300"}`}
                             >
                                 Analytics
                             </button>
                         </div>
                         <button
                             onClick={handleExport}
-                            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg"
+                            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors"
                         >
                             <Download size={16} />
                             Export CSV
@@ -251,20 +263,6 @@ export default function Gradebook() {
                     <GradebookTable gradebook={gradebook} />
                 )}
             </main>
-        </div>
-    );
-}
-
-function StatCard({ icon: Icon, label, value, color }) {
-    return (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-                <Icon className={color} size={24} />
-                <div>
-                    <p className="text-2xl font-bold">{value}</p>
-                    <p className="text-sm text-gray-400">{label}</p>
-                </div>
-            </div>
         </div>
     );
 }

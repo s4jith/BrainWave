@@ -4,14 +4,16 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check } from "lucide-react";
+import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen } from "lucide-react";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function GroupManagement() {
+    const navigate = useNavigate();
     const { getAuthHeader } = useUserStore();
     const [groups, setGroups] = useState([]);
     const [teachers, setTeachers] = useState([]);
@@ -446,21 +448,39 @@ export default function GroupManagement() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Class & Subject *</label>
-                                    <select
-                                        required
-                                        value={groupForm.classSubject}
-                                        onChange={(e) => setGroupForm({ ...groupForm, classSubject: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">Select Class & Subject</option>
-                                        {loadingCurriculum ? (
-                                            <option disabled>Loading...</option>
-                                        ) : classSubjectOptions.length === 0 ? (
-                                            <option disabled>No subjects found</option>
-                                        ) : (
-                                            classSubjectOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
-                                        )}
-                                    </select>
+                                    {classSubjectOptions.length === 0 && !loadingCurriculum ? (
+                                        <div className="space-y-2">
+                                            <select
+                                                disabled
+                                                className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400"
+                                            >
+                                                <option>No subjects found</option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate('/subjects-management')}
+                                                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 transition"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                <BookOpen className="w-4 h-4" />
+                                                Create Subject First
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            required
+                                            value={groupForm.classSubject}
+                                            onChange={(e) => setGroupForm({ ...groupForm, classSubject: e.target.value })}
+                                            className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">Select Class & Subject</option>
+                                            {loadingCurriculum ? (
+                                                <option disabled>Loading...</option>
+                                            ) : (
+                                                classSubjectOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                                            )}
+                                        </select>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Batch Year *</label>

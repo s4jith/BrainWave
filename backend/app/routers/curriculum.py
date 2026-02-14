@@ -3,26 +3,30 @@ Curriculum Management Router
 Admin endpoints for managing subjects, chapters, and topics hierarchy
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
 from typing import List, Optional
 from datetime import datetime
 import logging
 import uuid
 
-from app.db.mongo import mongodb
+from app.db.mongo import mongodb, db
 from app.models.curriculum_models import (
     Subject, Chapter, Topic,
     CreateSubjectRequest, UpdateSubjectRequest,
     CreateChapterRequest, UpdateChapterRequest,
     CreateTopicRequest, UpdateTopicRequest,
-    SubjectSummary, ChapterSummary, TopicSummary
+    SubjectSummary, ChapterSummary, TopicSummary,
+    PendingCurriculumItem, UploadCurriculumRequest, ApprovePendingItemRequest,
+    ExtractedChapter
 )
+from app.services.curriculum_extraction_service import curriculum_extraction_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/curriculum", tags=["Curriculum Management"])
 
 SUBJECTS_COLLECTION = "subjects"
+PENDING_CURRICULUM_COLLECTION = "pending_curriculum"
 
 
 # ==================== SUBJECT MANAGEMENT ====================
@@ -685,5 +689,513 @@ async def delete_topic(subject_id: str, chapter_id: str, topic_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete topic failed: {e}")
+        logger.error(f="❌ Delete topic failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== AVAILABLE BOOKS METADATA ====================
+
+@router.get("/available-books")
+async def get_available_books():
+    """
+    Get available subjects and classes from books collection.
+    Used for dropdown options in curriculum creation forms.
+    
+    Returns:
+        {
+            "subjects": ["Mathematics", "Physics", ...],
+            "classes": [5, 6, 7, ...],
+            "subject_class_map": {
+                "Mathematics": [5, 6, 7, ...],
+                "Physics": [9, 10, 11, 12],
+                ...
+            }
+        }
+    """
+    try:
+        # Get distinct subjects and classes from books collection
+        books_collection = db.books
+        
+        # Get all books
+        all_books = list(books_collection.find({}, {"subject": 1, "class": 1}))
+        
+        # Extract unique subjects and classes
+        subjects_set = set()
+        classes_set = set()
+        subject_class_map = {}
+        
+        for book in all_books:
+            subject = book.get("subject")
+            class_level = book.get("class")
+            
+            if subject:
+                subjects_set.add(subject)
+                
+                if subject not in subject_class_map:
+                    subject_class_map[subject] = set()
+                
+                if class_level:
+                    classes_set.add(class_level)
+                    subject_class_map[subject].add(class_level)
+        
+        # Convert sets to sorted lists
+        subjects = sorted(list(subjects_set))
+        classes = sorted(list(classes_set))
+        
+        # Convert subject_class_map sets to sorted lists
+        subject_class_map_final = {
+            subject: sorted(list(classes))
+            for subject, classes in subject_class_map.items()
+        }
+        
+        logger.info(f"📚 Available books: {len(subjects)} subjects, {len(classes)} classes")
+        
+        return {
+            "subjects": subjects,
+            "classes": classes,
+            "subject_class_map": subject_class_map_final
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Get available books failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== AI-POWERED EXTRACTION ====================
+
+@router.post("/extract-from-upload")
+async def extract_curriculum_from_upload(
+    file: UploadFile = File(...),
+    subject_name: str = Form(...),
+    class_level: int = Form(..., ge=5, le=12),
+    board: str = Form(default="CBSE"),
+    uploaded_by: str = Form(...),
+):
+    """
+    Upload a PDF or image file and extract chapter/topic structure using AI.
+    The extracted data is stored in pending_curriculum collection for admin review.
+    
+    Args:
+        file: PDF or image file (table of contents)
+        subject_name: Subject name
+        class_level: Class level (5-12)
+        board: Educational board (default: CBSE)
+        uploaded_by: User ID of the admin who uploaded
+    
+    Returns:
+        PendingCurriculumItem with extracted chapters and topics
+    """
+    try:
+        logger.info(f"📤 Received curriculum extraction request: {file.filename}")
+        
+        # Validate file type
+        allowed_types = [
+            "application/pdf",
+            "image/jpeg", "image/jpg", "image/png", "image/webp"
+        ]
+        
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type: {file.content_type}. Allowed: PDF, JPEG, PNG, WebP"
+            )
+        
+        # Read file bytes
+        file_bytes = await file.read()
+        
+        logger.info(f"📖 Processing {file.content_type} file ({len(file_bytes)} bytes)...")
+        
+        # Extract chapters using AI
+        extracted_chapters: List[ExtractedChapter] = []
+        
+        if file.content_type == "application/pdf":
+            extracted_chapters = await curriculum_extraction_service.extract_from_pdf(
+                pdf_bytes=file_bytes,
+                subject_name=subject_name,
+                class_level=class_level
+            )
+        else:
+            # Image file
+            extracted_chapters = await curriculum_extraction_service.extract_from_image(
+                image_bytes=file_bytes,
+                mime_type=file.content_type,
+                subject_name=subject_name,
+                class_level=class_level
+            )
+        
+        # Create pending curriculum item
+        pending_id = f"pending_{subject_name.lower().replace(' ', '_')}_{class_level}_{uuid.uuid4().hex[:8]}"
+        
+        pending_item = {
+            "pending_id": pending_id,
+            "subject_name": subject_name,
+            "class_level": class_level,
+            "board": board,
+            "extracted_chapters": [ch.dict() for ch in extracted_chapters],
+            "source_file_name": file.filename,
+            "source_file_url": "",  # Could upload to cloud storage here
+            "extraction_method": "ai",
+            "status": "pending",
+            "uploaded_by": uploaded_by,
+            "uploaded_at": datetime.utcnow(),
+            "reviewed_by": None,
+            "reviewed_at": None,
+            "rejection_reason": ""
+        }
+        
+        # Save to pending collection
+        collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        result = await collection.insert_one(pending_item)
+        
+        if result.inserted_id:
+            logger.info(f"✅ Created pending curriculum item: {pending_id} ({len(extracted_chapters)} chapters)")
+            return PendingCurriculumItem(**pending_item)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save pending item")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Curriculum extraction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pending", response_model=List[PendingCurriculumItem])
+async def get_pending_curriculum_items(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """
+    Get all pending curriculum items waiting for admin review.
+    
+    Args:
+        status: Optional status filter
+    
+    Returns:
+        List of pending curriculum items
+    """
+    try:
+        query = {}
+        if status:
+            query["status"] = status
+        else:
+            # Default to showing only pending items
+            query["status"] = "pending"
+        
+        collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        items = await collection.find(query).sort("uploaded_at", -1).to_list(100)
+        
+        pending_items = [PendingCurriculumItem(**item) for item in items]
+        
+        logger.info(f"📋 Retrieved {len(pending_items)} pending curriculum items")
+        return pending_items
+        
+    except Exception as e:
+        logger.error(f"❌ Get pending items failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pending/{pending_id}", response_model=PendingCurriculumItem)
+async def get_pending_curriculum_item(pending_id: str):
+    """
+    Get details of a specific pending curriculum item.
+    
+    Args:
+        pending_id: Pending item ID
+    
+    Returns:
+        PendingCurriculumItem details
+    """
+    try:
+        collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        item = await collection.find_one({"pending_id": pending_id})
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Pending item not found")
+        
+        return PendingCurriculumItem(**item)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Get pending item failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/pending/{pending_id}")
+async def update_pending_curriculum_item(
+    pending_id: str,
+    subject_name: str = Form(None),
+    class_level: int = Form(None),
+    extracted_chapters: str = Form(None)  # JSON string
+):
+    """
+    Update a pending curriculum item before approval.
+    Allows admin to edit extracted data if AI made mistakes.
+    
+    Args:
+        pending_id: Pending item ID
+        subject_name: Updated subject name (optional)
+        class_level: Updated class level (optional)
+        extracted_chapters: Updated chapters as JSON string (optional)
+    
+    Returns:
+        Updated PendingCurriculumItem
+    """
+    try:
+        import json
+        
+        collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        
+        # Get existing item
+        existing = await collection.find_one({"pending_id": pending_id})
+        
+        if not existing:
+            raise HTTPException(status_code=404, detail="Pending item not found")
+        
+        # Build update data
+        update_data = {}
+        
+        if subject_name is not None:
+            update_data["subject_name"] = subject_name
+        
+        if class_level is not None:
+            update_data["class_level"] = class_level
+        
+        if extracted_chapters is not None:
+            # Parse JSON string to list of chapters
+            chapters_data = json.loads(extracted_chapters)
+            update_data["extracted_chapters"] = chapters_data
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No data to update")
+        
+        # Add updated timestamp
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update the item
+        result = await collection.update_one(
+            {"pending_id": pending_id},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to update item")
+        
+        # Get updated item
+        updated_item = await collection.find_one({"pending_id": pending_id})
+        
+        logger.info(f"✅ Updated pending item: {pending_id}")
+        return PendingCurriculumItem(**updated_item)
+        
+    except HTTPException:
+        raise
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format for extracted_chapters")
+    except Exception as e:
+        logger.error(f"❌ Update pending item failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pending/{pending_id}/approve")
+async def approve_or_reject_pending_item(
+    pending_id: str,
+    request: ApprovePendingItemRequest,
+    reviewed_by: str = Form(...)
+):
+    """
+    Approve or reject a pending curriculum item.
+    If approved, creates the subject with chapters and topics.
+    
+    Args:
+        pending_id: Pending item ID
+        request: Approval/rejection details
+        reviewed_by: User ID of the admin who reviewed
+    
+    Returns:
+        Success message with created subject_id if approved
+    """
+    try:
+        pending_collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        subjects_collection = mongodb.db[SUBJECTS_COLLECTION]
+        
+        # Get pending item
+        pending_item = await pending_collection.find_one({"pending_id": pending_id})
+        
+        if not pending_item:
+            raise HTTPException(status_code=404, detail="Pending item not found")
+        
+        if pending_item["status"] != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Item already {pending_item['status']}"
+            )
+        
+        # Handle rejection
+        if request.action == "reject":
+            if not request.rejection_reason:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Rejection reason is required"
+                )
+            
+            await pending_collection.update_one(
+                {"pending_id": pending_id},
+                {
+                    "$set": {
+                        "status": "rejected",
+                        "reviewed_by": reviewed_by,
+                        "reviewed_at": datetime.utcnow(),
+                        "rejection_reason": request.rejection_reason
+                    }
+                }
+            )
+            
+            logger.info(f"❌ Rejected pending item: {pending_id}")
+            return {
+                "success": True,
+                "message": "Pending item rejected",
+                "action": "rejected"
+            }
+        
+        # Handle approval
+        if request.action == "approve":
+            # Use override values if provided
+            subject_name = request.subject_name_override or pending_item["subject_name"]
+            
+            # Check if subject already exists
+            subject_id = f"{subject_name.lower().replace(' ', '_')}_{pending_item['class_level']}"
+            
+            existing = await subjects_collection.find_one({
+                "subject_id": subject_id,
+                "is_active": True
+            })
+            
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Subject '{subject_name}' already exists for Class {pending_item['class_level']}"
+                )
+            
+            # Convert extracted chapters to proper Chapter format
+            chapters = []
+            for idx, extracted_ch in enumerate(pending_item["extracted_chapters"], 1):
+                # Convert extracted topics to Topic format
+                topics = []
+                for topic_idx, extracted_topic in enumerate(extracted_ch.get("topics", []), 1):
+                    topic_id = f"{subject_id}_ch{extracted_ch['chapter_number']}_topic{topic_idx}"
+                    topics.append({
+                        "topic_id": topic_id,
+                        "topic_name": extracted_topic["topic_name"],
+                        "description": extracted_topic.get("description", ""),
+                        "page_range": extracted_topic.get("page_range", ""),
+                        "learning_objectives": [],
+                        "keywords": [],
+                        "estimated_time_minutes": 45,
+                        "difficulty_level": "medium",
+                        "prerequisites": [],
+                        "order": topic_idx,
+                        "is_active": True,
+                        "question_count": 0
+                    })
+                
+                # Create chapter
+                chapter_id = f"{subject_id}_ch{extracted_ch['chapter_number']}"
+                chapters.append({
+                    "chapter_id": chapter_id,
+                    "chapter_number": extracted_ch["chapter_number"],
+                    "chapter_name": extracted_ch["chapter_name"],
+                    "description": f"Author: {extracted_ch.get('author', 'N/A')}",
+                    "topics": topics,
+                    "pdf_url": "",
+                    "video_url": "",
+                    "total_pages": 0,
+                    "order": idx,
+                    "is_active": True,
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                })
+            
+            # Create subject document
+            subject_doc = {
+                "subject_id": subject_id,
+                "subject_name": subject_name,
+                "class_level": pending_item["class_level"],
+                "board": pending_item.get("board", "CBSE"),
+                "description": f"Auto-generated from {pending_item['source_file_name']}",
+                "icon": request.icon or "📚",
+                "color": request.color or "#3B82F6",
+                "chapters": chapters,
+                "total_topics": sum(len(ch["topics"]) for ch in chapters),
+                "total_chapters": len(chapters),
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Insert subject
+            result = await subjects_collection.insert_one(subject_doc)
+            
+            if result.inserted_id:
+                # Update pending item status
+                await pending_collection.update_one(
+                    {"pending_id": pending_id},
+                    {
+                        "$set": {
+                            "status": "approved",
+                            "reviewed_by": reviewed_by,
+                            "reviewed_at": datetime.utcnow()
+                        }
+                    }
+                )
+                
+                logger.info(f"✅ Approved and created subject: {subject_id} ({len(chapters)} chapters, {subject_doc['total_topics']} topics)")
+                return {
+                    "success": True,
+                    "message": "Pending item approved and subject created",
+                    "action": "approved",
+                    "subject_id": subject_id,
+                    "total_chapters": len(chapters),
+                    "total_topics": subject_doc["total_topics"]
+                }
+            else:
+                raise HTTPException(status_code=500, detail="Failed to create subject")
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid action. Must be 'approve' or 'reject'"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Approve/reject pending item failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/pending/{pending_id}")
+async def delete_pending_item(pending_id: str):
+    """
+    Delete a pending curriculum item (hard delete).
+    
+    Args:
+        pending_id: Pending item ID
+    
+    Returns:
+        Success message
+    """
+    try:
+        collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
+        result = await collection.delete_one({"pending_id": pending_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Pending item not found")
+        
+        logger.info(f"🗑️ Deleted pending item: {pending_id}")
+        return {"success": True, "message": "Pending item deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Delete pending item failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))

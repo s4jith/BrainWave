@@ -1,32 +1,23 @@
 """
-OPEA-style Generation Service
+Generation Service
 
-Intel-optimized: Uses Gemini for high-quality answer generation.
-
-This service wraps the answer generation logic following OPEA architecture:
-- Context-aware prompt construction
-- Multi-source answer synthesis
-- Educational content formatting
-
-Maps to OPEA's "Generation Microservice" in the Enterprise RAG reference.
+Uses Gemini for answer generation from retrieved context.
 """
 
 import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
-from app.utils.performance_logger import measure_latency, IntelOptimizedConfig
+from app.utils.performance_logger import measure_latency
 from app.services.gemini_service import gemini_service
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class GenerationConfig(IntelOptimizedConfig):
+class GenerationConfig:
     """Configuration for Generation Service."""
-    intel_optimized: bool = True
     component_name: str = "GenerationService"
-    description: str = "OPEA-style generation: LLM answer synthesis from retrieved context"
     
     # Generation settings
     model: str = "gemini-2.0-flash"
@@ -37,22 +28,18 @@ class GenerationConfig(IntelOptimizedConfig):
 
 class GenerationService:
     """
-    OPEA-style Generation Service for answer synthesis.
-    
-    Intel-optimized: Efficient prompt construction and response generation.
+    Generation Service for answer synthesis from retrieved context.
     
     Modes:
         - Basic: Quick, focused answers
         - DeepDive: Comprehensive explanations from fundamentals
-    
-    This component maps to OPEA's "Generation Microservice" pattern.
     """
     
     def __init__(self, config: Optional[GenerationConfig] = None):
         self.config = config or GenerationConfig()
         self.gemini = gemini_service
         
-        logger.info(f"✅ {self.config.component_name} initialized (Intel-optimized: {self.config.intel_optimized})")
+        logger.info(f"✅ {self.config.component_name} initialized")
     
     @measure_latency("rag_generation")
     def generate_answer(
@@ -69,7 +56,7 @@ class GenerationService:
         """
         Generate answer from retrieved context.
         
-        Intel-optimized: Efficient multi-source context synthesis.
+        Efficient multi-source context synthesis.
         
         Args:
             question: Student's question
@@ -183,7 +170,7 @@ Keep the explanation simple and suitable for a Class {student_class} student."""
         """
         Generate MCQ question from context.
         
-        Intel-optimized: Can fall back to OpenVINO MCQ service for local generation.
+        Uses Gemini for generation.
         
         Args:
             context: Source content for question
@@ -210,10 +197,9 @@ Return JSON format:
             return {"question": response, "options": [], "correct_answer": ""}
     
     def get_status(self) -> Dict:
-        """Get service status for Intel endpoint."""
+        """Get service status."""
         return {
             "service": self.config.component_name,
-            "intel_optimized": self.config.intel_optimized,
             "model": self.config.model,
             "modes": ["basic", "deepdive"]
         }

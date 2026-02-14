@@ -31,8 +31,8 @@ from PIL import Image
 import cv2
 import numpy as np
 
-# Intel OpenVINO OCR (replaces Tesseract for Intel optimization)
-from app.services.openvino_ocr_service import get_openvino_ocr_service
+# Gemini Vision for OCR fallback
+from app.services.gemini_service import gemini_service
 
 # Google Gemini for image understanding
 import google.generativeai as genai
@@ -252,7 +252,7 @@ class AdvancedPDFProcessor:
         except Exception as e:
             logger.warning(f"PyPDF2 extraction failed for page {page_number}: {e}")
         
-        # 2. OCR extraction from page image using Intel OpenVINO
+        # 2. OCR extraction from page image
         if page_image:
             try:
                 # Convert to numpy array for OpenCV processing
@@ -261,9 +261,18 @@ class AdvancedPDFProcessor:
                 # Preprocess image for better OCR
                 processed_img = self._preprocess_for_ocr(img_array)
                 
-                # Run OpenVINO OCR (Intel optimized - replaces Tesseract)
-                ocr_service = get_openvino_ocr_service()
-                page_content.ocr_content = ocr_service.read_text_from_image(processed_img)
+                # Use Gemini Vision for OCR
+                import base64
+                from io import BytesIO
+                pil_img = Image.fromarray(processed_img) if isinstance(processed_img, np.ndarray) else processed_img
+                buffer = BytesIO()
+                pil_img.save(buffer, format='PNG')
+                img_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                page_content.ocr_content = gemini_service.analyze_image(
+                    image_data=img_b64,
+                    prompt="Extract all text from this page image. Return only the text content.",
+                    mime_type="image/png"
+                ) or ""
                 
                 # Detect if page has significant visual content
                 page_content.has_images = self._detect_images_in_page(img_array)
@@ -272,7 +281,7 @@ class AdvancedPDFProcessor:
                 )
                 
             except Exception as e:
-                logger.warning(f"OpenVINO OCR extraction failed for page {page_number}: {e}")
+                logger.warning(f"OCR extraction failed for page {page_number}: {e}")
         
         # 3. If page has images/diagrams and Gemini Vision is enabled, get descriptions
         if page_image and self.use_gemini_vision and page_content.has_images:

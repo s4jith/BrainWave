@@ -22,8 +22,8 @@ router = APIRouter(
 def detect_text_language(text: str) -> str:
     """Detect language of the selected text and return language instruction."""
     try:
-        from app.services.openvino_multilingual_service import multilingual_service
-        lang, confidence = multilingual_service.detect_language_with_confidence(text)
+        from app.utils.language_detection import detect_language_with_confidence
+        lang, confidence = detect_language_with_confidence(text)
         
         lang_names = {
             "hi": "Hindi",
@@ -57,65 +57,6 @@ class AnnotationRequest(BaseModel):
     chapter: int | None = Field(None, ge=1, description="Optional chapter number")
     image_data: str | None = Field(None, description="Optional base64 image data for screenshot doubts")
 
-
-def extract_text_from_image(image_data: str, language_hint: str = None) -> str:
-    """
-    Extract text from base64 image using Multilingual OCR Service.
-    Uses EasyOCR for Hindi/Indic scripts, OpenVINO for English.
-    Runs locally - NO API calls needed!
-    
-    Args:
-        image_data: Base64 encoded image
-        language_hint: Optional language hint (e.g., 'hi' for Hindi, 'en' for English)
-    """
-    import base64
-    import io
-    import numpy as np
-    
-    try:
-        # Remove data URL prefix if present
-        if image_data.startswith('data:'):
-            image_data = image_data.split(',', 1)[1]
-        
-        # Decode base64 image
-        image_bytes = base64.b64decode(image_data)
-        
-        # Use Multilingual OCR Service (EasyOCR + OpenVINO, runs locally)
-        try:
-            from app.services.multilingual_ocr_service import get_multilingual_ocr_service
-            from PIL import Image
-            
-            # Convert image bytes to numpy array
-            img = Image.open(io.BytesIO(image_bytes))
-            img_array = np.array(img)
-            
-            # Get multilingual OCR service
-            ocr_service = get_multilingual_ocr_service()
-            
-            if ocr_service.is_available():
-                # Extract text with language hint if provided
-                text, detected_lang = ocr_service.extract_text(img_array, language_hint=language_hint)
-                
-                if text and text.strip():
-                    logger.info(f"   [OK] Multilingual OCR extracted ({detected_lang}): '{text[:100]}...'")
-                    return text.strip()
-                else:
-                    logger.warning("   [WARNING] Multilingual OCR found no text")
-                    return None
-            else:
-                logger.warning("   [WARNING] Multilingual OCR service not available")
-                return None
-                
-        except ImportError as e:
-            logger.warning(f"Multilingual OCR import error: {e}")
-            return None
-        except Exception as e:
-            logger.warning(f"Multilingual OCR error: {e}")
-            return None
-        
-    except Exception as e:
-        logger.error(f"Image processing error: {e}")
-        return None
 
 
 class AnnotationResponse(BaseModel):
@@ -196,58 +137,44 @@ async def process_annotation(request: AnnotationRequest):
         language_hint = subject_to_lang.get(request.subject.lower(), "en")  # Default to English
         
         if request.image_data:
-            logger.info(f"[IMAGE] Screenshot doubt received, extracting text...")
-            logger.info(f"   Using language hint: {language_hint or 'auto-detect'}")
+            logger.info(f"[IMAGE] Screenshot doubt - using Gemini Vision OCR directly...")
             
-            # 1. Try Local Multilingual OCR first (Fast, Free)
-            extracted_text = extract_text_from_image(request.image_data, language_hint=language_hint)
-            
-            # Simple validation: Must be > 3 chars and contain at least one letter
-            is_valid_ocr = extracted_text and len(extracted_text.strip()) > 3 and any(c.isalpha() for c in extracted_text)
-            
-            if is_valid_ocr:
-                query_text = extracted_text
-                logger.info(f"   OCR extracted: '{query_text[:100]}...'")
-            else:
-                logger.warning(f"   OCR returned invalid/short text: '{extracted_text}'")
-                logger.info(f"   ⚠️ Local OCR failed/poor quality. Attempting Gemini Vision fallback...")
+            try:
+                # Use Gemini Vision directly (skip local OCR for speed)
+                import base64
+                import asyncio
                 
-                try:
-                    # 2. Fallback to Gemini Vision (High Accuracy, Costs Tokens)
-                    import base64
-                    import asyncio
+                # Prepare image bytes
+                if request.image_data.startswith('data:'):
+                    b64_data = request.image_data.split(',', 1)[1]
+                else:
+                    b64_data = request.image_data
                     
-                    # Prepare image bytes
-                    if request.image_data.startswith('data:'):
-                        b64_data = request.image_data.split(',', 1)[1]
-                    else:
-                        b64_data = request.image_data
-                        
-                    image_bytes = base64.b64decode(b64_data)
-                    
-                    vision_prompt = """Extract the main educational text from this textbook screenshot. 
-                    If it contains a question, output the question. 
-                    If it contains a paragraph, output the paragraph.
-                    Do not describe the UI, just give the content text.
-                    Output ONLY the extracted text."""
-                    
-                    # Call Gemini Service (Sync method wrapped in thread)
-                    # Using a different method name if needed, checking gemini_service.py...
-                    # It has generate_response_with_image(prompt, image_bytes, mime_type, ...)
-                    extracted_text_vision = await asyncio.to_thread(
-                        gemini_service.generate_response_with_image,
-                        prompt=vision_prompt,
-                        image_bytes=image_bytes
-                    )
-                    
-                    if extracted_text_vision and len(extracted_text_vision.strip()) > 3:
-                         query_text = extracted_text_vision.strip()
-                         logger.info(f"   ✅ Gemini Vision extracted: '{query_text[:100]}...'")
-                    else:
-                         logger.warning("   ❌ Gemini Vision also failed to extract meaningful text")
-                         
-                except Exception as ve:
-                    logger.error(f"   ❌ Gemini Vision fallback failed: {ve}")
+                image_bytes = base64.b64decode(b64_data)
+                
+                vision_prompt = """Extract the main educational text from this textbook screenshot. 
+                If it contains a question, output the question. 
+                If it contains a paragraph, output the paragraph.
+                Do not describe the UI, just give the content text.
+                Output ONLY the extracted text."""
+                
+                # Call Gemini Vision
+                extracted_text_vision = await asyncio.to_thread(
+                    gemini_service.generate_response_with_image,
+                    prompt=vision_prompt,
+                    image_bytes=image_bytes
+                )
+                
+                if extracted_text_vision and len(extracted_text_vision.strip()) > 3:
+                     query_text = extracted_text_vision.strip()
+                     logger.info(f"   ✅ Gemini Vision extracted: '{query_text[:100]}'")
+                else:
+                     logger.warning("   ❌ Gemini Vision failed to extract meaningful text")
+                     raise HTTPException(status_code=400, detail="Could not extract text from image")
+                     
+            except Exception as ve:
+                logger.error(f"   ❌ Gemini Vision failed: {ve}")
+                raise HTTPException(status_code=500, detail="Image OCR failed")
         
         logger.info(f"[NOTE] Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
         logger.info(f"   Class {request.class_level}, {request.subject}")
@@ -312,43 +239,48 @@ async def process_annotation(request: AnnotationRequest):
 - [Point 2]
 - [Point 3]"""
             
-            # Generate better definition using Gemini
-            if source_chunks:
-                context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]])
+            # OPTIMIZATION: Use RAG answer directly if it has content (skip redundant Gemini call)
+            # RAG already generated answer via Gemini (either with sources or fallback)
+            if answer and len(answer.strip()) > 20:
+                logger.info(f"   ⚡ Using RAG answer directly (already formatted by RAG service)")
+                # Only re-generate for Hindi/Urdu which need special script formatting
+                if is_hindi_subject or is_urdu_subject:
+                    context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]]) if source_chunks else ""
+                    
+                    prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
+{language_instruction}
+**Student's Query:** {query_text}
+
+**Context:** {context or answer}
+
+**Instructions:**
+1. Provide a clear, simple definition or explanation
+2. Use bullet points for key concepts
+3. Keep it concise (under 150 words)
+{'4. RESPOND ONLY IN HINDI USING DEVANAGARI SCRIPT' if is_hindi_subject else '4. RESPOND IN URDU USING NASTALIQ SCRIPT'}
+
+**Format your response as:**
+{format_example}"""
+                    
+                    answer = gemini_service.generate_response(prompt)
+            else:
+                # RAG returned no answer - generate from scratch
+                logger.warning(f"   ⚠️ RAG returned no answer, generating from scratch")
+                context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]]) if source_chunks else ""
                 
                 prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
 {language_instruction}
 **Student's Query:** {query_text}
 
-**Textbook Content:**
-{context}
+{f'**Textbook Content:** {context}' if context else 'No textbook content found. Provide a helpful explanation based on general knowledge.'}
 
 **Instructions:**
 1. Provide a clear, simple definition or explanation
 2. Use bullet points for key concepts
 3. Keep it concise (under 150 words)
 4. Make it easy for a Class {request.class_level} student to understand
-{'5. RESPOND ONLY IN HINDI USING DEVANAGARI SCRIPT' if is_hindi_subject else ('5. RESPOND IN URDU USING NASTALIQ SCRIPT' if is_urdu_subject else '5. RESPOND IN ENGLISH')}
 
 **Format your response as:**
-{format_example}
-{lang_instruction}"""
-                
-                answer = gemini_service.generate_response(prompt)
-            else:
-                # No textbook content found - provide general explanation
-                prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
-{language_instruction}
-The student selected this text and wants to understand it:
-"{query_text}"
-
-Since no specific textbook content was found, provide a helpful explanation:
-1. Explain what this text/concept means
-2. Keep it simple for Class {request.class_level}
-{'3. RESPOND ONLY IN HINDI USING DEVANAGARI SCRIPT' if is_hindi_subject else ('3. RESPOND IN URDU USING NASTALIQ SCRIPT' if is_urdu_subject else '3. RESPOND IN ENGLISH')}
-4. Be concise (under 150 words)
-
-Format:
 {format_example}"""
                 
                 answer = gemini_service.generate_response(prompt)

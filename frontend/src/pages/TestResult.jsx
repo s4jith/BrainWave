@@ -211,6 +211,90 @@ export default function TestResult() {
           </div>
         )}
 
+        {/* Topic-Level Analytics - NEW */}
+        {result.topic_analytics && (
+          <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+              <Target className="w-5 h-5 text-orange-600" />
+              <h3 className="font-semibold text-gray-800">Performance by Topic</h3>
+              <span className="text-sm text-gray-500">
+                ({result.topic_analytics.total_topics_covered} topics covered)
+              </span>
+            </div>
+            
+            {/* Strong Topics */}
+            {result.topic_analytics.strong_topics?.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-green-700 mb-2 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Strong Topics ({result.topic_analytics.strong_topics.length})
+                </h4>
+                <div className="space-y-2">
+                  {result.topic_analytics.strong_topics.map((topic, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-green-50 p-3 rounded-lg border border-green-100">
+                      <span className="text-green-800 font-medium">{topic.name}</span>
+                      <span className="text-green-600 font-bold">{Math.round(topic.score)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Weak Topics */}
+            {result.topic_analytics.weak_topics?.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-red-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Topics Needing Practice ({result.topic_analytics.weak_topics.length})
+                </h4>
+                <div className="space-y-2">
+                  {result.topic_analytics.weak_topics.map((topic, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-red-50 p-3 rounded-lg border border-red-100">
+                      <span className="text-red-800 font-medium">{topic.name}</span>
+                      <span className="text-red-600 font-bold">{Math.round(topic.score)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* All Topics Performance */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">All Topics Performance</h4>
+              <div className="space-y-2">
+                {result.topic_analytics.topics?.map((topic, idx) => (
+                  <div key={idx} className="p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-gray-800 font-medium">{topic.topic_name}</span>
+                      <span className={`font-bold ${
+                        topic.score_percentage >= 70 ? 'text-green-600' : 
+                        topic.score_percentage >= 50 ? 'text-yellow-600' : 
+                        'text-red-600'
+                      }`}>
+                        {Math.round(topic.score_percentage)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>{topic.correct_answers}/{topic.total_questions} correct</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          topic.score_percentage >= 70 ? 'bg-green-500' : 
+                          topic.score_percentage >= 50 ? 'bg-yellow-500' : 
+                          'bg-red-500'
+                        }`}
+                        style={{ width: `${topic.score_percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Strengths & Improvements */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {result.strengths?.length > 0 && (
