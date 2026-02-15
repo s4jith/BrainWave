@@ -478,7 +478,7 @@ Output ONLY the JSON array."""
     ) -> List[Dict]:
         """
         Get all chapters for a subject with their topics.
-        Checks MongoDB question bank first, then falls back to Pinecone metadata.
+        Checks MongoDB question bank first, then books collection, then Pinecone metadata.
         """
         collection = mongodb.db[self.QUESTION_BANK]
         
@@ -530,33 +530,73 @@ Output ONLY the JSON array."""
         if result:
             return result
         
-        # Fallback: Get chapter info from Pinecone metadata
-        logger.info(f"No chapters in question bank for {subject}, checking Pinecone...")
+        # Fallback 1: Check books collection (same source as get_available_subjects)
+        logger.info(f"No chapters in question bank for {subject} class {class_level}, checking books collection...")
+        
+        try:
+            books_collection = mongodb.db["books"]
+            # Match by class_level and subject (case-insensitive)
+            books = await books_collection.find(
+                {"class_level": class_level, "subject": {"$regex": f"^{subject}$", "$options": "i"}},
+                {"chapter_number": 1, "title": 1, "subject": 1}
+            ).sort("chapter_number", 1).to_list(100)
+            
+            if books:
+                chapter_info = {}
+                for book in books:
+                    ch_num = book.get("chapter_number", 1)
+                    ch_name = book.get("title", f"Chapter {ch_num}")
+                    chapter_key = str(ch_num)
+                    if chapter_key not in chapter_info:
+                        chapter_info[chapter_key] = {
+                            "chapter_number": ch_num,
+                            "chapter_name": ch_name,
+                            "total_topics": 0,
+                            "total_questions": 0,
+                            "average_score": None,
+                            "topics": []
+                        }
+                
+                result = sorted(chapter_info.values(), key=lambda x: x["chapter_number"])
+                if result:
+                    logger.info(f"Found {len(result)} chapters from books collection for {subject} class {class_level}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error fetching chapters from books collection: {e}")
+        
+        # Fallback 2: Get chapter info from Pinecone metadata
+        logger.info(f"No chapters in books for {subject} class {class_level}, checking Pinecone...")
         
         try:
             from app.db.mongo import namespace_db
             
             if namespace_db.index:
-                # Query Pinecone to get unique chapters from metadata
-                # Use a simple embedding of the subject name to retrieve some docs
                 namespace = namespace_db.get_namespace(subject)
                 
-                # Get all unique chapters from metadata
-                # We'll sample vectors from the namespace to get chapter info
                 stats = namespace_db.index.describe_index_stats()
                 namespaces = stats.get('namespaces', {})
                 
                 if namespace in namespaces:
-                    # Generate embedding using llm_storage_service
                     from app.services.llm_storage_service import llm_storage_service
                     sample_embedding = llm_storage_service.embedding_model.encode(f"{subject} class {class_level} chapter").tolist()
                     
+                    # Try with class_level filter first
                     results = namespace_db.index.query(
                         vector=sample_embedding,
                         namespace=namespace,
-                        top_k=100,  # Get enough docs to find chapters
+                        top_k=100,
+                        filter={"class_level": class_level},
                         include_metadata=True
                     )
+                    
+                    # If no results with filter, try without
+                    if not results.get('matches'):
+                        results = namespace_db.index.query(
+                            vector=sample_embedding,
+                            namespace=namespace,
+                            top_k=100,
+                            include_metadata=True
+                        )
                     
                     # Extract unique chapters from metadata
                     chapter_info = {}
@@ -1476,22 +1516,32 @@ Output ONLY the JSON object."""
     
     CHAPTER_TEST_COLLECTION = "chapter_test_questions"
     
-    # Test format: 15 questions (10 one-mark + 5 two-mark) = 20 marks, 40 minutes
+    # Test format: 15 questions (5 MCQ + 5 Fill-up + 5 two-mark) = 20 marks, 40 minutes
+    # Difficulty per type: 2 easy, 2 medium, 1 hard
+    # 3 variants stored to avoid repeat questions
     CHAPTER_TEST_FORMAT = {
-        "one_mark": {
-            "pool_size": 30,  # Generate 30 for variety (3 variations × 10)
-            "select_count": 10,
+        "mcq": {
+            "pool_per_variant": 5,  # 5 MCQs per variant
+            "total_pool": 15,       # 3 variants × 5 = 15 MCQs total
             "marks": 1,
-            "difficulty_mix": ["easy", "medium", "application"]  # Mixed
+            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
+        },
+        "fillup": {
+            "pool_per_variant": 5,  # 5 Fill-ups per variant
+            "total_pool": 15,       # 3 variants × 5 = 15 Fill-ups total
+            "marks": 1,
+            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
         },
         "two_mark": {
-            "pool_size": 15,  # Generate 15 for variety (3 variations × 5)
-            "select_count": 5,
+            "pool_per_variant": 5,  # 5 two-mark per variant
+            "total_pool": 15,       # 3 variants × 5 = 15 two-mark total
             "marks": 2,
-            "difficulty_mix": ["medium", "application"]  # Mixed
+            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
         },
+        "total_questions": 15,
         "total_marks": 20,
-        "time_limit_minutes": 40
+        "time_limit_minutes": 40,
+        "num_variants": 3
     }
     
     async def check_chapter_test_pool_exists(
@@ -1500,7 +1550,7 @@ Output ONLY the JSON object."""
         subject: str,
         chapter_number: int
     ) -> Dict:
-        """Check if chapter test question pool exists in MongoDB."""
+        """Check if chapter test question pool exists in MongoDB with all 3 variants."""
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
         existing = await collection.find_one({
@@ -1509,14 +1559,30 @@ Output ONLY the JSON object."""
             "chapter_number": chapter_number
         })
         
-        if existing and len(existing.get("one_mark_pool", [])) >= 10 and len(existing.get("two_mark_pool", [])) >= 5:
-            return {
-                "exists": True,
-                "chapter_name": existing.get("chapter_name", ""),
-                "one_mark_count": len(existing.get("one_mark_pool", [])),
-                "two_mark_count": len(existing.get("two_mark_pool", [])),
-                "generated_at": existing.get("generated_at")
-            }
+        if existing:
+            variants = existing.get("variants", [])
+            # Need at least 1 variant with proper question counts
+            if len(variants) >= 1:
+                v = variants[0]
+                has_mcq = len(v.get("mcq_pool", [])) >= 5
+                has_fillup = len(v.get("fillup_pool", [])) >= 5
+                has_two_mark = len(v.get("two_mark_pool", [])) >= 5
+                if has_mcq and has_fillup and has_two_mark:
+                    return {
+                        "exists": True,
+                        "chapter_name": existing.get("chapter_name", ""),
+                        "num_variants": len(variants),
+                        "generated_at": existing.get("generated_at")
+                    }
+            
+            # Legacy format check (old one_mark_pool/two_mark_pool)
+            if len(existing.get("one_mark_pool", [])) >= 10 and len(existing.get("two_mark_pool", [])) >= 5:
+                return {
+                    "exists": True,
+                    "chapter_name": existing.get("chapter_name", ""),
+                    "num_variants": 0,  # Legacy format
+                    "generated_at": existing.get("generated_at")
+                }
         
         return {"exists": False}
     
@@ -1527,75 +1593,79 @@ Output ONLY the JSON object."""
         chapter_number: int
     ) -> Dict:
         """
-        Generate chapter test question pool (first-time).
-        Creates 30 one-mark + 15 two-mark = 45 questions total.
+        Generate chapter test question pool with 3 variants.
         
-        One-mark questions: Mix of easy, medium, application (1 mark each)
-        Two-mark questions: Mix of medium, application (2 marks each)
+        Each variant has:
+        - 5 MCQs (2 easy, 2 medium, 1 hard) × 1 mark = 5 marks
+        - 5 Fill-ups (2 easy, 2 medium, 1 hard) × 1 mark = 5 marks  
+        - 5 Two-mark (2 easy, 2 medium, 1 hard) × 2 marks = 10 marks
+        Total: 15 questions, 20 marks per variant
         
-        Returns: Dict with status and question counts
+        3 variants × 15 = 45 questions total stored.
         """
-        logger.info(f"🎯 Generating chapter test pool for {subject} Ch.{chapter_number}...")
+        logger.info(f"🎯 Generating chapter test pool (3 variants) for {subject} Ch.{chapter_number}...")
         
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
-        # Step 1: Get chapter content from Pinecone
+        # Step 1: Get chapter content from Pinecone or books
         content = await self._retrieve_chapter_content(class_level, subject, chapter_number)
         
         if not content:
+            # Try getting content from books collection
+            books_collection = mongodb.db["books"]
+            book = await books_collection.find_one({
+                "class_level": class_level,
+                "subject": {"$regex": f"^{subject}$", "$options": "i"},
+                "chapter_number": chapter_number
+            })
+            if book and book.get("content"):
+                content = {
+                    "chapter_name": book.get("title", f"Chapter {chapter_number}"),
+                    "text": book["content"],
+                    "chunk_count": 1
+                }
+        
+        if not content:
             logger.error(f"No content found for {subject} Ch.{chapter_number}")
-            return {"status": "error", "error": "No chapter content available"}
+            return {"status": "error", "error": "No chapter content available. Please ensure the book is uploaded and embedded."}
         
         chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
         content_text = content.get("text", "")
         
-        # Step 2: Generate one-mark questions (30 total)
-        one_mark_questions = await self._generate_chapter_test_questions_batch(
+        # Step 2: Generate all 3 variants in a single API call
+        all_variants = await self._generate_all_variants(
             content_text=content_text,
             class_level=class_level,
             subject=subject,
             chapter_name=chapter_name,
-            marks=1,
-            count=self.CHAPTER_TEST_FORMAT["one_mark"]["pool_size"],
-            difficulty_mix=self.CHAPTER_TEST_FORMAT["one_mark"]["difficulty_mix"]
+            chapter_number=chapter_number
         )
         
-        # Step 3: Generate two-mark questions (15 total)
-        two_mark_questions = await self._generate_chapter_test_questions_batch(
-            content_text=content_text,
-            class_level=class_level,
-            subject=subject,
-            chapter_name=chapter_name,
-            marks=2,
-            count=self.CHAPTER_TEST_FORMAT["two_mark"]["pool_size"],
-            difficulty_mix=self.CHAPTER_TEST_FORMAT["two_mark"]["difficulty_mix"]
-        )
+        if not all_variants or len(all_variants) == 0:
+            return {"status": "error", "error": "Failed to generate questions. Please try again."}
         
-        # Step 4: Validate questions have proper answers
-        valid_one_mark = [q for q in one_mark_questions if self._has_valid_answer(q)]
-        valid_two_mark = [q for q in two_mark_questions if self._has_valid_answer(q)]
-        
-        logger.info(f"Validated: {len(valid_one_mark)} one-mark, {len(valid_two_mark)} two-mark questions")
-        
-        # If not enough questions, log warning but proceed
-        if len(valid_one_mark) < 10 or len(valid_two_mark) < 5:
-            logger.warning(f"Insufficient validated questions: {len(valid_one_mark)} one-mark, {len(valid_two_mark)} two-mark")
-        
-        # Step 5: Store in MongoDB
+        # Step 3: Store in MongoDB
         pool_doc = {
             "class_level": class_level,
             "subject": subject,
             "chapter_number": chapter_number,
             "chapter_name": chapter_name,
-            "one_mark_pool": valid_one_mark,
-            "two_mark_pool": valid_two_mark,
-            "total_one_mark": len(valid_one_mark),
-            "total_two_mark": len(valid_two_mark),
+            "variants": all_variants,
+            "num_variants": len(all_variants),
+            "format": {
+                "mcq_count": 5,
+                "fillup_count": 5,
+                "two_mark_count": 5,
+                "total_questions": 15,
+                "total_marks": 20,
+                "time_limit_minutes": 40
+            },
             "generated_at": datetime.utcnow(),
-            "last_used": datetime.utcnow()
+            "last_used": datetime.utcnow(),
+            "usage_count": 0
         }
         
-        # Upsert - update if exists, insert if not
+        # Upsert
         await collection.update_one(
             {
                 "class_level": class_level,
@@ -1606,99 +1676,202 @@ Output ONLY the JSON object."""
             upsert=True
         )
         
-        logger.info(f"✅ Stored chapter test pool: {len(valid_one_mark)} one-mark + {len(valid_two_mark)} two-mark questions")
+        total_q = sum(
+            len(v.get("mcq_pool", [])) + len(v.get("fillup_pool", [])) + len(v.get("two_mark_pool", []))
+            for v in all_variants
+        )
+        
+        logger.info(f"✅ Stored chapter test pool: {len(all_variants)} variants, {total_q} total questions")
         
         return {
             "status": "generated",
             "chapter_name": chapter_name,
-            "one_mark_count": len(valid_one_mark),
-            "two_mark_count": len(valid_two_mark),
-            "total_questions": len(valid_one_mark) + len(valid_two_mark)
+            "num_variants": len(all_variants),
+            "total_questions": total_q
         }
     
-    async def _generate_chapter_test_questions_batch(
+    async def _generate_all_variants(
         self,
         content_text: str,
         class_level: int,
         subject: str,
         chapter_name: str,
-        marks: int,
-        count: int,
-        difficulty_mix: List[str]
+        chapter_number: int = 1
     ) -> List[Dict]:
-        """Generate questions for chapter test with specified marks value."""
+        """Generate 3 variants of questions (MCQ + Fill-up + 2-mark) in a single Gemini call."""
         
-        mark_type = "one-mark" if marks == 1 else "two-mark"
-        difficulty_desc = ", ".join(difficulty_mix)
-        
-        prompt = f"""Generate {count} {mark_type} questions for Class {class_level} {subject} chapter test.
+        prompt = f"""You are an expert question paper setter for Class {class_level} {subject}.
 
 **Chapter:** {chapter_name}
 
 **Textbook Content:**
-{content_text[:15000]}
+{content_text[:18000]}
 
-**REQUIREMENTS:**
-- Generate exactly {count} questions worth {marks} mark(s) each
-- Mix of difficulties: {difficulty_desc}
-- {"Simple recall, definitions, basic concepts" if marks == 1 else "Application, understanding, problem-solving"}
-- Each question MUST have a clear, complete expected answer
-- For numerical questions: include solution steps
+**TASK:** Generate 3 VARIANTS of a test paper. Each variant must have:
+- 5 MCQs (Multiple Choice - 4 options, 1 correct) → 1 mark each
+- 5 Fill-in-the-blanks → 1 mark each
+- 5 Short answer questions → 2 marks each
 
-**OUTPUT FORMAT (JSON Array):**
-[
-  {{
-    "question_text": "What is the definition of...",
-    "question_type": "{"recall" if marks == 1 else "application"}",
-    "difficulty": "{"easy" if marks == 1 else "medium"}",
-    "expected_answer": "Complete answer that can be verified...",
-    "keywords": ["keyword1", "keyword2"],
-    "marks": {marks},
-    "is_numerical": false,
-    "solution_steps": ""
-  }},
-  ...
-]
+**DIFFICULTY DISTRIBUTION (for each question type in each variant):**
+- 2 Easy questions (recall, definitions, basic facts)
+- 2 Medium questions (understanding, application)
+- 1 Hard question (analysis, higher-order thinking)
 
 **CRITICAL RULES:**
-1. Every question MUST have expected_answer (at least 10 characters)
-2. Questions must be diverse - cover different concepts from the chapter
-3. For {marks}-mark questions: {"brief, direct answers" if marks == 1 else "more detailed answers with explanation"}
-4. Questions MUST be answerable from the provided content
-5. For numerical problems, include solution_steps
+1. ALL questions MUST be directly answerable from the provided textbook content
+2. Each variant must cover DIFFERENT aspects/concepts - NO question should repeat across variants
+3. MCQs must have exactly 4 options (A, B, C, D) with exactly 1 correct answer
+4. Fill-ups must have a clear single correct answer (the blank word/phrase)
+5. Two-mark questions need detailed answers (2-4 sentences)
+6. Questions must be age-appropriate for Class {class_level} students
+7. Cover diverse topics from throughout the chapter
+8. For numerical subjects: include calculation-based questions
+9. Every question MUST include a "topic" field — the specific sub-topic/concept being tested
 
-Output ONLY the JSON array, no other text."""
+**OUTPUT FORMAT (JSON Object):**
+{{
+  "variants": [
+    {{
+      "variant_id": 1,
+      "mcq": [
+        {{
+          "question_text": "Which of the following...",
+          "options": {{"A": "option1", "B": "option2", "C": "option3", "D": "option4"}},
+          "correct_option": "B",
+          "expected_answer": "option2",
+          "topic": "Specific sub-topic this question tests",
+          "difficulty": "easy",
+          "keywords": ["keyword1"]
+        }}
+      ],
+      "fillup": [
+        {{
+          "question_text": "The process of ______ is used to...",
+          "expected_answer": "photosynthesis",
+          "topic": "Specific sub-topic this question tests",
+          "difficulty": "easy",
+          "keywords": ["photosynthesis"]
+        }}
+      ],
+      "two_mark": [
+        {{
+          "question_text": "Explain the significance of...",
+          "expected_answer": "Detailed answer explaining the concept...",
+          "topic": "Specific sub-topic this question tests",
+          "difficulty": "easy",
+          "keywords": ["keyword1", "keyword2"],
+          "solution_steps": "Step 1: ... Step 2: ..."
+        }}
+      ]
+    }},
+    {{
+      "variant_id": 2,
+      "mcq": [...],
+      "fillup": [...],
+      "two_mark": [...]
+    }},
+    {{
+      "variant_id": 3,
+      "mcq": [...],
+      "fillup": [...],
+      "two_mark": [...]
+    }}
+  ]
+}}
+
+Generate EXACTLY 3 variants with 5 questions each type (5 MCQ + 5 fillup + 5 two_mark = 15 per variant).
+Output ONLY the JSON object, no other text."""
 
         try:
             response = self.gemini.generate_response(prompt)
             
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
-            if json_match:
-                questions_data = json.loads(json_match.group())
+            # Parse JSON
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not json_match:
+                logger.error("Failed to parse variants JSON from Gemini response")
+                return []
+            
+            data = json.loads(json_match.group())
+            raw_variants = data.get("variants", [])
+            
+            if not raw_variants:
+                logger.error("No variants found in Gemini response")
+                return []
+            
+            # Process and validate each variant
+            processed_variants = []
+            for v_idx, variant in enumerate(raw_variants):
+                timestamp = datetime.utcnow().timestamp()
+                prefix = f"{subject.lower().replace(' ', '_')}_ch{chapter_number}"
                 
-                formatted_questions = []
-                for i, q in enumerate(questions_data):
-                    question = {
-                        "question_id": f"{subject.lower().replace(' ', '_')}_{chapter_name.lower()[:10]}_{mark_type}_{i}_{datetime.utcnow().timestamp()}",
-                        "question_text": q.get("question_text", ""),
-                        "question_type": q.get("question_type", "recall" if marks == 1 else "application"),
+                # Process MCQs
+                mcq_pool = []
+                for i, q in enumerate(variant.get("mcq", [])):
+                    if not q.get("question_text") or not q.get("expected_answer"):
+                        continue
+                    mcq_pool.append({
+                        "question_id": f"{prefix}_mcq_v{v_idx}_{i}_{timestamp}",
+                        "question_text": q["question_text"],
+                        "question_type": "mcq",
+                        "options": q.get("options", {}),
+                        "correct_option": q.get("correct_option", ""),
+                        "expected_answer": q["expected_answer"],
+                        "topic": q.get("topic", chapter_name),
                         "difficulty": q.get("difficulty", "medium"),
-                        "expected_answer": q.get("expected_answer", ""),
                         "keywords": q.get("keywords", []),
-                        "marks": marks,
-                        "is_numerical": q.get("is_numerical", False),
-                        "solution_steps": q.get("solution_steps", "")
-                    }
-                    formatted_questions.append(question)
+                        "marks": 1
+                    })
                 
-                logger.info(f"Generated {len(formatted_questions)} {mark_type} questions")
-                return formatted_questions
+                # Process Fill-ups
+                fillup_pool = []
+                for i, q in enumerate(variant.get("fillup", [])):
+                    if not q.get("question_text") or not q.get("expected_answer"):
+                        continue
+                    fillup_pool.append({
+                        "question_id": f"{prefix}_fillup_v{v_idx}_{i}_{timestamp}",
+                        "question_text": q["question_text"],
+                        "question_type": "fillup",
+                        "expected_answer": q["expected_answer"],
+                        "topic": q.get("topic", chapter_name),
+                        "difficulty": q.get("difficulty", "medium"),
+                        "keywords": q.get("keywords", []),
+                        "marks": 1
+                    })
+                
+                # Process Two-mark questions
+                two_mark_pool = []
+                for i, q in enumerate(variant.get("two_mark", [])):
+                    if not q.get("question_text") or not q.get("expected_answer"):
+                        continue
+                    two_mark_pool.append({
+                        "question_id": f"{prefix}_2mark_v{v_idx}_{i}_{timestamp}",
+                        "question_text": q["question_text"],
+                        "question_type": "two_mark",
+                        "expected_answer": q["expected_answer"],
+                        "topic": q.get("topic", chapter_name),
+                        "difficulty": q.get("difficulty", "medium"),
+                        "keywords": q.get("keywords", []),
+                        "marks": 2,
+                        "solution_steps": q.get("solution_steps", "")
+                    })
+                
+                processed_variants.append({
+                    "variant_id": v_idx + 1,
+                    "mcq_pool": mcq_pool,
+                    "fillup_pool": fillup_pool,
+                    "two_mark_pool": two_mark_pool,
+                    "total_questions": len(mcq_pool) + len(fillup_pool) + len(two_mark_pool)
+                })
+                
+                logger.info(f"Variant {v_idx+1}: {len(mcq_pool)} MCQ, {len(fillup_pool)} Fillup, {len(two_mark_pool)} 2-mark")
             
-            logger.error("Failed to parse questions JSON")
+            return processed_variants
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error in variant generation: {e}")
             return []
-            
         except Exception as e:
-            logger.error(f"Error generating {mark_type} questions: {e}")
+            logger.error(f"Error generating question variants: {e}")
             return []
     
     def _has_valid_answer(self, question: Dict) -> bool:
@@ -1713,13 +1886,18 @@ Output ONLY the JSON array, no other text."""
         self,
         class_level: int,
         subject: str,
-        chapter_number: int
+        chapter_number: int,
+        student_id: str = None
     ) -> Dict:
         """
-        Select 15 random questions from pool for a chapter test.
-        - 10 one-mark questions (mixed difficulty)
-        - 5 two-mark questions (mixed difficulty)
+        Select 15 questions from a variant for a chapter test.
+        - 5 MCQ questions (1 mark each, with options)
+        - 5 Fill-in-the-blank questions (1 mark each)
+        - 5 Two-mark questions (2 marks each)
         - Total: 20 marks, 40 minutes
+        
+        Variant is selected based on student's previous attempt count
+        so repeat tests get different questions.
         
         Returns: Dict with questions, chapter info, and test parameters
         """
@@ -1734,58 +1912,133 @@ Output ONLY the JSON array, no other text."""
         if not pool:
             return {"status": "error", "error": "Question pool not found"}
         
-        one_mark_pool = pool.get("one_mark_pool", [])
-        two_mark_pool = pool.get("two_mark_pool", [])
+        # Check for new variant format
+        variants = pool.get("variants", [])
         
-        if len(one_mark_pool) < 10 or len(two_mark_pool) < 5:
-            return {"status": "error", "error": "Insufficient questions in pool"}
+        if variants and len(variants) > 0:
+            # NEW FORMAT: variant-based selection
+            # Determine which variant to use based on student's attempt count
+            variant_index = 0
+            if student_id:
+                attempt_count = await mongodb.db.test_sessions.count_documents({
+                    "student_id": student_id,
+                    "class_level": class_level,
+                    "subject": subject,
+                    "chapter_number": chapter_number,
+                    "test_type": "chapter_test"
+                })
+                variant_index = attempt_count % len(variants)
+            
+            variant = variants[variant_index]
+            mcq_pool = variant.get("mcq_pool", [])
+            fillup_pool = variant.get("fillup_pool", [])
+            two_mark_pool = variant.get("two_mark_pool", [])
+            
+            logger.info(f"Using variant {variant_index + 1}/{len(variants)} for student {student_id}")
+            
+            # Build ordered question list: MCQs first, then fill-ups, then 2-mark
+            formatted_questions = []
+            q_num = 1
+            
+            for q in mcq_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"mcq_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": "mcq",
+                    "marks": 1,
+                    "time_estimate": 90,
+                    "options": q.get("options", {}),
+                    "correct_option": q.get("correct_option", ""),
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", [])
+                })
+                q_num += 1
+            
+            for q in fillup_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"fillup_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": "fillup",
+                    "marks": 1,
+                    "time_estimate": 60,
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", [])
+                })
+                q_num += 1
+            
+            for q in two_mark_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"2mark_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": "two_mark",
+                    "marks": 2,
+                    "time_estimate": 150,
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "solution_steps": q.get("solution_steps", "")
+                })
+                q_num += 1
+        else:
+            # LEGACY FORMAT: one_mark_pool / two_mark_pool (backward compatibility)
+            import random
+            one_mark_pool = pool.get("one_mark_pool", [])
+            two_mark_pool_legacy = pool.get("two_mark_pool", [])
+            
+            if len(one_mark_pool) < 10 or len(two_mark_pool_legacy) < 5:
+                return {"status": "error", "error": "Insufficient questions in pool"}
+            
+            selected_one = random.sample(one_mark_pool, 10)
+            selected_two = random.sample(two_mark_pool_legacy, 5)
+            all_questions = selected_one + selected_two
+            random.shuffle(all_questions)
+            
+            formatted_questions = []
+            for i, q in enumerate(all_questions):
+                formatted_questions.append({
+                    "question_number": i + 1,
+                    "question_id": q.get("question_id", f"q_{i}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": q.get("question_type", "conceptual"),
+                    "marks": q.get("marks", 1),
+                    "time_estimate": 120 if q.get("marks", 1) == 2 else 90,
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "solution_steps": q.get("solution_steps", "")
+                })
         
-        import random
-        
-        # Random select 10 one-mark questions
-        selected_one_mark = random.sample(one_mark_pool, 10)
-        
-        # Random select 5 two-mark questions
-        selected_two_mark = random.sample(two_mark_pool, 5)
-        
-        # Combine and shuffle
-        all_questions = selected_one_mark + selected_two_mark
-        random.shuffle(all_questions)
-        
-        # Add question numbers
-        formatted_questions = []
-        for i, q in enumerate(all_questions):
-            formatted_questions.append({
-                "question_number": i + 1,
-                "question_id": q.get("question_id", f"q_{i}"),
-                "question_text": q.get("question_text", ""),
-                "difficulty": q.get("difficulty", "medium"),
-                "question_type": q.get("question_type", "conceptual"),
-                "marks": q.get("marks", 1),
-                "time_estimate": 120 if q.get("marks", 1) == 2 else 90,  # 2 min for 2-mark, 1.5 min for 1-mark
-                # Keep for evaluation (not sent to frontend)
-                "expected_answer": q.get("expected_answer", ""),
-                "keywords": q.get("keywords", []),
-                "solution_steps": q.get("solution_steps", "")
-            })
-        
-        # Update last_used timestamp
+        # Update last_used timestamp and usage_count
         await collection.update_one(
             {"_id": pool["_id"]},
-            {"$set": {"last_used": datetime.utcnow()}}
+            {
+                "$set": {"last_used": datetime.utcnow()},
+                "$inc": {"usage_count": 1}
+            }
         )
         
-        logger.info(f"✅ Selected 15 questions for {subject} Ch.{chapter_number} test")
+        mcq_count = len([q for q in formatted_questions if q["question_type"] == "mcq"])
+        fillup_count = len([q for q in formatted_questions if q["question_type"] == "fillup"])
+        two_mark_count = len([q for q in formatted_questions if q["question_type"] == "two_mark"])
+        
+        logger.info(f"✅ Selected {len(formatted_questions)} questions for {subject} Ch.{chapter_number} "
+                     f"(MCQ:{mcq_count}, Fillup:{fillup_count}, 2-mark:{two_mark_count})")
         
         return {
             "status": "success",
             "chapter_name": pool.get("chapter_name", f"Chapter {chapter_number}"),
             "questions": formatted_questions,
-            "total_questions": 15,
+            "total_questions": len(formatted_questions),
             "total_marks": 20,
             "time_limit_minutes": 40,
-            "one_mark_count": 10,
-            "two_mark_count": 5
+            "mcq_count": mcq_count,
+            "fillup_count": fillup_count,
+            "two_mark_count": two_mark_count
         }
     
     # ==================== TOPIC-TAGGED QUESTION GENERATION ====================

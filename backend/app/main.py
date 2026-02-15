@@ -106,7 +106,7 @@ app.include_router(history.router, prefix="/api")     # ✅ Annotation History
 
 # Import admin and user routers
 from app.routers import admin, user, test, auth
-from app.routers import admin_dashboard, support, support_tickets, test_management
+from app.routers import admin_dashboard, support, support_tickets, test_management, suggestions
 from app.routers import book_management, curriculum
 app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
 app.include_router(user.router, prefix="/api")   # ✅ User Stats (Dashboard)
@@ -115,6 +115,7 @@ app.include_router(auth.router)                  # ✅ Authentication (Login/Pas
 app.include_router(admin_dashboard.router)       # ✅ Admin Dashboard & Student Management
 app.include_router(support.router)               # ✅ Support (FAQs, Contact, Feedback)
 app.include_router(support_tickets.router)       # ✅ Support Tickets
+app.include_router(suggestions.router, prefix="/api")  # ✅ Student Suggestions
 app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
 app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
 app.include_router(curriculum.router)            # ✅ Curriculum Management (Subjects, Chapters, Topics)

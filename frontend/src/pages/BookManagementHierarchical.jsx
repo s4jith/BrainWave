@@ -42,8 +42,6 @@ export default function BookManagement() {
     pdf_file: null
   });
 
-  const subjects = ["Mathematics", "Science", "Physics", "Chemistry", "Biology", "Social Science", "English", "Hindi"];
-
   useEffect(() => {
     fetchHierarchicalStructure();
     fetchPineconeStats();

@@ -64,13 +64,14 @@ def generate_admin_notifications():
 
         notifications = []
 
-        # 1. Inactive Students (no login in 7+ days)
+        # 1. Inactive Students (no login in 7+ days, excluding recently created accounts)
         inactive_students = db.users.count_documents({
             "role": "student",
             "is_active": True,
             "$or": [
                 {"last_login": {"$lt": week_ago}},
-                {"last_login": None}
+                {"last_login": None, "created_at": {"$lt": week_ago}},
+                {"last_login": None, "created_at": None}
             ]
         })
         if inactive_students > 0:
@@ -81,13 +82,14 @@ def generate_admin_notifications():
                 "category": "activity"
             })
 
-        # 2. Inactive Teachers (no login in 7+ days)
+        # 2. Inactive Teachers (no login in 7+ days, excluding recently created accounts)
         inactive_teachers = db.users.count_documents({
             "role": "teacher",
             "is_active": True,
             "$or": [
                 {"last_login": {"$lt": week_ago}},
-                {"last_login": None}
+                {"last_login": None, "created_at": {"$lt": week_ago}},
+                {"last_login": None, "created_at": None}
             ]
         })
         if inactive_teachers > 0:

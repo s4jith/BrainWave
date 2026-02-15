@@ -54,21 +54,41 @@ export default function BookManagement() {
   // Upload form state
   const [uploadForm, setUploadForm] = useState({
     title: "",
-    subject: "Mathematics",
-    class_level: 6,
+    subject: "",
+    class_level: "",
     chapter_number: 1,
     description: "",
     pdf_file: null
   });
 
-  // Subjects and classes for filters
-  const subjects = ["Mathematics", "Science", "Physics", "Chemistry", "Biology", "Social Science", "English", "Hindi"];
-  const classes = [5, 6, 7, 8, 9, 10, 11, 12];
+  // Curriculum subjects from API
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(true);
+
+  // Derive subject names and class levels from curriculum
+  const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
+  const currClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
   useEffect(() => {
     fetchBooks();
     fetchPineconeStats();
+    fetchCurriculumSubjects();
   }, []);
+
+  const fetchCurriculumSubjects = async () => {
+    setLoadingCurriculum(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
+      if (response.ok) {
+        const data = await response.json();
+        setCurriculumSubjects(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch curriculum:", err);
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
 
   // Auto-refresh on window focus
   useEffect(() => {
@@ -155,8 +175,8 @@ export default function BookManagement() {
         setShowUploadModal(false);
         setUploadForm({
           title: "",
-          subject: "Mathematics",
-          class_level: 6,
+          subject: "",
+          class_level: "",
           chapter_number: 1,
           description: "",
           pdf_file: null
@@ -625,9 +645,14 @@ export default function BookManagement() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     required
                   >
-                    {subjects.map(subject => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
+                    <option value="">Select Subject</option>
+                    {loadingCurriculum ? (
+                      <option disabled>Loading...</option>
+                    ) : (
+                      currSubjectNames.map(subject => (
+                        <option key={subject} value={subject}>{subject}</option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -641,9 +666,14 @@ export default function BookManagement() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     required
                   >
-                    {classes.map(cls => (
-                      <option key={cls} value={cls}>Class {cls}</option>
-                    ))}
+                    <option value="">Select Class</option>
+                    {loadingCurriculum ? (
+                      <option disabled>Loading...</option>
+                    ) : (
+                      currClassLevels.map(cls => (
+                        <option key={cls} value={cls}>Class {cls}</option>
+                      ))
+                    )}
                   </select>
                 </div>
 

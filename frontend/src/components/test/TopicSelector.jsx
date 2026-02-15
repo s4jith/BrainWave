@@ -42,7 +42,7 @@ export default function TopicSelector({
   const [selectedChapter, setSelectedChapter] = useState(null);
 
   // Fixed test format - no user config needed
-  // 15 questions (10 one-mark + 5 two-mark) = 20 marks, 40 minutes
+  // 15 questions (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 minutes
 
   // Load subjects on mount
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function TopicSelector({
   };
 
   const handleStartTest = () => {
-    // Fixed format: 15Q (10×1 + 5×2) = 20 marks, 40 min
+    // Fixed format: 15Q (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 min
     onSelectTopic({
       subject: selectedSubject.subject,
       chapter_number: selectedChapter.chapter_number,
@@ -323,7 +323,7 @@ export default function TopicSelector({
                 </div>
                 <div className="mt-4 pt-4 border-t border-blue-100">
                   <p className="text-sm text-gray-600 text-center">
-                    <span className="font-medium">10 × 1 mark</span> + <span className="font-medium">5 × 2 marks</span>
+                    <span className="font-medium">5 MCQ</span> + <span className="font-medium">5 Fill-ups</span> + <span className="font-medium">5 Short Answer</span>
                   </p>
                 </div>
               </div>

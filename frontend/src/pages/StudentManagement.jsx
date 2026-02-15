@@ -256,7 +256,7 @@ export default function StudentManagement() {
             className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
           >
             <option value="all">All Classes</option>
-            {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(c => (
               <option key={c} value={c}>Class {c}</option>
             ))}
           </select>
@@ -463,7 +463,7 @@ export default function StudentManagement() {
                     onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   >
-                    {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(c => (
                       <option key={c} value={c}>Class {c}</option>
                     ))}
                   </select>
@@ -546,7 +546,7 @@ export default function StudentManagement() {
                     onChange={(e) => setFormData({ ...formData, class_level: parseInt(e.target.value) })}
                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   >
-                    {[5, 6, 7, 8, 9, 10, 11, 12].map(c => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(c => (
                       <option key={c} value={c}>Class {c}</option>
                     ))}
                   </select>

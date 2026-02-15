@@ -1,6 +1,6 @@
 /**
  * Gradebook - View grades and analytics
- * Shows student grades, course analytics, and export options
+ * Shows student grades (AI tests + staff tests), topic analysis, and detailed evaluations
  */
 
 import { useState, useEffect } from "react";
@@ -14,14 +14,22 @@ import {
     CheckCircle,
     XCircle,
     BookOpen,
-    Award
+    Award,
+    ChevronDown,
+    ChevronUp,
+    Brain,
+    Target,
+    AlertTriangle,
+    Sparkles,
+    FileText
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import DashboardLayout from "../components/dashboard/DashboardLayout";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// StatCard Component for displaying grade statistics
+// StatCard Component
 function StatCard({ icon: Icon, label, value, color }) {
     return (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-colors">
@@ -32,6 +40,170 @@ function StatCard({ icon: Icon, label, value, color }) {
                 <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+        </div>
+    );
+}
+
+// TopicBar - visual strength bar
+function TopicBar({ topic, accuracy, status }) {
+    const barColor = status === "strong" ? "bg-emerald-500" : status === "moderate" ? "bg-amber-500" : "bg-red-500";
+    const textColor = status === "strong" ? "text-emerald-600 dark:text-emerald-400" : status === "moderate" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
+    return (
+        <div className="flex items-center gap-3">
+            <p className="text-sm text-gray-700 dark:text-gray-300 w-40 truncate" title={topic}>{topic}</p>
+            <div className="flex-1 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${Math.max(accuracy, 4)}%` }} />
+            </div>
+            <p className={`text-sm font-semibold w-14 text-right ${textColor}`}>{accuracy}%</p>
+        </div>
+    );
+}
+
+// Evaluation card for a single question
+function EvaluationCard({ ev, index }) {
+    return (
+        <div className={`p-3 rounded-lg border ${ev.is_correct ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20" : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20"}`}>
+            <div className="flex items-start justify-between mb-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Q{index + 1}. {ev.question || ev.question_text || ""}</p>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded ${ev.is_correct ? "bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300"}`}>
+                    {ev.score ?? 0}/{ev.max_score ?? 10}
+                </span>
+            </div>
+            {ev.student_answer && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1"><strong>Your Answer:</strong> {ev.student_answer}</p>
+            )}
+            {ev.correct_answer && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5"><strong>Correct Answer:</strong> {ev.correct_answer}</p>
+            )}
+            {ev.explanation && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{ev.explanation}</p>
+            )}
+            {ev.feedback && !ev.explanation && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{ev.feedback}</p>
+            )}
+        </div>
+    );
+}
+
+// Expandable grade row
+function GradeRow({ grade }) {
+    const [expanded, setExpanded] = useState(false);
+    const isAI = grade.source === "ai_test";
+    const hasEvaluations = grade.evaluations && grade.evaluations.length > 0;
+    const hasFeedback = grade.feedback || (grade.strengths && grade.strengths.length > 0) || (grade.improvements && grade.improvements.length > 0);
+    const canExpand = hasEvaluations || hasFeedback;
+
+    const formatDate = (dt) => {
+        if (!dt) return "";
+        const d = typeof dt === "string" ? new Date(dt) : dt;
+        return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    };
+
+    return (
+        <div className="border-b border-gray-200 dark:border-gray-700 last:border-0">
+            <div
+                className={`px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${canExpand ? "cursor-pointer" : ""}`}
+                onClick={() => canExpand && setExpanded(!expanded)}
+            >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`p-1.5 rounded-lg ${isAI ? "bg-purple-100 dark:bg-purple-900/30" : "bg-blue-100 dark:bg-blue-900/30"}`}>
+                        {isAI ? <Brain size={16} className="text-purple-600 dark:text-purple-400" /> : <FileText size={16} className="text-blue-600 dark:text-blue-400" />}
+                    </div>
+                    <div className="min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">{grade.title}</p>
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <span className={`px-1.5 py-0.5 rounded ${isAI ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
+                                {isAI ? "AI Test" : "Staff Test"}
+                            </span>
+                            {grade.subject && <span>{grade.subject}</span>}
+                            {formatDate(grade.completed_at) && <span>{formatDate(grade.completed_at)}</span>}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-right">
+                        <p className={`font-bold ${grade.passed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            {grade.percentage}%
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{grade.score}/{grade.max_score}</p>
+                    </div>
+                    {grade.passed ? (
+                        <CheckCircle className="text-emerald-600 dark:text-emerald-400 shrink-0" size={20} />
+                    ) : (
+                        <XCircle className="text-red-600 dark:text-red-400 shrink-0" size={20} />
+                    )}
+                    {canExpand && (
+                        expanded ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />
+                    )}
+                </div>
+            </div>
+
+            {expanded && (
+                <div className="px-4 pb-4 space-y-4 bg-gray-50 dark:bg-gray-800/50">
+                    {/* Overall Feedback */}
+                    {grade.feedback && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">{grade.feedback}</p>
+                        </div>
+                    )}
+
+                    {/* Strengths & Improvements side by side */}
+                    {(grade.strengths?.length > 0 || grade.improvements?.length > 0) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {grade.strengths?.length > 0 && (
+                                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800 p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Target size={14} className="text-emerald-600 dark:text-emerald-400" />
+                                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Strengths</p>
+                                    </div>
+                                    <ul className="space-y-1">
+                                        {grade.strengths.map((s, i) => (
+                                            <li key={i} className="text-xs text-emerald-700 dark:text-emerald-400">• {s}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {grade.improvements?.length > 0 && (
+                                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />
+                                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Needs Improvement</p>
+                                    </div>
+                                    <ul className="space-y-1">
+                                        {grade.improvements.map((s, i) => (
+                                            <li key={i} className="text-xs text-amber-700 dark:text-amber-400">• {s}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Question-by-question evaluation */}
+                    {hasEvaluations && (
+                        <div>
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Question-wise Evaluation</p>
+                            <div className="space-y-2">
+                                {grade.evaluations.map((ev, i) => (
+                                    <EvaluationCard key={i} ev={ev} index={i} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Topics to review */}
+                    {grade.topics_to_review?.length > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-3">
+                            <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">Topics to Review</p>
+                            <div className="flex flex-wrap gap-2">
+                                {grade.topics_to_review.map((t, i) => (
+                                    <span key={i} className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">{t}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -47,7 +219,8 @@ export default function Gradebook() {
     const [gradebook, setGradebook] = useState(null);
     const [analytics, setAnalytics] = useState(null);
     const [myGrades, setMyGrades] = useState(null);
-    const [viewMode, setViewMode] = useState("gradebook"); // gradebook | analytics
+    const [viewMode, setViewMode] = useState("gradebook");
+    const [filter, setFilter] = useState("all"); // all | ai_test | staff_test
 
     const isInstructor = isTeacher() || isAdmin();
 
@@ -110,7 +283,6 @@ export default function Gradebook() {
                 headers: getAuthHeader()
             });
             if (!res.ok) throw new Error("Export failed");
-
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -138,22 +310,28 @@ export default function Gradebook() {
         );
     }
 
+    // Filtered grades
+    const filteredGrades = (myGrades?.grades || []).filter(g => {
+        if (filter === "all") return true;
+        return g.source === filter;
+    });
+
+    const aiCount = (myGrades?.grades || []).filter(g => g.source === "ai_test").length;
+    const staffCount = (myGrades?.grades || []).filter(g => g.source === "staff_test").length;
+
     // Student view
     if (!isInstructor) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors">
-                <header className="bg-white dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <div className="max-w-4xl mx-auto flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <ArrowLeft size={20} />
-                        </button>
-                        <h1 className="text-xl font-bold">My Grades</h1>
+            <DashboardLayout>
+                <div className="max-w-4xl mx-auto">
+                    {/* Header */}
+                    <div className="mb-6">
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Grades</h1>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">View your scores, topic analysis, and detailed evaluations</p>
                     </div>
-                </header>
 
-                <main className="max-w-4xl mx-auto px-6 py-8">
-                    {/* Summary */}
-                    <div className="grid grid-cols-3 gap-4 mb-8">
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <StatCard
                             icon={Award}
                             label="Overall"
@@ -162,56 +340,105 @@ export default function Gradebook() {
                         />
                         <StatCard
                             icon={BookOpen}
-                            label="Assessments"
+                            label="Total Tests"
                             value={myGrades?.grade_count || 0}
                             color="text-blue-500 dark:text-blue-400"
                         />
                         <StatCard
-                            icon={TrendingUp}
-                            label="Total Points"
-                            value={`${myGrades?.total_score || 0}/${myGrades?.total_max_score || 0}`}
+                            icon={Brain}
+                            label="AI Tests"
+                            value={aiCount}
                             color="text-purple-500 dark:text-purple-400"
                         />
+                        <StatCard
+                            icon={TrendingUp}
+                            label="Points"
+                            value={`${myGrades?.total_score || 0}/${myGrades?.total_max_score || 0}`}
+                            color="text-indigo-500 dark:text-indigo-400"
+                        />
+                    </div>
+
+                    {/* Topic Analysis Panel */}
+                    {myGrades?.topic_analysis?.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Sparkles size={18} className="text-purple-500" />
+                                <h2 className="font-semibold text-gray-900 dark:text-white">Topic Analysis</h2>
+                            </div>
+
+                            {/* Strength / Weakness Summary */}
+                            {(myGrades.strong_topics?.length > 0 || myGrades.weak_topics?.length > 0) && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                                    {myGrades.strong_topics?.length > 0 && (
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800">
+                                            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-1">Strong Topics</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {myGrades.strong_topics.map((t, i) => (
+                                                    <span key={i} className="text-xs bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded">{t}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {myGrades.weak_topics?.length > 0 && (
+                                        <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-800">
+                                            <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">Needs Improvement</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {myGrades.weak_topics.map((t, i) => (
+                                                    <span key={i} className="text-xs bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">{t}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Topic bars */}
+                            <div className="space-y-2">
+                                {myGrades.topic_analysis.map((t, i) => (
+                                    <TopicBar key={i} topic={t.topic} accuracy={t.accuracy} status={t.status} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-2 mb-4">
+                        {[
+                            { key: "all", label: `All (${myGrades?.grade_count || 0})` },
+                            { key: "ai_test", label: `AI Tests (${aiCount})` },
+                            { key: "staff_test", label: `Staff Tests (${staffCount})` }
+                        ].map(f => (
+                            <button
+                                key={f.key}
+                                onClick={() => setFilter(f.key)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filter === f.key ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Grades List */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                            <h2 className="font-semibold">Assessment Grades</h2>
+                            <h2 className="font-semibold text-gray-900 dark:text-white">Assessment Results</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Click on a test to see detailed evaluation</p>
                         </div>
 
-                        {myGrades?.grades?.length === 0 ? (
+                        {filteredGrades.length === 0 ? (
                             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                                 No grades yet
                             </div>
                         ) : (
-                            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                                {myGrades?.grades?.map((grade) => (
-                                    <div key={grade.submission_id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <div>
-                                            <p className="font-medium">{grade.assessment_title}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{grade.assessment_type}</p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <p className={`font-bold ${grade.passed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                                    {grade.percentage}%
-                                                </p>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">{grade.score}/{grade.max_score}</p>
-                                            </div>
-                                            {grade.passed ? (
-                                                <CheckCircle className="text-emerald-600 dark:text-emerald-400" size={20} />
-                                            ) : (
-                                                <XCircle className="text-red-600 dark:text-red-400" size={20} />
-                                            )}
-                                        </div>
-                                    </div>
+                            <div>
+                                {filteredGrades.map((grade) => (
+                                    <GradeRow key={grade.id} grade={grade} />
                                 ))}
                             </div>
                         )}
                     </div>
-                </main>
-            </div>
+                </div>
+            </DashboardLayout>
         );
     }
 

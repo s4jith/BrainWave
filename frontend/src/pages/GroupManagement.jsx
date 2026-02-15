@@ -111,6 +111,11 @@ export default function GroupManagement() {
         })).sort((a, b) => a.label.localeCompare(b.label));
     }, [curriculumSubjects]);
 
+    // Derive available class levels from curriculum
+    const availableClassLevels = React.useMemo(() => {
+        return [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
+    }, [curriculumSubjects]);
+
     const handleCreateGroup = async (e) => {
         e.preventDefault();
         if (groupForm.teacher_ids.length === 0) return alert("Please select at least one teacher for this group");
@@ -548,7 +553,7 @@ export default function GroupManagement() {
                                     <select value={studentClassFilter} onChange={(e) => setStudentClassFilter(e.target.value)}
                                         className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
                                         <option value="">All Classes</option>
-                                        {[5, 6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                                        {availableClassLevels.map(c => <option key={c} value={c}>Class {c}</option>)}
                                     </select>
                                 </div>
                                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
@@ -596,7 +601,7 @@ export default function GroupManagement() {
                             <select value={studentClassFilter} onChange={(e) => setStudentClassFilter(e.target.value)}
                                 className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
                                 <option value="">All Classes</option>
-                                {[5, 6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                                {availableClassLevels.map(c => <option key={c} value={c}>Class {c}</option>)}
                             </select>
                         </div>
                         <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-72 overflow-y-auto mb-4">

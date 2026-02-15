@@ -461,7 +461,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                       <div className="space-y-3 max-h-96 overflow-y-auto">
                         {(editingItem === item.pending_id ? editForm.extracted_chapters : item.extracted_chapters)?.map((chapter, idx) => (
                           <div
-                            key={idx}
+                            key={`ch-${chapter.chapter_number}-${idx}`}
                             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
                           >
                             <div className="flex items-start gap-3">
@@ -509,7 +509,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                                 {chapter.topics && chapter.topics.length > 0 && (
                                   <div className="mt-2 space-y-1">
                                     {chapter.topics.map((topic, topicIdx) => (
-                                      <div key={topicIdx} className="flex items-center gap-2">
+                                      <div key={`topic-${chapter.chapter_number}-${topicIdx}`} className="flex items-center gap-2">
                                         <span className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></span>
                                         {editingItem === item.pending_id ? (
                                           <div className="flex-1 flex items-center gap-2">

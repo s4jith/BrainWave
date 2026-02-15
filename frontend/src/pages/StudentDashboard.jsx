@@ -120,8 +120,8 @@ export default function StudentDashboard() {
             onClick: () => navigate("/my-grades")
         },
         {
-            title: "Assessments",
-            description: "Take a quiz or test",
+            title: "Test Center",
+            description: "AI & Staff tests",
             icon: CheckCircle,
             color: "bg-purple-500",
             onClick: () => navigate("/my-tests")
@@ -141,11 +141,11 @@ export default function StudentDashboard() {
             onClick: () => navigate("/notes")
         },
         {
-            title: "Help & Support",
-            description: "Get help from admin",
+            title: "Suggestions",
+            description: "Share feedback",
             icon: MessageCircle,
             color: "bg-rose-500",
-            onClick: () => navigate("/support-tickets")
+            onClick: () => navigate("/suggestions")
         },
         {
             title: "Statistics",

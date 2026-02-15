@@ -34,21 +34,34 @@ PENDING_CURRICULUM_COLLECTION = "pending_curriculum"
 @router.get("/subjects", response_model=List[SubjectSummary])
 async def get_all_subjects(
     class_level: Optional[int] = Query(None, ge=5, le=12),
-    is_active: Optional[bool] = Query(None)
+    is_active: Optional[bool] = Query(True)
 ):
     """
     Get all subjects with optional filters.
     Returns summary information for list views.
+    By default, only returns active subjects.
     """
     try:
         query = {}
         if class_level:
             query["class_level"] = class_level
-        if is_active is not None:
+        
+        # Filter by is_active - handle both new format and legacy documents
+        if is_active is True:
+            # Show active subjects (explicit True) but exclude explicitly False ones
+            query["is_active"] = {"$ne": False}
+        elif is_active is False:
+            query["is_active"] = False
+        elif is_active is not None:
             query["is_active"] = is_active
+        # If is_active is None (default True), show only active
+        else:
+            query["is_active"] = {"$ne": False}
         
         collection = mongodb.db[SUBJECTS_COLLECTION]
         subjects = await collection.find(query).sort("class_level", 1).to_list(200)
+        
+        logger.info(f"📚 Query: {query}, Retrieved {len(subjects)} subjects")
         
         # Convert to summary format
         summaries = []
@@ -273,6 +286,9 @@ async def delete_subject(subject_id: str):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
+        # Log before deletion
+        logger.info(f"🔍 Attempting to delete subject: {subject_id}")
+        
         result = await collection.find_one_and_update(
             {"subject_id": subject_id},
             {"$set": {"is_active": False, "updated_at": datetime.utcnow()}},
@@ -280,9 +296,10 @@ async def delete_subject(subject_id: str):
         )
         
         if not result:
+            logger.warning(f"❌ Subject not found: {subject_id}")
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        logger.info(f"🗑️ Deleted subject: {subject_id}")
+        logger.info(f"🗑️ Deleted subject: {subject_id}, is_active now: {result.get('is_active', 'NOT SET')}")
         return {"success": True, "message": "Subject deleted successfully"}
         
     except HTTPException:
@@ -999,8 +1016,12 @@ async def update_pending_curriculum_item(
 @router.post("/pending/{pending_id}/approve")
 async def approve_or_reject_pending_item(
     pending_id: str,
-    request: ApprovePendingItemRequest,
-    reviewed_by: str = Form(...)
+    action: str = Form(...),
+    reviewed_by: str = Form(...),
+    rejection_reason: Optional[str] = Form(None),
+    subject_name_override: Optional[str] = Form(None),
+    icon: Optional[str] = Form(None),
+    color: Optional[str] = Form(None)
 ):
     """
     Approve or reject a pending curriculum item.
@@ -1008,8 +1029,12 @@ async def approve_or_reject_pending_item(
     
     Args:
         pending_id: Pending item ID
-        request: Approval/rejection details
+        action: 'approve' or 'reject'
         reviewed_by: User ID of the admin who reviewed
+        rejection_reason: Required if action is 'reject'
+        subject_name_override: Optional override for subject name
+        icon: Optional icon for subject (default: 📚)
+        color: Optional color for subject (default: #3B82F6)
     
     Returns:
         Success message with created subject_id if approved
@@ -1031,8 +1056,8 @@ async def approve_or_reject_pending_item(
             )
         
         # Handle rejection
-        if request.action == "reject":
-            if not request.rejection_reason:
+        if action == "reject":
+            if not rejection_reason:
                 raise HTTPException(
                     status_code=400,
                     detail="Rejection reason is required"
@@ -1045,7 +1070,7 @@ async def approve_or_reject_pending_item(
                         "status": "rejected",
                         "reviewed_by": reviewed_by,
                         "reviewed_at": datetime.utcnow(),
-                        "rejection_reason": request.rejection_reason
+                        "rejection_reason": rejection_reason
                     }
                 }
             )
@@ -1058,9 +1083,9 @@ async def approve_or_reject_pending_item(
             }
         
         # Handle approval
-        if request.action == "approve":
+        if action == "approve":
             # Use override values if provided
-            subject_name = request.subject_name_override or pending_item["subject_name"]
+            subject_name = subject_name_override or pending_item["subject_name"]
             
             # Check if subject already exists
             subject_id = f"{subject_name.lower().replace(' ', '_')}_{pending_item['class_level']}"
@@ -1122,8 +1147,8 @@ async def approve_or_reject_pending_item(
                 "class_level": pending_item["class_level"],
                 "board": pending_item.get("board", "CBSE"),
                 "description": f"Auto-generated from {pending_item['source_file_name']}",
-                "icon": request.icon or "📚",
-                "color": request.color or "#3B82F6",
+                "icon": icon or "📚",
+                "color": color or "#3B82F6",
                 "chapters": chapters,
                 "total_topics": sum(len(ch["topics"]) for ch in chapters),
                 "total_chapters": len(chapters),

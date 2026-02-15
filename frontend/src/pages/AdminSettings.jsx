@@ -155,7 +155,7 @@ export default function AdminSettings() {
                                     onChange={(e) => setSettings({ ...settings, defaultStudentClass: parseInt(e.target.value) })}
                                     className="px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                                 >
-                                    {[5, 6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
                                 </select>
                             </div>
                         </div>

@@ -109,6 +109,7 @@ class AssessmentCreateRequest(BaseModel):
     title: str = Field(..., min_length=3)
     description: Optional[str] = None
     subject: Optional[str] = None
+    class_level: Optional[int] = None
     type: Optional[AssessmentType] = AssessmentType.QUIZ
     course_id: Optional[str] = None
     settings: AssessmentSettings = Field(default_factory=AssessmentSettings)
@@ -124,6 +125,7 @@ class AssessmentCreateRequest(BaseModel):
     group_ids: Optional[List[str]] = Field(default_factory=list, description="Group IDs assigned to this assessment")
     questions: Optional[List[dict]] = Field(default_factory=list)
     created_by: Optional[str] = None
+    evaluation_type: Optional[str] = Field(default="manual", description="'ai' for AI evaluation, 'manual' for teacher grading")
 
 
 class AssessmentUpdateRequest(BaseModel):

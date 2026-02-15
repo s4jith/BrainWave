@@ -27,13 +27,17 @@ export default function TeacherManagement() {
     const [formData, setFormData] = useState({
         name: "",
         email: "",
-        preferred_subject: "Mathematics"
+        preferred_subject: ""
     });
 
-    const subjects = ["Mathematics", "Science", "Physics", "Chemistry", "Biology", "Social Science", "English", "Hindi"];
+    // Curriculum subjects from API
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true);
+    const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
 
     useEffect(() => {
         fetchTeachers();
+        fetchCurriculumSubjects();
     }, []);
 
     // Auto-refresh on window focus
@@ -59,6 +63,23 @@ export default function TeacherManagement() {
             setTeachers([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchCurriculumSubjects = async () => {
+        setLoadingCurriculum(true);
+        try {
+            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+                headers: getAuthHeader()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCurriculumSubjects(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch curriculum:", err);
+        } finally {
+            setLoadingCurriculum(false);
         }
     };
 
@@ -156,7 +177,7 @@ export default function TeacherManagement() {
     };
 
     const resetForm = () => {
-        setFormData({ name: "", email: "", preferred_subject: "Mathematics" });
+        setFormData({ name: "", email: "", preferred_subject: "" });
     };
 
     const openEditModal = (teacher) => {
@@ -164,7 +185,7 @@ export default function TeacherManagement() {
         setFormData({
             name: teacher.name,
             email: teacher.email,
-            preferred_subject: teacher.preferred_subject || "Mathematics"
+            preferred_subject: teacher.preferred_subject || ""
         });
         setShowEditModal(true);
     };
@@ -393,7 +414,12 @@ export default function TeacherManagement() {
                                     onChange={(e) => setFormData({ ...formData, preferred_subject: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                                 >
-                                    {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                                    <option value="">Select Subject</option>
+                                    {loadingCurriculum ? (
+                                        <option disabled>Loading...</option>
+                                    ) : (
+                                        currSubjectNames.map(s => <option key={s} value={s}>{s}</option>)
+                                    )}
                                 </select>
                             </div>
                             <div className="flex gap-3 pt-4">
@@ -450,7 +476,12 @@ export default function TeacherManagement() {
                                     onChange={(e) => setFormData({ ...formData, preferred_subject: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                                 >
-                                    {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                                    <option value="">Select Subject</option>
+                                    {loadingCurriculum ? (
+                                        <option disabled>Loading...</option>
+                                    ) : (
+                                        currSubjectNames.map(s => <option key={s} value={s}>{s}</option>)
+                                    )}
                                 </select>
                             </div>
                             <div className="flex gap-3 pt-4">

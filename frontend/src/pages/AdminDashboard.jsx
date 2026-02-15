@@ -10,7 +10,7 @@ import AdminLayout from "../components/AdminLayout";
 import {
   LayoutDashboard, Users, BookOpen, FolderKanban, FileText,
   ClipboardList, TrendingUp, CheckCircle, AlertCircle, ArrowRight,
-  GraduationCap, BarChart3
+  GraduationCap, BarChart3, MessageCircle
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -57,6 +57,7 @@ export default function AdminDashboard() {
     { label: "Manage Teachers", description: "Configure teachers", icon: GraduationCap, path: "/teacher-management" },
     { label: "Create Test", description: "Build new assessments", icon: ClipboardList, path: "/create-test" },
     { label: "Manage Groups", description: "Organize student groups", icon: FolderKanban, path: "/group-management" },
+    { label: "Student Suggestions", description: "Review student feedback", icon: MessageCircle, path: "/admin-suggestions" },
   ];
 
   if (loading) {

@@ -33,10 +33,16 @@ export default function TestManagement() {
   // Teacher's groups and subjects
   const [teacherGroups, setTeacherGroups] = useState([]);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
+  const [teacherClassLevels, setTeacherClassLevels] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
+
+  // Curriculum data (for admin fallback)
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
   useEffect(() => {
     fetchTeacherGroups();
+    fetchCurriculumSubjects();
   }, []);
 
   useEffect(() => {
@@ -70,9 +76,11 @@ export default function TestManagement() {
         const groups = data.groups || [];
         setTeacherGroups(groups);
         
-        // Extract unique subjects from groups
+        // Extract unique subjects and class levels from groups
         const subjects = [...new Set(groups.map(g => g.subject).filter(Boolean))];
         setTeacherSubjects(subjects.sort());
+        const classes = [...new Set(groups.map(g => g.class_level).filter(Boolean))];
+        setTeacherClassLevels(classes.sort((a, b) => a - b));
       }
     } catch (err) {
       console.error("Failed to fetch teacher groups:", err);
@@ -80,6 +88,31 @@ export default function TestManagement() {
       setLoadingGroups(false);
     }
   };
+
+  const fetchCurriculumSubjects = async () => {
+    setLoadingCurriculum(true);
+    try {
+      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+        headers: getAuthHeader()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurriculumSubjects(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch curriculum subjects:", err);
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
+
+  // Derive dynamic filter options: use teacher groups if available, otherwise curriculum
+  const filterClassLevels = teacherClassLevels.length > 0 
+    ? teacherClassLevels 
+    : [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
+  const filterSubjectNames = teacherSubjects.length > 0 
+    ? teacherSubjects 
+    : [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
 
   const fetchTests = async () => {
     try {
@@ -267,17 +300,21 @@ export default function TestManagement() {
             <select value={filterClass} onChange={(e) => setFilterClass(e.target.value)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
               <option value="">All Classes</option>
-              {[5, 6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>Class {c}</option>)}
+              {(loadingGroups && loadingCurriculum) ? (
+                <option disabled>Loading...</option>
+              ) : (
+                filterClassLevels.map(c => <option key={c} value={c}>Class {c}</option>)
+              )}
             </select>
             <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
               <option value="">All Subjects</option>
-              {loadingGroups ? (
+              {(loadingGroups && loadingCurriculum) ? (
                 <option disabled>Loading...</option>
-              ) : teacherSubjects.length > 0 ? (
-                teacherSubjects.map(s => <option key={s} value={s}>{s}</option>)
+              ) : filterSubjectNames.length > 0 ? (
+                filterSubjectNames.map(s => <option key={s} value={s}>{s}</option>)
               ) : (
-                <option disabled>No subjects assigned</option>
+                <option disabled>No subjects available</option>
               )}
             </select>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}

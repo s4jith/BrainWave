@@ -372,34 +372,15 @@ export default function Dashboard() {
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Hero Banner - Purple/Violet Theme */}
+            {/* Motivational Quote Banner - No course pills */}
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-8 text-white relative overflow-hidden">
               <div className="absolute right-0 top-0 w-64 h-64 opacity-20">
                 <div className="w-full h-full bg-white/20 rounded-full blur-3xl"></div>
               </div>
-              <span className="text-xs uppercase tracking-wider opacity-80">Free tier</span>
-              <h2 className="text-3xl font-semibold mt-2 max-w-md leading-tight">
+              <h2 className="text-3xl font-semibold max-w-md leading-tight">
                 "{getDailyQuote().text}"
               </h2>
               <p className="text-sm mt-2 opacity-90 font-medium">— {getDailyQuote().author}</p>
-
-
-              {/* Course Pills - Only show if books exist in Pinecone */}
-              {dynamicCourses.length > 0 && (
-                <div className="flex gap-4 mt-8">
-                  {dynamicCourses.slice(0, 3).map(course => (
-                    <div key={course.id} className="flex items-center gap-3 bg-white/20 backdrop-blur rounded-2xl px-4 py-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${course.color}`}>
-                        <course.icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs opacity-80">{course.watched}/{course.total} watched</p>
-                        <p className="font-medium text-sm">{course.title}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Quick Actions */}
@@ -564,18 +545,18 @@ export default function Dashboard() {
 
 
 
-            {/* Message Staff - Purple/Violet Theme */}
+            {/* Suggestions to Admin */}
             <div
-              onClick={() => navigate("/support-tickets")}
-              className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg"
+              onClick={() => navigate("/suggestions")}
+              className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg transition-shadow"
             >
               <div className="flex items-center justify-between text-white">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <MessageCircle className="w-5 h-5" />
-                    <h3 className="font-semibold">Message Staff</h3>
+                    <h3 className="font-semibold">Suggestions</h3>
                   </div>
-                  <p className="text-sm opacity-80">Get help from our team</p>
+                  <p className="text-sm opacity-80">Share your feedback with admin</p>
                 </div>
                 <ArrowRight className="w-6 h-6" />
               </div>

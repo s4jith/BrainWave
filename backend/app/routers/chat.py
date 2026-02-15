@@ -334,8 +334,8 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 query_embedding=query_embedding
             )
             
-            # Check for cache hit (threshold: 0.85 for more cache hits)
-            if llm_chunks and llm_chunks[0]['score'] >= 0.85:
+            # Check for cache hit (threshold: 0.80 — same Gemini embeddings now used for store & query)
+            if llm_chunks and llm_chunks[0]['score'] >= 0.80:
                 cached_answer = llm_chunks[0]['text']
                 logger.info(f"🎯 CACHE HIT (streaming): similarity {llm_chunks[0]['score']:.3f}")
                 
@@ -360,7 +360,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             combined_context = "\n\n".join(context_parts)
             
             if not combined_context:
-                no_content_msg = "I couldn't find relevant content for this question. Please try rephrasing or ask about a specific topic."
+                no_content_msg = "The content is not found in your textbook. Please try a different question."
                 yield f"data: {json.dumps({'text': no_content_msg})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
                 return
@@ -370,26 +370,59 @@ async def student_chatbot_stream(request: StreamingChatRequest):
 
 STUDENT QUESTION: {request.question}
 
-REFERENCE CONTENT:
+REFERENCE CONTENT FROM TEXTBOOK:
 {combined_context}
 
-INSTRUCTIONS:
-1. Answer the question directly using the content provided
-2. Do NOT start with any preamble like "Based on your textbook" or "According to the textbook"
-3. Just give the answer directly - start with the actual answer content
-4. Keep the answer clear and appropriate for Class {request.class_level}
-5. Use examples if available
+RULES:
+1. Answer the question using the REFERENCE CONTENT above as your primary source.
+2. If the reference content is directly about the topic asked, give a clear answer from it.
+3. If the reference content is from the same subject but covers a different specific topic (e.g., student asks about irrational numbers but content is about prime factorization), respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+4. If the student asks about something completely unrelated to {request.subject} (e.g., asking about animals in a math class), respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
+6. Do NOT describe what the reference content contains instead of answering.
+7. Keep the answer clear for Class {request.class_level} students.
 
-Generate a clear, direct answer:"""
+Generate your answer:"""
             
             # Step 4: Stream response from Gemini
             logger.info("📡 Starting Gemini streaming...")
             full_response = ""
             
-            for chunk in gemini_service.generate_response_streaming(prompt):
-                full_response += chunk
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
+            # Run synchronous Gemini streaming in thread to avoid blocking event loop
+            # This ensures each chunk is yielded to the client immediately
+            import queue
+            import threading
             
+            chunk_queue = queue.Queue()
+            
+            def _stream_worker():
+                try:
+                    for chunk in gemini_service.generate_response_streaming(prompt):
+                        chunk_queue.put(("chunk", chunk))
+                    chunk_queue.put(("done", None))
+                except Exception as e:
+                    chunk_queue.put(("error", str(e)))
+            
+            thread = threading.Thread(target=_stream_worker, daemon=True)
+            thread.start()
+            
+            while True:
+                # Poll the queue with a small timeout to keep the async loop responsive
+                while chunk_queue.empty():
+                    await asyncio.sleep(0.01)
+                
+                msg_type, data = chunk_queue.get()
+                
+                if msg_type == "chunk":
+                    full_response += data
+                    yield f"data: {json.dumps({'text': data})}\n\n"
+                elif msg_type == "done":
+                    break
+                elif msg_type == "error":
+                    yield f"data: {json.dumps({'error': data})}\n\n"
+                    return            
             logger.info(f"✅ Streaming complete: {len(full_response)} chars")
             
             # Step 5: Send completion signal with sources

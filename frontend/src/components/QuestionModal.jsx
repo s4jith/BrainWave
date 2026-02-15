@@ -26,8 +26,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
     const [loadingSubjectDetail, setLoadingSubjectDetail] = useState(false);
 
-    // Determine subject list based on role (fallback for AI tab etc)
-    const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : ["Mathematics", "Science", "English", "Hindi", "Social Science"]);
+    // Determine subject list based on role (for teachers use assigned subjects, for admin use curriculum)
+    const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : []);
 
     // Load saved form defaults from localStorage
     const savedDefaults = (() => {

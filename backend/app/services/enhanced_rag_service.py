@@ -150,12 +150,10 @@ class EnhancedRAGService:
         available_classes = self.subject_class_ranges.get(subject, list(range(5, 13)))
         available_classes = [c for c in available_classes if c <= student_class]
         
-        if mode == "basic":
-            # Basic mode: Current class + 2 previous classes
-            # Example: Class 10 → [8, 9, 10]
-            prerequisite_range = 2
-            start_class = max(available_classes[0], student_class - prerequisite_range)
-            return [c for c in available_classes if start_class <= c <= student_class]
+        if mode in ("basic", "quick"):
+            # Quick mode: ONLY search student's current class
+            # Example: Class 10 → [10]
+            return [student_class] if student_class in available_classes else available_classes[-1:]
         
         else:  # deepdive mode
             # Deep dive: ALL classes from start to current
@@ -203,54 +201,83 @@ class EnhancedRAGService:
             class_distribution = {}
             
             # === STAGE 1: PRE-FILTER (Indexed Metadata) ===
-            # Build metadata filter for class levels (handles both int and string storage)
-            class_filter_values = []
-            for c in classes_to_search:
-                class_filter_values.extend([c, str(c)])
+            # Pinecone data uses 'class_level' (int) from pdf_processor uploads
+            # Also handle legacy 'class' (str) from math_chunker uploads
+            # Build filters for both possible metadata schemas
+            class_filter_int = [int(c) for c in classes_to_search]
+            class_filter_str = [str(c) for c in classes_to_search]
             
-            metadata_filter = {"class": {"$in": class_filter_values}}
+            # Primary filter: class_level as integer (pdf_processor format)
+            metadata_filter = {"class_level": {"$in": class_filter_int}}
             
             # Optional: add chapter filter if provided
             if chapter is not None:
-                metadata_filter["chapter_number"] = chapter
+                metadata_filter["chapter_number"] = int(chapter)
             
-            logger.info(f"   Stage 1 Pre-filter: namespace={namespace}, class={list(classes_to_search)}, chapter={chapter}")
+            logger.info(f"   Stage 1 Pre-filter: namespace={namespace}, class={class_filter_int}, chapter={chapter}")
             
             try:
                 # === STAGE 2: ANN VECTOR SEARCH (on pre-filtered subset) ===
-                results = self.textbook_db.index.query(
-                    namespace=namespace,
-                    vector=query_embedding,
-                    top_k=5,
-                    include_metadata=True,
-                    filter=metadata_filter
-                )
+                try:
+                    results = self.textbook_db.index.query(
+                        namespace=namespace,
+                        vector=query_embedding,
+                        top_k=10,
+                        include_metadata=True,
+                        filter=metadata_filter
+                    )
+                    matches = results.get('matches', [])
+                except Exception as filter_err:
+                    logger.warning(f"   ⚠️ class_level int filter failed: {filter_err}")
+                    matches = []
                 
-                matches = results.get('matches', [])
+                # If no matches with class_level (int), try legacy 'class' (str) key
+                if len(matches) == 0:
+                    logger.info(f"   ⚠️ No matches with class_level filter, trying 'class' (string) filter...")
+                    legacy_filter = {"class": {"$in": class_filter_str}}
+                    if chapter is not None:
+                        legacy_filter["chapter_number"] = str(chapter)
+                    try:
+                        results = self.textbook_db.index.query(
+                            namespace=namespace,
+                            vector=query_embedding,
+                            top_k=10,
+                            include_metadata=True,
+                            filter=legacy_filter
+                        )
+                        matches = results.get('matches', [])
+                        if matches:
+                            logger.info(f"   ✅ Legacy 'class' filter matched: {len(matches)} results")
+                    except Exception:
+                        matches = []
+                
                 logger.info(f"   Stage 2 ANN search: {len(matches)} matches from filtered subset")
                 
                 # FALLBACK: If pre-filter is too restrictive, retry without filter
                 if len(matches) == 0:
-                    logger.info(f"   ⚠️ No matches with filter, retrying without metadata filter...")
+                    logger.info(f"   ⚠️ No matches with any filter, retrying without metadata filter...")
                     results = self.textbook_db.index.query(
                         namespace=namespace,
                         vector=query_embedding,
-                        top_k=5,
+                        top_k=10,
                         include_metadata=True
                     )
                     matches = results.get('matches', [])
                     logger.info(f"   🔄 Fallback: {len(matches)} matches without filter")
                 
                 # === STAGE 3: POST-FILTER (Score Threshold + Class Boost) ===
-                threshold = 0.3 if mode == "basic" else 0.2
+                # Gemini embeddings produce lower cosine similarity scores (~0.05-0.15)
+                # compared to other models, so threshold must be low
+                threshold = 0.03
                 
                 for match in matches:
                     score = match.get('score', 0)
                     
                     if score >= threshold:
                         metadata = match.get('metadata', {})
-                        # Read class from correct key ('class' is what upload scripts store)
-                        chunk_class = metadata.get('class', metadata.get('class_level', 0))
+                        # Read class from metadata - supports both 'class_level' (pdf_processor) 
+                        # and 'class' (math_chunker) upload formats
+                        chunk_class = metadata.get('class_level', metadata.get('class', 0))
                         
                         try:
                             chunk_class = int(chunk_class) if chunk_class else 0
@@ -447,17 +474,8 @@ class EnhancedRAGService:
             Generated answer
         """
         if not textbook_chunks:
-            # Fallback: Try to answer with general knowledge if RAG fails
-            logger.info("⚠️ No RAG content found (Basic Mode). Attempting general knowledge fallback.")
-            fallback_prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
-            The student asked: "{question}"
-            
-            Answer the question directly using your general knowledge.
-            Do NOT start with any preamble like "Based on your textbook" or "I couldn't find this topic".
-            Just give the answer directly, clearly and simply.
-            Keep it suitable for Class {student_class}.
-            """
-            return self.gemini.generate_response(fallback_prompt)
+            logger.info("⚠️ No RAG content found (Basic Mode).")
+            return "The content is not found in the book, ask some other questions related to your subject."
         
         # Build context with class markers
         context_parts = []
@@ -508,11 +526,15 @@ REFERENCE CONTENT:
 {progressive_note}
 
 INSTRUCTIONS:
-1. Answer the question directly using the content provided
-2. Do NOT start with any preamble like "Based on your textbook" or "According to the textbook"
-3. Just give the answer directly - start with the actual answer content
-4. Keep the answer clear and appropriate for Class {student_class} students
-5. Use examples if available{lang_instruction}
+1. Answer the question using the REFERENCE CONTENT above as your primary source.
+2. If the reference content is directly about the topic asked, give a clear answer from it.
+3. If the reference content is from the same subject but covers a different specific topic, respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+4. If the student asks about something completely unrelated to {subject}, respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
+6. Do NOT describe what the reference content contains instead of answering.
+7. Keep the answer clear for Class {student_class} students{lang_instruction}
 
 Generate a clear, direct answer:"""
         
@@ -605,16 +627,18 @@ CONTENT (from Classes {earliest_class} to {student_class} + additional resources
 {combined_context}
 
 DEEP DIVE MODE INSTRUCTIONS:
-1. **Start from Fundamentals**: Begin with the most basic concept from the earliest class
-2. **Progressive Building**: Build understanding step-by-step through class levels
-3. **Comprehensive Coverage**: Address the "Wh-questions" - What, Why, When, Where, How (as applicable)
-4. **Structure**:
+1. Answer the question using the CONTENT above as your primary source.
+2. If the content is about a completely different topic than what's asked, respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+3. **Start from Fundamentals**: Begin with the most basic concept from the earliest class
+4. **Progressive Building**: Build understanding step-by-step through class levels
+5. **Structure**:
    - 🌱 **Fundamentals** (if using content from Classes {earliest_class}-{student_class-1})
    - 📚 **Core Concept** (Class {student_class} level understanding)
    - 🔍 **Deep Dive** (comprehensive explanation with examples, applications, significance)
    - 💡 **Key Takeaways** (summarize main points)
-5. **Make it engaging**: Use analogies, examples, and clear explanations
-6. **Appropriate language**: Suitable for Class {student_class} students but comprehensive{lang_instruction}
+6. **Make it engaging**: Use analogies, examples, and clear explanations
+7. **Appropriate language**: Suitable for Class {student_class} students but comprehensive{lang_instruction}
 
 Generate a thorough, well-structured deep dive explanation:"""
         
@@ -655,37 +679,8 @@ Generate a thorough, well-structured deep dive explanation:"""
             Generated answer
         """
         if not textbook_chunks and not llm_chunks and not web_chunks:
-            # SMART FALLBACK: Suggest similar topics when content not found
-            logger.info("⚠️ No RAG content found. Attempting to suggest similar topics.")
-            
-            try:
-                # Get some available topics from Pinecone for this subject
-                namespace = self.get_namespace(subject)
-                generic_query = self.generate_embedding(f"main topics in {subject}")
-                
-                results = self.textbook_db.index.query(
-                    namespace=namespace,
-                    vector=generic_query,
-                    top_k=5,
-                    include_metadata=True
-                )
-                
-                # Extract unique chapters/topics from metadata
-                available_topics = set()
-                for match in results.get('matches', []):
-                    meta = match.get('metadata', {})
-                    chapter = meta.get('chapter_title', meta.get('chapter', ''))
-                    if chapter:
-                        available_topics.add(str(chapter))
-                
-                if available_topics:
-                    topic_list = ', '.join(list(available_topics)[:5])
-                    return f"This topic is not covered in your Class {student_class} {subject} textbook. Try asking about these topics instead: {topic_list}"
-                else:
-                    return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
-            except Exception as e:
-                logger.warning(f"Fallback topic suggestion failed: {e}")
-                return f"This topic is not covered in your Class {student_class} {subject} textbook. Please ask about topics from your current chapters."
+            logger.info("⚠️ No RAG content found for this question.")
+            return "The content is not found in your textbook. Please try a different question."
         
         # Build multi-source context
         context_sections = []
@@ -732,33 +727,27 @@ Generate a thorough, well-structured deep dive explanation:"""
         
         prompt = f"""You are an NCERT tutor for Class {student_class} {subject}. 
 
-**🚨 CRITICAL ANTI-HALLUCINATION RULES - YOU MUST FOLLOW:**
+**RULES:**
 
-1. ✅ ONLY use information EXPLICITLY stated in the TEXTBOOK CONTENT below
-2. ✅ If information is NOT in the textbook, say: "This specific topic is not covered in your Class {student_class} textbook."
-3. ❌ NEVER make up facts, dates, names, formulas, definitions, or examples
-4. ❌ NEVER use your general knowledge - you are a RAG-only system
-5. ❌ NEVER say "In general...", "According to science...", "It is known that..."
-6. ❌ NEVER invent examples that aren't in the textbook
-7. ✅ If you can only partially answer, say what IS covered and what ISN'T
+1. Answer the question using the TEXTBOOK CONTENT below as your primary source.
+2. If the textbook content is directly about the topic asked, give a clear answer from it.
+3. If the textbook content is about a completely different topic than what the student asked, respond with EXACTLY:
+   "The content is not found in the book, ask some other questions related to your subject."
+4. Do NOT make up facts, formulas, or examples not present in the content.
+5. Do NOT describe what the textbook content contains instead of answering.
+6. If you can partially answer, answer what you can from the textbook.
 
 **STUDENT QUESTION:** {question}
 
-**📚 TEXTBOOK CONTENT (Your ONLY source of truth):**
+**TEXTBOOK CONTENT:**
 {combined_context}
 
 **ANSWER FORMAT ({mode_description}):**
 {'- Start from fundamentals and build up' if mode == 'deepdive' else '- Direct and concise answer'}
 - Use headings and bullet points
-- Include ONLY examples from the textbook above
 - Appropriate language for Class {student_class} students
 
-**⚠️ BEFORE ANSWERING, ASK YOURSELF:**
-- Is every fact I'm stating from the textbook content above?
-- Am I inventing any information?
-- If unsure, don't include it.
-
-Generate your answer using ONLY the textbook content provided:"""
+Generate your answer:"""
         
         answer = self.gemini.generate_response(prompt)
         
@@ -857,12 +846,12 @@ Generate your answer using ONLY the textbook content provided:"""
         
         # Log best score for debugging
         best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
-        good_chunks = [c for c in textbook_chunks if c.get('score', 0) >= 0.6]
+        good_chunks = [c for c in textbook_chunks if c.get('score', 0) >= 0.05]
         logger.info(f"   📊 Best textbook score: {best_score:.3f}, Good chunks: {len(good_chunks)}/{len(textbook_chunks)}")
         logger.info(f"   ⚡ Parallel query complete")
         
-        # 🎯 CACHE HIT: Return cached answer if high similarity (threshold: 0.85 for more cache hits)
-        if llm_chunks and llm_chunks[0]['score'] >= 0.85:
+        # 🎯 CACHE HIT: Return cached answer if high similarity (0.80 — same Gemini embeddings for store & query)
+        if llm_chunks and llm_chunks[0]['score'] >= 0.80:
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
@@ -958,7 +947,7 @@ Generate your answer using ONLY the textbook content provided:"""
         )
         
         # 🎯 CACHE HIT: Return cached answer directly if reasonable similarity
-        if llm_chunks and llm_chunks[0]['score'] >= 0.75:  # Still high bar for direct use
+        if llm_chunks and llm_chunks[0]['score'] >= 0.80:  # Same Gemini embeddings for store & query
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
@@ -1001,28 +990,10 @@ Generate your answer using ONLY the textbook content provided:"""
         # Combine all sources
         all_chunks = textbook_chunks + llm_chunks + web_chunks
         
-        # EDGE CASE 2: Still no content - Use Gemini fallback with disclaimer
+        # EDGE CASE 2: Still no content - return not found message
         if not all_chunks:
             logger.warning(f"⚠️ EDGE CASE: No content in any class for '{question[:50]}...'")
-            logger.info(f"🤖 Using Gemini fallback (general knowledge with disclaimer)")
-            
-            fallback_prompt = f"""The student asked: "{question}"
-
-This topic doesn't appear to be explicitly covered in their Class {student_class} {subject} textbook.
-
-Provide a simple, age-appropriate explanation suitable for Class {student_class} students:
-1. Basic definition or concept (2-3 sentences)
-2. One simple example
-3. End with: "Note: This explanation is based on general {subject} knowledge. Check your textbook or ask your teacher for content specific to your Class {student_class} syllabus."
-
-Keep it under 200 words and student-friendly."""
-            
-            answer = self.gemini.generate_response(fallback_prompt)
-            # Keep markdown formatting for ReactMarkdown frontend rendering
-            # answer = self._clean_markdown_formatting(answer)  # DISABLED - frontend uses ReactMarkdown
-            
-            logger.info(f"✓ Fallback answer generated ({len(answer)} chars)")
-            return answer, []  # Return empty chunks to indicate fallback was used
+            return "The content is not found in the book, ask some other questions related to your subject.", []
         
         # Generate answer from multiple sources
         answer = self.generate_answer_from_multiple_sources(
@@ -1147,8 +1118,8 @@ Keep it under 200 words and student-friendly."""
         logger.info(f"   📊 Best textbook score: {best_score:.3f}")
         logger.info(f"   ⚡ Parallel query complete (textbook: {len(textbook_chunks)}, llm: {len(llm_chunks)}, web: {len(web_chunks)})")
         
-        # 🎯 CACHE HIT: Return cached answer if high similarity (threshold: 0.85 for more cache hits)
-        if llm_chunks and llm_chunks[0]['score'] >= 0.85:
+        # 🎯 CACHE HIT: Return cached answer if high similarity (0.80 — same Gemini embeddings for store & query)
+        if llm_chunks and llm_chunks[0]['score'] >= 0.80:
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")

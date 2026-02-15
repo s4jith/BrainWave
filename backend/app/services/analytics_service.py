@@ -58,11 +58,16 @@ class AnalyticsService:
         student_id: str,
         course_id: str = None
     ) -> Dict[str, Any]:
-        """Get all grades for a student."""
+        """Get all grades for a student — includes both staff test submissions and AI test sessions."""
         try:
+            grades = []
+            total_score = 0
+            total_max = 0
+            topic_performance = {}  # topic -> {correct, total, scores}
+
+            # ── 1. Staff test submissions (from 'submissions' collection) ──
             query = {"student_id": student_id, "status": "graded"}
             if course_id:
-                # Get assessments for this course first
                 course_assessments = await self.assessments.find(
                     {"course_id": course_id}
                 ).to_list(length=1000)
@@ -71,42 +76,145 @@ class AnalyticsService:
             
             submissions = await self.submissions.find(query).to_list(length=1000)
             
-            grades = []
-            total_score = 0
-            total_max = 0
-            
             for sub in submissions:
-                # Get assessment details
                 assessment = await self.assessments.find_one(
                     {"_id": ObjectId(sub["assessment_id"])}
                 )
                 
+                score = sub.get("total_score", 0)
+                max_score = sub.get("max_score", 0)
+                
                 grades.append({
-                    "submission_id": str(sub["_id"]),
+                    "id": str(sub["_id"]),
+                    "source": "staff_test",
                     "assessment_id": sub["assessment_id"],
-                    "assessment_title": assessment["title"] if assessment else "Unknown",
-                    "assessment_type": assessment.get("type") if assessment else None,
-                    "score": sub.get("total_score", 0),
-                    "max_score": sub.get("max_score", 0),
+                    "title": assessment["title"] if assessment else "Unknown",
+                    "type": assessment.get("type") if assessment else "test",
+                    "subject": assessment.get("subject", "") if assessment else "",
+                    "score": score,
+                    "max_score": max_score,
                     "percentage": sub.get("percentage", 0),
                     "passed": sub.get("passed", False),
-                    "submitted_at": sub.get("submitted_at"),
-                    "graded_at": sub.get("graded_at")
+                    "completed_at": sub.get("graded_at") or sub.get("submitted_at"),
+                    "evaluation_type": assessment.get("evaluation_type", "manual") if assessment else "manual",
+                    "evaluations": sub.get("evaluation_details", []),
+                    "feedback": sub.get("overall_feedback", ""),
+                    "strengths": sub.get("strengths", []),
+                    "improvements": sub.get("improvements", []),
                 })
                 
-                total_score += sub.get("total_score", 0)
-                total_max += sub.get("max_score", 0)
+                total_score += score
+                total_max += max_score
+                
+                # Aggregate topic data from staff test questions if available
+                if assessment:
+                    for q in assessment.get("questions", []):
+                        topic = q.get("topic") or q.get("chapter_name", "General")
+                        if topic not in topic_performance:
+                            topic_performance[topic] = {"correct": 0, "total": 0, "scores": []}
+                        topic_performance[topic]["total"] += 1
+
+            # ── 2. AI test sessions (from 'test_sessions' collection) ──
+            test_sessions_collection = mongodb.db["test_sessions"]
+            ai_sessions = await test_sessions_collection.find({
+                "student_id": student_id,
+                "status": "completed"
+            }).sort("completed_at", -1).to_list(length=500)
+            
+            for session in ai_sessions:
+                session_score = session.get("score", 0)  # percentage
+                total_q = session.get("total_questions", 0)
+                correct = session.get("correct_count", 0)
+                # Calculate equivalent points (score is %, questions are out of marks)
+                max_marks = 20  # default AI test is 20 marks
+                earned = round(session_score * max_marks / 100, 1) if max_marks > 0 else 0
+                
+                chapter_name = session.get("chapter_name", f"Ch.{session.get('chapter_number', 0)}")
+                topic_name = session.get("topic_name", "")
+                subject = session.get("subject", "Unknown")
+                
+                grades.append({
+                    "id": session.get("session_id", str(session.get("_id", ""))),
+                    "source": "ai_test",
+                    "title": f"{subject} - {chapter_name}" + (f" ({topic_name})" if topic_name else ""),
+                    "type": "chapter_test",
+                    "subject": subject,
+                    "chapter_name": chapter_name,
+                    "topic_name": topic_name,
+                    "score": earned,
+                    "max_score": max_marks,
+                    "percentage": round(session_score, 1),
+                    "passed": session_score >= 40,
+                    "completed_at": session.get("completed_at"),
+                    "total_questions": total_q,
+                    "correct_count": correct,
+                    "evaluation_type": "ai",
+                    "evaluations": session.get("evaluation_details", []),
+                    "feedback": session.get("overall_feedback", {}).get("summary", "") if isinstance(session.get("overall_feedback"), dict) else "",
+                    "strengths": session.get("overall_feedback", {}).get("strengths", []) if isinstance(session.get("overall_feedback"), dict) else [],
+                    "improvements": session.get("overall_feedback", {}).get("improvements", []) if isinstance(session.get("overall_feedback"), dict) else [],
+                    "topics_to_review": session.get("topics_to_review", []),
+                    "topic_analytics": session.get("topic_analytics", {}),
+                })
+                
+                total_score += earned
+                total_max += max_marks
+                
+                # Aggregate topic performance from AI evaluations
+                for ev in session.get("evaluation_details", []):
+                    t = ev.get("topic") or topic_name or chapter_name or "General"
+                    if t not in topic_performance:
+                        topic_performance[t] = {"correct": 0, "total": 0, "scores": []}
+                    topic_performance[t]["total"] += 1
+                    if ev.get("is_correct"):
+                        topic_performance[t]["correct"] += 1
+                    topic_performance[t]["scores"].append(ev.get("score", 0))
+
+            # ── 3. Sort all grades by date (newest first) ──
+            def _sort_key(g):
+                dt = g.get("completed_at")
+                if dt is None:
+                    return datetime.min
+                if isinstance(dt, str):
+                    try:
+                        return datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                    except Exception:
+                        return datetime.min
+                return dt
+            grades.sort(key=_sort_key, reverse=True)
             
             overall_percentage = (total_score / total_max * 100) if total_max > 0 else 0
+            
+            # ── 4. Build topic analysis (strengths / weaknesses) ──
+            topic_analysis = []
+            for topic, data in topic_performance.items():
+                avg_score = round(sum(data["scores"]) / len(data["scores"]), 1) if data["scores"] else 0
+                accuracy = round(data["correct"] / data["total"] * 100, 1) if data["total"] > 0 else 0
+                status = "strong" if accuracy >= 70 else ("moderate" if accuracy >= 40 else "weak")
+                topic_analysis.append({
+                    "topic": topic,
+                    "total_questions": data["total"],
+                    "correct": data["correct"],
+                    "accuracy": accuracy,
+                    "avg_score": avg_score,
+                    "status": status
+                })
+            topic_analysis.sort(key=lambda x: x["accuracy"], reverse=True)
+            
+            strong_topics = [t["topic"] for t in topic_analysis if t["status"] == "strong"]
+            weak_topics = [t["topic"] for t in topic_analysis if t["status"] == "weak"]
             
             return {
                 "student_id": student_id,
                 "course_id": course_id,
                 "grades": grades,
-                "total_score": total_score,
-                "total_max_score": total_max,
+                "total_score": round(total_score, 1),
+                "total_max_score": round(total_max, 1),
                 "overall_percentage": round(overall_percentage, 2),
-                "grade_count": len(grades)
+                "grade_count": len(grades),
+                "topic_analysis": topic_analysis,
+                "strong_topics": strong_topics,
+                "weak_topics": weak_topics,
             }
             
         except Exception as e:
@@ -117,7 +225,10 @@ class AnalyticsService:
                 "total_score": 0,
                 "total_max_score": 0,
                 "overall_percentage": 0,
-                "grade_count": 0
+                "grade_count": 0,
+                "topic_analysis": [],
+                "strong_topics": [],
+                "weak_topics": [],
             }
     
     # === Course Analytics ===

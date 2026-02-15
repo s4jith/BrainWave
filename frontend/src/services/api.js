@@ -1150,9 +1150,10 @@ export const testService = {
 
   /**
    * Get staff-assigned tests for a student
-   * @param {string} subject - Optional subject filter (not used, kept for compatibility)
-   * @param {number} chapter - Optional chapter filter (not used, kept for compatibility)
-   * @param {string} studentId - Student ID for getting tests for their class
+   * Fetches from the assessments collection (tests created by admin/teacher via CreateTest)
+   * @param {string} subject - Optional subject filter (not used currently)
+   * @param {number} chapter - Optional chapter filter (not used currently)
+   * @param {string} studentId - Student ID for getting assigned tests
    * @returns {Promise<array>}
    */
   async getStaffTests(subject = null, chapter = null, studentId = null) {
@@ -1162,8 +1163,19 @@ export const testService = {
         return [];
       }
 
-      const url = `${API_BASE_URL}/api/tests/student/${studentId}`;
-      const response = await fetch(url);
+      // Get auth token for the assessments endpoint
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No auth token found");
+        return [];
+      }
+
+      const url = `${API_BASE_URL}/api/assessments`;
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
 
       if (!response.ok) {
         throw new Error(`Staff Tests API Error: ${response.statusText}`);
@@ -1171,26 +1183,27 @@ export const testService = {
 
       const data = await response.json();
 
-      // Backend returns array directly
-      if (Array.isArray(data)) {
-        return data.map(test => ({
+      // Backend returns { assessments: [...], total: N }
+      if (data && Array.isArray(data.assessments)) {
+        return data.assessments.map(test => ({
           id: test.id,
           title: test.title,
           description: test.description,
           subject: test.subject,
           class_level: test.class_level,
-          pdf_filename: test.pdf_filename,
-          pdf_url: test.pdf_url,
-          start_date: test.start_datetime,  // Map from start_datetime
-          due_date: test.end_datetime,      // Map from end_datetime
+          type: test.type || "mcq",
+          questions_count: test.question_count || 0,
+          total_points: test.total_points || 0,
+          duration_minutes: test.duration_minutes || 30,
+          start_date: test.start_datetime,
+          due_date: test.end_datetime,
           created_at: test.created_at,
-          created_by: test.created_by,
-          status: test.status || 'active',
-          is_timed: test.is_timed,
-          has_submitted: test.has_submitted,
-          submission_id: test.submission_id,
-          submission_date: test.submission_date,
-          has_feedback: test.has_feedback
+          created_by: test.instructor_id,
+          status: test.status || "published",
+          has_attempted: test.has_attempted || false,
+          best_score: test.best_score || null,
+          attempts_remaining: test.attempts_remaining,
+          submission_count: test.submission_count || 0
         }));
       }
 

@@ -364,7 +364,7 @@ export default function TestSession() {
                 <Target className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-800">{session.topic_name}</h2>
+                <h2 className="font-semibold text-gray-800">{session.chapter_name || session.topic_name}</h2>
                 <p className="text-sm text-gray-500">
                   {testConfig?.subject} • Chapter {testConfig?.chapter_number}
                 </p>
@@ -412,120 +412,185 @@ export default function TestSession() {
 
           {/* Question Text */}
           <div className="p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${
+                currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
+                currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
+                'bg-green-100 text-green-700'
+              }`}>
+                {currentQuestion?.question_type === 'mcq' ? 'Multiple Choice' :
+                 currentQuestion?.question_type === 'fillup' ? 'Fill in the Blank' :
+                 'Short Answer'}
+              </span>
+            </div>
             <p className="text-lg text-gray-800 leading-relaxed">
               {currentQuestion?.question_text}
             </p>
           </div>
 
-          {/* Answer Input */}
+          {/* Answer Input - Conditional based on question type */}
           <div className="p-6 pt-0">
             <div className="space-y-4">
-              <label className="text-sm font-medium text-gray-700">Your Answer:</label>
-              <div className="relative">
-                <textarea
-                  value={currentAnswer}
-                  onChange={(e) => {
-                    // Allow voice input without restrictions
-                    if (isRecording) {
-                      setCurrentAnswer(e.target.value);
-                      return;
-                    }
-
-                    const newValue = e.target.value;
-                    const oldLength = currentAnswer.length;
-                    const newLength = newValue.length;
-                    const lengthDiff = newLength - oldLength;
-
-                    // Detect suspiciously fast typing
-                    if (lengthDiff > 0) {
-                      const timeSinceStart = (Date.now() - questionStartTime) / 1000; // seconds
-                      const typingSpeed = newLength / timeSinceStart; // characters per second
-
-                      // Flag if typing more than 10 chars/sec sustained (20+ lines in 10 sec = ~200 chars)
-                      // Or sudden burst of 50+ characters
-                      if ((typingSpeed > 10 && newLength > 100) || lengthDiff > 50) {
+              {/* MCQ Options */}
+              {currentQuestion?.question_type === 'mcq' && currentQuestion?.options ? (
+                <>
+                  <label className="text-sm font-medium text-gray-700">Select your answer:</label>
+                  <div className="space-y-3">
+                    {Object.entries(currentQuestion.options).map(([key, value]) => (
+                      <button
+                        key={key}
+                        onClick={() => !testBlocked && setCurrentAnswer(key)}
+                        disabled={testBlocked}
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${
+                          currentAnswer === key
+                            ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          currentAnswer === key
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {key}
+                        </span>
+                        <span className="text-gray-800">{value}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : currentQuestion?.question_type === 'fillup' ? (
+                /* Fill in the Blank - Short text input */
+                <>
+                  <label className="text-sm font-medium text-gray-700">Your Answer:</label>
+                  <input
+                    type="text"
+                    value={currentAnswer}
+                    onChange={(e) => {
+                      if (!testBlocked) setCurrentAnswer(e.target.value);
+                    }}
+                    onPaste={(e) => {
+                      if (!isRecording) {
+                        e.preventDefault();
                         const warning = {
                           questionNumber: currentQuestionIndex + 1,
                           timestamp: new Date().toISOString(),
-                          reason: lengthDiff > 50
-                            ? `Sudden paste detected: ${lengthDiff} characters added instantly`
-                            : `Suspiciously fast typing: ${Math.round(typingSpeed)} chars/sec`,
+                          reason: 'Attempted to paste content',
                           student: user?.name || user?.sub || 'Unknown',
                           testId: session.session_id
                         };
-
                         setTypingWarnings(prev => [...prev, warning]);
                         setShowCheatingWarning(true);
-                        setTestBlocked(true); // Block further test progress
-
-                        // Log to console for staff monitoring
-                        console.warn('⚠️ POTENTIAL CHEATING DETECTED:', warning);
-                        console.warn('🚫 TEST BLOCKED - Student cannot continue');
-
-                        // TODO: Send to backend API to notify staff
-                        // await staffNotificationService.reportSuspiciousActivity(warning);
+                        setTestBlocked(true);
                       }
-                    }
+                    }}
+                    onCopy={(e) => e.preventDefault()}
+                    onCut={(e) => e.preventDefault()}
+                    disabled={testBlocked}
+                    placeholder={testBlocked ? "Test blocked due to suspicious activity" : "Type your answer here..."}
+                    className={`w-full p-4 border rounded-xl focus:outline-none focus:ring-2 ${
+                      testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
+                    }`}
+                    autoComplete="off"
+                  />
+                </>
+              ) : (
+                /* Two-mark / Short Answer - Textarea with voice input */
+                <>
+                  <label className="text-sm font-medium text-gray-700">Your Answer (2-4 sentences):</label>
+                  <div className="relative">
+                    <textarea
+                      value={currentAnswer}
+                      onChange={(e) => {
+                        // Allow voice input without restrictions
+                        if (isRecording) {
+                          setCurrentAnswer(e.target.value);
+                          return;
+                        }
 
-                    setCurrentAnswer(newValue);
-                  }}
-                  onPaste={(e) => {
-                    // Block paste unless using voice input
-                    if (!isRecording) {
-                      e.preventDefault();
+                        const newValue = e.target.value;
+                        const oldLength = currentAnswer.length;
+                        const newLength = newValue.length;
+                        const lengthDiff = newLength - oldLength;
 
-                      const warning = {
-                        questionNumber: currentQuestionIndex + 1,
-                        timestamp: new Date().toISOString(),
-                        reason: 'Attempted to paste content',
-                        student: user?.name || user?.sub || 'Unknown',
-                        testId: session.session_id
-                      };
+                        // Detect suspiciously fast typing
+                        if (lengthDiff > 0) {
+                          const timeSinceStart = (Date.now() - questionStartTime) / 1000;
+                          const typingSpeed = newLength / timeSinceStart;
 
-                      setTypingWarnings(prev => [...prev, warning]);
-                      setShowCheatingWarning(true);
-                      setTestBlocked(true); // Block test immediately
+                          if ((typingSpeed > 10 && newLength > 100) || lengthDiff > 50) {
+                            const warning = {
+                              questionNumber: currentQuestionIndex + 1,
+                              timestamp: new Date().toISOString(),
+                              reason: lengthDiff > 50
+                                ? `Sudden paste detected: ${lengthDiff} characters added instantly`
+                                : `Suspiciously fast typing: ${Math.round(typingSpeed)} chars/sec`,
+                              student: user?.name || user?.sub || 'Unknown',
+                              testId: session.session_id
+                            };
 
-                      console.warn('🚫 PASTE BLOCKED:', warning);
-                      console.warn('🚫 TEST BLOCKED - Student cannot continue');
+                            setTypingWarnings(prev => [...prev, warning]);
+                            setShowCheatingWarning(true);
+                            setTestBlocked(true);
 
-                      // TODO: Send to backend
-                      // await staffNotificationService.reportSuspiciousActivity(warning);
-                    }
-                  }}
-                  onCopy={(e) => {
-                    // Block copy
-                    e.preventDefault();
-                  }}
-                  onCut={(e) => {
-                    // Block cut
-                    e.preventDefault();
-                  }}
-                  disabled={testBlocked} // Disable input if test is blocked
-                  placeholder={testBlocked ? "Test blocked due to suspicious activity" : "Type your answer here or use voice input..."}
-                  className={`w-full h-40 p-4 border rounded-xl resize-none focus:outline-none focus:ring-2 ${testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'}`}
-                />
+                            console.warn('⚠️ POTENTIAL CHEATING DETECTED:', warning);
+                            console.warn('🚫 TEST BLOCKED - Student cannot continue');
+                          }
+                        }
 
-                {/* Voice Input Button */}
-                {recognition && (
-                  <button
-                    onClick={toggleRecording}
-                    className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isRecording
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        setCurrentAnswer(newValue);
+                      }}
+                      onPaste={(e) => {
+                        if (!isRecording) {
+                          e.preventDefault();
+
+                          const warning = {
+                            questionNumber: currentQuestionIndex + 1,
+                            timestamp: new Date().toISOString(),
+                            reason: 'Attempted to paste content',
+                            student: user?.name || user?.sub || 'Unknown',
+                            testId: session.session_id
+                          };
+
+                          setTypingWarnings(prev => [...prev, warning]);
+                          setShowCheatingWarning(true);
+                          setTestBlocked(true);
+
+                          console.warn('🚫 PASTE BLOCKED:', warning);
+                          console.warn('🚫 TEST BLOCKED - Student cannot continue');
+                        }
+                      }}
+                      onCopy={(e) => e.preventDefault()}
+                      onCut={(e) => e.preventDefault()}
+                      disabled={testBlocked}
+                      placeholder={testBlocked ? "Test blocked due to suspicious activity" : "Type your answer here or use voice input..."}
+                      className={`w-full h-40 p-4 border rounded-xl resize-none focus:outline-none focus:ring-2 ${
+                        testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
                       }`}
-                    title={isRecording ? "Stop recording" : "Start voice input"}
-                  >
-                    {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  </button>
-                )}
-              </div>
+                    />
 
-              {isRecording && (
-                <p className="text-sm text-red-600 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Recording... Speak now
-                </p>
+                    {/* Voice Input Button */}
+                    {recognition && (
+                      <button
+                        onClick={toggleRecording}
+                        className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isRecording
+                          ? "bg-red-500 text-white animate-pulse"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                        title={isRecording ? "Stop recording" : "Start voice input"}
+                      >
+                        {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      </button>
+                    )}
+                  </div>
+
+                  {isRecording && (
+                    <p className="text-sm text-red-600 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      Recording... Speak now
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -636,10 +701,20 @@ export default function TestSession() {
         {/* Question Navigator */}
         <div className="mt-6 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Questions Overview</h4>
+          
+          {/* Question type legend */}
+          <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> MCQ</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Fill-up</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> Short Answer</span>
+          </div>
+          
           <div className="flex flex-wrap gap-2">
             {session.questions.map((q, index) => {
               const isAnswered = !!answers[q.question_id] || (index === currentQuestionIndex && currentAnswer.trim());
               const isCurrent = index === currentQuestionIndex;
+              const typeColor = q.question_type === 'mcq' ? 'border-purple-300' :
+                q.question_type === 'fillup' ? 'border-blue-300' : 'border-green-300';
 
               return (
                 <button
@@ -654,12 +729,13 @@ export default function TestSession() {
                     setCurrentQuestionIndex(index);
                     setCurrentAnswer(answers[q.question_id] || "");
                   }}
-                  className={`w-10 h-10 rounded-lg font-medium transition-all ${isCurrent
-                    ? "bg-orange-600 text-white"
+                  className={`w-10 h-10 rounded-lg font-medium transition-all border-2 ${isCurrent
+                    ? "bg-orange-600 text-white border-orange-600"
                     : isAnswered
-                      ? "bg-green-100 text-green-700 border border-green-200"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? `bg-green-100 text-green-700 ${typeColor}`
+                      : `bg-gray-100 text-gray-600 hover:bg-gray-200 ${typeColor}`
                     }`}
+                  title={`Q${index + 1} - ${q.question_type === 'mcq' ? 'MCQ' : q.question_type === 'fillup' ? 'Fill-up' : 'Short Answer'} (${q.marks} mark${q.marks > 1 ? 's' : ''})`}
                 >
                   {index + 1}
                 </button>

@@ -66,6 +66,7 @@ class AssessmentService:
                 "title": request.title,
                 "description": request.description,
                 "subject": request.subject,
+                "class_level": request.class_level,
                 "type": request.type.value if request.type else "quiz",
                 "instructor_id": instructor_id,
                 "created_by": request.created_by or instructor_id,
@@ -82,6 +83,7 @@ class AssessmentService:
                 "end_datetime": request.end_datetime,
                 "student_ids": request.student_ids or [],
                 "group_ids": request.group_ids or [],
+                "evaluation_type": getattr(request, 'evaluation_type', None) or "manual",
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
@@ -109,8 +111,20 @@ class AssessmentService:
             title = assessment["title"]
             assessment_id = str(assessment.get("_id", assessment.get("id"))) # Handle both
             
-            # 1. Notify Students
-            student_ids = assessment.get("student_ids", [])
+            # 1. Notify directly assigned students
+            student_ids = set(assessment.get("student_ids", []))
+            
+            # 2. Also notify students from assigned groups
+            group_ids = assessment.get("group_ids", [])
+            if group_ids:
+                groups = await mongodb.db.groups.find({
+                    "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
+                }).to_list(length=100)
+                
+                for group in groups:
+                    for sid in group.get("student_ids", []):
+                        student_ids.add(sid)
+            
             for sid in student_ids:
                 notifications.append({
                     "title": f"New Test: {title}",
@@ -118,20 +132,20 @@ class AssessmentService:
                     "type": "test_assigned",
                     "recipient_id": sid,
                     "role": "student",
-                    "link": f"/student/test/{assessment_id}",
+                    "link": f"/assessments/{assessment_id}",
                     "created_at": created_at,
                     "is_read": False
                 })
             
-            # 2. Notify Teachers of assigned groups
-            group_ids = assessment.get("group_ids", [])
+            # 3. Notify Teachers of assigned groups
             teacher_ids_set = set()
             
             if group_ids:
-                # Find all groups and extract teacher IDs
-                groups = await mongodb.db.groups.find({
-                    "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
-                }).to_list(length=100)
+                # Reuse groups already fetched above, or fetch if not yet loaded
+                if not groups:
+                    groups = await mongodb.db.groups.find({
+                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
+                    }).to_list(length=100)
                 
                 for group in groups:
                     # Handle both teacher_id (legacy) and teacher_ids (new)
@@ -288,6 +302,62 @@ class AssessmentService:
                 logger.info(f"   - Final query: {query}")
                 logger.info(f"   - OR conditions: {len(or_queries)}")
 
+            # Student View Logic: Show tests assigned to the student (via student_ids or group_ids)
+            if student_id and not instructor_id and not teacher_id:
+                # Get student's groups
+                student_user = await mongodb.db.users.find_one({"user_id": student_id})
+                student_class = student_user.get("class_level") if student_user else None
+                student_mongo_id = str(student_user["_id"]) if student_user else None
+                
+                # Find groups the student belongs to (check both user_id and mongo _id)
+                student_id_variants = [student_id]
+                if student_mongo_id and student_mongo_id != student_id:
+                    student_id_variants.append(student_mongo_id)
+                
+                student_groups = await mongodb.db.groups.find({
+                    "student_ids": {"$in": student_id_variants}
+                }).to_list(length=100)
+                student_group_ids = [str(g["_id"]) for g in student_groups]
+                
+                logger.info(f"🔍 Student {student_id} assessment filter:")
+                logger.info(f"   - user_id: {student_id}")
+                logger.info(f"   - mongo_id: {student_mongo_id}")
+                logger.info(f"   - class_level: {student_class} (type: {type(student_class).__name__})")
+                logger.info(f"   - Found {len(student_groups)} groups: {student_group_ids}")
+                for g in student_groups:
+                    logger.info(f"     Group: {g.get('name')} (id: {str(g['_id'])})")
+                
+                # Build student query: tests where student is directly assigned OR in assigned groups OR matches class level
+                student_or = []
+                
+                # Tests directly assigned to this student (by user_id or mongo_id)
+                for sid in student_id_variants:
+                    student_or.append({"student_ids": sid})
+                
+                # Tests assigned to student's groups
+                if student_group_ids:
+                    student_or.append({"group_ids": {"$in": student_group_ids}})
+                
+                # Tests matching student's class level with no specific assignments
+                if student_class:
+                    # Convert class_level to int for consistent matching
+                    class_int = int(student_class) if student_class else None
+                    if class_int:
+                        student_or.append({
+                            "class_level": class_int,
+                            "student_ids": {"$size": 0},
+                            "group_ids": {"$size": 0}
+                        })
+                        # Also handle missing fields
+                        student_or.append({
+                            "class_level": class_int,
+                            "student_ids": {"$exists": False}
+                        })
+                
+                query["$or"] = student_or
+                logger.info(f"   - Student OR conditions: {len(student_or)}")
+                logger.info(f"   - Full query: {query}")
+
             if status:
                 query["status"] = status
             else:
@@ -296,13 +366,15 @@ class AssessmentService:
                     query["status"] = AssessmentStatus.PUBLISHED.value
             
             total = await self.assessments.count_documents(query)
-            logger.info(f"   - Found {total} matching assessments")
+            logger.info(f"   - Found {total} matching assessments (query: {query})")
             cursor = self.assessments.find(query).sort("created_at", -1)
             
             assessments = []
             async for doc in cursor:
                 if teacher_id:
                     logger.info(f"   - Assessment: {doc.get('title')} | group_ids: {doc.get('group_ids', [])} | instructor: {doc.get('instructor_id')}")
+                if student_id:
+                    logger.info(f"   - Match: {doc.get('title')} | student_ids: {doc.get('student_ids', [])[:3]} | group_ids: {doc.get('group_ids', [])} | status: {doc.get('status')}")
                 # Count submissions for this assessment
                 assessment_id = str(doc["_id"])
                 submission_count = await self.submissions.count_documents({"assessment_id": assessment_id})
@@ -937,7 +1009,7 @@ class AssessmentService:
             started = submission.get("started_at", datetime.utcnow())
             time_spent = int((datetime.utcnow() - started).total_seconds())
             
-            # Update submission
+            # Build update data
             update_data = {
                 "answers": [a.model_dump() for a in request.answers],
                 "auto_score": auto_score,
@@ -950,7 +1022,100 @@ class AssessmentService:
                 "time_spent_seconds": time_spent
             }
             
-            if not needs_manual:
+            # ── AI Evaluation for staff tests with evaluation_type="ai" ──
+            evaluation_type = assessment.get("evaluation_type", "manual")
+            if evaluation_type == "ai":
+                try:
+                    from app.services.rag_evaluation_service import rag_evaluation_service
+                    
+                    # Build questions and answers for RAG evaluation
+                    questions_for_eval = []
+                    answers_for_eval = []
+                    
+                    for answer in request.answers:
+                        question = questions_map.get(answer.question_id)
+                        if not question:
+                            continue
+                        
+                        q_type = question.get("type", "")
+                        # Build expected answer from question data
+                        expected = ""
+                        if question.get("answer_text"):
+                            expected = question["answer_text"]
+                        elif question.get("fillup_answers"):
+                            expected = question["fillup_answers"]
+                        elif question.get("correct_answer_text"):
+                            expected = question["correct_answer_text"]
+                        elif q_type in ["mcq", QuestionType.MCQ.value]:
+                            # Get correct option text
+                            for opt in question.get("options", []):
+                                if opt.get("is_correct"):
+                                    expected = opt.get("text", opt.get("option_text", ""))
+                                    break
+                        
+                        # Determine student answer text
+                        student_answer = answer.answer_text or ""
+                        if not student_answer and answer.selected_option_ids:
+                            # Map selected option IDs to text
+                            for opt in question.get("options", []):
+                                if opt.get("id") in answer.selected_option_ids:
+                                    student_answer = opt.get("text", opt.get("option_text", ""))
+                                    break
+                        
+                        questions_for_eval.append({
+                            "question_id": answer.question_id,
+                            "question_text": question.get("question_text", question.get("text", "")),
+                            "expected_answer": expected,
+                            "keywords": question.get("keywords", []),
+                            "marks": question.get("points", question.get("marks", 1)),
+                            "question_type": q_type,
+                            "topic": question.get("topic", ""),
+                            "correct_option": question.get("correct_option", ""),
+                            "options": question.get("options", {})
+                        })
+                        
+                        answers_for_eval.append({
+                            "question_id": answer.question_id,
+                            "answer": student_answer
+                        })
+                    
+                    if questions_for_eval:
+                        subject = assessment.get("subject", "")
+                        class_level = assessment.get("class_level", 10)
+                        
+                        eval_result = await rag_evaluation_service.evaluate_test_session(
+                            session_id=f"staff_{submission_id}",
+                            student_id=student_id,
+                            class_level=class_level,
+                            subject=subject,
+                            chapter_number=0,
+                            topic_id="",
+                            topic_name=assessment.get("title", "Staff Test"),
+                            questions=questions_for_eval,
+                            answers=answers_for_eval
+                        )
+                        
+                        # Override scores with AI evaluation
+                        ai_score_pct = eval_result.get("score", 0)
+                        ai_total = round(ai_score_pct * max_score / 100, 1) if max_score > 0 else 0
+                        
+                        update_data["total_score"] = ai_total
+                        update_data["percentage"] = round(ai_score_pct, 2)
+                        update_data["passed"] = ai_score_pct >= passing
+                        update_data["status"] = SubmissionStatus.GRADED.value
+                        update_data["evaluation_details"] = eval_result.get("evaluations", [])
+                        update_data["overall_feedback"] = eval_result.get("feedback", "")
+                        update_data["strengths"] = eval_result.get("strengths", [])
+                        update_data["improvements"] = eval_result.get("improvements", [])
+                        update_data["topics_to_review"] = eval_result.get("topics_to_review", [])
+                        
+                        logger.info(f"AI evaluation complete for staff test submission {submission_id}: {ai_score_pct}%")
+                
+                except Exception as ai_err:
+                    logger.error(f"AI evaluation failed for submission {submission_id}: {ai_err}")
+                    # Fall back to auto-grade, don't block submission
+            
+            if not needs_manual or evaluation_type == "ai":
                 update_data["graded_at"] = datetime.utcnow()
             
             await self.submissions.update_one(
@@ -1112,10 +1277,8 @@ class AssessmentService:
         import uuid
         
         # 1. Handle question_text
-        # DEBUGLOG: Print incoming question payload
         logger.info(f"Transforming question payload: {q}")
         
-        # Prioritize 'text' from frontend/question bank if present, as it contains updated content
         if "text" in q:
             q["question_text"] = q["text"]
             
@@ -1123,7 +1286,6 @@ class AssessmentService:
             q["question_text"] = "Question Text Missing"
             
         # 2. Normalize and Prepare Options
-        # We need to handle both strings and objects to find the correct index if answer is text
         raw_options = q.get("options", [])
         options_text = []
         
@@ -1134,24 +1296,32 @@ class AssessmentService:
                 elif isinstance(raw_options[0], dict):
                     options_text = [str(opt.get("text", "")) for opt in raw_options]
         
-        # 3. Determine Correct Index
-        correct_idx = -1
-        raw_correct = q.get("correct_answer")
+        # 3. Determine Correct Index(es)
+        q_type = q.get("type", "mcq")
+        correct_indices = set()
         
-        # Try as index (int or valid integer string)
-        try:
-            correct_idx = int(raw_correct)
-        except (ValueError, TypeError):
-            # Failed to parse as int, try matching text
-            if isinstance(raw_correct, str) and raw_correct in options_text:
-                correct_idx = options_text.index(raw_correct)
+        if q_type == "mcq_multi":
+            # Multi-select MCQ: correct_answers is array of indices
+            correct_answers_raw = q.get("correct_answers", [])
+            for ca in correct_answers_raw:
+                try:
+                    correct_indices.add(int(ca))
+                except (ValueError, TypeError):
+                    pass
+        else:
+            # Single-select MCQ
+            raw_correct = q.get("correct_answer")
+            try:
+                correct_indices.add(int(raw_correct))
+            except (ValueError, TypeError):
+                if isinstance(raw_correct, str) and raw_correct in options_text:
+                    correct_indices.add(options_text.index(raw_correct))
         
         # 4. Construct QuestionOption objects
         new_options = []
         for idx, text in enumerate(options_text):
-            is_correct = (idx == correct_idx)
+            is_correct = (idx in correct_indices)
             
-            # Preserve existing ID if available in object source
             opt_id = str(uuid.uuid4())
             if raw_options and isinstance(raw_options[0], dict) and idx < len(raw_options):
                 opt_id = str(raw_options[idx].get("id", opt_id))
@@ -1178,6 +1348,12 @@ class AssessmentService:
                 q["points"] = int(q.get("marks", 1))
             except (ValueError, TypeError):
                 q["points"] = 1
+
+        # 8. Preserve answer fields for AI evaluation
+        # fillup_answers: comma-separated accepted answers
+        # answer_text: model answer for subjective questions
+        # topic: question topic for analytics
+        # These are already in the dict from frontend, just ensure they're preserved
 
         return q
     

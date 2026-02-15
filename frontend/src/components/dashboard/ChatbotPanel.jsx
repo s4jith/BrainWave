@@ -31,6 +31,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
   const abortStreamRef = useRef(null);
+  const textareaRef = useRef(null);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef(null);
 
@@ -216,6 +217,8 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     setMessage("");
     setSelectedImage(null);
     setIsLoading(true);
+    // Reset textarea height
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
       if (currentImage) {
@@ -286,7 +289,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 : msg
             ));
 
-            // Track the question (non-blocking)
+            // Track the question and refresh top questions
             topQuestionsService.trackQuestion({
               question: currentMessage,
               answer: fullAnswer,
@@ -295,7 +298,22 @@ export default function ChatbotPanel({ isOpen, onClose }) {
               mode: chatMode === "deepdive" ? "deep" : "quick",
               user_id: user.id || "guest",
               session_id: `${user.id || "guest"}_${Date.now()}`
-            }).catch(err => console.log("Question tracking failed:", err));
+            }).then(() => {
+              // Refresh top questions after tracking
+              const mode = chatMode === "deepdive" ? "deep" : "quick";
+              return topQuestionsService.getTopQuestions(activeSubject, user.classLevel || 7, mode, 5);
+            }).then(response => {
+              if (response?.success && response.questions) {
+                const formattedQuestions = response.questions.map((q, index) => ({
+                  id: index + 1,
+                  text: q.question,
+                  category: q.subject ? q.subject.charAt(0).toUpperCase() + q.subject.slice(1) : activeSubject,
+                  askCount: q.ask_count || 0,
+                  chapter: q.chapter
+                }));
+                setTopQuestions(formattedQuestions);
+              }
+            }).catch(err => console.log("Question tracking/refresh failed:", err));
           },
           // onError
           (error) => {
@@ -659,7 +677,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 </div>
               )}
 
-              <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 px-4 py-2 shadow-sm">
+              <div className="flex items-end gap-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 px-4 py-2 shadow-sm">
                 <input
                   type="file"
                   ref={imageInputRef}
@@ -670,21 +688,34 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={isLoading || uploadingImage}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 disabled:opacity-50"
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 disabled:opacity-50 mb-0.5"
                   title="Upload image of textbook/question"
                 >
                   <Camera className="w-5 h-5" />
                 </button>
-                <input
+                <textarea
+                  ref={textareaRef}
                   value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                  onChange={e => {
+                    setMessage(e.target.value);
+                    // Auto-resize textarea
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
                   placeholder={selectedImage ? "Add a question about this image..." : "Write a message here..."}
-                  className="flex-1 bg-transparent border-none outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-sm"
+                  className="flex-1 bg-transparent border-none outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-sm resize-none overflow-y-auto"
+                  style={{ minHeight: '36px', maxHeight: '120px' }}
+                  rows={1}
                   disabled={isLoading}
                 />
                 <button onClick={handleSend} disabled={(!message.trim() && !selectedImage) || isLoading}
-                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600">
+                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600 mb-0.5 flex-shrink-0">
                   <ArrowUp className="w-5 h-5" />
                 </button>
               </div>

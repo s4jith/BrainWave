@@ -68,9 +68,9 @@ export default function SubjectsManagement() {
   const fetchSubjects = async () => {
     setLoading(true);
     try {
-      let url = `${API_URL}/api/curriculum/subjects?is_active=true`;
+      let url = `${API_URL}/api/curriculum/subjects`;
       if (selectedClass !== "all") {
-        url += `&class_level=${selectedClass}`;
+        url += `?class_level=${selectedClass}`;
       }
       
       const response = await fetch(url);
@@ -229,14 +229,23 @@ export default function SubjectsManagement() {
       });
       
       if (response.ok) {
-        alert("Subject deleted successfully!");
-        fetchSubjects();
+        // Optimistically remove from local state immediately
+        setSubjects(prev => prev.filter(s => s.subject_id !== subjectId));
+        
         if (selectedSubject && selectedSubject.subject_id === subjectId) {
           setSelectedSubject(null);
           setShowChapterModal(false);
         }
+        
+        alert("Subject deleted successfully!");
+        // Refresh from server to ensure consistency
+        fetchSubjects();
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete subject: ${error.detail || 'Unknown error'}`);
       }
     } catch (err) {
+      console.error("Delete subject error:", err);
       alert("Failed to delete subject");
     }
   };
@@ -292,7 +301,7 @@ export default function SubjectsManagement() {
           className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">All Classes</option>
-          {[5, 6, 7, 8, 9, 10, 11, 12].map(cls => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(cls => (
             <option key={cls} value={cls}>Class {cls}</option>
           ))}
         </select>
@@ -413,7 +422,7 @@ export default function SubjectsManagement() {
                   onChange={(e) => setSubjectForm({ ...subjectForm, class_level: parseInt(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                 >
-                  {[5, 6, 7, 8, 9, 10, 11, 12].map(cls => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(cls => (
                     <option key={cls} value={cls}>Class {cls}</option>
                   ))}
                 </select>

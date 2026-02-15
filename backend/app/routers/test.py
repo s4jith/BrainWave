@@ -314,9 +314,10 @@ class ChapterTestQuestion(BaseModel):
     question_id: str
     question_text: str
     difficulty: str
-    question_type: str
+    question_type: str  # "mcq", "fillup", "two_mark"
     marks: int  # 1 or 2
     time_estimate: int
+    options: Optional[Dict[str, str]] = None  # For MCQs: {"A": "...", "B": "...", "C": "...", "D": "..."}
 
 
 class ChapterTestResponse(BaseModel):
@@ -327,8 +328,9 @@ class ChapterTestResponse(BaseModel):
     total_questions: int  # Always 15
     total_marks: int  # Always 20
     time_limit_minutes: int  # Always 40
-    one_mark_count: int  # Always 10
-    two_mark_count: int  # Always 5
+    mcq_count: int = 5
+    fillup_count: int = 5
+    two_mark_count: int = 5
     started_at: str
     is_first_time: bool = False  # True if questions were just generated
 
@@ -339,14 +341,15 @@ async def start_chapter_test(request: StartChapterTestRequest):
     Start fixed-format chapter test.
     
     Test Format:
-    - 15 questions total (10 one-mark + 5 two-mark)
-    - 20 marks total
+    - 15 questions total (5 MCQ + 5 Fill-up + 5 Two-mark)
+    - 20 marks total (5×1 + 5×1 + 5×2)
     - 40 minutes time limit
+    - 3 variants stored to avoid repeat questions
     
     Flow:
     1. Check if question pool exists in MongoDB
-    2. If not (first student), generate 30+15 questions and store
-    3. Random select 10+5 questions from pool
+    2. If not (first student), generate 3 variants of 15 questions each
+    3. Select variant based on student's attempt count
     4. Create test session
     """
     try:
@@ -376,11 +379,12 @@ async def start_chapter_test(request: StartChapterTestRequest):
                     detail=f"Failed to generate questions: {gen_result.get('error')}"
                 )
         
-        # Step 3: Select random questions from pool
+        # Step 3: Select questions from pool (variant based on student attempts)
         selection = await topic_question_bank_service.select_chapter_test_questions(
             class_level=request.class_level,
             subject=request.subject,
-            chapter_number=request.chapter_number
+            chapter_number=request.chapter_number,
+            student_id=request.student_id
         )
         
         if selection.get("status") != "success":
@@ -403,10 +407,11 @@ async def start_chapter_test(request: StartChapterTestRequest):
             "chapter_number": request.chapter_number,
             "chapter_name": chapter_name,
             "test_type": "chapter_test",
-            "num_questions": 15,
+            "num_questions": len(questions),
             "total_marks": 20,
-            "one_mark_count": 10,
-            "two_mark_count": 5,
+            "mcq_count": selection.get("mcq_count", 5),
+            "fillup_count": selection.get("fillup_count", 5),
+            "two_mark_count": selection.get("two_mark_count", 5),
             "time_limit_minutes": 40,
             "questions_served": questions,  # Includes expected_answer for evaluation
             "answers": [],
@@ -426,7 +431,8 @@ async def start_chapter_test(request: StartChapterTestRequest):
                 difficulty=q["difficulty"],
                 question_type=q["question_type"],
                 marks=q["marks"],
-                time_estimate=q["time_estimate"]
+                time_estimate=q["time_estimate"],
+                options=q.get("options") if q["question_type"] == "mcq" else None
             )
             for q in questions
         ]
@@ -437,11 +443,12 @@ async def start_chapter_test(request: StartChapterTestRequest):
             session_id=session_id,
             chapter_name=chapter_name,
             questions=response_questions,
-            total_questions=15,
+            total_questions=len(questions),
             total_marks=20,
             time_limit_minutes=40,
-            one_mark_count=10,
-            two_mark_count=5,
+            mcq_count=selection.get("mcq_count", 5),
+            fillup_count=selection.get("fillup_count", 5),
+            two_mark_count=selection.get("two_mark_count", 5),
             started_at=session_doc["started_at"].isoformat(),
             is_first_time=is_first_time
         )

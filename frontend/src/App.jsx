@@ -20,6 +20,7 @@ import CreateTest from "./pages/CreateTest";
 import TestManagement from "./pages/TestManagement";
 import StudentTests from "./pages/StudentTests";
 import Notes from "./pages/Notes";
+import Suggestions from "./pages/Suggestions";
 import BookManagement from "./pages/BookManagementHierarchical";
 import SubjectsManagement from "./pages/SubjectsManagement";
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -33,6 +34,7 @@ import GroupManagement from "./pages/GroupManagement";
 import StudentGroups from "./pages/StudentGroups";
 import AdminSettings from "./pages/AdminSettings";
 import AdminReports from "./pages/AdminReports";
+import AdminSuggestions from "./pages/AdminSuggestions";
 import TeacherGroups from "./pages/TeacherGroups";
 import QuestionBank from "./pages/QuestionBank";
 import TeacherTests from "./pages/TeacherTests";
@@ -53,7 +55,7 @@ function ProtectedRoute({ children }) {
   // Admin should only access admin routes
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -267,6 +269,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/suggestions"
+          element={
+            <ProtectedRoute>
+              <Suggestions />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Admin/Staff Routes */}
         <Route
@@ -380,6 +390,14 @@ function App() {
           element={
             <StaffRoute>
               <AdminReports />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/admin-suggestions"
+          element={
+            <StaffRoute>
+              <AdminSuggestions />
             </StaffRoute>
           }
         />

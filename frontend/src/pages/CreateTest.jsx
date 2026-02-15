@@ -10,7 +10,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
 import QuestionBankSelector from "../components/QuestionBankSelector";
-import { SUBJECTS, CLASSES, getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
+import { parseCombinedValue, parseGroupName } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -41,7 +41,8 @@ export default function CreateTest() {
     duration_minutes: 60,
     num_attempts: 1,
     show_results: false,
-    description: ""
+    description: "",
+    evaluation_type: "manual" // "ai" or "manual"
   });
 
   // Groups and Students
@@ -136,10 +137,13 @@ export default function CreateTest() {
     class_level: 10,
     subject: "",
     marks: 1,
-    type: "mcq", // mcq, fillup, subjective
+    type: "mcq", // mcq, mcq_multi, fillup, subjective
     text: "",
     options: ["", "", "", ""],
-    correct_answer: 0
+    correct_answer: 0,       // single MCQ: index of correct option
+    correct_answers: [],     // multi-select MCQ: array of correct option indices
+    fillup_answers: "",      // fill-up: comma-separated accepted answers
+    answer_text: ""          // subjective (2/5 mark): model answer text
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -272,7 +276,8 @@ export default function CreateTest() {
         duration_minutes: data.duration_minutes || 60,
         num_attempts: data.num_attempts || 1,
         show_results: data.show_results_immediately || false,
-        description: data.description || ""
+        description: data.description || "",
+        evaluation_type: data.evaluation_type || "manual"
       });
 
       // Transform backend questions to frontend format (options as strings, correct_answer as index)
@@ -284,19 +289,24 @@ export default function CreateTest() {
 
         // Handle correct answer: find index of correct option
         let correctIndex = 0;
+        let correctIndices = [];
         if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'object') {
           const foundIndex = q.options.findIndex(opt => opt.is_correct);
           if (foundIndex !== -1) correctIndex = foundIndex;
+          // Multi-select: find all correct indices
+          correctIndices = q.options.map((opt, idx) => opt.is_correct ? idx : -1).filter(i => i >= 0);
         } else if (q.correct_answer !== undefined) {
-          // Fallback for legacy format if any
           correctIndex = parseInt(q.correct_answer) || 0;
         }
 
         return {
           ...q,
-          text: q.question_text || q.text || "", // Map question_text to text for frontend
+          text: q.question_text || q.text || "",
           options: optionsText,
           correct_answer: correctIndex,
+          correct_answers: correctIndices.length > 1 ? correctIndices : (q.correct_answers || []),
+          fillup_answers: q.fillup_answers || "",
+          answer_text: q.answer_text || "",
           marks: q.points || q.marks || 1
         };
       });
@@ -340,11 +350,11 @@ export default function CreateTest() {
           setQuestionForm(prev => ({ ...prev, subject: subjects[0] || "" }));
         }
       } else {
-        setAvailableSubjects(SUBJECTS);
+        setAvailableSubjects(currSubjectNames);
       }
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
-      setAvailableSubjects(SUBJECTS);
+      setAvailableSubjects(currSubjectNames);
     } finally {
       setLoadingSubjects(false);
     }
@@ -361,16 +371,21 @@ export default function CreateTest() {
         if (resetSubject) {
           if (subjects.length === 1) {
             setFormData(prev => ({ ...prev, subject: subjects[0] }));
-          } else if (!subjects.includes(formData.subject)) {
-            setFormData(prev => ({ ...prev, subject: "" }));
+          } else {
+            setFormData(prev => {
+              if (!subjects.includes(prev.subject)) {
+                return { ...prev, subject: "" };
+              }
+              return prev;
+            });
           }
         }
       } else {
-        setTestSubjects(SUBJECTS);
+        setTestSubjects([]);
       }
     } catch (err) {
       console.error("Failed to fetch test subjects:", err);
-      setTestSubjects(SUBJECTS);
+      setTestSubjects([]);
     }
   };
 
@@ -511,6 +526,7 @@ export default function CreateTest() {
         title: formData.title,
         description: formData.description,
         subject: formData.subject,
+        class_level: formData.class_level,
         duration_minutes: formData.duration_minutes,
         num_attempts: formData.num_attempts,
         show_results_immediately: formData.show_results,
@@ -519,7 +535,8 @@ export default function CreateTest() {
         student_ids: selectedStudents,
         group_ids: selectedGroups, // Include selected group IDs
         questions: questions,
-        created_by: user?.user_id || "admin"
+        created_by: user?.user_id || "admin",
+        evaluation_type: formData.evaluation_type
       };
 
       const url = isEditMode
@@ -564,7 +581,10 @@ export default function CreateTest() {
       type: "mcq",
       text: "",
       options: ["", "", "", ""],
-      correct_answer: 0
+      correct_answer: 0,
+      correct_answers: [],
+      fillup_answers: "",
+      answer_text: ""
     });
     setEditingIndex(null);
     setShowQuestionModal(true);
@@ -575,9 +595,24 @@ export default function CreateTest() {
       setError("Please enter question text");
       return;
     }
-    if (questionForm.type === "mcq" && questionForm.options.some(o => !o.trim())) {
+    if ((questionForm.type === "mcq" || questionForm.type === "mcq_multi") && questionForm.options.some(o => !o.trim())) {
       setError("Please fill all MCQ options");
       return;
+    }
+    // Validate answer fields when AI evaluation is enabled
+    if (formData.evaluation_type === "ai") {
+      if (questionForm.type === "mcq_multi" && questionForm.correct_answers.length === 0) {
+        setError("Please select at least one correct answer for multi-select MCQ");
+        return;
+      }
+      if (questionForm.type === "fillup" && !questionForm.fillup_answers?.trim()) {
+        setError("Please enter the correct answer(s) for fill in the blank");
+        return;
+      }
+      if (questionForm.type === "subjective" && !questionForm.answer_text?.trim()) {
+        setError("Please enter the model answer for subjective question");
+        return;
+      }
     }
 
     const newQuestion = {
@@ -606,7 +641,7 @@ export default function CreateTest() {
   };
 
   const handleMarksChange = (marks) => {
-    const type = marks === 1 ? "mcq" : "subjective";
+    const type = marks === 1 ? questionForm.type === "fillup" ? "fillup" : "mcq" : "subjective";
     setQuestionForm(prev => ({ ...prev, marks, type }));
   };
 
@@ -723,16 +758,26 @@ export default function CreateTest() {
                       return;
                     }
                     
-                    // Parse: try group name format first, then combined value format
-                    let parsed = parseGroupName(value);
-                    if (!parsed.class) {
-                      // Not a group name, try combined value format (e.g., "10-Maths")
-                      parsed = parseCombinedValue(value);
-                    }
-                    if (parsed.class && parsed.subject) {
-                      setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
-                      fetchTestSubjectsForClass(parsed.class, true);
-                      fetchStudentsForClass(parsed.class, true);
+                    // Find the matching option from combinedOptions
+                    const matchedOption = combinedOptions.find(opt => opt.value === value);
+                    
+                    if (matchedOption) {
+                      // Use the class and subject from the matched option directly
+                      // This ensures consistency between the select value and formData
+                      setFormData({ ...formData, class_level: matchedOption.class, subject: matchedOption.subject });
+                      fetchTestSubjectsForClass(matchedOption.class, false); // Don't reset subject - we just set it above
+                      fetchStudentsForClass(matchedOption.class, true);
+                    } else {
+                      // Fallback to parsing if no match found
+                      let parsed = parseGroupName(value);
+                      if (!parsed.class) {
+                        parsed = parseCombinedValue(value);
+                      }
+                      if (parsed.class && parsed.subject) {
+                        setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
+                        fetchTestSubjectsForClass(parsed.class, false); // Don't reset subject - we just set it above
+                        fetchStudentsForClass(parsed.class, true);
+                      }
                     }
                   }}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
@@ -856,6 +901,29 @@ export default function CreateTest() {
                 placeholder="Enter test instructions or description..."
                 className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none resize-none"
               />
+            </div>
+
+            {/* Evaluation Type Toggle */}
+            <div className="mt-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Evaluation Method</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, evaluation_type: "manual" })}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition text-left ${formData.evaluation_type === "manual" ? "border-gray-900 dark:border-white bg-white dark:bg-gray-800" : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 opacity-60"}`}
+                >
+                  <p className="font-medium text-gray-900 dark:text-white text-sm">Manual Evaluation</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Teachers will grade answers manually. No answer key required.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, evaluation_type: "ai" })}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition text-left ${formData.evaluation_type === "ai" ? "border-purple-600 dark:border-purple-400 bg-purple-50 dark:bg-purple-900/20" : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 opacity-60"}`}
+                >
+                  <p className="font-medium text-purple-700 dark:text-purple-300 text-sm">AI Evaluation</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-graded by AI. You must provide answers for all questions.</p>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1070,7 +1138,7 @@ export default function CreateTest() {
                       {currSubjectNames.length > 0 ? (
                         currSubjectNames.map(s => <option key={s} value={s}>{s}</option>)
                       ) : (
-                        SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)
+                        <option disabled>No subjects found</option>
                       )}
                     </select>
                   )}
@@ -1168,12 +1236,18 @@ export default function CreateTest() {
               {questionForm.marks === 1 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Question Type</label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => setQuestionForm(prev => ({ ...prev, type: 'mcq' }))}
                       className={`px-4 py-2 rounded-lg font-medium transition ${questionForm.type === 'mcq' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
                     >
-                      MCQ (Multiple Choice)
+                      MCQ (Single)
+                    </button>
+                    <button
+                      onClick={() => setQuestionForm(prev => ({ ...prev, type: 'mcq_multi', correct_answers: [] }))}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${questionForm.type === 'mcq_multi' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                    >
+                      MCQ (Multi-select)
                     </button>
                     <button
                       onClick={() => setQuestionForm(prev => ({ ...prev, type: 'fillup' }))}
@@ -1197,7 +1271,7 @@ export default function CreateTest() {
                 />
               </div>
 
-              {/* MCQ Options */}
+              {/* MCQ Options - Single select */}
               {questionForm.type === 'mcq' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Options (select correct answer)</label>
@@ -1228,20 +1302,95 @@ export default function CreateTest() {
                 </div>
               )}
 
-              {/* Info for Fill-ups and Subjective */}
-              {questionForm.type === 'fillup' && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                  <p className="text-sm text-blue-700 dark:text-blue-400">
-                    <strong>Fill in the Blank:</strong> Students will type their answer in a text box. Use ___ in your question to indicate where the blank is.
-                  </p>
+              {/* MCQ Options - Multi select */}
+              {questionForm.type === 'mcq_multi' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Options (select all correct answers)</label>
+                  <div className="space-y-2">
+                    {questionForm.options.map((opt, i) => {
+                      const isSelected = (questionForm.correct_answers || []).includes(i);
+                      return (
+                        <div key={i} className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setQuestionForm(prev => {
+                                const current = prev.correct_answers || [];
+                                const updated = isSelected ? current.filter(x => x !== i) : [...current, i];
+                                return { ...prev, correct_answers: updated };
+                              });
+                            }}
+                            className={`w-8 h-8 rounded flex items-center justify-center font-medium transition ${isSelected ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                          >
+                            {isSelected ? '✓' : String.fromCharCode(65 + i)}
+                          </button>
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => {
+                              const newOpts = [...questionForm.options];
+                              newOpts[i] = e.target.value;
+                              setQuestionForm(prev => ({ ...prev, options: newOpts }));
+                            }}
+                            placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                            className="flex-1 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Click options to toggle correct answers (multiple allowed)</p>
                 </div>
               )}
 
+              {/* Fill-up answer field */}
+              {questionForm.type === 'fillup' && (
+                <div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      <strong>Fill in the Blank:</strong> Use ___ in your question to indicate where the blank is.
+                    </p>
+                  </div>
+                  {formData.evaluation_type === "ai" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Accepted Answer(s) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={questionForm.fillup_answers || ""}
+                        onChange={(e) => setQuestionForm(prev => ({ ...prev, fillup_answers: e.target.value }))}
+                        placeholder='Enter answers separated by commas (e.g., "photosynthesis, photo synthesis")'
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple accepted answers with commas</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Subjective answer field (2+ marks) */}
               {questionForm.marks > 1 && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                  <p className="text-sm text-amber-700 dark:text-amber-400">
-                    <strong>Subjective Question ({questionForm.marks} Marks):</strong> Students will write a detailed answer. Teachers will manually grade these responses.
-                  </p>
+                <div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                      <strong>Subjective Question ({questionForm.marks} Marks):</strong> {formData.evaluation_type === "ai" ? "AI will evaluate based on the model answer below." : "Teachers will manually grade these responses."}
+                    </p>
+                  </div>
+                  {formData.evaluation_type === "ai" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Model Answer <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={questionForm.answer_text || ""}
+                        onChange={(e) => setQuestionForm(prev => ({ ...prev, answer_text: e.target.value }))}
+                        placeholder="Enter the expected/model answer for AI evaluation..."
+                        rows={4}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This answer will be used by AI to evaluate student responses</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -2,10 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Filter, Search, Plus, Check } from "lucide-react";
 import useUserStore from "../stores/userStore";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
     const [questions, setQuestions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState(preSelectedIds);
+
+    // Dynamic curriculum data
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
     // Filters
     const [filters, setFilters] = useState({
@@ -23,6 +29,29 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
         pages: 1
     });
 
+    // Fetch curriculum subjects on mount
+    useEffect(() => {
+        const fetchCurriculum = async () => {
+            setLoadingCurriculum(true);
+            try {
+                const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setCurriculumSubjects(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch curriculum:", err);
+            } finally {
+                setLoadingCurriculum(false);
+            }
+        };
+        fetchCurriculum();
+    }, []);
+
+    // Derive unique subject names and class levels from curriculum
+    const subjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
+    const classLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
+
     const fetchQuestions = async () => {
         setLoading(true);
         try {
@@ -32,7 +61,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
                 ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
             });
 
-            const response = await fetch(`http://localhost:8000/api/question-bank/questions?${queryParams}`, {
+            const response = await fetch(`${API_URL}/api/question-bank/questions?${queryParams}`, {
                 headers: {
                     "Authorization": `Bearer ${useUserStore.getState().accessToken}`
                 }
@@ -105,9 +134,11 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
                         onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
                     >
                         <option value="">Subject</option>
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Science">Science</option>
-                        <option value="English">English</option>
+                        {loadingCurriculum ? (
+                            <option disabled>Loading...</option>
+                        ) : (
+                            subjectNames.map(s => <option key={s} value={s}>{s}</option>)
+                        )}
                     </select>
                     <select
                         className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
@@ -115,7 +146,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
                         onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
                     >
                         <option value="">Class</option>
-                        {[6, 7, 8, 9, 10, 11, 12].map(c => <option key={c} value={c}>{c}</option>)}
+                        {classLevels.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <select
                         className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"

@@ -1,10 +1,11 @@
 """
 LLM Storage Service
 Stores high-quality LLM-generated answers for reuse and knowledge building.
+Uses Gemini embedding-001 for consistency with textbook index.
 """
 
-from sentence_transformers import SentenceTransformer
 from app.db.mongo import pinecone_llm_db
+from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
 import hashlib
 import logging
 import re
@@ -19,9 +20,18 @@ class LLMStorageService:
     """
     
     def __init__(self):
-        """Initialize LLM storage service with embedding model."""
-        self.embedding_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
-        logger.info("✅ LLM Storage Service initialized with sentence-transformers")
+        """Initialize LLM storage service with Gemini embedding model."""
+        logger.info(f"✅ LLM Storage Service initialized with {EMBEDDING_MODEL}")
+    
+    def _generate_embedding(self, text: str) -> list:
+        """Generate embedding using same Gemini model as textbook index."""
+        from app.services.gemini_key_manager import gemini_key_manager
+        api_key = gemini_key_manager.get_available_key()
+        return _embed_rest(
+            text=text,
+            api_key=api_key,
+            task_type="RETRIEVAL_DOCUMENT"
+        )
     
     def store_answer(
         self,
@@ -58,8 +68,8 @@ class LLMStorageService:
             if not topic:
                 topic = self._extract_topic(question)
             
-            # Generate embedding from question
-            question_embedding = self.embedding_model.encode(question).tolist()
+            # Generate embedding from question using Gemini (same model as query)
+            question_embedding = self._generate_embedding(question)
             
             # Create unique ID
             question_hash = hashlib.md5(question.lower().strip().encode()).hexdigest()[:16]
@@ -254,8 +264,8 @@ class LLMStorageService:
             List of matching stored answers with scores
         """
         try:
-            # Generate query embedding
-            query_embedding = self.embedding_model.encode(question).tolist()
+            # Generate query embedding using Gemini (same model as store)
+            query_embedding = self._generate_embedding(question)
             
             # Query Pinecone LLM DB
             results = pinecone_llm_db.query(

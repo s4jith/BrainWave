@@ -62,10 +62,10 @@ const navItems = [
     path: "/my-grades"
   },
   {
-    id: "assessments",
-    label: "Assessments",
+    id: "test-center",
+    label: "Test Center",
     icon: ClipboardCheck,
-    path: "/my-tests"
+    path: "/test"
   },
   {
     id: "book-to-bot",
@@ -81,17 +81,10 @@ const navItems = [
     path: "/notes"
   },
   {
-    id: "report-card",
-    label: "Statistics",
-    icon: BarChart3,
-    path: "/report-card",
-    badge: "PRO"
-  },
-  {
-    id: "support",
-    label: "Help & Support",
+    id: "suggestions",
+    label: "Suggestions",
     icon: MessageCircle,
-    path: "/support-tickets"
+    path: "/suggestions"
   },
   {
     id: "about-you",
@@ -227,8 +220,8 @@ export default function DashboardLayout({ children }) {
           })}
         </nav>
 
-        {/* Calendar Reminders Card - Orange Gradient */}
-        {sidebarOpen && (
+        {/* Moved Reminders to Dashboard page - This space is now for navigation only */}
+        {sidebarOpen && false && (
           <div className="px-3 pb-3">
             <div
               className="rounded-2xl p-5 relative overflow-hidden"

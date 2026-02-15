@@ -10,7 +10,8 @@ import useThemeStore from "../stores/themeStore";
 import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
-    FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers
+    FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
+    MessageCircle
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -134,6 +135,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/test-management", label: "Tests", icon: ClipboardList },
         { path: "/admin-reports", label: "Reports", icon: BarChart3 },
+        { path: "/admin-suggestions", label: "Suggestions", icon: MessageCircle },
         { path: "/admin-settings", label: "Settings", icon: Settings },
     ];
 
@@ -205,21 +207,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 </nav>
 
                 {/* Bottom Section */}
-                <div className="p-3 border-t border-gray-100 dark:border-gray-700 space-y-1">
-                    <a
-                        href="https://docs.example.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                        <FileText className="w-5 h-5" />
-                        <span>Documentation</span>
-                    </a>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <HelpCircle className="w-5 h-5" />
-                        <span>Help & Support</span>
-                    </button>
-                </div>
+
 
                 {/* User Profile */}
                 <div className="p-3 border-t border-gray-100 dark:border-gray-700">

@@ -144,6 +144,9 @@ class RAGEvaluationService:
         except Exception as e:
             logger.warning(f"Could not update student performance: {e}")
         
+        # Calculate topic-level analytics
+        topic_analytics = self._calculate_topic_analytics(questions, evaluations)
+        
         # Save session results
         await self._save_session_results(
             session_id=session_id,
@@ -159,9 +162,6 @@ class RAGEvaluationService:
             correct_count=correct_count,
             topic_analytics=topic_analytics  # Pass topic analytics
         )
-        
-        # Calculate topic-level analytics
-        topic_analytics = self._calculate_topic_analytics(questions, evaluations)
         
         logger.info(f"✅ Evaluation complete: {percentage_score}% ({correct_count}/{len(questions)} correct)")
         
@@ -198,7 +198,11 @@ class RAGEvaluationService:
                 "expected_answer": q.get("expected_answer"),
                 "keywords": q.get("keywords", []),
                 "marks": q.get("marks", 10),
-                "difficulty": q.get("difficulty", "medium")
+                "difficulty": q.get("difficulty", "medium"),
+                "question_type": q.get("question_type", ""),
+                "correct_option": q.get("correct_option", ""),
+                "options": q.get("options", {}),
+                "topic": q.get("topic", "")
             })
         
         return pairs
@@ -249,9 +253,23 @@ class RAGEvaluationService:
             answer_text = qa["answer"].strip() if qa["answer"] else "(No answer provided)"
             expected = qa.get("expected_answer", "Not provided")
             keywords = ", ".join(qa.get("keywords", [])) if qa.get("keywords") else "Not specified"
+            q_type = qa.get("question_type", "")
+            
+            # Add question type specific info
+            type_info = ""
+            if q_type == "mcq":
+                correct_opt = qa.get("correct_option", "")
+                options = qa.get("options", {})
+                options_str = ", ".join([f"{k}: {v}" for k, v in options.items()]) if options else ""
+                type_info = f"\n- Type: MCQ (Options: {options_str})\n- Correct Option: {correct_opt}"
+                type_info += f"\n- NOTE: Student selected option '{answer_text}'. Mark 10/10 if it matches correct option '{correct_opt}', else 0/10."
+            elif q_type == "fillup":
+                type_info = f"\n- Type: Fill in the Blank\n- NOTE: Check if student's answer matches or is close to the expected answer. Exact match or minor variation = 10/10."
+            else:
+                type_info = f"\n- Type: Short Answer ({qa.get('marks', 2)} marks)"
             
             questions_section += f"""
-**Q{i+1}:** {qa["question"]}
+**Q{i+1}:** {qa["question"]}{type_info}
 - Student's Answer: {answer_text}
 - Expected Answer: {expected}
 - Keywords: {keywords}
@@ -319,7 +337,8 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
                             "score": min(10, max(0, result.get("score", 0))),
                             "max_score": 10,
                             "feedback": result.get("feedback", ""),
-                            "correct_answer": result.get("correct_answer", qa.get("expected_answer", ""))
+                            "correct_answer": result.get("correct_answer", qa.get("expected_answer", "")),
+                            "topic": qa.get("topic", "")
                         })
                     else:
                         # Fallback for missing result
@@ -366,7 +385,8 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
             "score": min(10, score),
             "max_score": 10,
             "feedback": "Answer evaluated. Review the correct answer for more detail." if score > 0 else "No answer provided.",
-            "correct_answer": qa.get("expected_answer", "Please refer to the textbook.")
+            "correct_answer": qa.get("expected_answer", "Please refer to the textbook."),
+            "topic": qa.get("topic", "")
         }
     
     def _generate_feedback_without_api(
@@ -469,12 +489,15 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         # Match questions with evaluations and group by topic
         for i, q in enumerate(questions):
             topic_id = q.get("topic_id")
-            topic_name = q.get("topic_name", "General")
+            topic_name = q.get("topic_name") or q.get("topic", "General")
             
             # If no topic info, use chapter-level
             if not topic_id or not topic_name:
                 topic_id = "chapter_general"
-                topic_name = "General Concepts"
+                topic_name = topic_name or "General Concepts"
+            
+            if not topic_id:
+                topic_id = topic_name.lower().replace(" ", "_")
             
             # Initialize topic if not seen
             if topic_id not in topic_performance:
