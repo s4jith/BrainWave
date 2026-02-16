@@ -392,7 +392,7 @@ class RAGService:
     ) -> str:
         """
         Retrieve full chapter context from Pinecone for MCQ generation.
-        Uses namespace architecture for book embeddings.
+        Uses the same Pinecone index where books are uploaded (PINECONE_HOST).
         
         Args:
             class_level: Class (5-10)
@@ -404,12 +404,26 @@ class RAGService:
             Combined chapter text or empty string if not found
         """
         try:
+            from pinecone import Pinecone
+            from app.core.config import settings
+            
+            # Normalize subject name to match Pinecone namespace
+            # Handle common variations (Maths -> Mathematics, etc.)
+            subject_namespace_map = {
+                "maths": "mathematics",
+                "math": "mathematics",
+                "science": "science",
+                "social science": "social_science",
+                "social-science": "social_science",
+                "bio": "biology",
+            }
+            
+            subject_lower = subject.lower().strip()
+            namespace = subject_namespace_map.get(subject_lower, subject_lower.replace(' ', '_'))
+            
             # Use a generic query to get chapter content
             dummy_query = f"{subject} chapter {chapter}"
             query_embedding = self.gemini.generate_embedding(dummy_query)
-            
-            # Namespace format: subject lowercase with spaces replaced by underscores
-            namespace = subject.lower().replace(' ', '_')
             
             # Metadata filter - matches how books are uploaded (pdf_processor.py)
             # Books use: class_level (int), subject (str), chapter_number (int)
@@ -420,23 +434,18 @@ class RAGService:
             
             logger.info(f"📚 Querying namespace '{namespace}' with filter: {metadata_filter}")
             
-            # Try namespace_db first (new architecture)
-            if self.namespace_db and self.namespace_db.index:
-                results = self.namespace_db.index.query(
-                    vector=query_embedding,
-                    top_k=max_chunks,
-                    filter=metadata_filter,
-                    namespace=namespace,
-                    include_metadata=True
-                )
-            else:
-                # Fallback to legacy DB
-                logger.warning("Namespace DB not available, using legacy DB")
-                results = self.pinecone.query(
-                    vector=query_embedding,
-                    top_k=max_chunks,
-                    filter=metadata_filter
-                )
+            # Connect to the same Pinecone index where books are uploaded
+            # pdf_processor uses PINECONE_HOST (legacy index)
+            pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+            index = pc.Index(host=settings.PINECONE_HOST)
+            
+            results = index.query(
+                vector=query_embedding,
+                top_k=max_chunks,
+                filter=metadata_filter,
+                namespace=namespace,
+                include_metadata=True
+            )
             
             # Extract and combine chunks
             chunks = []
