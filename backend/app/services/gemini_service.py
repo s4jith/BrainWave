@@ -591,15 +591,16 @@ JSON:"""
             # Get model with available API key
             model, key_index = self._get_model_with_available_key(retry_count)
             
-            # Configure for complete JSON output
+            # Configure for JSON output (without unsupported fields)
             generation_config = {
                 "temperature": 0.7,
-                "max_output_tokens": 8192,
-                "response_mime_type": "application/json"
+                "max_output_tokens": 8192
             }
             
             response = model.generate_content(prompt, generation_config=generation_config)
             text = response.text.strip()
+            
+            logger.info(f"📝 Gemini response length: {len(text)} chars")
             
             # Try direct parsing (should work with response_mime_type)
             try:
@@ -608,7 +609,7 @@ JSON:"""
                     logger.info(f"✅ Generated {len(questions)} questions successfully")
                     return questions
             except json.JSONDecodeError as e:
-                logger.warning(f"Direct JSON parse failed: {e}")
+                logger.warning(f"Direct JSON parse failed: {e}, attempting cleanup...")
             
             # Fallback: Extract JSON from text
             if "```json" in text:
@@ -622,48 +623,60 @@ JSON:"""
             
             try:
                 questions = json.loads(text)
+                logger.info(f"✅ Parsed after cleanup: {len(questions)} questions")
                 return questions
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Parse after cleanup failed: {e}")
             
-            # Try to repair incomplete JSON
-            # Find the last complete object in array
+            # Try to repair incomplete JSON by finding last complete object
             if text.startswith('['):
-                # Find positions of complete objects
+                logger.info("🔧 Attempting JSON repair...")
+                
+                # Find the last properly closed object
                 depth = 0
-                last_complete = 0
+                last_complete_pos = 0
                 in_string = False
                 escape_next = False
+                object_count = 0
                 
                 for i, char in enumerate(text):
                     if escape_next:
                         escape_next = False
                         continue
+                    
                     if char == '\\':
                         escape_next = True
                         continue
+                    
                     if char == '"' and not escape_next:
                         in_string = not in_string
                         continue
+                    
                     if in_string:
                         continue
+                    
                     if char == '{':
                         depth += 1
                     elif char == '}':
                         depth -= 1
                         if depth == 0:
-                            last_complete = i + 1
+                            # Found a complete object
+                            object_count += 1
+                            last_complete_pos = i + 1
                 
-                if last_complete > 1:
-                    repaired = text[:last_complete] + ']'
+                if last_complete_pos > 1 and object_count > 0:
+                    # Close the array at the last complete object
+                    repaired = text[:last_complete_pos] + ']'
                     try:
                         questions = json.loads(repaired)
-                        logger.info(f"✅ Repaired JSON, got {len(questions)} questions")
+                        logger.info(f"✅ Repaired JSON! Got {len(questions)}/{object_count} questions")
                         return questions
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Repair failed: {e}")
             
-            raise ValueError(f"Could not parse Gemini response. Preview: {text[:300]}...")
+            # Log the problematic text for debugging
+            logger.error(f"Failed to parse JSON. Full response ({len(text)} chars):\n{text[:500]}...")
+            raise ValueError(f"Could not parse Gemini response after multiple attempts")
             
         except Exception as e:
             error_str = str(e)

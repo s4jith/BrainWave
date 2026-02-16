@@ -42,6 +42,13 @@ async def lifespan(app: FastAPI):
     
     try:
         await init_databases()
+        
+        # Clean up expired pending questions on startup
+        from app.services.question_bank_service import question_bank_service
+        deleted = await question_bank_service.cleanup_expired_pending_questions()
+        if deleted > 0:
+            logger.info(f"🗑️ Cleaned up {deleted} expired pending questions")
+        
         logger.info("✅ All systems initialized successfully")
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")

@@ -66,6 +66,26 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         }
     });
 
+    // Populate form when editing existing question
+    useEffect(() => {
+        if (question) {
+            setFormData({
+                text: question.text || "",
+                subject: question.subject || formData.subject,
+                class_level: question.class_level || formData.class_level,
+                chapter: question.chapter || formData.chapter,
+                chapter_name: question.chapter_name || "",
+                topic: question.topic || "",
+                type: question.type || "mcq",
+                difficulty: question.difficulty || "medium",
+                marks: question.marks || 1,
+                options: question.options || ["", "", "", ""],
+                correct_answer: question.correct_answer || "",
+                status: question.status || "approved"
+            });
+        }
+    }, [question]);
+
     // Fetch curriculum subjects on mount
     useEffect(() => {
         const fetchCurriculum = async () => {

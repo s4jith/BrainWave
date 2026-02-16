@@ -6,7 +6,7 @@ Handles management of the centralized question bank.
 from app.db.mongo import db
 from app.services.rag_service import rag_service
 from app.services.gemini_service import gemini_service
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 import logging
 from typing import List, Optional, Dict
@@ -28,7 +28,9 @@ class QuestionBankService:
         created_by: Optional[str] = None,  # For teacher-specific view
         limit: int = 50,
         offset: int = 0,
-        group_filters: Optional[list] = None  # List of {subject, class_level} dicts
+        group_filters: Optional[list] = None,  # List of {subject, class_level} dicts
+        user_id: Optional[str] = None,  # Current user ID for filtering
+        user_role: Optional[str] = None  # Current user role
     ) -> Dict:
         """Get questions with filters."""
         query = {}
@@ -45,6 +47,21 @@ class QuestionBankService:
         # Approval Status Filter
         if status:
              query["status"] = status
+        
+        # IMPORTANT: Pending questions should only be visible to:
+        # 1. The creator/trigger (admin or teacher who created/triggered it)
+        # 2. Admins (who can approve)
+        if status == "pending" and user_role != "admin":
+            # Non-admin users can only see their own pending questions
+            # For AI-generated questions, check triggered_by; for manual, check created_by
+            if user_id:
+                query["$or"] = [
+                    {"created_by": user_id},
+                    {"triggered_by": user_id}
+                ]
+            else:
+                # If no user_id provided, return empty for pending
+                query["_id"] = {"$exists": False}  # Force no results
         
         # Group-based filtering for teachers
         # Only show questions matching teacher's assigned group subjects/classes
@@ -91,6 +108,7 @@ class QuestionBankService:
                 "subject": q.get("subject"),
                 "class_level": q.get("class_level"),
                 "chapter": q.get("chapter"),
+                "chapter_name": q.get("chapter_name"),
                 "topic": q.get("topic"),
                 "type": q.get("type"),
                 "difficulty": q.get("difficulty"),
@@ -99,7 +117,11 @@ class QuestionBankService:
                 "correct_answer": q.get("correct_answer"),
                 "status": q.get("status", "approved"), # Default for old data
                 "created_by": q.get("created_by"),
-                "created_at": q.get("created_at")
+                "created_role": q.get("created_role"),
+                "triggered_by": q.get("triggered_by"),
+                "created_at": q.get("created_at"),
+                "is_ai_generated": q.get("is_ai_generated", False),
+                "expires_at": q.get("expires_at")  # For auto-delete countdown
             })
             
         return {
@@ -196,6 +218,9 @@ class QuestionBankService:
             
             # 3. Save to DB
             saved_ids = []
+            now = datetime.utcnow()
+            expires_at = now + timedelta(days=7)  # Auto-delete after 7 days
+            
             for q in generated_questions:
                 q_doc = {
                     "text": q.get("text") or q.get("question"), # Handle potential variation in AI output keys
@@ -208,10 +233,13 @@ class QuestionBankService:
                     "options": q.get("options", []),
                     "correct_answer": q.get("correct_answer"),
                     "created_by": "AI",
+                    "created_role": "system",
                     "triggered_by": user_id,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "triggered_by_role": user_role,
+                    "created_at": now.isoformat(),
                     "is_ai_generated": True,
-                    "status": "pending" # AI Questions are Pending Approval by default
+                    "status": "pending", # AI Questions are Pending Approval by default
+                    "expires_at": expires_at  # Auto-delete after 7 days if still pending
                 }
                 
                 # Sanitize: ensure no nulls for required fields
@@ -230,5 +258,28 @@ class QuestionBankService:
         except Exception as e:
             logger.error(f"Generate questions error: {e}")
             return {"success": False, "error": str(e)}
+
+    async def cleanup_expired_pending_questions(self):
+        """
+        Delete pending questions that have expired (older than 7 days).
+        Returns count of deleted questions.
+        """
+        try:
+            now = datetime.utcnow()
+            
+            # Delete pending questions where expires_at is in the past
+            result = self.collection.delete_many({
+                "status": "pending",
+                "expires_at": {"$lt": now}
+            })
+            
+            deleted_count = result.deleted_count
+            if deleted_count > 0:
+                logger.info(f"🗑️ Cleaned up {deleted_count} expired pending questions")
+            
+            return deleted_count
+        except Exception as e:
+            logger.error(f"Error cleaning up expired questions: {e}")
+            return 0
 
 question_bank_service = QuestionBankService()

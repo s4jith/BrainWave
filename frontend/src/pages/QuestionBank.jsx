@@ -386,8 +386,18 @@ const QuestionBank = () => {
                                             )}
 
                                             <div className="mt-2 text-xs text-gray-500">
-                                                Chapter {q.chapter} • Created by {q.created_by} • {new Date(q.created_at).toLocaleDateString()}
+                                                Chapter {q.chapter} • {q.is_ai_generated ? `Triggered by ${q.triggered_by || q.created_by}` : `Created by ${q.created_by}`} • {new Date(q.created_at).toLocaleDateString()}
                                                 {q.is_ai_generated && <span className="ml-2 text-blue-400 flex items-center inline-flex gap-1">✨ AI Generated</span>}
+                                                {q.status === 'pending' && q.expires_at && (() => {
+                                                    const daysLeft = Math.ceil((new Date(q.expires_at) - new Date()) / (1000 * 60 * 60 * 24));
+                                                    return daysLeft > 0 ? (
+                                                        <span className={`ml-2 ${daysLeft <= 2 ? 'text-red-400' : 'text-yellow-400'}`}>
+                                                            ⏱️ Auto-deletes in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="ml-2 text-red-400">⏱️ Expired</span>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
 
@@ -410,9 +420,9 @@ const QuestionBank = () => {
                                             )}
                                             <button
                                                 onClick={() => handleEdit(q)}
-                                                className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                                                className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 title="Edit"
-                                                disabled={isTeacher && q.created_role !== 'teacher' && q.created_by !== user.user_id}
+                                                disabled={isTeacher && q.created_role !== 'teacher' && q.created_by !== user.user_id && q.triggered_by !== user.user_id}
                                             >
                                                 <Edit size={18} />
                                             </button>

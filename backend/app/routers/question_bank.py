@@ -183,7 +183,9 @@ async def get_questions(
             status=status,
             limit=limit,
             offset=offset,
-            group_filters=group_filters
+            group_filters=group_filters,
+            user_id=current_user.user_id,
+            user_role=current_user.role.value
         )
         return result
     except HTTPException:
@@ -426,4 +428,23 @@ async def generate_questions(
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/cleanup-expired")
+async def cleanup_expired_questions(
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN]))
+):
+    """
+    Manually trigger cleanup of expired pending questions (older than 7 days).
+    Admin only.
+    """
+    try:
+        deleted_count = await question_bank_service.cleanup_expired_pending_questions()
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Cleaned up {deleted_count} expired pending questions"
+        }
+    except Exception as e:
+        logger.error(f"Manual cleanup error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
