@@ -359,10 +359,25 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             
             combined_context = "\n\n".join(context_parts)
             
+            # FALLBACK: If no textbook content but question is valid for subject, generate direct answer
             if not combined_context:
-                no_content_msg = "The content is not found in your textbook. Please try a different question."
-                yield f"data: {json.dumps({'text': no_content_msg})}\n\n"
-                yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
+                logger.info(f"🔄 No textbook content found - generating direct answer for valid {request.subject} question")
+                
+                # Generate direct answer (subject validation already passed)
+                direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
+
+STUDENT QUESTION: {request.question}
+
+Provide a clear, educational answer appropriate for Class {request.class_level} level.
+- Start with a simple definition/explanation
+- Give 1-2 examples
+- Keep it concise but informative (200-400 words)"""
+
+                # Stream the direct answer
+                for chunk in gemini_service.generate_response_streaming(direct_prompt):
+                    yield f"data: {json.dumps({'text': chunk})}\n\n"
+                
+                yield f"data: {json.dumps({'done': True, 'sources': [], 'fallback': True})}\n\n"
                 return
             
             # Step 3: Build prompt

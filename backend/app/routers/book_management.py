@@ -2013,7 +2013,16 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         })
         books_deleted = mongo_result.deleted_count
         
-        logger.info(f"✅ Deleted Chapter {chapter_number} from {subject} Class {class_level}: {vectors_to_delete} vectors, {books_deleted} book records")
+        # Delete cached summaries for this chapter
+        from app.services.summary_cache_service import summary_cache_service
+        cache_result = await summary_cache_service.delete_chapter_summaries(
+            subject=subject,
+            class_level=class_level,
+            chapter=chapter_number
+        )
+        summaries_deleted = cache_result.get("summaries_deleted", 0)
+        
+        logger.info(f"✅ Deleted Chapter {chapter_number} from {subject} Class {class_level}: {vectors_to_delete} vectors, {books_deleted} book records, {summaries_deleted} cached summaries")
         
         return {
             "success": True,
@@ -2023,7 +2032,8 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
                 "class_level": class_level,
                 "chapter_number": chapter_number,
                 "vectors_deleted": vectors_to_delete,
-                "books_deleted": books_deleted
+                "books_deleted": books_deleted,
+                "summaries_deleted": summaries_deleted
             }
         }
         

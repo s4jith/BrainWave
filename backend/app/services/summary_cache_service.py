@@ -150,6 +150,56 @@ class SummaryCacheService:
         except Exception as e:
             logger.error(f"❌ Failed to get cache stats: {e}")
             return {"total_cached": 0}
+    
+    async def delete_chapter_summaries(
+        self,
+        subject: str,
+        class_level: int,
+        chapter: int
+    ) -> dict:
+        """
+        Delete all cached summaries for a specific chapter.
+        Called when a chapter is deleted from the system.
+        
+        Deletes:
+        - Chapter summary for this chapter
+        - All page summaries for this chapter
+        
+        Returns:
+            Dict with deletion stats
+        """
+        try:
+            collection = await self.get_collection()
+            
+            # Delete all summaries matching this chapter (both page and chapter type)
+            result = await collection.delete_many({
+                "subject": {"$regex": f"^{subject}$", "$options": "i"},
+                "class_level": class_level,
+                "chapter": chapter
+            })
+            
+            deleted_count = result.deleted_count
+            
+            if deleted_count > 0:
+                logger.info(f"🗑️ Deleted {deleted_count} cached summaries for {subject} Class {class_level} Chapter {chapter}")
+            else:
+                logger.info(f"ℹ️ No cached summaries found for {subject} Class {class_level} Chapter {chapter}")
+            
+            return {
+                "success": True,
+                "summaries_deleted": deleted_count,
+                "subject": subject,
+                "class_level": class_level,
+                "chapter": chapter
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to delete chapter summaries: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "summaries_deleted": 0
+            }
 
 
 # Global instance

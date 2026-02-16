@@ -572,15 +572,17 @@ Format as:
                     answer = cached_summary["summary"]
                     source_chunks = []
                 else:
-                    # Use efficient RAG - answer_annotation_basic instead of deepdive (2-3 API calls max)
-                    answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
-                        question=f"Provide a comprehensive overview of chapter {request.chapter} including main topics, key concepts, and important formulas or definitions.",
+                    # Use DEEPDIVE for chapter summaries - need comprehensive content
+                    # Chapter summaries are cached, so the extra API calls only happen once
+                    logger.info(f"[CHAPTER SUMMARY] Using deepdive RAG for comprehensive chapter content")
+                    rag_answer, source_chunks = await enhanced_rag_service.answer_question_deepdive(
+                        question=f"Explain all the main topics, concepts, definitions, formulas, and examples covered in chapter {request.chapter}. Include everything important from the chapter.",
                         subject=request.subject,
                         student_class=request.class_level,
                         chapter=request.chapter
                     )
                     
-                    if answer and len(answer.strip()) > 50:
+                    if rag_answer and len(rag_answer.strip()) > 50:
                         # Format into comprehensive chapter summary
                         subject_lower = request.subject.lower()
                         if subject_lower == "hindi":
@@ -590,31 +592,84 @@ Format as:
                         else:
                             lang_prompt = ""
                         
-                        prompt = f"""You are a tutor helping a Class {request.class_level} student review Chapter {request.chapter} in {request.subject}.
+                        prompt = f"""You are an expert tutor creating a DETAILED and COMPREHENSIVE chapter summary for a Class {request.class_level} student studying {request.subject}.
 
-Based on the content below, create a comprehensive chapter summary:
+This is Chapter {request.chapter}. The student needs a thorough summary to understand and revise the entire chapter content.
 
-**Content:**
-{answer}
+**Source Content from Chapter:**
+{rag_answer}
 
-**Format (aim for 300-500 words):**
-**Chapter Overview:** [Main theme]
+**CRITICAL INSTRUCTIONS:**
+- This is the ONLY summary the student will receive for this chapter - make it COUNT
+- Be EXTREMELY THOROUGH and DETAILED - cover ALL major topics mentioned in the source
+- Write AT LEAST 1000-1500 words (this is a chapter summary, not a brief overview!)
+- Include specific examples, explanations, and applications from the content
+- Make it comprehensive enough for exam preparation and revision
+- DO NOT truncate or cut short - complete the ENTIRE summary
 
-**Major Topics:**
-1. [Topic 1]: [Brief explanation]
-2. [Topic 2]: [Brief explanation]
+**Required Format:**
 
-**Key Concepts & Definitions:**
-- [Concept]: [Definition]
+## Chapter Overview
+[Write 4-6 sentences explaining what this chapter is about, its importance in the curriculum, prerequisites if any, and what students will learn by the end]
 
-**Important Formulas/Facts:**
-- [Formula/Fact]
+## Major Topics Covered
 
-**Key Takeaways:**
-- [Takeaway 1]
-- [Takeaway 2]{lang_prompt}"""
+### 1. [First Major Topic]
+- Comprehensive explanation of the topic (5-7 sentences minimum)
+- All key points and subtopics under this topic
+- Examples or illustrations mentioned in the textbook
+- How this connects to other concepts in the chapter or subject
+- Common mistakes students make with this topic
+
+### 2. [Second Major Topic]
+- Comprehensive explanation (5-7 sentences minimum)
+- Key points and subtopics
+- Practical applications or examples
+- Step-by-step methods if applicable
+
+### 3. [Third Major Topic]
+[Continue this pattern for ALL major topics in the chapter - do not skip any!]
+
+## Key Concepts & Definitions
+- **[Term 1]**: [Complete definition with detailed explanation and example]
+- **[Term 2]**: [Complete definition with detailed explanation and example]
+- **[Term 3]**: [Complete definition with detailed explanation and example]
+[Include ALL important terms from the chapter - aim for at least 5-10 terms]
+
+## Important Formulas/Facts/Rules
+- **[Formula/Fact 1]**: [The formula or fact] - [When to use it] - [Example of application]
+- **[Formula/Fact 2]**: [The formula or fact] - [When to use it] - [Example of application]
+[Include all formulas, theorems, rules, or critical facts from the chapter]
+
+## Worked Examples from the Chapter
+- **Example 1**: [Describe what the example demonstrates and the key learning]
+- **Example 2**: [Describe what the example demonstrates and the key learning]
+[Mention key examples discussed in the chapter with their purpose]
+
+## Summary & Key Takeaways
+1. [Most important concept from the chapter with brief explanation]
+2. [Second key takeaway with brief explanation]
+3. [Third key takeaway with brief explanation]
+4. [Fourth key takeaway with brief explanation]
+5. [Fifth key takeaway with brief explanation]
+6. [Additional takeaways if the chapter is content-heavy]
+
+## Quick Revision Points (For Last-Minute Review)
+- [Point 1 - one line summary]
+- [Point 2 - one line summary]
+- [Point 3 - one line summary]
+- [Point 4 - one line summary]
+- [Point 5 - one line summary]
+- [Point 6 - one line summary]
+- [Point 7 - one line summary]
+- [Point 8 - one line summary]
+
+## Common Questions & Tips
+- What type of questions are commonly asked from this chapter?
+- Key tips for scoring well in exams{lang_prompt}"""
                         
-                        answer = gemini_service.generate_response(prompt)
+                        # Use HIGH token limit for detailed chapter summary (4000 tokens ~ 3000 words)
+                        answer = gemini_service.generate_response(prompt, max_output_tokens=4000)
                         
                         # SAVE TO CACHE
                         await summary_cache_service.save_summary(

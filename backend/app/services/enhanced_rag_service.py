@@ -879,6 +879,49 @@ Generate your answer:"""
             mode="basic"
         )
         
+        # 🎯 FALLBACK: If no content found but question IS related to subject, generate direct answer
+        not_found_messages = [
+            "The content is not found",
+            "not found in the book",
+            "not found in your textbook"
+        ]
+        is_not_found = any(msg.lower() in answer.lower() for msg in not_found_messages)
+        
+        if is_not_found:
+            logger.info(f"🔄 RAG returned 'not found' - generating direct answer for valid {subject} question...")
+            
+            # Generate a concise answer directly from Gemini (basic mode = shorter answers)
+            direct_prompt = f"""You are a {subject} tutor helping a Class {student_class} student.
+
+STUDENT QUESTION: {question}
+
+Provide a clear, educational answer appropriate for Class {student_class} level.
+
+Structure:
+- Start with a simple definition/explanation
+- Give 1-2 examples
+- Summarize key points
+
+Keep it concise but informative (200-400 words)."""
+            
+            answer = self.gemini.generate_response(direct_prompt, max_output_tokens=1000)
+            logger.info(f"✓ Direct Gemini answer generated ({len(answer)} chars)")
+            
+            # Store this answer for future queries
+            topic = self.llm_storage._extract_topic(question)
+            self.llm_storage.store_answer(
+                question=question,
+                answer=answer,
+                subject=subject,
+                class_level=student_class,
+                topic=topic,
+                quality_score=0.75,  # Lower score for basic mode fallback
+                textbook_chunks=[]
+            )
+            logger.info(f"✓ Direct answer stored in LLM cache (topic: {topic})")
+            
+            return answer, []
+        
         # Store answer if high quality (with textbook verification)
         if self.llm_storage._should_store_answer(answer, textbook_chunks):
             topic = self.llm_storage._extract_topic(question)
@@ -1158,6 +1201,60 @@ Generate your answer:"""
             subject=subject,
             mode="deepdive"
         )
+        
+        # 🎯 FALLBACK: If no content found but question IS related to subject, generate direct answer
+        not_found_messages = [
+            "The content is not found",
+            "not found in the book",
+            "not found in your textbook"
+        ]
+        is_not_found = any(msg.lower() in answer.lower() for msg in not_found_messages)
+        
+        if is_not_found:
+            logger.info(f"🔄 RAG returned 'not found' - checking if question is valid for {subject}...")
+            
+            # The subject validation already passed (we didn't return early), so generate direct answer
+            logger.info(f"✅ Question IS related to {subject} - generating direct Gemini answer")
+            
+            # Generate a comprehensive answer directly from Gemini
+            direct_prompt = f"""You are an expert {subject} tutor helping a Class {student_class} student.
+
+STUDENT QUESTION: {question}
+
+Since this is a valid {subject} question, provide a COMPREHENSIVE educational answer.
+
+INSTRUCTIONS:
+1. Start with a clear, simple definition or explanation
+2. Provide examples to illustrate the concept
+3. Explain any related concepts or applications
+4. Keep the explanation appropriate for Class {student_class} level
+5. Use proper formatting with headers and bullet points
+
+Structure your answer as:
+🌱 **Basic Understanding**: [Simple definition/explanation]
+📚 **Detailed Explanation**: [Comprehensive explanation]
+💡 **Examples**: [2-3 examples]
+🔍 **Key Points to Remember**: [Summary bullet points]
+
+Generate a thorough educational explanation:"""
+            
+            answer = self.gemini.generate_response(direct_prompt, max_output_tokens=2000)
+            logger.info(f"✓ Direct Gemini answer generated ({len(answer)} chars)")
+            
+            # Store this answer for future queries (so next time it comes from cache)
+            topic = self.llm_storage._extract_topic(question)
+            self.llm_storage.store_answer(
+                question=question,
+                answer=answer,
+                subject=subject,
+                class_level=student_class,
+                topic=topic,
+                quality_score=0.80,  # Slightly lower score since no textbook verification
+                textbook_chunks=[]  # No textbook chunks for this answer
+            )
+            logger.info(f"✓ Direct answer stored in LLM cache for future reuse (topic: {topic})")
+            
+            return answer, []  # No source chunks since it's a direct answer
         
         # Store answer if high quality (with textbook verification)
         if self.llm_storage._should_store_answer(answer, textbook_chunks):
