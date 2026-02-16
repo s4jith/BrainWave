@@ -578,7 +578,7 @@ Output ONLY the JSON array."""
                 
                 if namespace in namespaces:
                     from app.services.llm_storage_service import llm_storage_service
-                    sample_embedding = llm_storage_service.embedding_model.encode(f"{subject} class {class_level} chapter").tolist()
+                    sample_embedding = llm_storage_service._generate_embedding(f"{subject} class {class_level} chapter")
                     
                     # Try with class_level filter first
                     results = namespace_db.index.query(
@@ -1216,7 +1216,7 @@ Output ONLY the JSON array."""
             
             # Create embedding for chapter query
             query_text = f"{subject} class {class_level} chapter {chapter_number}"
-            query_embedding = llm_storage_service.embedding_model.encode(query_text).tolist()
+            query_embedding = llm_storage_service._generate_embedding(query_text)
             
             # Query Pinecone with chapter filter
             results = namespace_db.index.query(
@@ -1925,7 +1925,7 @@ Output ONLY the JSON object, no other text."""
                     "class_level": class_level,
                     "subject": subject,
                     "chapter_number": chapter_number,
-                    "test_type": "chapter_test"
+                    "test_type": {"$in": ["chapter_test", "ai_with_topics"]}
                 })
                 variant_index = attempt_count % len(variants)
             
@@ -1952,7 +1952,8 @@ Output ONLY the JSON object, no other text."""
                     "options": q.get("options", {}),
                     "correct_option": q.get("correct_option", ""),
                     "expected_answer": q.get("expected_answer", ""),
-                    "keywords": q.get("keywords", [])
+                    "keywords": q.get("keywords", []),
+                    "topic": q.get("topic", "")
                 })
                 q_num += 1
             
@@ -1966,7 +1967,8 @@ Output ONLY the JSON object, no other text."""
                     "marks": 1,
                     "time_estimate": 60,
                     "expected_answer": q.get("expected_answer", ""),
-                    "keywords": q.get("keywords", [])
+                    "keywords": q.get("keywords", []),
+                    "topic": q.get("topic", "")
                 })
                 q_num += 1
             
@@ -1981,7 +1983,8 @@ Output ONLY the JSON object, no other text."""
                     "time_estimate": 150,
                     "expected_answer": q.get("expected_answer", ""),
                     "keywords": q.get("keywords", []),
-                    "solution_steps": q.get("solution_steps", "")
+                    "solution_steps": q.get("solution_steps", ""),
+                    "topic": q.get("topic", "")
                 })
                 q_num += 1
         else:
@@ -2048,7 +2051,8 @@ Output ONLY the JSON object, no other text."""
         class_level: int,
         subject: str,
         chapter_number: int,
-        num_questions: int = 15
+        num_questions: int = 15,
+        student_id: str = None
     ) -> Dict:
         """
         Generate questions with automatic topic tagging for AI tests.
@@ -2076,14 +2080,22 @@ Output ONLY the JSON object, no other text."""
             chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
             content_text = content.get("text", "")
             
-            # Step 2: Generate questions with topic tagging
+            # Step 2: Fetch previously asked questions to avoid repetition on retake
+            previous_questions = await self._get_previous_questions(
+                student_id=student_id,
+                subject=subject,
+                chapter_number=chapter_number
+            ) if student_id else []
+            
+            # Step 3: Generate questions with topic tagging
             questions_with_topics = await self._generate_topic_tagged_questions(
                 content_text=content_text,
                 class_level=class_level,
                 subject=subject,
                 chapter_number=chapter_number,
                 chapter_name=chapter_name,
-                num_questions=num_questions
+                num_questions=num_questions,
+                previous_questions=previous_questions
             )
             
             if not questions_with_topics:
@@ -2119,6 +2131,42 @@ Output ONLY the JSON object, no other text."""
                 "error": str(e)
             }
     
+    async def _get_previous_questions(
+        self,
+        student_id: str,
+        subject: str,
+        chapter_number: int
+    ) -> List[str]:
+        """Fetch question texts from previous test sessions for this student+chapter to avoid repetition."""
+        try:
+            if mongodb.db is None:
+                return []
+            
+            previous_sessions = await mongodb.db.test_sessions.find(
+                {
+                    "student_id": student_id,
+                    "subject": {"$regex": f"^{re.escape(subject)}$", "$options": "i"},
+                    "chapter_number": chapter_number,
+                    "test_type": "ai_with_topics",
+                    "status": {"$in": ["completed", "started"]}
+                },
+                {"questions_served": 1}
+            ).sort("started_at", -1).limit(3).to_list(length=3)
+            
+            prev_questions = []
+            for session in previous_sessions:
+                for q in session.get("questions_served", []):
+                    q_text = q.get("question_text", "").strip()
+                    if q_text and q_text not in prev_questions:
+                        prev_questions.append(q_text)
+            
+            logger.info(f"Found {len(prev_questions)} previous questions for student {student_id} on {subject} Ch.{chapter_number}")
+            return prev_questions
+            
+        except Exception as e:
+            logger.warning(f"Could not fetch previous questions: {e}")
+            return []
+    
     async def _generate_topic_tagged_questions(
         self,
         content_text: str,
@@ -2126,94 +2174,197 @@ Output ONLY the JSON object, no other text."""
         subject: str,
         chapter_number: int,
         chapter_name: str,
-        num_questions: int
+        num_questions: int,
+        previous_questions: List[str] = None
     ) -> List[Dict]:
         """
-        Generate questions with Gemini and auto-assign topics to each question.
-        Uses a single API call to be efficient.
+        Generate structured questions (5 MCQ + 5 Fill-up + 5 Short Answer) with topic tagging.
+        Each type has difficulty distribution: 2 easy, 2 medium, 1 hard.
         """
         
-        prompt = f"""Analyze this Class {class_level} {subject} chapter content and generate {num_questions} questions.
+        # Build section to avoid repeating previous questions
+        avoid_section = ""
+        if previous_questions:
+            prev_list = "\n".join([f"- {q}" for q in previous_questions[:30]])
+            avoid_section = f"""
+**PREVIOUSLY ASKED QUESTIONS (DO NOT REPEAT THESE — generate completely different questions):**
+{prev_list}
+
+"""
+        
+        prompt = f"""You are an expert question paper setter for Class {class_level} {subject}.
 
 **Chapter:** {chapter_name}
 
-**Content:**
-{content_text[:12000]}
+**Textbook Content:**
+{content_text[:15000]}
 
-**TASK:**
+{avoid_section}**TASK:**
 1. Identify 3-5 main TOPICS/CONCEPTS covered in this content
-2. Generate {num_questions} questions (mix of easy/medium/hard)
-3. Tag EACH question with the topic it belongs to
+2. Generate a structured test paper with these sections:
+   - 5 MCQs (Multiple Choice - 4 options, 1 correct) → 1 mark each
+   - 5 Fill-in-the-blanks → 1 mark each
+   - 5 Short answer questions → 2 marks each
+3. Tag EACH question with the specific topic it belongs to
 
-**QUESTION DISTRIBUTION:**
-- {int(num_questions * 0.4)} EASY questions (recall, definitions)
-- {int(num_questions * 0.4)} MEDIUM questions (application, understanding)
-- {int(num_questions * 0.2)} HARD questions (analysis, problem-solving)
+**DIFFICULTY DISTRIBUTION (for each question type):**
+- 2 Easy questions (recall, definitions, basic facts)
+- 2 Medium questions (understanding, application)
+- 1 Hard question (analysis, higher-order thinking)
 
 **OUTPUT FORMAT (JSON):**
 {{
   "topics": [
-    {{"topic_id": "topic_1", "topic_name": "Introduction to {subject}"}},
-    {{"topic_id": "topic_2", "topic_name": "Basic Concepts"}},
-    ...
+    {{"topic_id": "topic_1", "topic_name": "Specific Topic Name"}},
+    {{"topic_id": "topic_2", "topic_name": "Another Specific Topic"}}
   ],
-  "questions": [
+  "mcq": [
     {{
-      "question_text": "What is...?",
+      "question_text": "Which of the following...",
+      "options": {{"A": "option1", "B": "option2", "C": "option3", "D": "option4"}},
+      "correct_option": "B",
+      "expected_answer": "option2",
       "topic_id": "topic_1",
-      "topic_name": "Introduction to {subject}",
+      "topic_name": "Specific Topic Name",
       "difficulty": "easy",
-      "question_type": "recall",
-      "expected_answer": "...",
-      "keywords": ["..."],
-      "marks": 5,
-      "time_estimate_seconds": 60
-    }},
-    ...
+      "keywords": ["keyword1"]
+    }}
+  ],
+  "fillup": [
+    {{
+      "question_text": "The process of ______ is used to...",
+      "expected_answer": "photosynthesis",
+      "topic_id": "topic_2",
+      "topic_name": "Another Specific Topic",
+      "difficulty": "easy",
+      "keywords": ["photosynthesis"]
+    }}
+  ],
+  "two_mark": [
+    {{
+      "question_text": "Explain the significance of...",
+      "expected_answer": "Detailed answer explaining the concept in 2-4 sentences...",
+      "topic_id": "topic_1",
+      "topic_name": "Specific Topic Name",
+      "difficulty": "easy",
+      "keywords": ["keyword1", "keyword2"]
+    }}
   ]
 }}
 
 **CRITICAL RULES:**
-1. Each question MUST have a topic_id and topic_name
-2. Topics should be specific (e.g., "Photosynthesis" not "Biology Concepts")  
-3. Questions must be answerable from the content
-4. Distribute questions across ALL identified topics
-5. Include detailed expected_answer for evaluation
+1. Each question MUST have a topic_id and topic_name — topics should be SPECIFIC (e.g., "Photosynthesis Process" not "Biology Concepts")
+2. MCQs must have exactly 4 options (A, B, C, D) with exactly 1 correct answer
+3. Fill-ups must have a clear single correct answer (the blank word/phrase)
+4. Two-mark questions need detailed answers (2-4 sentences)
+5. ALL questions must be directly answerable from the provided textbook content
+6. Distribute questions across ALL identified topics
+7. Generate exactly 5 questions per type (15 total)
+8. For numerical subjects: include calculation-based questions
 
-Output ONLY the JSON object."""
+Output ONLY the JSON object, no other text."""
 
         try:
-            response = self.gemini.generate_response(prompt)
+            response = self.gemini.generate_response(prompt, max_output_tokens=8000)
             
-            # Parse JSON
-            json_match = re.search(r'\\{.*\\}', response, re.DOTALL)
-            if not json_match:
-                logger.error("Could not parse JSON from Gemini response")
+            # Strip markdown code fences if present (```json ... ```)
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                first_newline = cleaned.find('\n')
+                if first_newline != -1:
+                    cleaned = cleaned[first_newline + 1:]
+                if cleaned.rstrip().endswith("```"):
+                    cleaned = cleaned.rstrip()[:-3].rstrip()
+            
+            # Parse JSON - find the outermost { ... } block
+            start_idx = cleaned.find('{')
+            end_idx = cleaned.rfind('}')
+            if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+                logger.error(f"Could not parse JSON from Gemini response (length={len(response)})")
+                logger.debug(f"Response preview: {response[:500]}")
                 return []
+            json_str = cleaned[start_idx:end_idx + 1]
             
-            data = json.loads(json_match.group())
-            questions_data = data.get("questions", [])
+            # Clean common JSON issues from LLM output
+            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_str)
+            
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError as parse_err:
+                logger.warning(f"Initial JSON parse failed: {parse_err}")
+                json_str = json_str.replace('\n', '\\n').replace('\t', '\\t')
+                json_str = json_str.replace('\\n{', '\n{').replace('\\n[', '\n[')
+                json_str = json_str.replace('}\\n', '}\n').replace(']\\n', ']\n')
+                json_str = json_str.replace(',\\n', ',\n').replace(':\\n', ':\n')
+                try:
+                    data = json.loads(json_str)
+                except json.JSONDecodeError as parse_err2:
+                    logger.error(f"JSON parse failed after cleanup: {parse_err2}")
+                    logger.error(f"Problematic JSON around char {parse_err2.pos}: ...{json_str[max(0,parse_err2.pos-100):parse_err2.pos+100]}...")
+                    return []
+            
             topics = data.get("topics", [])
-            
             logger.info(f"Gemini identified {len(topics)} topics: {[t['topic_name'] for t in topics]}")
             
-            # Format questions
+            # Process MCQ questions
             formatted_questions = []
-            for i, q in enumerate(questions_data):
+            mcq_questions = data.get("mcq", [])
+            for i, q in enumerate(mcq_questions[:5]):
                 formatted_questions.append({
-                    "question_id": f"{subject}_{chapter_number}_{i}_{uuid.uuid4().hex[:6]}",
+                    "question_id": f"{subject}_{chapter_number}_mcq_{i}_{uuid.uuid4().hex[:6]}",
                     "question_text": q.get("question_text", ""),
                     "topic_id": q.get("topic_id", "general"),
                     "topic_name": q.get("topic_name", "General"),
                     "difficulty": q.get("difficulty", "medium"),
-                    "question_type": q.get("question_type", "conceptual"),
+                    "question_type": "mcq",
+                    "options": q.get("options", {}),
+                    "correct_option": q.get("correct_option", ""),
                     "expected_answer": q.get("expected_answer", ""),
                     "keywords": q.get("keywords", []),
-                    "marks": q.get("marks", 5),
-                    "time_estimate_seconds": q.get("time_estimate_seconds", 90),
+                    "marks": 1,
+                    "time_estimate_seconds": 60,
                     "chapter_number": chapter_number,
                     "chapter_name": chapter_name
                 })
+            
+            # Process Fill-up questions
+            fillup_questions = data.get("fillup", [])
+            for i, q in enumerate(fillup_questions[:5]):
+                formatted_questions.append({
+                    "question_id": f"{subject}_{chapter_number}_fillup_{i}_{uuid.uuid4().hex[:6]}",
+                    "question_text": q.get("question_text", ""),
+                    "topic_id": q.get("topic_id", "general"),
+                    "topic_name": q.get("topic_name", "General"),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": "fillup",
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "marks": 1,
+                    "time_estimate_seconds": 45,
+                    "chapter_number": chapter_number,
+                    "chapter_name": chapter_name
+                })
+            
+            # Process Two-mark questions
+            two_mark_questions = data.get("two_mark", [])
+            for i, q in enumerate(two_mark_questions[:5]):
+                formatted_questions.append({
+                    "question_id": f"{subject}_{chapter_number}_2mark_{i}_{uuid.uuid4().hex[:6]}",
+                    "question_text": q.get("question_text", ""),
+                    "topic_id": q.get("topic_id", "general"),
+                    "topic_name": q.get("topic_name", "General"),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": "short_answer",
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "marks": 2,
+                    "time_estimate_seconds": 120,
+                    "chapter_number": chapter_number,
+                    "chapter_name": chapter_name
+                })
+            
+            logger.info(f"Formatted {len(formatted_questions)} questions: {len(mcq_questions[:5])} MCQ, {len(fillup_questions[:5])} Fill-up, {len(two_mark_questions[:5])} Short Answer")
             
             return formatted_questions
             

@@ -6,7 +6,9 @@ student submissions, and grading.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime
 import logging
 
 from app.models.assessment_models import (
@@ -22,6 +24,7 @@ from app.core.permissions import (
 )
 from app.models.rbac_models import Permission, TokenData, UserRole
 from app.db.mongo import db
+from app.db.mongo import mongodb
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
@@ -294,8 +297,8 @@ async def start_assessment(
                 detail="Assessment not available or attempt limit reached"
             )
         
-        # Get student name
-        user = db.users.find_one({"_id": ObjectId(current_user.user_id)})
+        # Get student name (user_id is login ID like roman149, not MongoDB ObjectId)
+        user = db.users.find_one({"user_id": current_user.user_id})
         student_name = user.get("name", "Student") if user else "Student"
         
         # Start attempt
@@ -409,3 +412,129 @@ async def grade_submission(
     except Exception as e:
         logger.error(f"Grade submission error: {e}")
         raise HTTPException(status_code=500, detail="Failed to grade submission")
+
+
+# === Comment / Feedback on Submissions ===
+
+class CommentRequest(BaseModel):
+    """Request body for adding a comment."""
+    comment: str = Field(..., min_length=1)
+
+
+@router.post("/submissions/{submission_id}/comment")
+async def add_submission_comment(
+    submission_id: str,
+    request: CommentRequest,
+    current_user: TokenData = Depends(require_permission(Permission.GRADE_SUBMISSION))
+):
+    """Add admin/teacher feedback comment to a submission. Notifies the student."""
+    try:
+        submissions_col = mongodb.get_collection("submissions")
+        submission = await submissions_col.find_one({"_id": ObjectId(submission_id)})
+        
+        if not submission:
+            raise HTTPException(status_code=404, detail="Submission not found")
+        
+        # Update submission with comment
+        await submissions_col.update_one(
+            {"_id": ObjectId(submission_id)},
+            {"$set": {
+                "admin_comment": request.comment,
+                "comment_at": datetime.utcnow(),
+                "comment_by": current_user.user_id,
+                "is_reviewed": True
+            }}
+        )
+        
+        # Get assessment title for notification
+        assessment = await mongodb.get_collection("assessments").find_one(
+            {"_id": ObjectId(submission.get("assessment_id"))}
+        )
+        test_title = assessment.get("title", "Test") if assessment else "Test"
+        
+        # Create notification for the student
+        db.notifications.insert_one({
+            "user_id": submission.get("student_id"),
+            "type": "test_feedback",
+            "title": "Feedback Received",
+            "message": f"You received feedback on '{test_title}'",
+            "assessment_id": submission.get("assessment_id"),
+            "submission_id": submission_id,
+            "is_read": False,
+            "for_admin": False,
+            "created_at": datetime.utcnow()
+        })
+        
+        logger.info(f"Comment added to submission {submission_id} by {current_user.user_id}")
+        
+        return {"success": True, "message": "Comment saved and student notified"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Add comment error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add comment")
+
+
+@router.get("/submissions/{submission_id}/detail")
+async def get_submission_detail(
+    submission_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Get detailed submission with answers and assessment questions for review."""
+    try:
+        submissions_col = mongodb.get_collection("submissions")
+        submission = await submissions_col.find_one({"_id": ObjectId(submission_id)})
+        
+        if not submission:
+            raise HTTPException(status_code=404, detail="Submission not found")
+        
+        # Get assessment with questions
+        assessment = await mongodb.get_collection("assessments").find_one(
+            {"_id": ObjectId(submission.get("assessment_id"))}
+        )
+        
+        # Build questions list
+        questions = []
+        if assessment:
+            for q in assessment.get("questions", []):
+                questions.append({
+                    "id": q.get("id"),
+                    "text": q.get("text", ""),
+                    "type": q.get("type", ""),
+                    "points": q.get("points", 0),
+                    "options": q.get("options", []),
+                    "correct_answer_text": q.get("correct_answer_text", ""),
+                    "answer_text": q.get("answer_text", ""),
+                })
+        
+        # Map answers by question_id
+        answers_map = {}
+        for ans in submission.get("answers", []):
+            answers_map[ans.get("question_id")] = ans
+        
+        return {
+            "id": str(submission["_id"]),
+            "student_id": submission.get("student_id"),
+            "student_name": submission.get("student_name"),
+            "assessment_id": submission.get("assessment_id"),
+            "assessment_title": assessment.get("title", "Unknown") if assessment else "Unknown",
+            "status": submission.get("status"),
+            "total_score": submission.get("total_score", 0),
+            "max_score": submission.get("max_score", 0),
+            "percentage": submission.get("percentage", 0),
+            "passed": submission.get("passed", False),
+            "submitted_at": submission.get("submitted_at"),
+            "time_spent_seconds": submission.get("time_spent_seconds", 0),
+            "admin_comment": submission.get("admin_comment", ""),
+            "is_reviewed": submission.get("is_reviewed", False),
+            "questions": questions,
+            "answers": answers_map,
+            "evaluation_details": submission.get("evaluation_details", []),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get submission detail error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get submission")

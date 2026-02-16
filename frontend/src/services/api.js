@@ -1066,14 +1066,14 @@ export const testService = {
   },
 
   /**
-   * Start an AI test session (legacy)
+   * Start an AI test session (legacy) - used by AITestModal
    * @param {string} testId - Test ID
    * @param {string} studentId - Student ID
    * @returns {Promise<{session_id, questions, time_limit}>}
    */
-  async startAITest(testId, studentId) {
+  async startAITestLegacy(testId, studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/ai-tests/start`, {
+      const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ test_id: testId, student_id: studentId }),
@@ -1164,7 +1164,8 @@ export const testService = {
       }
 
       // Get auth token for the assessments endpoint
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("token") 
+        || JSON.parse(localStorage.getItem("user-storage") || '{}')?.state?.accessToken;
       if (!token) {
         console.error("No auth token found");
         return [];

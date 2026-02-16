@@ -28,10 +28,11 @@ async def get_my_grades(
 ) -> Dict[str, Any]:
     """Get current student's grades."""
     try:
-        return await analytics_service.get_student_grades(
+        result = await analytics_service.get_student_grades(
             student_id=current_user.user_id,
             course_id=course_id
         )
+        return result
     except Exception as e:
         logger.error(f"Get my grades error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get grades")

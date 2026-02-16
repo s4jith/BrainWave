@@ -392,6 +392,7 @@ class RAGService:
     ) -> str:
         """
         Retrieve full chapter context from Pinecone for MCQ generation.
+        Uses namespace architecture for book embeddings.
         
         Args:
             class_level: Class (5-10)
@@ -407,17 +408,35 @@ class RAGService:
             dummy_query = f"{subject} chapter {chapter}"
             query_embedding = self.gemini.generate_embedding(dummy_query)
             
+            # Namespace format: subject lowercase with spaces replaced by underscores
+            namespace = subject.lower().replace(' ', '_')
+            
+            # Metadata filter - matches how books are uploaded (pdf_processor.py)
+            # Books use: class_level (int), subject (str), chapter_number (int)
             metadata_filter = {
-                "class": str(class_level),  # Convert to string
-                "subject": subject,
-                "lesson_number": f"{chapter:02d}"
+                "class_level": class_level,
+                "chapter_number": chapter
             }
             
-            results = self.pinecone.query(
-                vector=query_embedding,
-                top_k=max_chunks,
-                filter=metadata_filter
-            )
+            logger.info(f"📚 Querying namespace '{namespace}' with filter: {metadata_filter}")
+            
+            # Try namespace_db first (new architecture)
+            if self.namespace_db and self.namespace_db.index:
+                results = self.namespace_db.index.query(
+                    vector=query_embedding,
+                    top_k=max_chunks,
+                    filter=metadata_filter,
+                    namespace=namespace,
+                    include_metadata=True
+                )
+            else:
+                # Fallback to legacy DB
+                logger.warning("Namespace DB not available, using legacy DB")
+                results = self.pinecone.query(
+                    vector=query_embedding,
+                    top_k=max_chunks,
+                    filter=metadata_filter
+                )
             
             # Extract and combine chunks
             chunks = []
@@ -426,9 +445,10 @@ class RAGService:
                     chunks.append(match['metadata']['text'])
             
             if not chunks:
-                logger.warning(f"⚠️ No content found for Class {class_level}, {subject}, Chapter {chapter}")
+                logger.warning(f"⚠️ No content found for Class {class_level}, {subject}, Chapter {chapter} (namespace: {namespace})")
                 return ""  # Return empty string instead of raising error
             
+            logger.info(f"✅ Retrieved {len(chunks)} chunks for chapter {chapter}")
             return "\n\n".join(chunks)
         
         except Exception as e:

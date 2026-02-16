@@ -297,6 +297,8 @@ class SubmissionResponse(BaseModel):
     passed: bool
     submitted_at: Optional[datetime]
     graded_at: Optional[datetime]
+    admin_comment: Optional[str] = None
+    is_reviewed: bool = False
 
 
 class SubmissionDetailResponse(SubmissionResponse):

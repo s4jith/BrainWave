@@ -98,11 +98,11 @@ export default function TestCenter() {
             </p>
           </div>
           <button
-            onClick={() => navigate("/report-card")}
+            onClick={() => navigate("/my-grades")}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium"
           >
             <Award className="w-4 h-4" />
-            View Reports
+            My Grades
           </button>
         </div>
 

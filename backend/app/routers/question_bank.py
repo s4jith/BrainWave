@@ -377,9 +377,37 @@ async def generate_questions(
             user = db.users.find_one({"user_id": current_user.user_id})
             if not user:
                 raise HTTPException(status_code=401, detail="User data not found")
-                
-            if request.subject not in user.get("subjects", []):
-                 raise HTTPException(status_code=403, detail="Access denied for subject")
+            
+            # Check teacher's groups for subject access (same logic as create endpoint)
+            teacher_id_str = str(user["_id"])
+            match_values = [current_user.user_id, teacher_id_str]
+            
+            groups = list(db.groups.find({
+                "$or": [
+                    {"teacher_id": {"$in": match_values}},
+                    {"teacher_ids": {"$in": match_values}}
+                ]
+            }))
+            
+            # Extract unique subjects from groups (case-insensitive)
+            teacher_subjects = set()
+            for group in groups:
+                if "subject" in group:
+                    teacher_subjects.add(group["subject"].lower())
+            
+            # If teacher has no groups, deny access
+            if not teacher_subjects:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You are not assigned to any groups. Please contact admin."
+                )
+            
+            # Check if requested subject matches any of teacher's group subjects
+            if request.subject.lower() not in teacher_subjects:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Access denied for subject. Your allowed subjects: {', '.join(teacher_subjects)}"
+                )
 
         # Explicitly set status to 'pending' for AI generated questions
         # The service handles calling gemini and saving. We need to tell service to save as pending.

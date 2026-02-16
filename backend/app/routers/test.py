@@ -103,6 +103,8 @@ class TestQuestionItem(BaseModel):
     question_type: str
     marks: int
     time_estimate: int
+    options: Optional[Dict[str, str]] = None
+    correct_option: Optional[str] = None
 
 
 class StartTestResponse(BaseModel):
@@ -906,6 +908,10 @@ class StartAITestResponse(BaseModel):
     chapter_name: str
     questions: List[TestQuestionItem]
     total_questions: int
+    total_marks: int = 20
+    mcq_count: int = 5
+    fillup_count: int = 5
+    short_answer_count: int = 5
     time_limit_minutes: int
     started_at: str
     topics_covered: List[Dict]
@@ -916,39 +922,81 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
     """
     Start an AI test with topic-level analytics support.
     
-    Flow:
-    1. Generate questions with automatic topic tagging
-    2. Each question is tagged with topic_id and topic_name
-    3. After completion, evaluation provides topic-level performance breakdown
-    4. Students see strong topics and weak topics in results
+    Uses pre-generated chapter test pool (3 variants) for efficiency:
+    1. Check if question pool exists for this chapter
+    2. If not, generate 3 variants (one Gemini call)
+    3. Select variant based on student's attempt count (different questions each time)
+    4. Add topic tagging for topic-level analytics
+    5. After completion, evaluation provides topic-level performance breakdown
     """
     try:
         logger.info(f"📝 Starting AI test for {request.subject} Ch.{request.chapter_number}")
         
-        # Generate questions with topic tagging
-        result = await topic_question_bank_service.generate_questions_with_topic_tagging(
+        # Step 1: Check if chapter test pool exists
+        pool_status = await topic_question_bank_service.check_chapter_test_pool_exists(
+            class_level=request.class_level,
+            subject=request.subject,
+            chapter_number=request.chapter_number
+        )
+        
+        # Step 2: Generate pool if first time (one Gemini call for 3 variants = 45 questions)
+        if not pool_status.get("exists"):
+            logger.info(f"🎯 First test for {request.subject} Ch.{request.chapter_number} - Generating 3 variants...")
+            gen_result = await topic_question_bank_service.generate_chapter_test_pool(
+                class_level=request.class_level,
+                subject=request.subject,
+                chapter_number=request.chapter_number
+            )
+            if gen_result.get("status") == "error":
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to generate questions: {gen_result.get('error')}"
+                )
+        
+        # Step 3: Select variant based on student's attempt count
+        selection = await topic_question_bank_service.select_chapter_test_questions(
             class_level=request.class_level,
             subject=request.subject,
             chapter_number=request.chapter_number,
-            num_questions=request.num_questions
+            student_id=request.student_id
         )
         
-        if result.get("status") in ["error", "no_content", "generation_failed"]:
+        if selection.get("status") != "success":
             raise HTTPException(
                 status_code=500,
-                detail=result.get("error", "Failed to generate questions")
+                detail=f"Failed to select questions: {selection.get('error')}"
             )
         
-        questions = result.get("questions", [])
+        questions = selection["questions"]
+        chapter_name = selection["chapter_name"]
+        
         if not questions:
             raise HTTPException(
                 status_code=404,
-                detail="No questions generated for this chapter"
+                detail="No questions available for this chapter"
             )
+        
+        # Step 4: Add topic_id and topic_name for topic-level analytics
+        unique_topics = {}
+        for q in questions:
+            topic = q.get("topic", chapter_name)
+            if topic:
+                topic_id = topic.lower().replace(" ", "_").replace(":", "").replace("'", "")[:50]
+                q["topic_id"] = topic_id
+                q["topic_name"] = topic
+                if topic_id not in unique_topics:
+                    unique_topics[topic_id] = topic
+        
+        topics_covered = [{"topic_id": tid, "topic_name": tname} for tid, tname in unique_topics.items()]
         
         # Create test session
         session_id = str(uuid.uuid4())
-        time_limit_minutes = max(20, len(questions) * 2)  # 2 min per question
+        time_limit_minutes = 40
+        
+        mcq_count = selection.get("mcq_count", 5)
+        fillup_count = selection.get("fillup_count", 5)
+        short_count = selection.get("two_mark_count", 5)
+        total_marks = selection.get("total_marks", 20)
         
         session_doc = {
             "session_id": session_id,
@@ -956,11 +1004,12 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
             "class_level": request.class_level,
             "subject": request.subject,
             "chapter_number": request.chapter_number,
-            "chapter_name": result.get("chapter_name", f"Chapter {request.chapter_number}"),
+            "chapter_name": chapter_name,
             "test_type": "ai_with_topics",
             "num_questions": len(questions),
-            "questions_served": questions,  # Includes topic_id and topic_name for each question
-            "topics_covered": result.get("topics_covered", []),
+            "total_marks": total_marks,
+            "questions_served": questions,
+            "topics_covered": topics_covered,
             "answers": [],
             "status": "started",
             "started_at": datetime.utcnow(),
@@ -969,30 +1018,36 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Format questions for response (exclude expected answers)
+        # Format questions for response (exclude expected answers, include options for MCQ)
         response_questions = [
             TestQuestionItem(
-                question_number=i + 1,
+                question_number=q.get("question_number", i + 1),
                 question_id=q.get("question_id", f"q_{i}"),
                 question_text=q.get("question_text", ""),
                 difficulty=q.get("difficulty", "medium"),
-                question_type=q.get("question_type", "conceptual"),
-                marks=q.get("marks", 5),
-                time_estimate=q.get("time_estimate_seconds", 90)
+                question_type=q.get("question_type", "short_answer"),
+                marks=q.get("marks", 1),
+                time_estimate=q.get("time_estimate", 90),
+                options=q.get("options") if q.get("question_type") == "mcq" else None,
+                correct_option=None  # Don't send correct answer to frontend
             )
             for i, q in enumerate(questions)
         ]
         
-        logger.info(f"✅ Started AI test {session_id} with {len(questions)} topic-tagged questions")
+        logger.info(f"✅ Started AI test {session_id} with {len(questions)} questions ({mcq_count} MCQ, {fillup_count} Fill-up, {short_count} Short Answer)")
         
         return StartAITestResponse(
             session_id=session_id,
-            chapter_name=session_doc["chapter_name"],
+            chapter_name=chapter_name,
             questions=response_questions,
             total_questions=len(questions),
+            total_marks=total_marks,
+            mcq_count=mcq_count,
+            fillup_count=fillup_count,
+            short_answer_count=short_count,
             time_limit_minutes=time_limit_minutes,
             started_at=session_doc["started_at"].isoformat(),
-            topics_covered=result.get("topics_covered", [])
+            topics_covered=topics_covered
         )
         
     except HTTPException:
@@ -1315,19 +1370,49 @@ async def get_student_analytics(
 ):
     """Get comprehensive test analytics for a student."""
     try:
-        # Get student subject progress
+        # student_id from frontend is MongoDB ObjectId; resolve login ID for staff test queries
+        student_login_id = student_id
+        try:
+            user_doc = await mongodb.db.users.find_one({"_id": ObjectId(student_id)})
+            if user_doc:
+                student_login_id = user_doc.get("user_id", student_id)
+        except Exception:
+            # student_id might already be a login ID
+            user_doc = await mongodb.db.users.find_one({"user_id": student_id})
+            if user_doc:
+                student_login_id = student_id
+                student_id = str(user_doc["_id"])  # ensure we have the ObjectId too
+        
+        # Get student subject progress (uses MongoDB ObjectId as student_id)
         query = {"student_id": student_id, "class_level": class_level}
         if subject:
             query["subject"] = subject
         
         progress_docs = await mongodb.db.student_subject_progress.find(query).to_list(100)
         
+        # Also get staff test submissions (uses login ID as student_id)
+        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        staff_submissions = await mongodb.db.submissions.find({
+            "student_id": student_login_id,
+            "status": {"$in": ["graded", "submitted"]}
+        }).to_list(length=1000)
+        
+        staff_count = len(staff_submissions)
+        staff_avg_scores = [s.get("percentage", 0) for s in staff_submissions if s.get("percentage") is not None]
+        staff_avg = sum(staff_avg_scores) / len(staff_avg_scores) if staff_avg_scores else 0
+        staff_best = max(staff_avg_scores, default=0)
+        staff_this_week = sum(
+            1 for s in staff_submissions
+            if s.get("submitted_at") and s["submitted_at"] >= one_week_ago
+        )
+        
         if not progress_docs:
-            # Return empty analytics
+            # No AI test progress — return staff test stats only
             return StudentAnalytics(
-                total_tests_taken=0,
-                overall_average=0.0,
-                best_score=0.0,
+                total_tests_taken=staff_count,
+                tests_this_week=staff_this_week,
+                overall_average=round(staff_avg, 1),
+                best_score=staff_best,
                 topics_strong=0,
                 topics_moderate=0,
                 topics_weak=0,
@@ -1394,17 +1479,30 @@ async def get_student_analytics(
             recommendations = recs
             
         # Calculate tests this week
-        one_week_ago = datetime.utcnow() - timedelta(days=7)
-        tests_this_week = await mongodb.db.test_sessions.count_documents({
+        ai_tests_this_week = await mongodb.db.test_sessions.count_documents({
             "student_id": student_id,
             "started_at": {"$gte": one_week_ago}
         })
         
+        # Staff test data already fetched above (using student_login_id)
+        # Combine AI + staff test stats
+        combined_total = total_tests + staff_count
+        combined_this_week = ai_tests_this_week + staff_this_week
+        
+        # Recalculate combined average
+        if all_averages or staff_avg_scores:
+            combined_averages = all_averages + staff_avg_scores
+            combined_avg = sum(combined_averages) / len(combined_averages)
+        else:
+            combined_avg = overall_avg
+        
+        combined_best = max(best_score, staff_best)
+        
         return StudentAnalytics(
-            total_tests_taken=total_tests,
-            tests_this_week=tests_this_week,
-            overall_average=round(overall_avg, 1),
-            best_score=best_score,
+            total_tests_taken=combined_total,
+            tests_this_week=combined_this_week,
+            overall_average=round(combined_avg, 1),
+            best_score=combined_best,
             topics_strong=topics_strong,
             topics_moderate=topics_moderate,
             topics_weak=topics_weak,

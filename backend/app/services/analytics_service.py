@@ -29,25 +29,25 @@ class AnalyticsService:
     
     @property
     def courses(self):
-        if self._courses is None and mongodb.db:
+        if self._courses is None and mongodb.db is not None:
             self._courses = mongodb.get_collection("courses")
         return self._courses
     
     @property
     def assessments(self):
-        if self._assessments is None and mongodb.db:
+        if self._assessments is None and mongodb.db is not None:
             self._assessments = mongodb.get_collection("assessments")
         return self._assessments
     
     @property
     def submissions(self):
-        if self._submissions is None and mongodb.db:
+        if self._submissions is None and mongodb.db is not None:
             self._submissions = mongodb.get_collection("submissions")
         return self._submissions
     
     @property
     def users(self):
-        if self._users is None and mongodb.db:
+        if self._users is None and mongodb.db is not None:
             self._users = mongodb.get_collection("users")
         return self._users
     
@@ -65,8 +65,16 @@ class AnalyticsService:
             total_max = 0
             topic_performance = {}  # topic -> {correct, total, scores}
 
+            # Resolve MongoDB _id from login user_id (AI tests store mongo ObjectId as student_id)
+            student_mongo_id = None
+            user_doc = await self.users.find_one({"user_id": student_id})
+            if user_doc:
+                student_mongo_id = str(user_doc["_id"])
+            logger.info(f"📊 Resolved student: user_id={student_id}, mongo_id={student_mongo_id}")
+
             # ── 1. Staff test submissions (from 'submissions' collection) ──
-            query = {"student_id": student_id, "status": "graded"}
+            # Include both 'graded' and 'submitted' — auto-graded tests have scores even with 'submitted' status
+            query = {"student_id": student_id, "status": {"$in": ["graded", "submitted"]}}
             if course_id:
                 course_assessments = await self.assessments.find(
                     {"course_id": course_id}
@@ -115,9 +123,13 @@ class AnalyticsService:
                         topic_performance[topic]["total"] += 1
 
             # ── 2. AI test sessions (from 'test_sessions' collection) ──
+            # AI tests store student_id as MongoDB ObjectId string, not login ID
             test_sessions_collection = mongodb.db["test_sessions"]
+            ai_student_ids = [student_id]
+            if student_mongo_id and student_mongo_id != student_id:
+                ai_student_ids.append(student_mongo_id)
             ai_sessions = await test_sessions_collection.find({
-                "student_id": student_id,
+                "student_id": {"$in": ai_student_ids},
                 "status": "completed"
             }).sort("completed_at", -1).to_list(length=500)
             
@@ -133,6 +145,7 @@ class AnalyticsService:
                 topic_name = session.get("topic_name", "")
                 subject = session.get("subject", "Unknown")
                 
+                eval_status = session.get("evaluation_status", "completed")
                 grades.append({
                     "id": session.get("session_id", str(session.get("_id", ""))),
                     "source": "ai_test",
@@ -149,6 +162,7 @@ class AnalyticsService:
                     "total_questions": total_q,
                     "correct_count": correct,
                     "evaluation_type": "ai",
+                    "evaluation_status": eval_status,
                     "evaluations": session.get("evaluation_details", []),
                     "feedback": session.get("overall_feedback", {}).get("summary", "") if isinstance(session.get("overall_feedback"), dict) else "",
                     "strengths": session.get("overall_feedback", {}).get("strengths", []) if isinstance(session.get("overall_feedback"), dict) else [],
@@ -603,10 +617,10 @@ class AnalyticsService:
                 "enrolled_students": student_id
             })
             
-            # Get submissions
+            # Get submissions (include both graded and submitted with scores)
             submissions = await self.submissions.find({
                 "student_id": student_id,
-                "status": "graded"
+                "status": {"$in": ["graded", "submitted"]}
             }).to_list(length=1000)
             
             if submissions:

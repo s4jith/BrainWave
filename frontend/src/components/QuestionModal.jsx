@@ -160,7 +160,16 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             // Validation for MCQ
             if (formData.type === 'mcq') {
                 if (formData.options.some(o => !o.trim())) throw new Error("All options are required for MCQ");
-                if (!formData.options.includes(formData.correct_answer)) throw new Error("Correct answer must be one of the options");
+                const correctAnswers = (formData.correct_answer || "").split("|").filter(Boolean);
+                if (correctAnswers.length === 0) throw new Error("Select at least one correct answer for MCQ");
+                const invalidAnswers = correctAnswers.filter(a => !formData.options.includes(a));
+                if (invalidAnswers.length > 0) throw new Error("Correct answer(s) must match one of the options");
+            }
+
+            // Validation for fill-up
+            if (formData.type === 'fillup') {
+                const answers = (formData.correct_answer || "").split("|").filter(Boolean);
+                if (answers.length === 0) throw new Error("At least one correct answer is required for fill-in-the-blanks");
             }
 
             // If creating new manual question, status is 'approved' (or 'pending' if desired policy)
@@ -451,35 +460,100 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                             {formData.type === 'mcq' && (
                                 <div className="space-y-2">
                                     <label className="block text-sm text-gray-400">Options</label>
-                                    {formData.options.map((opt, idx) => (
-                                        <div key={idx} className="flex gap-2 items-center">
-                                            <span className="w-6 text-center text-gray-500">{String.fromCharCode(65 + idx)}</span>
-                                            <input
-                                                type="text"
-                                                className="flex-1 bg-gray-900 border border-gray-700 rounded p-2"
-                                                value={opt}
-                                                onChange={e => {
-                                                    const newOpts = [...formData.options];
-                                                    newOpts[idx] = e.target.value;
-                                                    setFormData({ ...formData, options: newOpts });
-                                                }}
-                                                placeholder={`Option ${idx + 1}`}
-                                                required
-                                            />
-                                            <input
-                                                type="radio"
-                                                name="correct_option"
-                                                checked={formData.correct_answer === opt && opt !== ""}
-                                                onChange={() => setFormData({ ...formData, correct_answer: opt })}
-                                                className="w-4 h-4"
-                                            />
-                                        </div>
-                                    ))}
-                                    <p className="text-xs text-gray-500">Select the radio button for the correct answer.</p>
+                                    {formData.options.map((opt, idx) => {
+                                        const correctAnswers = (formData.correct_answer || "").split("|").filter(Boolean);
+                                        const isChecked = opt !== "" && correctAnswers.includes(opt);
+                                        return (
+                                            <div key={idx} className="flex gap-2 items-center">
+                                                <span className="w-6 text-center text-gray-500">{String.fromCharCode(65 + idx)}</span>
+                                                <input
+                                                    type="text"
+                                                    className="flex-1 bg-gray-900 border border-gray-700 rounded p-2"
+                                                    value={opt}
+                                                    onChange={e => {
+                                                        const newOpts = [...formData.options];
+                                                        const oldOpt = newOpts[idx];
+                                                        newOpts[idx] = e.target.value;
+                                                        // Update correct_answer if this option was selected
+                                                        let updatedCorrect = correctAnswers.filter(a => a !== oldOpt);
+                                                        if (isChecked && e.target.value) updatedCorrect.push(e.target.value);
+                                                        setFormData({ ...formData, options: newOpts, correct_answer: updatedCorrect.join("|") });
+                                                    }}
+                                                    placeholder={`Option ${idx + 1}`}
+                                                    required
+                                                />
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        let updated;
+                                                        if (isChecked) {
+                                                            updated = correctAnswers.filter(a => a !== opt);
+                                                        } else {
+                                                            updated = [...correctAnswers, opt];
+                                                        }
+                                                        setFormData({ ...formData, correct_answer: updated.join("|") });
+                                                    }}
+                                                    className="w-4 h-4 accent-blue-500"
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                    <p className="text-xs text-gray-500">Select one or more checkboxes for correct answer(s).</p>
                                 </div>
                             )}
 
-                            {formData.type !== 'mcq' && (
+                            {formData.type === 'fillup' && (
+                                <div className="space-y-2">
+                                    <label className="block text-sm text-gray-400 mb-1">Acceptable Answers</label>
+                                    <p className="text-xs text-gray-500 mb-2">Add all acceptable answers. Student's answer will be matched against any of these (case-insensitive).</p>
+                                    {(formData.correct_answer || "").split("|").filter((a, i, arr) => i === 0 || a !== "").concat("").slice(0, Math.max((formData.correct_answer || "").split("|").length, 1) + 1 > 10 ? 10 : Math.max((formData.correct_answer || "").split("|").length, 1) + (formData.correct_answer && !formData.correct_answer.endsWith("|") ? 1 : 0)).map((ans, idx) => {
+                                        const answers = (formData.correct_answer || "").split("|");
+                                        return (
+                                            <div key={idx} className="flex gap-2 items-center">
+                                                <span className="w-6 text-center text-gray-500 text-sm">{idx + 1}.</span>
+                                                <input
+                                                    type="text"
+                                                    className="flex-1 bg-gray-900 border border-gray-700 rounded p-2"
+                                                    value={answers[idx] || ""}
+                                                    onChange={e => {
+                                                        const newAnswers = [...answers];
+                                                        while (newAnswers.length <= idx) newAnswers.push("");
+                                                        newAnswers[idx] = e.target.value;
+                                                        setFormData({ ...formData, correct_answer: newAnswers.filter(Boolean).join("|") });
+                                                    }}
+                                                    placeholder={idx === 0 ? "Primary answer (required)" : `Alternative answer ${idx + 1} (optional)`}
+                                                    required={idx === 0}
+                                                />
+                                                {idx > 0 && answers[idx] && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newAnswers = answers.filter((_, i) => i !== idx);
+                                                            setFormData({ ...formData, correct_answer: newAnswers.filter(Boolean).join("|") });
+                                                        }}
+                                                        className="p-1 text-red-400 hover:text-red-300"
+                                                    >
+                                                        <Trash size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const current = formData.correct_answer || "";
+                                            setFormData({ ...formData, correct_answer: current + "|" });
+                                        }}
+                                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1"
+                                    >
+                                        <Plus size={12} /> Add another acceptable answer
+                                    </button>
+                                </div>
+                            )}
+
+                            {formData.type !== 'mcq' && formData.type !== 'fillup' && (
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">Correct Answer / Key Points</label>
                                     <textarea

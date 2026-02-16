@@ -75,7 +75,9 @@ class RAGEvaluationService:
         answers: List[Dict]
     ) -> Dict:
         """
-        Evaluate a complete test session using SINGLE batch API call.
+        Evaluate a complete test session.
+        - MCQ and Fill-up: auto-evaluated with simple if/else logic (no Gemini).
+        - Short answer / Long answer (2-mark, 5-mark): marked as pending manual review by staff.
         """
         logger.info(f"📊 Evaluating test session {session_id} for student {student_id}")
         
@@ -89,44 +91,81 @@ class RAGEvaluationService:
         if not qa_pairs:
             return self._empty_result(session_id)
         
-        # Retrieve context from Pinecone ONCE for all questions
-        context = await self._get_topic_context(class_level, subject, chapter_number, topic_name)
+        # Split into objective (MCQ/fillup) and subjective (short_answer/long_answer/two_mark)
+        objective_pairs = []
+        subjective_pairs = []
+        for qa in qa_pairs:
+            q_type = (qa.get("question_type") or "").lower()
+            if q_type in ("mcq", "fillup", "fill_up", "fill-up", "fill_in_the_blank"):
+                objective_pairs.append(qa)
+            else:
+                subjective_pairs.append(qa)
         
-        # BATCH EVALUATE ALL QUESTIONS IN ONE GEMINI CALL
-        evaluations = await self._batch_evaluate_all_answers(
-            qa_pairs=qa_pairs,
-            context=context,
-            class_level=class_level,
-            subject=subject,
-            topic_name=topic_name
-        )
+        logger.info(f"Auto-evaluating {len(objective_pairs)} objective Qs, {len(subjective_pairs)} subjective Qs pending staff review")
         
-        # Calculate scores
+        # Auto-evaluate objective questions (no Gemini)
+        auto_evaluations = self._auto_evaluate_objective(objective_pairs)
+        
+        # Mark subjective questions as pending manual evaluation
+        pending_evaluations = []
+        for qa in subjective_pairs:
+            pending_evaluations.append({
+                "question_id": qa["question_id"],
+                "question_text": qa["question"],
+                "student_answer": qa["answer"],
+                "is_correct": False,
+                "score": 0,
+                "max_score": qa.get("marks", 10),
+                "feedback": "Pending evaluation by staff/admin.",
+                "correct_answer": qa.get("expected_answer", ""),
+                "topic": qa.get("topic", ""),
+                "evaluation_status": "pending"
+            })
+        
+        # Combine evaluations (order by question_number)
+        all_evaluations = auto_evaluations + pending_evaluations
+        
+        # Determine overall evaluation status
+        has_pending = len(subjective_pairs) > 0
+        evaluation_status = "pending_manual_review" if has_pending else "completed"
+        
+        # Calculate scores (only from auto-evaluated for now)
         total_score = 0
         correct_count = 0
-        max_possible = len(evaluations) * 10  # Max 10 per question
+        max_possible = 0
         
-        for e in evaluations:
-            total_score += e.get("score", 0)
-            if e.get("is_correct", False):
-                correct_count += 1
+        for e in all_evaluations:
+            if e.get("evaluation_status") != "pending":
+                total_score += e.get("score", 0)
+                max_possible += e.get("max_score", 10)
+                if e.get("is_correct", False):
+                    correct_count += 1
+            else:
+                max_possible += e.get("max_score", 10)
         
-        # Calculate percentage score correctly (capped at 100%)
-        percentage_score = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
+        # Calculate percentage (auto-evaluated portion only)
+        auto_percentage = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
         
-        # Generate feedback based on score (no extra API call)
-        overall_feedback = self._generate_feedback_without_api(
-            percentage_score=percentage_score,
-            correct_count=correct_count,
-            total_questions=len(questions),
-            topic_name=topic_name,
-            evaluations=evaluations,
-            subject=subject,
-            chapter_number=chapter_number
-        )
+        # Generate feedback for auto-evaluated portion
+        auto_evals_only = [e for e in all_evaluations if e.get("evaluation_status") != "pending"]
+        overall_feedback = {
+            "summary": f"Auto-evaluation complete: {correct_count}/{len(objective_pairs)} objective questions correct." + (f" {len(subjective_pairs)} subjective question(s) pending staff review." if has_pending else ""),
+            "strengths": [f"Correctly answered {correct_count} out of {len(objective_pairs)} MCQ/Fill-up questions"] if correct_count > 0 else ["Attempted the test"],
+            "improvements": [],
+            "topics_to_study": [],
+            "encouragement": ""
+        }
+        
+        # Add specific topic feedback from wrong answers
+        wrong_topics = list(set(e.get("topic", "") for e in auto_evals_only if not e.get("is_correct") and e.get("topic")))
+        if wrong_topics:
+            overall_feedback["improvements"] = [f"Review '{t}'" for t in wrong_topics[:5]]
         
         # Identify weak areas
-        weak_areas = self._identify_weak_areas(evaluations)
+        weak_areas = self._identify_weak_areas(auto_evals_only)
+        
+        # Calculate topic analytics
+        topic_analytics = self._calculate_topic_analytics(questions, all_evaluations)
         
         # Update student performance
         try:
@@ -137,22 +176,19 @@ class RAGEvaluationService:
                 chapter_number=chapter_number,
                 topic_id=topic_id,
                 topic_name=topic_name,
-                score=percentage_score,
+                score=auto_percentage,
                 questions_attempted=len(questions),
                 correct_count=correct_count
             )
         except Exception as e:
             logger.warning(f"Could not update student performance: {e}")
         
-        # Calculate topic-level analytics
-        topic_analytics = self._calculate_topic_analytics(questions, evaluations)
-        
-        # Save session results
+        # Save session results with evaluation_status
         await self._save_session_results(
             session_id=session_id,
             student_id=student_id,
-            score=percentage_score,
-            evaluations=evaluations,
+            score=auto_percentage,
+            evaluations=all_evaluations,
             overall_feedback=overall_feedback,
             weak_areas=weak_areas,
             subject=subject,
@@ -160,28 +196,128 @@ class RAGEvaluationService:
             topic_name=topic_name,
             total_questions=len(questions),
             correct_count=correct_count,
-            topic_analytics=topic_analytics  # Pass topic analytics
+            topic_analytics=topic_analytics,
+            evaluation_status=evaluation_status
         )
         
-        logger.info(f"✅ Evaluation complete: {percentage_score}% ({correct_count}/{len(questions)} correct)")
+        logger.info(f"✅ Evaluation complete: {auto_percentage}% ({correct_count}/{len(objective_pairs)} objective correct), status={evaluation_status}")
         
         return {
             "session_id": session_id,
-            "score": percentage_score,
+            "score": auto_percentage,
             "total_questions": len(questions),
             "correct_answers": correct_count,
-            "evaluations": evaluations,
+            "evaluations": all_evaluations,
             "feedback": overall_feedback["summary"],
             "strengths": overall_feedback["strengths"],
             "improvements": overall_feedback["improvements"],
             "topics_to_review": weak_areas,
             "topics_to_study": overall_feedback.get("topics_to_study", []),
-            "topic_analytics": topic_analytics,  # NEW: Topic-level performance breakdown
+            "topic_analytics": topic_analytics,
+            "evaluation_status": evaluation_status,
             "subject": subject,
             "chapter_number": chapter_number,
             "topic_name": topic_name,
             "completed_at": datetime.utcnow().isoformat()
         }
+    
+    def _auto_evaluate_objective(self, qa_pairs: List[Dict]) -> List[Dict]:
+        """
+        Auto-evaluate MCQ and Fill-up questions with simple if/else logic.
+        No Gemini API calls needed.
+        """
+        evaluations = []
+        
+        for qa in qa_pairs:
+            q_type = (qa.get("question_type") or "").lower()
+            student_answer = (qa.get("answer") or "").strip()
+            marks = qa.get("marks", 1)
+            
+            if q_type == "mcq":
+                # MCQ: Compare student answer against correct option(s)
+                correct_option = (qa.get("correct_option") or "").strip()
+                expected = (qa.get("expected_answer") or "").strip()
+                
+                # Support multiple correct answers (pipe-separated)
+                correct_answers = []
+                if correct_option:
+                    correct_answers = [a.strip().lower() for a in correct_option.split("|") if a.strip()]
+                if not correct_answers and expected:
+                    correct_answers = [a.strip().lower() for a in expected.split("|") if a.strip()]
+                
+                student_lower = student_answer.lower()
+                is_correct = student_lower in correct_answers if correct_answers else False
+                
+                # Also check if student selected the option letter (A/B/C/D)
+                if not is_correct and qa.get("options"):
+                    options = qa["options"]
+                    if isinstance(options, dict):
+                        # options = {"A": "val1", "B": "val2", ...}
+                        for key, value in options.items():
+                            if value.strip().lower() in correct_answers:
+                                if student_lower == key.lower() or student_lower == value.strip().lower():
+                                    is_correct = True
+                                    break
+                    elif isinstance(options, list):
+                        for i, opt in enumerate(options):
+                            if opt.strip().lower() in correct_answers:
+                                letter = chr(65 + i)  # A, B, C, D
+                                if student_lower == letter.lower() or student_lower == opt.strip().lower():
+                                    is_correct = True
+                                    break
+                
+                evaluations.append({
+                    "question_id": qa["question_id"],
+                    "question_text": qa["question"],
+                    "student_answer": student_answer,
+                    "is_correct": is_correct,
+                    "score": marks if is_correct else 0,
+                    "max_score": marks,
+                    "feedback": "Correct!" if is_correct else f"Incorrect. The correct answer is: {correct_option or expected}",
+                    "correct_answer": correct_option or expected,
+                    "topic": qa.get("topic", ""),
+                    "evaluation_status": "auto_evaluated"
+                })
+            
+            elif q_type in ("fillup", "fill_up", "fill-up", "fill_in_the_blank"):
+                # Fill-up: Case-insensitive comparison against acceptable answers
+                expected = (qa.get("expected_answer") or "").strip()
+                correct_option = (qa.get("correct_option") or "").strip()
+                
+                # Build list of acceptable answers (pipe-separated)
+                acceptable_answers = []
+                answer_source = correct_option or expected
+                if answer_source:
+                    acceptable_answers = [a.strip().lower() for a in answer_source.split("|") if a.strip()]
+                
+                student_lower = student_answer.lower().strip()
+                
+                # Check exact match (case-insensitive, trimmed)
+                is_correct = student_lower in acceptable_answers if acceptable_answers else False
+                
+                # Also check with minor variations (remove extra spaces, periods, etc.)
+                if not is_correct and student_lower:
+                    cleaned_student = re.sub(r'[.\s]+$', '', student_lower).strip()
+                    for acc in acceptable_answers:
+                        cleaned_acc = re.sub(r'[.\s]+$', '', acc).strip()
+                        if cleaned_student == cleaned_acc:
+                            is_correct = True
+                            break
+                
+                evaluations.append({
+                    "question_id": qa["question_id"],
+                    "question_text": qa["question"],
+                    "student_answer": student_answer,
+                    "is_correct": is_correct,
+                    "score": marks if is_correct else 0,
+                    "max_score": marks,
+                    "feedback": "Correct!" if is_correct else f"Incorrect. Acceptable answer(s): {answer_source}",
+                    "correct_answer": answer_source,
+                    "topic": qa.get("topic", ""),
+                    "evaluation_status": "auto_evaluated"
+                })
+        
+        return evaluations
     
     def _build_qa_pairs(self, questions: List[Dict], answers: List[Dict]) -> List[Dict]:
         """Match questions with answers."""
@@ -202,7 +338,7 @@ class RAGEvaluationService:
                 "question_type": q.get("question_type", ""),
                 "correct_option": q.get("correct_option", ""),
                 "options": q.get("options", {}),
-                "topic": q.get("topic", "")
+                "topic": q.get("topic") or q.get("topic_name", "")
             })
         
         return pairs
@@ -399,84 +535,155 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         subject: str = "",
         chapter_number: int = 0
     ) -> Dict:
-        """Generate overall feedback WITHOUT an additional API call."""
+        """Generate specific, topic-aware feedback using Gemini for targeted recommendations."""
         
-        # Analyze correct/incorrect
+        # Analyze correct/incorrect with topic details
         correct_qs = [e for e in evaluations if e.get("is_correct")]
         incorrect_qs = [e for e in evaluations if not e.get("is_correct")]
         
-        # Extract specific topics from incorrect questions for targeted review
-        weak_topics = []
+        # Extract specific topics from incorrect questions
+        weak_topic_details = []
         for e in incorrect_qs:
-            q_text = e.get("question_text", "")[:100]
+            q_text = e.get("question_text", "")[:150]
+            topic = e.get("topic", "")
+            feedback = e.get("feedback", "")
             if q_text:
-                weak_topics.append(q_text)
+                weak_topic_details.append({
+                    "question": q_text,
+                    "topic": topic,
+                    "score": e.get("score", 0),
+                    "feedback": feedback
+                })
+        
+        # Extract topics from correct questions 
+        strong_topic_details = []
+        for e in correct_qs:
+            topic = e.get("topic", "")
+            if topic and topic not in [s.get("topic") for s in strong_topic_details]:
+                strong_topic_details.append({"topic": topic, "score": e.get("score", 0)})
         
         # Build chapter reference
         chapter_ref = f"{subject} Chapter {chapter_number}" if subject and chapter_number else topic_name
         
-        # Special case: 0% score - complete failure
-        if percentage_score == 0 or correct_count == 0:
-            return {
-                "summary": f"📚 You need to study '{topic_name}' in {chapter_ref} more carefully. None of the answers were correct. Please read the chapter thoroughly before attempting again.",
-                "strengths": ["You attempted the test", "You've identified what you need to study"],
-                "improvements": [
-                    f"Read {chapter_ref} completely from the textbook",
-                    f"Focus on understanding '{topic_name}' concepts step by step",
-                    "Take notes while reading",
-                    "Ask your teacher if you have doubts",
-                    "Try again after studying"
-                ],
-                "topics_to_study": weak_topics[:5],
-                "encouragement": "📖 Don't worry! Go back to your textbook, study the chapter carefully, and try again. You'll improve!"
-            }
+        # Use Gemini to generate specific, targeted feedback
+        try:
+            weak_details_str = ""
+            if weak_topic_details:
+                weak_details_str = "\n".join([
+                    f"- Q: \"{d['question'][:100]}\" (Topic: {d['topic'] or 'Unknown'}, Score: {d['score']}/10, Feedback: {d['feedback'][:80]})"
+                    for d in weak_topic_details[:8]
+                ])
+            
+            strong_details_str = ""
+            if strong_topic_details:
+                strong_details_str = "\n".join([
+                    f"- Topic: {d['topic'] or 'General'} (Score: {d['score']}/10)"
+                    for d in strong_topic_details[:5]
+                ])
+            
+            feedback_prompt = f"""You are a helpful teacher analyzing a Class 10 {subject} student's test performance on "{topic_name}" from {chapter_ref}.
+
+**Test Results:** {correct_count}/{total_questions} correct ({percentage_score}%)
+
+**Questions the student got WRONG:**
+{weak_details_str or "None"}
+
+**Topics the student got RIGHT:**
+{strong_details_str or "None"}
+
+Generate SPECIFIC, ACTIONABLE feedback. Do NOT give generic advice like "study more" or "take notes". 
+Instead, mention EXACT topics, concepts, formulas, grammar rules, or chapter sections the student needs to work on.
+
+**OUTPUT FORMAT (JSON):**
+{{
+  "summary": "One sentence summary mentioning specific areas (e.g., 'You struggled with tenses and metaphors but excelled at comprehension')",
+  "strengths": ["Specific strength 1 mentioning exact topic/concept", "Specific strength 2"],
+  "improvements": ["Specific area 1 with exact topic (e.g., 'Practice converting fractions to decimals')", "Specific area 2 (e.g., 'Review the water cycle diagram in Section 3.2')", "Specific area 3"],
+  "topics_to_study": ["Exact topic 1 (e.g., 'Past Perfect Tense usage')", "Exact topic 2 (e.g., 'Photosynthesis - Light Reaction')"]
+}}
+
+Be encouraging but SPECIFIC. Output ONLY the JSON object."""
+
+            response = gemini_service.generate_response(feedback_prompt, max_output_tokens=2000)
+            
+            # Parse JSON response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                # Clean common JSON issues
+                json_str = json_match.group()
+                json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+                feedback_data = json.loads(json_str)
+                
+                # Add encouragement based on score
+                if percentage_score >= 80:
+                    encouragement = "🌟 Amazing work! Keep up the excellent performance!"
+                elif percentage_score >= 60:
+                    encouragement = "👍 Good job! With focused practice on the areas mentioned, you'll improve even more!"
+                elif percentage_score >= 40:
+                    encouragement = "💪 Don't give up! Focus on the specific topics listed above and try again!"
+                else:
+                    encouragement = "📚 Review the specific topics mentioned above and practice them. You'll get better!"
+                
+                return {
+                    "summary": feedback_data.get("summary", f"You scored {percentage_score}% on {topic_name}"),
+                    "strengths": feedback_data.get("strengths", ["Attempted the test"]),
+                    "improvements": feedback_data.get("improvements", [f"Review {chapter_ref}"]),
+                    "topics_to_study": feedback_data.get("topics_to_study", []),
+                    "encouragement": encouragement
+                }
+            
+        except Exception as e:
+            logger.warning(f"Gemini feedback generation failed, using fallback: {e}")
+        
+        # Fallback: Use topic names from wrong questions for specific feedback
+        weak_topic_names = list(set(d.get("topic", "") for d in weak_topic_details if d.get("topic")))
+        strong_topic_names = list(set(d.get("topic", "") for d in strong_topic_details if d.get("topic")))
+        
+        # Build specific improvements from actual wrong topics
+        specific_improvements = []
+        for topic in weak_topic_names[:4]:
+            specific_improvements.append(f"Review and practice '{topic}' from {chapter_ref}")
+        if not specific_improvements:
+            specific_improvements = [f"Review all concepts in {chapter_ref}"]
+        
+        # Build specific strengths from correct topics
+        specific_strengths = []
+        for topic in strong_topic_names[:3]:
+            specific_strengths.append(f"Good understanding of '{topic}'")
+        if not specific_strengths:
+            specific_strengths = ["Attempted the test"]
         
         if percentage_score >= 80:
             return {
-                "summary": f"🌟 Excellent performance on '{topic_name}'! You scored {percentage_score}% with {correct_count}/{total_questions} correct. Outstanding understanding demonstrated!",
-                "strengths": ["Strong conceptual understanding", "Clear and accurate answers", "Good application of concepts"],
-                "improvements": ["Continue practicing to maintain excellence", "Try more challenging problems"],
-                "topics_to_study": [],
+                "summary": f"🌟 Excellent! You scored {percentage_score}% on '{topic_name}'. " + (f"Strong in: {', '.join(strong_topic_names[:2])}." if strong_topic_names else "Outstanding understanding!"),
+                "strengths": specific_strengths,
+                "improvements": specific_improvements if weak_topic_names else ["Continue practicing to maintain excellence"],
+                "topics_to_study": weak_topic_names[:3],
                 "encouragement": "🌟 Amazing work! Keep up the excellent performance!"
             }
         elif percentage_score >= 60:
             return {
-                "summary": f"👍 Good effort on '{topic_name}'! You scored {percentage_score}% with {correct_count}/{total_questions} correct. You're on the right track.",
-                "strengths": ["Basic understanding present", "Attempted all questions", "Some concepts well understood"],
-                "improvements": [
-                    f"Review the incorrect answers in {chapter_ref}",
-                    "Practice more problems on weak areas",
-                    "Focus on the topics listed below"
-                ],
-                "topics_to_study": weak_topics[:3],
-                "encouragement": "👍 Good job! With more practice, you'll improve even more!"
+                "summary": f"👍 Good effort on '{topic_name}'! You scored {percentage_score}%. " + (f"Focus on: {', '.join(weak_topic_names[:2])}." if weak_topic_names else "Keep practicing!"),
+                "strengths": specific_strengths,
+                "improvements": specific_improvements,
+                "topics_to_study": weak_topic_names[:4],
+                "encouragement": "👍 Good job! With focused practice, you'll improve even more!"
             }
         elif percentage_score >= 40:
             return {
-                "summary": f"💪 Keep practicing '{topic_name}'! You scored {percentage_score}% with {correct_count}/{total_questions} correct. Focus on understanding the basics.",
-                "strengths": ["Showed effort and attempted the test", "Some concepts understood"],
-                "improvements": [
-                    f"Review {chapter_ref} thoroughly",
-                    "Focus on basic concepts first",
-                    "Practice step by step",
-                    "Study the specific topics listed below"
-                ],
-                "topics_to_study": weak_topics[:4],
-                "encouragement": "💪 Don't give up! Learning takes time. Keep practicing!"
+                "summary": f"💪 Keep going on '{topic_name}'! You scored {percentage_score}%. " + (f"Work on: {', '.join(weak_topic_names[:3])}." if weak_topic_names else "Review the chapter."),
+                "strengths": specific_strengths,
+                "improvements": specific_improvements,
+                "topics_to_study": weak_topic_names[:5],
+                "encouragement": "💪 Don't give up! Focus on the specific topics and try again!"
             }
         else:
             return {
-                "summary": f"📚 More practice needed on '{topic_name}'. You scored {percentage_score}% with {correct_count}/{total_questions} correct. Please review {chapter_ref} and try again.",
-                "strengths": ["Attempted the test", "Identified areas for improvement"],
-                "improvements": [
-                    f"Read {chapter_ref} from your textbook carefully",
-                    f"Start with basic definitions in '{topic_name}'",
-                    "Ask for help if needed",
-                    "Take notes while studying",
-                    "Study the questions you got wrong (listed below)"
-                ],
-                "topics_to_study": weak_topics[:5],
-                "encouragement": "📚 Every expert was once a beginner. Review the chapter and try again!"
+                "summary": f"📚 More practice needed on '{topic_name}'. You scored {percentage_score}%. " + (f"Start with: {', '.join(weak_topic_names[:2])}." if weak_topic_names else f"Review {chapter_ref} carefully."),
+                "strengths": specific_strengths,
+                "improvements": specific_improvements,
+                "topics_to_study": weak_topic_names[:5],
+                "encouragement": "📚 Every expert was once a beginner. Review the topics and try again!"
             }
     
     def _calculate_topic_analytics(self, questions: List[Dict], evaluations: List[Dict]) -> Dict:
@@ -573,28 +780,24 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         }
     
     def _identify_weak_areas(self, evaluations: List[Dict]) -> List[str]:
-        """Identify topics/areas where student needs improvement."""
+        """Identify specific topics/areas where student needs improvement using actual topic names."""
         weak_areas = []
         
         for e in evaluations:
             if not e.get("is_correct") and e.get("score", 10) < 5:
-                q = e.get("question_text", "").lower()
-                if "what is" in q or "define" in q:
-                    weak_areas.append("Basic definitions and concepts")
-                elif "explain" in q or "describe" in q:
-                    weak_areas.append("Detailed explanations")
-                elif "compare" in q or "difference" in q:
-                    weak_areas.append("Comparisons and distinctions")
-                elif "why" in q or "how" in q:
-                    weak_areas.append("Reasoning and understanding")
-                elif "example" in q or "application" in q:
-                    weak_areas.append("Practical applications")
-                elif "calculate" in q or "formula" in q:
-                    weak_areas.append("Numerical problems and formulas")
+                # Use actual topic name if available
+                topic = e.get("topic", "")
+                if topic and topic not in weak_areas:
+                    weak_areas.append(topic)
                 else:
-                    weak_areas.append("General understanding")
+                    # Fallback: extract key concept from question text
+                    q = e.get("question_text", "").strip()
+                    if q and len(q) > 10:
+                        # Take the first meaningful portion as area description
+                        short_q = q[:80] + "..." if len(q) > 80 else q
+                        weak_areas.append(short_q)
         
-        return list(set(weak_areas))[:5]
+        return list(dict.fromkeys(weak_areas))[:5]  # Deduplicate, keep order
     
     async def _save_session_results(
         self,
@@ -609,7 +812,8 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         topic_name: str = "",
         total_questions: int = 0,
         correct_count: int = 0,
-        topic_analytics: Dict = None
+        topic_analytics: Dict = None,
+        evaluation_status: str = "completed"
     ):
         """Save test session results to MongoDB."""
         try:
@@ -617,6 +821,7 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
             
             update_data = {
                 "status": "completed",
+                "evaluation_status": evaluation_status,
                 "score": score,
                 "subject": subject,
                 "chapter_number": chapter_number,

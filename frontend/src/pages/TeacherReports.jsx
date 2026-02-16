@@ -139,6 +139,7 @@ export default function TeacherReports() {
                         <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300">
                             <tr>
                                 <th className="px-6 py-4 font-medium text-sm">Test Name</th>
+                                <th className="px-6 py-4 font-medium text-sm">Type</th>
                                 <th className="px-6 py-4 font-medium text-sm">Date</th>
                                 <th className="px-6 py-4 font-medium text-sm">Taken By</th>
                                 <th className="px-6 py-4 font-medium text-sm">Avg Score</th>
@@ -148,7 +149,7 @@ export default function TeacherReports() {
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {(stats?.test_reports || []).length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                         No test data available yet. Create assessments and have students take them to see analytics.
                                     </td>
                                 </tr>
@@ -156,6 +157,13 @@ export default function TeacherReports() {
                                 (stats?.test_reports || []).map((report) => (
                                     <tr key={report.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                         <td className="px-6 py-4 text-gray-900 dark:text-white font-medium">{report.name}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                report.type === 'AI Test'
+                                                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                                    : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                            }`}>{report.type || 'Staff Test'}</span>
+                                        </td>
                                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{report.date}</td>
                                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{report.taken_by} Students</td>
                                         <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{report.avg_score}%</td>
@@ -163,7 +171,7 @@ export default function TeacherReports() {
                                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${report.status === 'Completed'
                                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                                                     : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                                }`}>{report.status}</span>
+                                                }`}>{report.status}{report.pending_count > 0 ? ` (${report.pending_count} pending)` : ''}</span>
                                         </td>
                                     </tr>
                                 ))

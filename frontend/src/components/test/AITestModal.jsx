@@ -122,7 +122,7 @@ export default function AITestModal({ test, studentId, onComplete, onClose }) {
     setIsLoading(true);
     try {
       // Start test session and get questions from backend
-      const data = await testService.startAITest(test.id, studentId);
+      const data = await testService.startAITestLegacy(test.id, studentId);
       
       setSessionId(data.session_id);
       setTimeLimit(data.time_limit || 10);

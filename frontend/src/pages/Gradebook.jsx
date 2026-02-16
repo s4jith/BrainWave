@@ -21,11 +21,25 @@ import {
     Target,
     AlertTriangle,
     Sparkles,
-    FileText
+    FileText,
+    Clock
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    Legend,
+} from "recharts";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -61,24 +75,40 @@ function TopicBar({ topic, accuracy, status }) {
 
 // Evaluation card for a single question
 function EvaluationCard({ ev, index }) {
+    const isPending = ev.evaluation_status === "pending";
+    const borderClass = isPending
+        ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20"
+        : ev.is_correct
+            ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20"
+            : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20";
+
     return (
-        <div className={`p-3 rounded-lg border ${ev.is_correct ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20" : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20"}`}>
+        <div className={`p-3 rounded-lg border ${borderClass}`}>
             <div className="flex items-start justify-between mb-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Q{index + 1}. {ev.question || ev.question_text || ""}</p>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded ${ev.is_correct ? "bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300"}`}>
-                    {ev.score ?? 0}/{ev.max_score ?? 10}
-                </span>
+                {isPending ? (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                        Pending Review
+                    </span>
+                ) : (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${ev.is_correct ? "bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300"}`}>
+                        {ev.score ?? 0}/{ev.max_score ?? 10}
+                    </span>
+                )}
             </div>
             {ev.student_answer && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1"><strong>Your Answer:</strong> {ev.student_answer}</p>
             )}
-            {ev.correct_answer && (
+            {!isPending && ev.correct_answer && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5"><strong>Correct Answer:</strong> {ev.correct_answer}</p>
             )}
-            {ev.explanation && (
+            {isPending && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 italic">This answer will be evaluated by your teacher.</p>
+            )}
+            {!isPending && ev.explanation && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{ev.explanation}</p>
             )}
-            {ev.feedback && !ev.explanation && (
+            {!isPending && ev.feedback && !ev.explanation && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{ev.feedback}</p>
             )}
         </div>
@@ -91,7 +121,12 @@ function GradeRow({ grade }) {
     const isAI = grade.source === "ai_test";
     const hasEvaluations = grade.evaluations && grade.evaluations.length > 0;
     const hasFeedback = grade.feedback || (grade.strengths && grade.strengths.length > 0) || (grade.improvements && grade.improvements.length > 0);
-    const canExpand = hasEvaluations || hasFeedback;
+    const hasTopicAnalytics = grade.topic_analytics && grade.topic_analytics.topics && grade.topic_analytics.topics.length > 0;
+    const canExpand = hasEvaluations || hasFeedback || hasTopicAnalytics;
+    const isPendingReview = grade.evaluation_status === "pending_manual_review";
+    const pendingCount = isPendingReview
+        ? (grade.evaluations || []).filter(e => e.evaluation_status === "pending").length
+        : 0;
 
     const formatDate = (dt) => {
         if (!dt) return "";
@@ -115,6 +150,11 @@ function GradeRow({ grade }) {
                             <span className={`px-1.5 py-0.5 rounded ${isAI ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
                                 {isAI ? "AI Test" : "Staff Test"}
                             </span>
+                            {isPendingReview && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300">
+                                    {pendingCount} Q pending review
+                                </span>
+                            )}
                             {grade.subject && <span>{grade.subject}</span>}
                             {formatDate(grade.completed_at) && <span>{formatDate(grade.completed_at)}</span>}
                         </div>
@@ -122,12 +162,16 @@ function GradeRow({ grade }) {
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="text-right">
-                        <p className={`font-bold ${grade.passed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                            {grade.percentage}%
+                        <p className={`font-bold ${isPendingReview ? "text-amber-600 dark:text-amber-400" : grade.passed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            {grade.percentage}%{isPendingReview ? "*" : ""}
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{grade.score}/{grade.max_score}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {isPendingReview ? "Partial" : `${grade.score}/${grade.max_score}`}
+                        </p>
                     </div>
-                    {grade.passed ? (
+                    {isPendingReview ? (
+                        <Clock className="text-amber-500 dark:text-amber-400 shrink-0" size={20} />
+                    ) : grade.passed ? (
                         <CheckCircle className="text-emerald-600 dark:text-emerald-400 shrink-0" size={20} />
                     ) : (
                         <XCircle className="text-red-600 dark:text-red-400 shrink-0" size={20} />
@@ -176,6 +220,86 @@ function GradeRow({ grade }) {
                                     </ul>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Topic-Level Performance Analytics */}
+                    {hasTopicAnalytics && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Target size={14} className="text-purple-600 dark:text-purple-400" />
+                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    Performance by Topic
+                                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">
+                                        ({grade.topic_analytics.total_topics_covered} topics)
+                                    </span>
+                                </p>
+                            </div>
+
+                            {/* Strong Topics */}
+                            {grade.topic_analytics.strong_topics?.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-1 flex items-center gap-1">
+                                        <TrendingUp size={12} /> Strong Topics ({grade.topic_analytics.strong_topics.length})
+                                    </p>
+                                    <div className="space-y-1">
+                                        {grade.topic_analytics.strong_topics.map((t, i) => (
+                                            <div key={i} className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1.5 rounded border border-emerald-100 dark:border-emerald-800">
+                                                <span className="text-xs text-emerald-800 dark:text-emerald-300">{t.name}</span>
+                                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{Math.round(t.score)}%</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Weak Topics */}
+                            {grade.topic_analytics.weak_topics?.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1 flex items-center gap-1">
+                                        <AlertTriangle size={12} /> Topics Needing Practice ({grade.topic_analytics.weak_topics.length})
+                                    </p>
+                                    <div className="space-y-1">
+                                        {grade.topic_analytics.weak_topics.map((t, i) => (
+                                            <div key={i} className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 px-2 py-1.5 rounded border border-red-100 dark:border-red-800">
+                                                <span className="text-xs text-red-800 dark:text-red-300">{t.name}</span>
+                                                <span className="text-xs font-bold text-red-600 dark:text-red-400">{Math.round(t.score)}%</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* All Topics with progress bars */}
+                            <div>
+                                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">All Topics</p>
+                                <div className="space-y-2">
+                                    {grade.topic_analytics.topics.map((t, i) => (
+                                        <div key={i}>
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[70%]" title={t.topic_name}>{t.topic_name}</span>
+                                                <span className={`text-xs font-bold ${
+                                                    t.score_percentage >= 70 ? 'text-emerald-600 dark:text-emerald-400' :
+                                                    t.score_percentage >= 50 ? 'text-amber-600 dark:text-amber-400' :
+                                                    'text-red-600 dark:text-red-400'
+                                                }`}>{Math.round(t.score_percentage)}%</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all ${
+                                                        t.score_percentage >= 70 ? 'bg-emerald-500' :
+                                                        t.score_percentage >= 50 ? 'bg-amber-500' :
+                                                        'bg-red-500'
+                                                    }`} style={{ width: `${Math.max(t.score_percentage, 3)}%` }} />
+                                                </div>
+                                                <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                    {t.correct_answers}/{t.total_questions} correct
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -398,6 +522,85 @@ export default function Gradebook() {
                                     <TopicBar key={i} topic={t.topic} accuracy={t.accuracy} status={t.status} />
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Performance Analytics Charts */}
+                    {(myGrades?.grades?.length > 1 || myGrades?.topic_analysis?.length > 0) && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            {/* Score Trend Bar Chart */}
+                            {myGrades?.grades?.length > 1 && (
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                        <BarChart3 size={16} className="text-blue-500" />
+                                        Score Trend
+                                    </h3>
+                                    <div className="h-48">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={[...myGrades.grades].reverse().slice(-10).map((g, i) => ({
+                                                name: `Test ${i + 1}`,
+                                                score: g.percentage,
+                                            }))}>
+                                                <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                                                <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#888" />
+                                                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#888" />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: "#1f2937", border: "none", borderRadius: "8px", color: "#fff" }}
+                                                    formatter={(v) => [`${v}%`, "Score"]}
+                                                />
+                                                <Bar dataKey="score" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Topic Accuracy Pie Chart */}
+                            {myGrades?.topic_analysis?.length > 0 && (
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                        <Target size={16} className="text-purple-500" />
+                                        Topic Distribution
+                                    </h3>
+                                    <div className="h-48">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={(() => {
+                                                        const strong = myGrades.topic_analysis.filter(t => t.status === "strong").length;
+                                                        const moderate = myGrades.topic_analysis.filter(t => t.status === "moderate").length;
+                                                        const weak = myGrades.topic_analysis.filter(t => t.status === "weak").length;
+                                                        return [
+                                                            { name: "Strong", value: strong },
+                                                            { name: "Moderate", value: moderate },
+                                                            { name: "Weak", value: weak },
+                                                        ].filter(d => d.value > 0);
+                                                    })()}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={40}
+                                                    outerRadius={70}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {[
+                                                        { name: "Strong", color: "#10b981" },
+                                                        { name: "Moderate", color: "#f59e0b" },
+                                                        { name: "Weak", color: "#ef4444" },
+                                                    ].filter(d => {
+                                                        const ct = myGrades.topic_analysis.filter(t => t.status === d.name.toLowerCase()).length;
+                                                        return ct > 0;
+                                                    }).map((entry, i) => (
+                                                        <Cell key={i} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

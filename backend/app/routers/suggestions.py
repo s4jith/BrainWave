@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-from app.db.mongo import mongodb
+from app.db.mongo import mongodb, db
 from bson import ObjectId
 import logging
 
@@ -65,6 +65,47 @@ async def create_suggestion(request: CreateSuggestionRequest):
         result = await mongodb.db.suggestions.insert_one(suggestion_doc)
         
         logger.info(f"✅ Suggestion created: {result.inserted_id} from {request.student_name}")
+        
+        # Resolve login user_id from MongoDB ObjectId for notifications
+        student_login_id = request.student_id
+        try:
+            user_doc = db.users.find_one({"_id": ObjectId(request.student_id)})
+            if user_doc:
+                student_login_id = user_doc.get("user_id", request.student_id)
+        except Exception:
+            pass
+        
+        # Notify admin about new suggestion
+        try:
+            db.notifications.insert_one({
+                "type": "suggestion",
+                "title": "New Suggestion",
+                "message": f"{request.student_name} (Class {request.class_level}) submitted a suggestion: {request.content[:80]}",
+                "suggestion_id": str(result.inserted_id),
+                "category": request.category,
+                "for_admin": True,
+                "is_read": False,
+                "created_at": datetime.utcnow(),
+                "created_by": request.student_id,
+                "created_by_name": request.student_name
+            })
+        except Exception as ne:
+            logger.error(f"Failed to create admin notification for suggestion: {ne}")
+        
+        # Notify student that suggestion was received
+        try:
+            db.notifications.insert_one({
+                "user_id": student_login_id,
+                "type": "suggestion",
+                "title": "Suggestion Received",
+                "message": "Your suggestion has been submitted and will be reviewed by admin.",
+                "suggestion_id": str(result.inserted_id),
+                "for_admin": False,
+                "is_read": False,
+                "created_at": datetime.utcnow()
+            })
+        except Exception as ne:
+            logger.error(f"Failed to create student notification for suggestion: {ne}")
         
         return {
             "status": "success",
@@ -176,6 +217,32 @@ async def respond_to_suggestion(
         
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+        # Notify the student about admin's response
+        try:
+            suggestion = await mongodb.db.suggestions.find_one({"_id": ObjectId(suggestion_id)})
+            if suggestion:
+                # Resolve login user_id from MongoDB ObjectId
+                student_login_id = suggestion.get("student_id")
+                try:
+                    user_doc = db.users.find_one({"_id": ObjectId(student_login_id)})
+                    if user_doc:
+                        student_login_id = user_doc.get("user_id", student_login_id)
+                except Exception:
+                    pass
+                
+                db.notifications.insert_one({
+                    "user_id": student_login_id,
+                    "type": "suggestion_response",
+                    "title": "Suggestion Reviewed",
+                    "message": f"Admin responded to your suggestion: {response[:80]}",
+                    "suggestion_id": suggestion_id,
+                    "for_admin": False,
+                    "is_read": False,
+                    "created_at": datetime.utcnow()
+                })
+        except Exception as ne:
+            logger.error(f"Failed to create notification for suggestion response: {ne}")
         
         logger.info(f"✅ Admin responded to suggestion: {suggestion_id}")
         

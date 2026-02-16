@@ -57,9 +57,9 @@ class AssessmentService:
     ) -> AssessmentResponse:
         """Create a new assessment."""
         try:
-            # Auto-publish if there are questions, otherwise save as draft
+            # Always publish when teacher creates via the form (they clicked "Publish")
             questions_list = request.questions or []
-            status = AssessmentStatus.PUBLISHED.value if len(questions_list) > 0 else AssessmentStatus.DRAFT.value
+            status = AssessmentStatus.PUBLISHED.value
             
             doc = {
                 "course_id": request.course_id or "",
@@ -357,6 +357,11 @@ class AssessmentService:
                 query["$or"] = student_or
                 logger.info(f"   - Student OR conditions: {len(student_or)}")
                 logger.info(f"   - Full query: {query}")
+                
+                # If no OR conditions, return empty (student has no relevant groups/assignments)
+                if not student_or:
+                    logger.warning(f"   - No matching conditions for student {student_id}, returning empty")
+                    return AssessmentListResponse(assessments=[], total=0)
 
             if status:
                 query["status"] = status
@@ -1370,7 +1375,9 @@ class AssessmentService:
             percentage=doc.get("percentage", 0),
             passed=doc.get("passed", False),
             submitted_at=doc.get("submitted_at"),
-            graded_at=doc.get("graded_at")
+            graded_at=doc.get("graded_at"),
+            admin_comment=doc.get("admin_comment"),
+            is_reviewed=doc.get("is_reviewed", False)
         )
     
     def _submission_to_detail_response(self, doc: dict) -> SubmissionDetailResponse:

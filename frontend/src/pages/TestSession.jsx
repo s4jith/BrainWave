@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import useUserStore from "../stores/userStore";
@@ -60,9 +60,13 @@ export default function TestSession() {
   const [showCheatingWarning, setShowCheatingWarning] = useState(false);
   const [testBlocked, setTestBlocked] = useState(false); // Block test on cheating
 
+  // Prevent duplicate API calls (React StrictMode)
+  const initCalledRef = useRef(false);
+
   useEffect(() => {
     const initSession = async () => {
-      if (session) return;
+      if (session || initCalledRef.current) return;
+      initCalledRef.current = true;
 
       if (!testConfig) {
         navigate("/test-center");

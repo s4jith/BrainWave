@@ -30,6 +30,11 @@ export default function TestManagement() {
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
+  // Submission detail modal
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [submissionDetail, setSubmissionDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
   // Teacher's groups and subjects
   const [teacherGroups, setTeacherGroups] = useState([]);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
@@ -227,19 +232,38 @@ export default function TestManagement() {
     if (!comment.trim()) return alert("Please enter a comment");
     setSavingComment(true);
     try {
-      const response = await fetch(`${API_URL}/api/tests/submissions/${selectedSubmission.id}/comment`, {
+      const response = await fetch(`${API_URL}/api/assessments/submissions/${selectedSubmission.id}/comment`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ comment: comment.trim() })
       });
       if (!response.ok) throw new Error("Failed");
       setSubmissions(submissions.map(s => s.id === selectedSubmission.id ? { ...s, admin_comment: comment, is_reviewed: true } : s));
       setShowCommentModal(false); setSelectedSubmission(null); setComment("");
-      alert("Comment saved!");
+      alert("Comment saved and student notified!");
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
       setSavingComment(false);
+    }
+  };
+
+  const handleViewSubmission = async (sub) => {
+    setLoadingDetail(true);
+    setShowDetailModal(true);
+    try {
+      const response = await fetch(`${API_URL}/api/assessments/submissions/${sub.id}/detail`, {
+        headers: getAuthHeader()
+      });
+      if (!response.ok) throw new Error("Failed to load submission");
+      const data = await response.json();
+      setSubmissionDetail(data);
+    } catch (err) {
+      console.error(err);
+      alert("Error loading submission details");
+      setShowDetailModal(false);
+    } finally {
+      setLoadingDetail(false);
     }
   };
 
@@ -403,10 +427,10 @@ export default function TestManagement() {
                           <p className="text-xs text-gray-400 dark:text-gray-500">Submitted: {new Date(sub.submitted_at).toLocaleString()}</p>
                         </div>
                         <div className="flex gap-2">
-                          <a href={`${API_URL}${sub.pdf_url}`} target="_blank" rel="noopener noreferrer"
+                          <button onClick={() => handleViewSubmission(sub)}
                             className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm flex items-center gap-1">
                             <ExternalLink className="w-3 h-3" /> View
-                          </a>
+                          </button>
                           <button onClick={() => { setSelectedSubmission(sub); setComment(sub.admin_comment || ""); setShowCommentModal(true); }}
                             className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${sub.is_reviewed
                               ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
@@ -450,6 +474,136 @@ export default function TestManagement() {
                 {savingComment ? "Saving..." : "Save"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Detail Modal */}
+      {showDetailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-3xl mx-auto border dark:border-gray-700 my-8">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {submissionDetail?.assessment_title || "Submission Detail"}
+                </h2>
+                {submissionDetail && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {submissionDetail.student_name} • Score: {submissionDetail.total_score}/{submissionDetail.max_score} ({submissionDetail.percentage}%)
+                  </p>
+                )}
+              </div>
+              <button onClick={() => { setShowDetailModal(false); setSubmissionDetail(null); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+            </div>
+            
+            {loadingDetail ? (
+              <div className="p-12 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+              </div>
+            ) : submissionDetail ? (
+              <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+                {/* Summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{submissionDetail.percentage}%</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {submissionDetail.passed ? "Passed" : "Failed"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Result</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {submissionDetail.time_spent_seconds ? Math.round(submissionDetail.time_spent_seconds / 60) + "m" : "N/A"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Time</p>
+                  </div>
+                </div>
+
+                {/* Admin comment */}
+                {submissionDetail.admin_comment && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-sm text-green-800 dark:text-green-300"><strong>Feedback:</strong> {submissionDetail.admin_comment}</p>
+                  </div>
+                )}
+
+                {/* Questions & Answers */}
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white mt-4">Questions & Answers</h3>
+                {submissionDetail.questions.map((q, idx) => {
+                  const answer = submissionDetail.answers[q.id] || {};
+                  const evalDetail = (submissionDetail.evaluation_details || []).find(e => e.question_id === q.id);
+                  const isCorrect = answer.is_correct;
+                  
+                  return (
+                    <div key={q.id || idx} className={`border rounded-lg p-4 ${
+                      isCorrect === true ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10" :
+                      isCorrect === false ? "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10" :
+                      "border-gray-200 dark:border-gray-700"
+                    }`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          Q{idx + 1}. {q.text}
+                        </p>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                          isCorrect === true ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" :
+                          isCorrect === false ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" :
+                          "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                        }`}>
+                          {answer.points_awarded ?? 0}/{q.points} pts
+                        </span>
+                      </div>
+                      
+                      {/* MCQ options */}
+                      {q.type === "mcq" && q.options && (
+                        <div className="space-y-1 mt-2">
+                          {q.options.map((opt, oi) => {
+                            const isSelected = answer.selected_option === oi || answer.selected_option === opt;
+                            const isCorrectOpt = opt === q.correct_answer_text || oi === q.correct_answer_text;
+                            return (
+                              <div key={oi} className={`text-xs px-2 py-1 rounded ${
+                                isSelected && isCorrect ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200" :
+                                isSelected && !isCorrect ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200" :
+                                "text-gray-600 dark:text-gray-400"
+                              }`}>
+                                {String.fromCharCode(65 + oi)}. {typeof opt === 'object' ? opt.text : opt}
+                                {isSelected && " (Selected)"}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* Text answers */}
+                      {(q.type === "short_answer" || q.type === "essay") && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Student's Answer:</p>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                            {answer.text_answer || answer.answer_text || "No answer provided"}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* True/False */}
+                      {q.type === "true_false" && (
+                        <p className="text-sm mt-1 text-gray-700 dark:text-gray-300">
+                          Answer: <strong>{answer.bool_answer !== undefined ? String(answer.bool_answer) : "N/A"}</strong>
+                        </p>
+                      )}
+                      
+                      {/* Evaluation feedback */}
+                      {(evalDetail?.feedback || answer.feedback) && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                          {evalDetail?.feedback || answer.feedback}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

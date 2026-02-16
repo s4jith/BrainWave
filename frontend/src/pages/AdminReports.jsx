@@ -21,10 +21,26 @@ export default function AdminReports() {
     const [dateRange, setDateRange] = useState("week");
     const [classFilter, setClassFilter] = useState("all");
     const [subjectFilter, setSubjectFilter] = useState("all");
+    const [dbSubjects, setDbSubjects] = useState([]);
 
     useEffect(() => {
         fetchAnalytics();
+        fetchSubjects();
     }, [dateRange]);
+
+    const fetchSubjects = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+                headers: getAuthHeader()
+            });
+            if (response.ok) {
+                const subjects = await response.json();
+                setDbSubjects(subjects.map(s => s.name || s.subject_name));
+            }
+        } catch (err) {
+            console.error("Failed to fetch subjects:", err);
+        }
+    };
 
     const fetchAnalytics = async () => {
         setLoading(true);
@@ -65,9 +81,12 @@ export default function AdminReports() {
     const weakStudents = analytics?.weak_students || [];
     const recentActivities = analytics?.recent_activities || [];
 
-    // Get unique classes and subjects for filter dropdowns
+    // Get unique classes for filter dropdowns
     const uniqueClasses = [...new Set(recentActivities.map(a => a.class_level).filter(Boolean))].sort((a, b) => a - b);
-    const uniqueSubjects = [...new Set(recentActivities.map(a => a.subject).filter(Boolean))];
+    // Use subjects from database instead of extracting from activities
+    const uniqueSubjects = dbSubjects.length > 0 
+        ? dbSubjects 
+        : [...new Set(recentActivities.map(a => a.subject).filter(Boolean))];
 
     // Filter recent activities
     const filteredActivities = recentActivities.filter(activity => {
