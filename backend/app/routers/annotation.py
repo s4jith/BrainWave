@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
+from app.services.summary_cache_service import summary_cache_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,12 @@ def detect_text_language(text: str) -> str:
 class AnnotationRequest(BaseModel):
     """Request schema for annotation AI actions."""
     selected_text: str = Field(..., description="Text selected by user for annotation")
-    action: Literal["define", "elaborate", "stick_flow"] = Field(..., description="AI action to perform")
+    action: Literal["define", "elaborate", "stick_flow", "summarize_page", "summarize_chapter"] = Field(..., description="AI action to perform")
     class_level: int = Field(..., ge=5, le=12, description="Student's class level")
     subject: str = Field(..., description="Subject name (Mathematics, Physics, etc.)")
     chapter: int | None = Field(None, ge=1, description="Optional chapter number")
     image_data: str | None = Field(None, description="Optional base64 image data for screenshot doubts")
+    page_number: int | None = Field(None, ge=1, description="Current page number for page summarization")
 
 
 
@@ -75,6 +77,8 @@ async def process_annotation(request: AnnotationRequest):
     - `define`: Quick, accurate definition from textbook
     - `elaborate`: Detailed explanation with examples  
     - `stick_flow`: Text-based flow diagram showing concept breakdown
+    - `summarize_page`: Comprehensive summary of the current page
+    - `summarize_chapter`: Complete chapter summary with all major topics
     
     **Cost-Efficient Design:**
     - Uses RAG for context (reduces Gemini tokens)
@@ -415,6 +419,224 @@ Try asking about:
 - Sequential topics
 
 Current search: "{request.selected_text}" in Class {request.class_level} {request.subject}"""
+        
+        elif request.action == "summarize_page":
+            # Summarize the current page content
+            logger.info(f"[SUMMARIZE_PAGE] Summarizing page {request.page_number or 'unknown'}")
+            
+            # CHECK CACHE FIRST - avoid unnecessary API calls
+            cached_summary = await summary_cache_service.get_cached_summary(
+                summary_type="page",
+                subject=request.subject,
+                class_level=request.class_level,
+                chapter=request.chapter,
+                page_number=request.page_number
+            )
+            
+            if cached_summary:
+                logger.info(f"[CACHE HIT] Returning cached page summary for page {request.page_number}")
+                answer = cached_summary["summary"]
+                source_chunks = []
+            # If we have image data, use Gemini Vision to understand and summarize the page
+            elif request.image_data:
+                import base64
+                import asyncio
+                
+                # Prepare image bytes
+                if request.image_data.startswith('data:'):
+                    b64_data = request.image_data.split(',', 1)[1]
+                else:
+                    b64_data = request.image_data
+                    
+                image_bytes = base64.b64decode(b64_data)
+                
+                # Determine language instruction
+                subject_lower = request.subject.lower()
+                if subject_lower == "hindi":
+                    lang_prompt = "\n\nIMPORTANT: Provide the summary in Hindi using Devanagari script."
+                elif subject_lower == "urdu":
+                    lang_prompt = "\n\nIMPORTANT: Provide the summary in Urdu using Nastaliq script."
+                else:
+                    lang_prompt = ""
+                
+                vision_prompt = f"""You are an educational assistant helping a Class {request.class_level} student studying {request.subject}.
+
+Analyze this textbook page and create a comprehensive summary that:
+1. Identifies the main topic/concept covered
+2. Lists key points in bullet format
+3. Highlights important definitions, formulas, or facts
+4. Notes any examples or illustrations
+5. Keeps the language simple and clear for a Class {request.class_level} student
+
+Format your response as:
+**Topic:** [Main topic of the page]
+
+**Key Points:**
+- [Point 1]
+- [Point 2]
+- [Point 3]
+
+**Important Details:**
+- [Any formulas, definitions, or critical facts]{lang_prompt}"""
+                
+                # Call Gemini Vision - single API call
+                answer = await asyncio.to_thread(
+                    gemini_service.generate_response_with_image,
+                    prompt=vision_prompt,
+                    image_bytes=image_bytes
+                )
+                
+                if not answer or len(answer.strip()) < 10:
+                    answer = "Unable to generate page summary. Please try again or select specific text for a focused explanation."
+                else:
+                    # SAVE TO CACHE for future requests
+                    await summary_cache_service.save_summary(
+                        summary_type="page",
+                        subject=request.subject,
+                        class_level=request.class_level,
+                        chapter=request.chapter,
+                        summary=answer,
+                        page_number=request.page_number
+                    )
+                    logger.info(f"[CACHE SAVED] Page summary cached for page {request.page_number}")
+                
+                source_chunks = []
+            else:
+                # No image provided - use efficient RAG (answer_annotation_basic instead of deepdive)
+                logger.info(f"   No image data, using efficient RAG for page summary (page {request.page_number})")
+                
+                # Use simpler answer_annotation_basic - 1-2 API calls instead of 5
+                answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
+                    question=f"Summarize the main topics and key points covered on page {request.page_number} of chapter {request.chapter}.",
+                    subject=request.subject,
+                    student_class=request.class_level,
+                    chapter=request.chapter
+                )
+                
+                if answer and len(answer.strip()) > 20:
+                    # Reformat to standard summary format with minimal Gemini call
+                    subject_lower = request.subject.lower()
+                    if subject_lower == "hindi":
+                        lang_prompt = "\n\nIMPORTANT: Write in Hindi using Devanagari script."
+                    elif subject_lower == "urdu":
+                        lang_prompt = "\n\nIMPORTANT: Write in Urdu using Nastaliq script."
+                    else:
+                        lang_prompt = ""
+                    
+                    format_prompt = f"""Reformat this content as a concise page summary for a Class {request.class_level} student:
+
+{answer}
+
+Format as:
+**Main Topic:** [Topic]
+**Key Points:**
+- [3-5 bullet points]
+**Important Notes:**
+- [Any critical formulas/definitions]{lang_prompt}"""
+                    
+                    answer = gemini_service.generate_response(format_prompt)
+                    
+                    # SAVE TO CACHE
+                    await summary_cache_service.save_summary(
+                        summary_type="page",
+                        subject=request.subject,
+                        class_level=request.class_level,
+                        chapter=request.chapter,
+                        summary=answer,
+                        page_number=request.page_number
+                    )
+                    logger.info(f"[CACHE SAVED] Page summary cached for page {request.page_number}")
+                else:
+                    answer = f"Unable to find content for page {request.page_number}. The content may not be indexed yet. Try using the Doubt button to select specific text for summarization."
+                    source_chunks = []
+        
+        elif request.action == "summarize_chapter":
+            # Summarize the entire chapter
+            logger.info(f"[SUMMARIZE_CHAPTER] Summarizing chapter {request.chapter or 'unknown'}")
+            
+            if not request.chapter:
+                answer = "Chapter number is required for chapter summarization."
+                source_chunks = []
+            else:
+                # CHECK CACHE FIRST - avoid unnecessary API calls
+                cached_summary = await summary_cache_service.get_cached_summary(
+                    summary_type="chapter",
+                    subject=request.subject,
+                    class_level=request.class_level,
+                    chapter=request.chapter,
+                    page_number=None  # Chapter summary has no page number
+                )
+                
+                if cached_summary:
+                    logger.info(f"[CACHE HIT] Returning cached chapter summary for chapter {request.chapter}")
+                    answer = cached_summary["summary"]
+                    source_chunks = []
+                else:
+                    # Use efficient RAG - answer_annotation_basic instead of deepdive (2-3 API calls max)
+                    answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
+                        question=f"Provide a comprehensive overview of chapter {request.chapter} including main topics, key concepts, and important formulas or definitions.",
+                        subject=request.subject,
+                        student_class=request.class_level,
+                        chapter=request.chapter
+                    )
+                    
+                    if answer and len(answer.strip()) > 50:
+                        # Format into comprehensive chapter summary
+                        subject_lower = request.subject.lower()
+                        if subject_lower == "hindi":
+                            lang_prompt = "\n\nIMPORTANT: Write the entire summary in Hindi using Devanagari script."
+                        elif subject_lower == "urdu":
+                            lang_prompt = "\n\nIMPORTANT: Write the entire summary in Urdu using Nastaliq script."
+                        else:
+                            lang_prompt = ""
+                        
+                        prompt = f"""You are a tutor helping a Class {request.class_level} student review Chapter {request.chapter} in {request.subject}.
+
+Based on the content below, create a comprehensive chapter summary:
+
+**Content:**
+{answer}
+
+**Format (aim for 300-500 words):**
+**Chapter Overview:** [Main theme]
+
+**Major Topics:**
+1. [Topic 1]: [Brief explanation]
+2. [Topic 2]: [Brief explanation]
+
+**Key Concepts & Definitions:**
+- [Concept]: [Definition]
+
+**Important Formulas/Facts:**
+- [Formula/Fact]
+
+**Key Takeaways:**
+- [Takeaway 1]
+- [Takeaway 2]{lang_prompt}"""
+                        
+                        answer = gemini_service.generate_response(prompt)
+                        
+                        # SAVE TO CACHE
+                        await summary_cache_service.save_summary(
+                            summary_type="chapter",
+                            subject=request.subject,
+                            class_level=request.class_level,
+                            chapter=request.chapter,
+                            summary=answer,
+                            page_number=None,
+                            chapter_title=f"Chapter {request.chapter}"
+                        )
+                        logger.info(f"[CACHE SAVED] Chapter summary cached for chapter {request.chapter}")
+                    else:
+                        answer = f"""Unable to find content for Chapter {request.chapter} in Class {request.class_level} {request.subject}.
+
+Possible reasons:
+- Chapter number might be incorrect
+- Content not yet added to the system
+- Subject or class level mismatch
+
+Please verify the chapter number and try again."""
+                        source_chunks = []
         
         logger.info(f"[OK] Annotation processed: {len(answer)} chars, {len(source_chunks)} sources")
         

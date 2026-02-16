@@ -14,12 +14,17 @@ import {
   Sparkles,
   X,
   Scissors,
+  FileText,
+  File,
+  BookMarked,
+  StickyNote,
 } from "lucide-react";
 import useAnnotationStore from "../../stores/annotationStore";
 import AIPanel from "../annotations/AIPanel";
 import NotesPanel from "../annotations/NotesPanel";
 import HistoryPanel from "../annotations/HistoryPanel";
 import HighlightOverlay from "../annotations/HighlightOverlay";
+import NoteTaker from "./NoteTaker";
 
 /**
  * PDF Viewer Component with "Doubt" Screenshot Feature
@@ -52,6 +57,9 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [selectedArea, setSelectedArea] = useState(null);
   const [showActionPopup, setShowActionPopup] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Notes panel toggle state
+  const [showNotes, setShowNotes] = useState(false);
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
@@ -281,6 +289,24 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     };
   };
 
+  // Handle direct summarization (without selection)
+  const handleSummarize = (action) => {
+    // Set selected text for AI panel
+    setSelectedText({
+      text: action === "summarize_page" 
+        ? `Provide a summary of page ${pageNumber} from ${currentLesson?.title || 'this chapter'}` 
+        : `Provide a comprehensive summary of chapter ${currentLesson?.number || 1}: ${currentLesson?.title || 'this chapter'}`,
+      imageData: null,
+      action: action,
+      pageNumber: pageNumber,
+      lessonId: currentLesson?.id,
+      position: { x: 0, y: 0 },
+    });
+
+    // Open AI panel
+    setActivePanel("ai");
+  };
+
   // Handle action selection (Define, Stick Flow, Elaborate)
   const handleAction = async (action) => {
     if (!selectedArea || !imageRef.current) return;
@@ -424,10 +450,45 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
             variant="outline"
             size="sm"
             onClick={() => setShowHistory(true)}
-            className="mr-4"
           >
             <History className="h-4 w-4 mr-2" />
             History
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSummarize("summarize_page")}
+            disabled={!currentLesson || isLoading}
+            className="bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/50"
+            title="Get AI summary of current page"
+          >
+            <File className="h-4 w-4 mr-2" />
+            Summarize Page
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSummarize("summarize_chapter")}
+            disabled={!currentLesson || isLoading}
+            className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/50"
+            title="Get AI summary of entire chapter"
+          >
+            <BookMarked className="h-4 w-4 mr-2" />
+            Summarize Chapter
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowNotes(!showNotes)}
+            disabled={!currentLesson || isLoading}
+            className={`mr-4 ${showNotes ? 'bg-amber-100 dark:bg-amber-900/50' : 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50'}`}
+            title={showNotes ? "Hide notes panel" : "Take notes for this page"}
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            {showNotes ? "Hide Notes" : "Notes"}
           </Button>
 
           <Button variant="outline" size="icon" onClick={zoomOut}>
@@ -631,45 +692,45 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   onClick={() => handleAction("define")}
                   disabled={isProcessing}
                 >
-                  <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
-                    <BookOpen className="h-5 w-5 text-orange-600" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium">Define</div>
-                    <div className="text-xs text-muted-foreground">Simple explanation</div>
-                  </div>
-                </Button>
+                    <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
+                      <BookOpen className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">Define</div>
+                      <div className="text-xs text-muted-foreground">Simple explanation</div>
+                    </div>
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-950/30"
-                  onClick={() => handleAction("stickflow")}
-                  disabled={isProcessing}
-                >
-                  <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
-                    <GitBranch className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium">Stick Flow</div>
-                    <div className="text-xs text-muted-foreground">Step-by-step breakdown</div>
-                  </div>
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-4 justify-start gap-4 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-950/30"
+                    onClick={() => handleAction("stickflow")}
+                    disabled={isProcessing}
+                  >
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                      <GitBranch className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">Stick Flow</div>
+                      <div className="text-xs text-muted-foreground">Step-by-step breakdown</div>
+                    </div>
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-950/30"
-                  onClick={() => handleAction("elaborate")}
-                  disabled={isProcessing}
-                >
-                  <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
-                    <Sparkles className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium">Elaborate</div>
-                    <div className="text-xs text-muted-foreground">Detailed explanation</div>
-                  </div>
-                </Button>
-              </div>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-4 justify-start gap-4 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-950/30"
+                    onClick={() => handleAction("elaborate")}
+                    disabled={isProcessing}
+                  >
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                      <Sparkles className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">Elaborate</div>
+                      <div className="text-xs text-muted-foreground">Detailed explanation</div>
+                    </div>
+                  </Button>
+                </div>
 
               {isProcessing && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-muted-foreground">
@@ -691,6 +752,15 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
             <HelpCircle className="h-5 w-5" />
             <span className="font-medium">Doubt?</span>
           </Button>
+        )}
+
+        {/* NoteTaker Component - Persistent notes for current page (toggleable) */}
+        {showNotes && currentLesson && !isLoading && !loadError && (
+          <NoteTaker
+            currentLesson={currentLesson}
+            pageNumber={pageNumber}
+            onClose={() => setShowNotes(false)}
+          />
         )}
       </div>
     </div>

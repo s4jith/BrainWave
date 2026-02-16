@@ -27,16 +27,16 @@ def check_data():
     stats = index.describe_index_stats()
     logger.info(f"\nIndex Stats: {stats}")
     
-    # Try querying mathematics namespace
+    # Try querying maths namespace
     try:
         results = index.query(
-            namespace="mathematics",
+            namespace="maths",
             vector=[0.1] * 768,
             top_k=10,
             include_metadata=True
         )
         
-        logger.info(f"\nFound {len(results.matches)} results in 'mathematics' namespace")
+        logger.info(f"\nFound {len(results.matches)} results in 'maths' namespace")
         
         if results.matches:
             # Show sample metadata

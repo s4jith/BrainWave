@@ -60,7 +60,8 @@ class NotesService:
         student_id: str,
         class_level: int = None,
         subject: str = None,
-        chapter: int = None
+        chapter: int = None,
+        page_number: int = None
     ) -> list[Note]:
         """
         Retrieve notes for a student with optional filters.
@@ -70,6 +71,7 @@ class NotesService:
             class_level: Optional class filter
             subject: Optional subject filter
             chapter: Optional chapter filter
+            page_number: Optional page number filter
         
         Returns:
             List of Note objects
@@ -85,6 +87,8 @@ class NotesService:
                 query["subject"] = subject
             if chapter:
                 query["chapter"] = chapter
+            if page_number:
+                query["page_number"] = page_number
             
             # Fetch notes
             cursor = collection.find(query).sort("created_at", -1)

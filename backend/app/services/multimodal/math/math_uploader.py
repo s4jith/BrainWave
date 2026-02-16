@@ -28,7 +28,7 @@ class PineconeUploader:
     
     Usage:
         uploader = PineconeUploader(api_key, index_name)
-        uploader.upload_chunks(chunks, embeddings, namespace="mathematics")
+        uploader.upload_chunks(chunks, embeddings, namespace="maths")
     """
     
     def __init__(
@@ -74,7 +74,7 @@ class PineconeUploader:
         self,
         chunks: List[Dict],
         embeddings: List[np.ndarray] = None,
-        namespace: str = "mathematics",
+        namespace: str = "maths",
         batch_size: int = 100,
         show_progress: bool = True
     ) -> Dict:
@@ -211,7 +211,7 @@ class PineconeUploader:
     def query_namespace(
         self,
         query_vector: np.ndarray,
-        namespace: str = "mathematics",
+        namespace: str = "maths",
         top_k: int = 10,
         filter_dict: Optional[Dict] = None
     ) -> Dict:
@@ -295,7 +295,7 @@ class PineconeUploader:
         self,
         vector_ids: List[str],
         metadata_updates: List[Dict],
-        namespace: str = "mathematics"
+        namespace: str = "maths"
     ):
         """
         Update metadata for existing vectors.

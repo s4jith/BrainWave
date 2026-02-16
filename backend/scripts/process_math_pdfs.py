@@ -168,11 +168,11 @@ class MathPDFPipeline:
             logger.info(f"   Std norm: {stats['std_norm']:.4f}")
             
             # Step 5: Upload to Pinecone
-            logger.info("\n[5/5] 📤 Uploading to Pinecone (mathematics namespace)...")
+            logger.info("\n[5/5] 📤 Uploading to Pinecone (maths namespace)...")
             upload_results = self.uploader.upload_chunks(
                 chunks=chunks,
                 embeddings=embeddings,
-                namespace="mathematics",
+                namespace="maths",
                 batch_size=100,
                 show_progress=True
             )

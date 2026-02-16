@@ -914,7 +914,19 @@ async def get_lessons_for_student(
         import time
         
         # Normalize subject to namespace format
-        namespace = subject.lower().replace(' ', '_')
+        # Map subject names to Pinecone namespaces
+        subject_namespace_map = {
+            "Mathematics": "maths",
+            "Physics": "physics",
+            "Chemistry": "chemistry",
+            "Biology": "biology",
+            "Social Science": "social_science",
+            "English": "english",
+            "Hindi": "hindi"
+        }
+        
+        namespace = subject_namespace_map.get(subject, subject.lower().replace(' ', '_'))
+        logger.info(f"📖 Getting lessons for {subject} (namespace: {namespace}), Class {class_level}")
         
         # Use random vector for querying (zero vector doesn't work well with cosine similarity)
         random_vec = [random.random() for _ in range(768)]
@@ -949,9 +961,11 @@ async def get_lessons_for_student(
                     raise conn_error
         
         matches = query_response.get("matches", []) if query_response else []
+        logger.info(f"🔍 Pinecone query returned {len(matches)} matches for namespace='{namespace}', class={class_level}")
         
         # Filter and group by chapter for this class level
         chapters_found = {}
+        filtered_count = 0
         for match in matches:
             metadata = match.get("metadata", {})
             
@@ -969,6 +983,11 @@ async def get_lessons_for_student(
                         continue
                 if int(meta_class) != class_level:
                     continue  # Skip if not matching class
+            else:
+                # No class_level in metadata, skip
+                continue
+            
+            filtered_count += 1
             
             # Extract chapter number (handle different field names)
             chapter_num = metadata.get("chapter_number") or metadata.get("chapter") or 1
@@ -996,6 +1015,8 @@ async def get_lessons_for_student(
                 }
             
             chapters_found[chapter_num]["vector_count"] += 1
+        
+        logger.info(f"📊 After filtering: {filtered_count}/{len(matches)} matches passed, {len(chapters_found)} unique chapters found")
         
         # Also check MongoDB for PDF URLs
         mongo_books = list(db.books.find({
@@ -1408,7 +1429,7 @@ async def sync_existing_books():
             "pdf_url": "/fegp101.pdf",  # Points to public folder
             "has_embeddings": True,  # Already in Pinecone
             "embedding_count": 2193,  # From README
-            "embedding_namespace": "mathematics",
+            "embedding_namespace": "maths",
             "chapters": [
                 {
                     "chapter_number": lesson["number"],
@@ -1435,7 +1456,7 @@ async def sync_existing_books():
                 "pdf_url": lesson["pdfUrl"],
                 "has_embeddings": True,
                 "embedding_count": 0,  # Individual count unknown
-                "embedding_namespace": "mathematics",
+                "embedding_namespace": "maths",
                 "chapter_number": lesson["number"],
                 "is_chapter": True,
                 "chapters": [],

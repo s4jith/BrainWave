@@ -44,7 +44,8 @@ async def get_notes(
     student_id: str,
     class_level: Optional[int] = Query(None, ge=5, le=12),
     subject: Optional[str] = Query(None),
-    chapter: Optional[int] = Query(None, ge=1)
+    chapter: Optional[int] = Query(None, ge=1),
+    page_number: Optional[int] = Query(None, ge=1)
 ):
     """
     Retrieve notes for a student with optional filters.
@@ -61,7 +62,8 @@ async def get_notes(
             student_id=student_id,
             class_level=class_level,
             subject=subject,
-            chapter=chapter
+            chapter=chapter,
+            page_number=page_number
         )
         
         return NotesListResponse(

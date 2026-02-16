@@ -50,7 +50,7 @@ class EnhancedRAGService:
         
         # Subject to namespace mapping for ncert-all-subjects index
         self.subject_namespaces = {
-            "Mathematics": "mathematics",
+            "Mathematics": "maths",
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",

@@ -17,14 +17,15 @@ export const chatService = {
    * UNIFIED ENDPOINT - Main function for text annotations
    * Supports both text and image-based (screenshot) annotations
    * @param {string} text - The selected text to process
-   * @param {string} action - Action type: "define", "elaborate", or "stick_flow"
+   * @param {string} action - Action type: "define", "elaborate", "stick_flow", "summarize_page", or "summarize_chapter"
    * @param {number} classLevel - User's class level (5-10)
    * @param {string} subject - Subject name
    * @param {number} chapter - Chapter number
    * @param {string} imageData - Optional base64 image data for screenshot doubts
+   * @param {number} pageNumber - Optional page number for page-specific actions
    * @returns {Promise<{answer: string, action_type: string, source_count: number}>}
    */
-  async processAnnotation(text, action, classLevel, subject, chapter, imageData = null) {
+  async processAnnotation(text, action, classLevel, subject, chapter, imageData = null, pageNumber = null) {
     try {
       const requestBody = {
         selected_text: text,
@@ -37,6 +38,11 @@ export const chatService = {
       // Add image data if provided (for screenshot-based doubts)
       if (imageData) {
         requestBody.image_data = imageData;
+      }
+
+      // Add page number if provided (for page-specific actions like summarize_page)
+      if (pageNumber) {
+        requestBody.page_number = pageNumber;
       }
 
       const response = await fetch(`${API_BASE_URL}/api/annotation/`, {
