@@ -553,6 +553,9 @@ Generate {num_questions} MCQs now in valid JSON format:"""
             List of question dictionaries
         """
         try:
+            import json
+            import re
+            
             # Construct a detailed prompt based on config
             requirements_str = ""
             total_q = 0
@@ -563,60 +566,109 @@ Generate {num_questions} MCQs now in valid JSON format:"""
                         requirements_str += f"- {count} {difficulty.upper()} {q_type.upper().replace('_', ' ')} questions\n"
                         total_q += count
             
-            prompt = f"""You are an expert teacher creating a test for Class {class_level} {subject}, Chapter {chapter}.
+            # Limit context to prevent truncation
+            context_limit = min(3000, len(context))
             
-STRICT REQUIREMENTS:
-1. Generate exactly {total_q} questions based on this distribution:
+            prompt = f"""Generate {total_q} questions for Class {class_level} {subject} Chapter {chapter}.
+
+Requirements:
 {requirements_str}
+Question formats:
+- MCQ: Include "options" array and "correct_answer" string. marks=1
+- FILLUP: Use _______ for blank in text. marks=1  
+- SHORT_ANSWER: 2-3 line answer. marks=2
+- LONG_ANSWER: Detailed answer. marks=5
 
-2. QUESTION TYPES & FORMATS:
-   - MCQ: Must have "options" (List[str]) and "correct_answer" (the text of the correct option). Marks: 1.
-   - FILLUP: Fill-in-the-blanks. "question" should have '_______' for the blank. "correct_answer" is the missing word(s). Marks: 1.
-   - SHORT_ANSWER: Conceptual questions requiring 2-3 lines. Marks: 2 or 3.
-   - LONG_ANSWER: Detailed questions requiring explanation. Marks: 5.
+Context:
+{context[:context_limit]}
 
-3. CONTENT RULES:
-   - Questions must be from the provided CONTEXT only.
-   - Varied topics! Do not ask 5 questions about the same sub-topic.
-   - "Hard" questions should test application/analysis. "Easy" can be recall.
+Return ONLY a valid JSON array. No markdown, no extra text.
+Example format:
+[{{"text":"Question?","type":"mcq","difficulty":"easy","marks":1,"options":["A","B","C","D"],"correct_answer":"A"}}]
 
-CONTEXT:
-{context[:4000]}
-
-OUTPUT FORMAT (Valid JSON Array):
-[
-  {{
-    "text": "Question text here...",
-    "type": "mcq",  // mcq, fillup, short_answer, long_answer
-    "difficulty": "easy", // easy, medium, hard, advanced
-    "marks": 1,
-    "options": ["A", "B", "C", "D"], // Only for MCQ
-    "correct_answer": "Actual answer text"
-  }},
-  ...
-]
-
-Generate JSON now:"""
+JSON:"""
 
             # Get model with available API key
             model, key_index = self._get_model_with_available_key(retry_count)
-            response = model.generate_content(prompt)
             
-            # Parse JSON response
-            import json
-            text = response.text
+            # Configure for complete JSON output
+            generation_config = {
+                "temperature": 0.7,
+                "max_output_tokens": 8192,
+                "response_mime_type": "application/json"
+            }
+            
+            response = model.generate_content(prompt, generation_config=generation_config)
+            text = response.text.strip()
+            
+            # Try direct parsing (should work with response_mime_type)
+            try:
+                questions = json.loads(text)
+                if isinstance(questions, list) and len(questions) > 0:
+                    logger.info(f"✅ Generated {len(questions)} questions successfully")
+                    return questions
+            except json.JSONDecodeError as e:
+                logger.warning(f"Direct JSON parse failed: {e}")
+            
+            # Fallback: Extract JSON from text
             if "```json" in text:
-                text = text.split("```json")[1].split("```")[0]
+                text = text.split("```json")[1].split("```")[0].strip()
             elif "```" in text:
-                text = text.split("```")[1].split("```")[0]
+                text = text.split("```")[1].split("```")[0].strip()
             
-            questions = json.loads(text.strip())
-            return questions
+            # Clean common issues
+            text = re.sub(r',\s*([}\]])', r'\1', text)  # trailing commas
+            text = re.sub(r'[\x00-\x1f]', ' ', text)  # control chars
+            
+            try:
+                questions = json.loads(text)
+                return questions
+            except json.JSONDecodeError:
+                pass
+            
+            # Try to repair incomplete JSON
+            # Find the last complete object in array
+            if text.startswith('['):
+                # Find positions of complete objects
+                depth = 0
+                last_complete = 0
+                in_string = False
+                escape_next = False
+                
+                for i, char in enumerate(text):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if in_string:
+                        continue
+                    if char == '{':
+                        depth += 1
+                    elif char == '}':
+                        depth -= 1
+                        if depth == 0:
+                            last_complete = i + 1
+                
+                if last_complete > 1:
+                    repaired = text[:last_complete] + ']'
+                    try:
+                        questions = json.loads(repaired)
+                        logger.info(f"✅ Repaired JSON, got {len(questions)} questions")
+                        return questions
+                    except json.JSONDecodeError:
+                        pass
+            
+            raise ValueError(f"Could not parse Gemini response. Preview: {text[:300]}...")
             
         except Exception as e:
             error_str = str(e)
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️ 429 Rate limit. Retrying generate_varied_questions ({retry_count})...")
+                logger.warning(f"⚠️ 429 Rate limit. Retrying ({retry_count})...")
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
             

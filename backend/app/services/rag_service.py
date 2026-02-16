@@ -407,19 +407,9 @@ class RAGService:
             from pinecone import Pinecone
             from app.core.config import settings
             
-            # Normalize subject name to match Pinecone namespace
-            # Handle common variations (Maths -> Mathematics, etc.)
-            subject_namespace_map = {
-                "maths": "mathematics",
-                "math": "mathematics",
-                "science": "science",
-                "social science": "social_science",
-                "social-science": "social_science",
-                "bio": "biology",
-            }
-            
-            subject_lower = subject.lower().strip()
-            namespace = subject_namespace_map.get(subject_lower, subject_lower.replace(' ', '_'))
+            # Namespace = subject name lowercase with spaces replaced by underscores
+            # Admin must ensure Pinecone namespaces match subject names exactly
+            namespace = subject.lower().strip().replace(' ', '_')
             
             # Use a generic query to get chapter content
             dummy_query = f"{subject} chapter {chapter}"
