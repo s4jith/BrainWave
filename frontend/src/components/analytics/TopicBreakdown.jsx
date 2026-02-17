@@ -140,7 +140,7 @@ export default function TopicBreakdown({ topics }) {
           {/* Recommendation */}
           {weakTopics.length > 0 && (
             <div className="p-4 rounded-xl bg-purple-50 border border-purple-200">
-              <h4 className="text-sm font-medium text-purple-800 mb-2">📚 Study Recommendation</h4>
+              <h4 className="text-sm font-medium text-purple-800 mb-2">Study Recommendation</h4>
               <p className="text-sm text-purple-700">
                 Focus on <strong>{weakTopics[0].topic}</strong> first. 
                 You've scored {weakTopics[0].score}% in this topic. 

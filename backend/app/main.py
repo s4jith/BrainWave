@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     Handles database initialization and cleanup.
     """
     # Startup
-    logger.info("🚀 Starting NCERT AI Learning Backend...")
+    logger.info("Starting NCERT AI Learning Backend...")
     logger.info(f"   App: {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"   Debug Mode: {settings.DEBUG}")
     
@@ -49,17 +49,17 @@ async def lifespan(app: FastAPI):
         if deleted > 0:
             logger.info(f"🗑️ Cleaned up {deleted} expired pending questions")
         
-        logger.info("✅ All systems initialized successfully")
+        logger.info("All systems initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
+        logger.error(f" Startup failed: {e}")
         raise
     
     yield
     
     # Shutdown
-    logger.info("🛑 Shutting down NCERT AI Learning Backend...")
+    logger.info(" Shutting down NCERT AI Learning Backend...")
     await close_databases()
-    logger.info("✅ Shutdown complete")
+    logger.info("Shutdown complete")
 
 
 # Create FastAPI app
@@ -107,61 +107,61 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(mcq.router, prefix="/api")
 app.include_router(evaluate.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
-app.include_router(assessment.router, prefix="/api")  # ✅ Voice Assessment
-app.include_router(annotation.router, prefix="/api")  # ✅ Annotation Chatbot
-app.include_router(history.router, prefix="/api")     # ✅ Annotation History
+app.include_router(assessment.router, prefix="/api")  # Voice Assessment
+app.include_router(annotation.router, prefix="/api")  # Annotation Chatbot
+app.include_router(history.router, prefix="/api")     # Annotation History
 
 # Import admin and user routers
 from app.routers import admin, user, test, auth
 from app.routers import admin_dashboard, support, support_tickets, test_management, suggestions
 from app.routers import book_management, curriculum
-app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
-app.include_router(user.router, prefix="/api")   # ✅ User Stats (Dashboard)
-app.include_router(test.router, prefix="/api")   # ✅ Tests (Staff + AI)
-app.include_router(auth.router)                  # ✅ Authentication (Login/Password)
-app.include_router(admin_dashboard.router)       # ✅ Admin Dashboard & Student Management
-app.include_router(support.router)               # ✅ Support (FAQs, Contact, Feedback)
-app.include_router(support_tickets.router)       # ✅ Support Tickets
-app.include_router(suggestions.router, prefix="/api")  # ✅ Student Suggestions
-app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
-app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
-app.include_router(curriculum.router)            # ✅ Curriculum Management (Subjects, Chapters, Topics)
+app.include_router(admin.router, prefix="/api")  # Admin & Monitoring
+app.include_router(user.router, prefix="/api")   # User Stats (Dashboard)
+app.include_router(test.router, prefix="/api")   # Tests (Staff + AI)
+app.include_router(auth.router)                  # Authentication (Login/Password)
+app.include_router(admin_dashboard.router)       # Admin Dashboard & Student Management
+app.include_router(support.router)               # Support (FAQs, Contact, Feedback)
+app.include_router(support_tickets.router)       # Support Tickets
+app.include_router(suggestions.router, prefix="/api")  # Student Suggestions
+app.include_router(test_management.router)       # Test Management (PDF Tests, Submissions, Feedback)
+app.include_router(book_management.router)       # Book Management (Admin upload, Student view)
+app.include_router(curriculum.router)            # Curriculum Management (Subjects, Chapters, Topics)
 
 # Teacher specific router
 from app.routers import teacher
-app.include_router(teacher.router)               # ✅ Teacher specific (Groups, Questions, Stats)
+app.include_router(teacher.router)               # Teacher specific (Groups, Questions, Stats)
 
 # Notifications router
 from app.routers import notifications
-app.include_router(notifications.router)         # ✅ Notifications
+app.include_router(notifications.router)         # Notifications
 
 # Stretch goal routers
 from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat, student
-app.include_router(voice_chat.router)            # ✅ Voice Chat (Stretch Goal)
-app.include_router(student_level.router)         # ✅ Adaptive Explanations (Stretch Goal)
-app.include_router(student.router)               # ✅ Student specific (Groups)
-app.include_router(multilingual_chat.router)     # ✅ Multilingual Chat (Indian Languages)
+app.include_router(voice_chat.router)            # Voice Chat (Stretch Goal)
+app.include_router(student_level.router)         # Adaptive Explanations (Stretch Goal)
+app.include_router(student.router)               # Student specific (Groups)
+app.include_router(multilingual_chat.router)     # Multilingual Chat (Indian Languages)
 app.include_router(optimized_chat.router, prefix="/api")  # ⚡ Optimized Chat (2-call max)
 
 # Question Bank
 from app.routers import question_bank
-app.include_router(question_bank.router)         # ✅ Question Bank (Centralized)
+app.include_router(question_bank.router)         # Question Bank (Centralized)
 
 # Top Questions & Recommendations
 from app.routers import top_questions
-app.include_router(top_questions.router)         # ✅ Top Questions & Recommendations
+app.include_router(top_questions.router)         # Top Questions & Recommendations
 
 # Course Management (LMS)
 from app.routers import courses
-app.include_router(courses.router)               # ✅ Course Management (Teachers/Students)
+app.include_router(courses.router)               # Course Management (Teachers/Students)
 
 # Assessment System (LMS)
 from app.routers import assessments
-app.include_router(assessments.router)           # ✅ Assessments (Quizzes/Exams)
+app.include_router(assessments.router)           # Assessments (Quizzes/Exams)
 
 # Gradebook & Analytics (LMS)
 from app.routers import gradebook
-app.include_router(gradebook.router)             # ✅ Gradebook & Analytics
+app.include_router(gradebook.router)             # Gradebook & Analytics
 
 
 # Root endpoint

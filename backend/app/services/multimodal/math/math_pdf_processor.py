@@ -90,7 +90,7 @@ class PDFProcessor:
             
             doc.close()
             
-            logger.info(f"✅ Extracted {len(text_blocks)} text blocks and {len(images)} images")
+            logger.info(f"Extracted {len(text_blocks)} text blocks and {len(images)} images")
             
             return {
                 "text_blocks": text_blocks,
@@ -104,7 +104,7 @@ class PDFProcessor:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to process PDF: {e}")
+            logger.error(f" Failed to process PDF: {e}")
             raise
     
     def _extract_text_blocks(
@@ -285,10 +285,10 @@ class PDFProcessor:
             import pytesseract
             from pdf2image import convert_from_path
         except ImportError:
-            logger.error("❌ OCR dependencies not installed. Install: pytesseract, pdf2image")
+            logger.error(" OCR dependencies not installed. Install: pytesseract, pdf2image")
             raise
         
-        logger.info(f"🔍 Using OCR for scanned PDF: {pdf_path}")
+        logger.info(f" Using OCR for scanned PDF: {pdf_path}")
         
         # Convert PDF to images
         images = convert_from_path(pdf_path)
@@ -314,7 +314,7 @@ class PDFProcessor:
                     }
                 })
         
-        logger.info(f"✅ OCR extracted {len(text_blocks)} text blocks")
+        logger.info(f"OCR extracted {len(text_blocks)} text blocks")
         
         return {
             "text_blocks": text_blocks,

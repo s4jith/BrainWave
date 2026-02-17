@@ -18,7 +18,7 @@ async def main():
     teacher_id = "staff_6_teacher3"  # The actual user_id from the database
     
     print("=" * 60)
-    print(f"🔍 Debugging Teacher Tests for: {teacher_id}")
+    print(f" Debugging Teacher Tests for: {teacher_id}")
     print("=" * 60)
     
     # 0. Check all groups to see what teacher IDs look like
@@ -53,9 +53,9 @@ async def main():
         print(f"\n   Checking if this _id ({matching_id}) is in any group...")
         for g in all_groups:
             if g.get('teacher_id') == matching_id or matching_id in g.get('teacher_ids', []):
-                print(f"   ✅ FOUND MATCH: Group '{g.get('name')}' has this teacher!")
+                print(f"   FOUND MATCH: Group '{g.get('name')}' has this teacher!")
     else:
-        print(f"   ❌ teacher3 user not found!")
+        print(f"    teacher3 user not found!")
     
     # 1. Find teacher's groups
     print("\n1️⃣ Finding teacher's groups (with new logic)...")
@@ -119,9 +119,9 @@ async def main():
             # Check string match
             string_matches = [gid for gid in teacher_group_ids if gid in assessment_group_ids]
             if string_matches:
-                print(f"   ✅ MATCH: {assessment.get('title')} - {string_matches}")
+                print(f"   MATCH: {assessment.get('title')} - {string_matches}")
             else:
-                print(f"   ❌ NO MATCH: {assessment.get('title')}")
+                print(f"    NO MATCH: {assessment.get('title')}")
                 print(f"      Assessment group_ids: {assessment_group_ids}")
                 print(f"      Teacher group_ids: {teacher_group_ids}")
     

@@ -134,7 +134,7 @@ async def update_student_level(student_id: str, level_data: StudentLevel) -> Stu
                 upsert=True
             )
             
-            logger.info(f"✅ Updated student {student_id} level to {level} (mode: {mode})")
+            logger.info(f"Updated student {student_id} level to {level} (mode: {mode})")
         
         return StudentLevelResponse(
             student_id=student_id,

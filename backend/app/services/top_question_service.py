@@ -61,9 +61,9 @@ class TopQuestionService:
                 ("mode", 1)
             ])
             
-            logger.info("✅ Top questions indexes created/verified")
+            logger.info("Top questions indexes created/verified")
         except Exception as e:
-            logger.warning(f"⚠️ Could not create indexes: {e}")
+            logger.warning(f" Could not create indexes: {e}")
     
     # ==================== TOP QUESTIONS ====================
     
@@ -116,7 +116,7 @@ class TopQuestionService:
             return questions
             
         except Exception as e:
-            logger.error(f"❌ Error getting top questions: {e}")
+            logger.error(f" Error getting top questions: {e}")
             return []
     
     def track_question(
@@ -190,7 +190,7 @@ class TopQuestionService:
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error tracking question: {e}")
+            logger.error(f" Error tracking question: {e}")
             return False
     
     def _categorize_question(self, question: str) -> str:
@@ -307,7 +307,7 @@ class TopQuestionService:
             return str(result.inserted_id)
             
         except Exception as e:
-            logger.error(f"❌ Error saving Q&A pair: {e}")
+            logger.error(f" Error saving Q&A pair: {e}")
             return None
     
     def update_feedback(
@@ -348,13 +348,13 @@ class TopQuestionService:
                 )
                 
                 if result.modified_count > 0:
-                    logger.info(f"✅ Updated feedback for Q&A {qa_id}")
+                    logger.info(f"Updated feedback for Q&A {qa_id}")
                     return True
             
             return False
             
         except Exception as e:
-            logger.error(f"❌ Error updating feedback: {e}")
+            logger.error(f" Error updating feedback: {e}")
             return False
     
     # ==================== RECOMMENDATIONS ====================
@@ -469,7 +469,7 @@ class TopQuestionService:
             return recommendations
             
         except Exception as e:
-            logger.error(f"❌ Error getting recommendations: {e}")
+            logger.error(f" Error getting recommendations: {e}")
             # Fallback to regular top questions
             return self.get_top_questions(subject, class_level, mode, limit)
     
@@ -528,7 +528,7 @@ class TopQuestionService:
             return trending
             
         except Exception as e:
-            logger.error(f"❌ Error getting trending questions: {e}")
+            logger.error(f" Error getting trending questions: {e}")
             return []
 
 

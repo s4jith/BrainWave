@@ -171,13 +171,13 @@ async def process_annotation(request: AnnotationRequest):
                 
                 if extracted_text_vision and len(extracted_text_vision.strip()) > 3:
                      query_text = extracted_text_vision.strip()
-                     logger.info(f"   ✅ Gemini Vision extracted: '{query_text[:100]}'")
+                     logger.info(f"   Gemini Vision extracted: '{query_text[:100]}'")
                 else:
-                     logger.warning("   ❌ Gemini Vision failed to extract meaningful text")
+                     logger.warning("    Gemini Vision failed to extract meaningful text")
                      raise HTTPException(status_code=400, detail="Could not extract text from image")
                      
             except Exception as ve:
-                logger.error(f"   ❌ Gemini Vision failed: {ve}")
+                logger.error(f"    Gemini Vision failed: {ve}")
                 raise HTTPException(status_code=500, detail="Image OCR failed")
         
         logger.info(f"[NOTE] Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
@@ -269,7 +269,7 @@ async def process_annotation(request: AnnotationRequest):
                     answer = gemini_service.generate_response(prompt)
             else:
                 # RAG returned no answer - generate from scratch
-                logger.warning(f"   ⚠️ RAG returned no answer, generating from scratch")
+                logger.warning(f"    RAG returned no answer, generating from scratch")
                 context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]]) if source_chunks else ""
                 
                 prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.

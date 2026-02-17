@@ -45,8 +45,8 @@ class EnhancedRAGService:
         # CRITICAL FIX: Use same embedding model as data upload
         # Data was uploaded using sentence-transformers, so we must use it for queries too!
         self.embedding_model_name = EMBEDDING_MODEL
-        logger.info("✅ RAG Service: Using Gemini gemini-embedding-001 for embeddings")
-        logger.info("✅ Triple-Index System: Textbook + Web + LLM content")
+        logger.info("RAG Service: Using Gemini gemini-embedding-001 for embeddings")
+        logger.info("Triple-Index System: Textbook + Web + LLM content")
         
         # Subject to namespace mapping for ncert-all-subjects index
         self.subject_namespaces = {
@@ -191,7 +191,7 @@ class EnhancedRAGService:
             
             # Get classes to search
             classes_to_search = self.get_prerequisite_classes(subject, student_class, mode)
-            logger.info(f"🔍 {mode.upper()} mode: Searching classes {classes_to_search} for {subject}")
+            logger.info(f" {mode.upper()} mode: Searching classes {classes_to_search} for {subject}")
             
             # Get namespace
             namespace = self.get_namespace(subject)
@@ -228,12 +228,12 @@ class EnhancedRAGService:
                     )
                     matches = results.get('matches', [])
                 except Exception as filter_err:
-                    logger.warning(f"   ⚠️ class_level int filter failed: {filter_err}")
+                    logger.warning(f"    class_level int filter failed: {filter_err}")
                     matches = []
                 
                 # If no matches with class_level (int), try legacy 'class' (str) key
                 if len(matches) == 0:
-                    logger.info(f"   ⚠️ No matches with class_level filter, trying 'class' (string) filter...")
+                    logger.info(f"    No matches with class_level filter, trying 'class' (string) filter...")
                     legacy_filter = {"class": {"$in": class_filter_str}}
                     if chapter is not None:
                         legacy_filter["chapter_number"] = str(chapter)
@@ -247,7 +247,7 @@ class EnhancedRAGService:
                         )
                         matches = results.get('matches', [])
                         if matches:
-                            logger.info(f"   ✅ Legacy 'class' filter matched: {len(matches)} results")
+                            logger.info(f"   Legacy 'class' filter matched: {len(matches)} results")
                     except Exception:
                         matches = []
                 
@@ -255,7 +255,7 @@ class EnhancedRAGService:
                 
                 # FALLBACK: If pre-filter is too restrictive, retry without filter
                 if len(matches) == 0:
-                    logger.info(f"   ⚠️ No matches with any filter, retrying without metadata filter...")
+                    logger.info(f"    No matches with any filter, retrying without metadata filter...")
                     results = self.textbook_db.index.query(
                         namespace=namespace,
                         vector=query_embedding,
@@ -314,7 +314,7 @@ class EnhancedRAGService:
             return all_chunks, class_distribution
             
         except Exception as e:
-            logger.error(f"❌ Multi-class query failed: {e}")
+            logger.error(f" Multi-class query failed: {e}")
             return [], {}
     
     def query_web_content(
@@ -474,7 +474,7 @@ class EnhancedRAGService:
             Generated answer
         """
         if not textbook_chunks:
-            logger.info("⚠️ No RAG content found (Basic Mode).")
+            logger.info(" No RAG content found (Basic Mode).")
             return "The content is not found in the book, ask some other questions related to your subject."
         
         # Build context with class markers
@@ -634,8 +634,8 @@ DEEP DIVE MODE INSTRUCTIONS:
 4. **Progressive Building**: Build understanding step-by-step through class levels
 5. **Structure**:
    - 🌱 **Fundamentals** (if using content from Classes {earliest_class}-{student_class-1})
-   - 📚 **Core Concept** (Class {student_class} level understanding)
-   - 🔍 **Deep Dive** (comprehensive explanation with examples, applications, significance)
+   - **Core Concept** (Class {student_class} level understanding)
+   -  **Deep Dive** (comprehensive explanation with examples, applications, significance)
    - 💡 **Key Takeaways** (summarize main points)
 6. **Make it engaging**: Use analogies, examples, and clear explanations
 7. **Appropriate language**: Suitable for Class {student_class} students but comprehensive{lang_instruction}
@@ -679,7 +679,7 @@ Generate a thorough, well-structured deep dive explanation:"""
             Generated answer
         """
         if not textbook_chunks and not llm_chunks and not web_chunks:
-            logger.info("⚠️ No RAG content found for this question.")
+            logger.info(" No RAG content found for this question.")
             return "The content is not found in your textbook. Please try a different question."
         
         # Build multi-source context
@@ -753,7 +753,7 @@ Generate your answer:"""
         
         # Log sources used
         sources_summary = f"Textbook: {len(textbook_chunks)}, LLM: {len(llm_chunks)}, Web: {len(web_chunks)}"
-        logger.info(f"✅ Answer generated ({len(answer)} chars) from {sources_summary}")
+        logger.info(f"Answer generated ({len(answer)} chars) from {sources_summary}")
         
         # Keep markdown formatting for ReactMarkdown frontend rendering
         # answer = self._clean_markdown_formatting(answer)  # DISABLED - frontend uses ReactMarkdown
@@ -782,7 +782,7 @@ Generate your answer:"""
         Returns:
             Tuple of (answer, source_chunks)
         """
-        logger.info(f"📚 BASIC MODE (Triple-Index): Class {student_class} {subject}")
+        logger.info(f"BASIC MODE (Triple-Index): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
         
         # 0. Generate embedding AND validate subject IN PARALLEL to save ~2s
@@ -798,16 +798,16 @@ Generate your answer:"""
             logger.error(f"Failed parallel init: {e}")
             return "I'm having trouble understanding that right now. Please try again.", []
 
-        # 🔍 STRICT SUBJECT VALIDATION (result from parallel call above)
+        #  STRICT SUBJECT VALIDATION (result from parallel call above)
         try:
             detected_subject = validation.get("detected_subject", "Unknown")
             confidence = validation.get("confidence", 0.0)
             
-            logger.info(f"🔍 Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
+            logger.info(f" Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
             
             # STRICT BLOCKING LOGIC
             if confidence > 0.60 and detected_subject.lower() != subject.lower():
-                 logger.warning(f"⚠️ Subject mismatch blocked: User={subject}, Detected={detected_subject}")
+                 logger.warning(f" Subject mismatch blocked: User={subject}, Detected={detected_subject}")
                  return "The specific topic is not present in the book. Change the book or question.", []
                  
         except Exception as e:
@@ -1011,7 +1011,7 @@ Keep it concise but informative (200-400 words)."""
         
         # EDGE CASE 1: No content found - Try ONE previous class only (optimized)
         if not textbook_chunks and not llm_chunks:
-            logger.warning(f"⚠️ EDGE CASE: No content found for '{question[:50]}...' in Class {student_class}")
+            logger.warning(f" EDGE CASE: No content found for '{question[:50]}...' in Class {student_class}")
             prev_class = student_class - 1
             if prev_class >= 5:
                 logger.info(f"🔄 Searching Class {prev_class} (one-step fallback)...")
@@ -1026,7 +1026,7 @@ Keep it concise but informative (200-400 words)."""
                 )
                 
                 if prev_chunks:
-                    logger.info(f"✅ Found {len(prev_chunks)} chunks in Class {prev_class} (foundation content)")
+                    logger.info(f"Found {len(prev_chunks)} chunks in Class {prev_class} (foundation content)")
                     textbook_chunks = prev_chunks
                     class_dist = prev_dist
         
@@ -1035,7 +1035,7 @@ Keep it concise but informative (200-400 words)."""
         
         # EDGE CASE 2: Still no content - return not found message
         if not all_chunks:
-            logger.warning(f"⚠️ EDGE CASE: No content in any class for '{question[:50]}...'")
+            logger.warning(f" EDGE CASE: No content in any class for '{question[:50]}...'")
             return "The content is not found in the book, ask some other questions related to your subject.", []
         
         # Generate answer from multiple sources
@@ -1087,24 +1087,24 @@ Keep it concise but informative (200-400 words)."""
         Returns:
             Tuple of (answer, combined_source_chunks)
         """
-        # 🔍 STRICT SUBJECT VALIDATION
+        #  STRICT SUBJECT VALIDATION
         try:
             # Use lower threshold (0.60) as requested for strict enforcement
             validation = await subject_classifier.classify(question)
             detected_subject = validation.get("detected_subject", "Unknown")
             confidence = validation.get("confidence", 0.0)
             
-            logger.info(f"🔍 Deep Dive Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
+            logger.info(f" Deep Dive Subject Check: Detected='{detected_subject}' ({confidence:.2f}) vs Current='{subject}'")
             
             # STRICT BLOCKING LOGIC
             if confidence > 0.60 and detected_subject.lower() != subject.lower():
-                 logger.warning(f"⚠️ Subject mismatch blocked: User={subject}, Detected={detected_subject}")
+                 logger.warning(f" Subject mismatch blocked: User={subject}, Detected={detected_subject}")
                  return "The specific topic is not present in the book. Change the book or question.", []
                  
         except Exception as e:
             logger.warning(f"Subject validation failed (proceeding anyway): {e}")
 
-        logger.info(f"🔍 DEEP DIVE MODE (Triple-Index): Class {student_class} {subject}")
+        logger.info(f" DEEP DIVE MODE (Triple-Index): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
         logger.info(f"   Will search from fundamentals (earliest class) to current class")
         
@@ -1115,8 +1115,8 @@ Keep it concise but informative (200-400 words)."""
             logger.error(f"Failed to generate embedding: {e}")
             return "I'm having trouble understanding that right now. Please try again.", []
         
-        # 1. PARALLEL QUERY: Textbook + LLM cache + Web content simultaneously
-        logger.info("   ⚡ Running parallel queries (textbook + LLM + web)...")
+        # 1. PARALLEL QUERY: Textbook + LLM cache (Web scraping DISABLED)
+        logger.info("   ⚡ Running parallel queries (textbook + LLM cache)...")
         
         async def query_textbook_async():
             return await asyncio.to_thread(
@@ -1139,27 +1139,20 @@ Keep it concise but informative (200-400 words)."""
                 query_embedding=query_embedding
             )
         
-        async def query_web_async():
-            return await asyncio.to_thread(
-                self.query_web_content,
-                query_text=question,
-                subject=subject,
-                student_class=student_class,
-                top_k=10,
-                query_embedding=query_embedding
-            )
-        
-        # Execute all three queries in parallel
-        (textbook_chunks, class_dist), llm_chunks, web_chunks = await asyncio.gather(
+        # Execute both queries in parallel (Web scraping DISABLED to save API costs)
+        (textbook_chunks, class_dist), llm_chunks = await asyncio.gather(
             query_textbook_async(),
-            query_llm_async(),
-            query_web_async()
+            query_llm_async()
         )
+        
+        # Web content disabled - empty list
+        web_chunks = []
         
         # Log best score for debugging
         best_score = textbook_chunks[0]['score'] if textbook_chunks else 0.0
         logger.info(f"   📊 Best textbook score: {best_score:.3f}")
-        logger.info(f"   ⚡ Parallel query complete (textbook: {len(textbook_chunks)}, llm: {len(llm_chunks)}, web: {len(web_chunks)})")
+        logger.info(f"   ⚡ Parallel query complete (textbook: {len(textbook_chunks)}, llm: {len(llm_chunks)})")
+        logger.info(f"   🌐 Web scraping: DISABLED (saving API costs)")
         
         # 🎯 CACHE HIT: Return cached answer if high similarity (0.80 — same Gemini embeddings for store & query)
         if llm_chunks and llm_chunks[0]['score'] >= 0.80:
@@ -1171,21 +1164,13 @@ Keep it concise but informative (200-400 words)."""
             source_chunks = textbook_chunks + llm_chunks
             return cached_answer, source_chunks
         
-        # 4. Check if we need more content via web scraping
-        total_chunks = len(textbook_chunks) + len(web_chunks)
-        if self.web_scraper.should_scrape(total_chunks, threshold=8):
-            # Extract topic and trigger scraping
-            topic = self.llm_storage._extract_topic(question)
-            logger.info(f"🌐 Triggering web scraping for topic: {topic}")
-            self.web_scraper.scrape_topic(subject, topic, student_class, max_sources=3)
-            
-            # Re-query web content after scraping
-            web_chunks = self.query_web_content(
-                query_text=question,
-                subject=subject,
-                student_class=student_class,
-                top_k=10
-            )
+        # Web scraping DISABLED to reduce API costs
+        # total_chunks = len(textbook_chunks) + len(web_chunks)
+        # if self.web_scraper.should_scrape(total_chunks, threshold=8):
+        #     topic = self.llm_storage._extract_topic(question)
+        #     logger.info(f"🌐 Triggering web scraping for topic: {topic}")
+        #     self.web_scraper.scrape_topic(subject, topic, student_class, max_sources=3)
+        #     web_chunks = self.query_web_content(...)
         
         # Combine all sources
         all_chunks = textbook_chunks + llm_chunks + web_chunks
@@ -1214,7 +1199,7 @@ Keep it concise but informative (200-400 words)."""
             logger.info(f"🔄 RAG returned 'not found' - checking if question is valid for {subject}...")
             
             # The subject validation already passed (we didn't return early), so generate direct answer
-            logger.info(f"✅ Question IS related to {subject} - generating direct Gemini answer")
+            logger.info(f"Question IS related to {subject} - generating direct Gemini answer")
             
             # Generate a comprehensive answer directly from Gemini
             direct_prompt = f"""You are an expert {subject} tutor helping a Class {student_class} student.
@@ -1232,9 +1217,9 @@ INSTRUCTIONS:
 
 Structure your answer as:
 🌱 **Basic Understanding**: [Simple definition/explanation]
-📚 **Detailed Explanation**: [Comprehensive explanation]
+**Detailed Explanation**: [Comprehensive explanation]
 💡 **Examples**: [2-3 examples]
-🔍 **Key Points to Remember**: [Summary bullet points]
+ **Key Points to Remember**: [Summary bullet points]
 
 Generate a thorough educational explanation:"""
             

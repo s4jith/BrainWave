@@ -59,7 +59,7 @@ async def generate_mcqs(request: MCQGenerationRequest):
         )
     
     except Exception as e:
-        logger.error(f"❌ MCQ generation error: {e}")
+        logger.error(f" MCQ generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

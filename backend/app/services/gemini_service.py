@@ -17,7 +17,7 @@ class GeminiService:
         # Don't configure API key here - will be set per request via key manager
         # Initialize Gemini 2.5 Flash model
         self.model_name = 'models/gemini-2.5-flash'
-        logger.info(f"🚀 Gemini Service initialized with model: {self.model_name}")
+        logger.info(f"Gemini Service initialized with model: {self.model_name}")
         logger.info(f"🔑 Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
         
         # Initialize embedding model
@@ -36,7 +36,7 @@ class GeminiService:
         if retry_count >= len(gemini_key_manager.keys):
             # Tried all keys, none worked
             raise Exception(
-                "❌ All Gemini API keys exhausted or rate limited! "
+                " All Gemini API keys exhausted or rate limited! "
                 f"Total capacity: {gemini_key_manager.get_quota_status()['total_capacity']} requests/day. "
                 "Quotas reset at midnight Pacific Time."
             )
@@ -45,7 +45,7 @@ class GeminiService:
         
         if not api_key:
             raise Exception(
-                "❌ All Gemini API keys exhausted! "
+                " All Gemini API keys exhausted! "
                 f"Total capacity: {gemini_key_manager.get_quota_status()['total_capacity']} requests/day. "
                 "Quotas reset at midnight Pacific Time."
             )
@@ -91,7 +91,7 @@ class GeminiService:
             )
         
         except Exception as e:
-            logger.error(f"❌ Embedding generation failed: {e}")
+            logger.error(f" Embedding generation failed: {e}")
             raise
     
     def format_explanation(
@@ -132,7 +132,7 @@ class GeminiService:
             
             # Check if it's a 429 rate limit error
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                 
                 # Force rotation to next key
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -140,10 +140,10 @@ class GeminiService:
                 # Retry with next key
                 return self.format_explanation(context, question, mode, class_level, retry_count + 1)
             
-            logger.error(f"❌ Gemini explanation failed: {e}")
+            logger.error(f" Gemini explanation failed: {e}")
             raise
     
-    def generate_response(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500) -> str:
+    def generate_response(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500, model_name: str = None) -> str:
         """
         Generate a simple text response from Gemini with automatic retry on 429 and expired key errors.
         
@@ -151,6 +151,8 @@ class GeminiService:
             prompt: Input prompt
             retry_count: Number of retries attempted (internal use)
             max_output_tokens: Maximum tokens for response (default: 1500)
+            model_name: Optional model to use (default: self.model_name). 
+                        Use 'models/gemini-2.5-pro' for complex tasks requiring large outputs.
         
         Returns:
             Generated text response
@@ -172,9 +174,12 @@ class GeminiService:
                 "top_k": 40,
             }
             
+            # Use specified model or default
+            selected_model = model_name or self.model_name
+            
             # Create model with custom config
             model = genai.GenerativeModel(
-                self.model_name,
+                selected_model,
                 generation_config=generation_config
             )
             
@@ -200,16 +205,16 @@ class GeminiService:
                     # Mark key as permanently invalid so it's skipped in future
                     if current_key_id:
                         gemini_key_manager.mark_key_invalid(current_key_id)
-                    logger.warning(f"⚠️ API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
+                    logger.warning(f" API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
                 else:
-                    logger.warning(f"⚠️ 429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                    logger.warning(f" 429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                     # Force rotation to next key
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
-                # Retry with next key
-                return self.generate_response(prompt, retry_count + 1, max_output_tokens)
+                # Retry with next key (pass model_name for consistency)
+                return self.generate_response(prompt, retry_count + 1, max_output_tokens, model_name)
             
-            logger.error(f"❌ Gemini generation failed: {e}")
+            logger.error(f" Gemini generation failed: {e}")
             raise
     
     def generate_response_streaming(self, prompt: str, retry_count: int = 0):
@@ -254,15 +259,15 @@ class GeminiService:
                 if is_expired_key:
                     if current_key_id:
                         gemini_key_manager.mark_key_invalid(current_key_id)
-                    logger.warning(f"⚠️ API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
+                    logger.warning(f" API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
                 else:
-                    logger.warning(f"⚠️ 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
+                    logger.warning(f" 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
                 # Retry with next key - yield from recursive call
                 yield from self.generate_response_streaming(prompt, retry_count + 1)
             else:
-                logger.error(f"❌ Gemini streaming failed: {e}")
+                logger.error(f" Gemini streaming failed: {e}")
                 raise
     
     def generate_response_with_image(
@@ -327,7 +332,7 @@ class GeminiService:
             
             # Check if it's a 429 rate limit error
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                 
                 # Force rotation to next key
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -335,7 +340,7 @@ class GeminiService:
                 # Retry with next key
                 return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1, max_output_tokens)
             
-            logger.error(f"❌ Gemini vision failed: {e}")
+            logger.error(f" Gemini vision failed: {e}")
             raise
     
     def _build_prompt(self, context: str, question: str, mode: str, class_level: int = 6) -> str:
@@ -356,10 +361,10 @@ class GeminiService:
         base_instruction = f"""You are an AI tutor for NCERT Class {class_level} students.
 
 CRITICAL RULES - STRICT RAG (Retrieval-Augmented Generation):
-1. ⚠️ ONLY use information from the CONTEXT below - DO NOT use your general knowledge
-2. ⚠️ If the context doesn't have the answer, say: "I don't have enough information to answer this. Try asking about a specific topic."
-3. ⚠️ DO NOT make up facts, dates, names, or examples that aren't in the context
-4. ⚠️ If you're unsure, say so - don't guess or hallucinate
+1.  ONLY use information from the CONTEXT below - DO NOT use your general knowledge
+2.  If the context doesn't have the answer, say: "I don't have enough information to answer this. Try asking about a specific topic."
+3.  DO NOT make up facts, dates, names, or examples that aren't in the context
+4.  If you're unsure, say so - don't guess or hallucinate
 
 LANGUAGE LEVEL (Class {class_level}):
 {language_instruction}
@@ -513,7 +518,7 @@ Generate {num_questions} MCQs now in valid JSON format:"""
             
             # Check if it's a 429 rate limit error
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                 
                 # Force rotation to next key
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -521,7 +526,7 @@ Generate {num_questions} MCQs now in valid JSON format:"""
                 # Retry with next key
                 return self.generate_mcqs(context, num_questions, class_level, subject, chapter, retry_count + 1)
             
-            logger.error(f"❌ MCQ generation failed: {e}")
+            logger.error(f" MCQ generation failed: {e}")
             raise
     
     def generate_varied_questions(
@@ -606,7 +611,7 @@ JSON:"""
             try:
                 questions = json.loads(text)
                 if isinstance(questions, list) and len(questions) > 0:
-                    logger.info(f"✅ Generated {len(questions)} questions successfully")
+                    logger.info(f"Generated {len(questions)} questions successfully")
                     return questions
             except json.JSONDecodeError as e:
                 logger.warning(f"Direct JSON parse failed: {e}, attempting cleanup...")
@@ -623,7 +628,7 @@ JSON:"""
             
             try:
                 questions = json.loads(text)
-                logger.info(f"✅ Parsed after cleanup: {len(questions)} questions")
+                logger.info(f"Parsed after cleanup: {len(questions)} questions")
                 return questions
             except json.JSONDecodeError as e:
                 logger.warning(f"Parse after cleanup failed: {e}")
@@ -669,7 +674,7 @@ JSON:"""
                     repaired = text[:last_complete_pos] + ']'
                     try:
                         questions = json.loads(repaired)
-                        logger.info(f"✅ Repaired JSON! Got {len(questions)}/{object_count} questions")
+                        logger.info(f"Repaired JSON! Got {len(questions)}/{object_count} questions")
                         return questions
                     except json.JSONDecodeError as e:
                         logger.warning(f"Repair failed: {e}")
@@ -681,11 +686,11 @@ JSON:"""
         except Exception as e:
             error_str = str(e)
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️ 429 Rate limit. Retrying ({retry_count})...")
+                logger.warning(f" 429 Rate limit. Retrying ({retry_count})...")
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
             
-            logger.error(f"❌ Varied question generation failed: {e}")
+            logger.error(f" Varied question generation failed: {e}")
             raise
 
     def evaluate_assessment(
@@ -766,7 +771,7 @@ Provide evaluation in JSON format:"""
             
             # Check if it's a 429 rate limit error
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"⚠️  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
+                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                 
                 # Force rotation to next key
                 gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -774,11 +779,9 @@ Provide evaluation in JSON format:"""
                 # Retry with next key
                 return self.evaluate_assessment(questions_and_answers, class_level, subject, chapter, retry_count + 1)
             
-            logger.error(f"❌ Assessment evaluation failed: {e}")
+            logger.error(f" Assessment evaluation failed: {e}")
             raise
 
 
 # Global Gemini service instance
 gemini_service = GeminiService()
-
-

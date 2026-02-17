@@ -28,14 +28,14 @@ class PhysicsEmbedder:
         logger.info("   Loading text model...")
         self.text_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
         self.text_model.to(self.device)
-        logger.info(f"   ✅ Text model loaded: all-mpnet-base-v2 (768-dim)")
+        logger.info(f"   Text model loaded: all-mpnet-base-v2 (768-dim)")
         
         # CLIP for diagrams (lazy load)
         self.clip_model = None
         self.clip_processor = None
         self.clip_projection = None
         
-        logger.info("✅ Physics Embedder initialized")
+        logger.info("Physics Embedder initialized")
     
     def _init_clip(self):
         """Lazy initialization of CLIP model"""
@@ -55,7 +55,7 @@ class PhysicsEmbedder:
             torch.nn.Linear(768, 768)
         ).to(self.device)
         
-        logger.info(f"   ✅ CLIP model loaded and projected to 768-dim")
+        logger.info(f"   CLIP model loaded and projected to 768-dim")
     
     def embed_chunks_batch(
         self,
@@ -114,7 +114,7 @@ class PhysicsEmbedder:
         for chunk in chunks:
             chunk.pop('_index', None)
         
-        logger.info(f"✅ Generated {len(chunks)} embeddings")
+        logger.info(f"Generated {len(chunks)} embeddings")
         return chunks
     
     def _embed_text_or_formula(self, chunk: Dict) -> np.ndarray:

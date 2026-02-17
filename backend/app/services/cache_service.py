@@ -128,7 +128,7 @@ class CacheService:
             
             # Upsert (insert or replace)
             await self.collection.replace_one({"_id": key}, doc, upsert=True)
-            logger.debug(f"✅ Cached saved: {key}")
+            logger.debug(f"Cached saved: {key}")
             return True
             
         except Exception as e:

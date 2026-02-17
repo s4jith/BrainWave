@@ -80,12 +80,13 @@ export default function TestSession() {
 
         // Check test type
         if (testConfig.test_type === 'ai_with_analytics') {
-          // New AI test with topic-level analytics
+          // New AI test with topic-level analytics and difficulty selection
           newSession = await testService.startAITest({
             studentId: user?.id || user?.sub || "guest",
             classLevel: testConfig.class_level || user?.classLevel || 11,
             subject: testConfig.subject,
             chapter_number: testConfig.chapter_number,
+            difficulty: testConfig.difficulty || "medium",
             num_questions: testConfig.num_questions || 15
           });
         } else if (testConfig.use_chapter_test) {
@@ -537,7 +538,7 @@ export default function TestSession() {
                             setShowCheatingWarning(true);
                             setTestBlocked(true);
 
-                            console.warn('⚠️ POTENTIAL CHEATING DETECTED:', warning);
+                            console.warn(' POTENTIAL CHEATING DETECTED:', warning);
                             console.warn('🚫 TEST BLOCKED - Student cannot continue');
                           }
                         }
@@ -622,7 +623,7 @@ export default function TestSession() {
                       Total warnings: {typingWarnings.length}
                     </p>
                     <p className="text-xs text-red-900 font-semibold mt-2 bg-red-200 p-2 rounded">
-                      ⚠️ This incident will be reported to staff. You can only submit the test as-is.
+                       This incident will be reported to staff. You can only submit the test as-is.
                     </p>
                   </div>
                   <button

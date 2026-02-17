@@ -157,12 +157,12 @@ export default function StaffTestCard({ test, studentId, onRefresh }) {
       console.log("📥 RESPONSE:", response.status, responseData);
 
       if (!response.ok) {
-        console.error("❌ Upload Error:", responseData);
+        console.error(" Upload Error:", responseData);
         alert(`Upload Error: ${JSON.stringify(responseData)}`);
         throw new Error(responseData.detail || JSON.stringify(responseData) || "Upload failed");
       }
 
-      alert("✅ Upload successful!");
+      alert("Upload successful!");
       onRefresh();
     } catch (error) {
       console.error("Upload failed:", error);

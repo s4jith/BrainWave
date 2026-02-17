@@ -34,6 +34,9 @@ export default function GroupManagement() {
     const [studentSearchTerm, setStudentSearchTerm] = useState("");
     const [studentClassFilter, setStudentClassFilter] = useState("");
 
+    // Teacher search/filter state
+    const [teacherSearchTerm, setTeacherSearchTerm] = useState("");
+
     const [groupForm, setGroupForm] = useState({
         teacher_ids: [],
         classSubject: "",  // Combined class-subject
@@ -302,6 +305,14 @@ export default function GroupManagement() {
         return matchesSearch && matchesClass && (showAssignStudents ? notInGroup : true);
     });
 
+    // Filter teachers by search term
+    const filteredTeachers = teachers.filter(teacher => {
+        const matchesSearch = teacher.name?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
+            teacher.user_id?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
+            teacher.email?.toLowerCase().includes(teacherSearchTerm.toLowerCase());
+        return matchesSearch;
+    });
+
     return (
         <AdminLayout title="Group Management" icon={FolderKanban}>
             {/* Search and Actions */}
@@ -516,12 +527,23 @@ export default function GroupManagement() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assign Teachers *</label>
-                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto p-2">
-                                    {teachers.length === 0 ? (
-                                        <div className="text-center text-gray-500 dark:text-gray-400 py-2">No teachers found</div>
+                                <div className="mb-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Search teachers..."
+                                        value={teacherSearchTerm}
+                                        onChange={(e) => setTeacherSearchTerm(e.target.value)}
+                                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
+                                    {filteredTeachers.length === 0 ? (
+                                        <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                                            {teacherSearchTerm ? "No teachers match your search" : "No teachers found"}
+                                        </div>
                                     ) : (
-                                        teachers.map(teacher => (
-                                            <label key={teacher.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer rounded">
+                                        filteredTeachers.map(teacher => (
+                                            <label key={teacher.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0">
                                                 <input
                                                     type="checkbox"
                                                     checked={groupForm.teacher_ids.includes(teacher.id)}
@@ -533,7 +555,10 @@ export default function GroupManagement() {
                                                     }}
                                                     className="w-4 h-4 text-gray-900 rounded border-gray-300"
                                                 />
-                                                <span className="text-gray-900 dark:text-white">{teacher.name} ({teacher.user_id})</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium text-gray-900 dark:text-white truncate">{teacher.name}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.user_id} {teacher.email ? `• ${teacher.email}` : ""}</p>
+                                                </div>
                                             </label>
                                         ))
                                     )}

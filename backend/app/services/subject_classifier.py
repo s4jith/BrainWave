@@ -18,10 +18,10 @@ class SubjectClassifier:
     def __init__(self):
         self.gemini = gemini_service
         self.valid_subjects = [
-            "Physics", "Chemistry", "Mathematics", "Biology", 
+            "Physics", "Chemistry", "Maths", "Biology", 
             "Science", "English", "Hindi", "Social Science"
         ]
-        logger.info("✅ SubjectClassifier initialized")
+        logger.info("SubjectClassifier initialized")
     
     async def classify(self, question: str) -> Dict:
         """
@@ -50,8 +50,8 @@ class SubjectClassifier:
             # Normalize detected subject
             detected = data.get("detected_subject", "Unknown")
             # Map common variations
-            if detected.lower() in ["math", "maths"]: 
-                detected = "Mathematics"
+            if detected.lower() in ["math", "maths", "mathematics"]: 
+                detected = "Maths"
             
             data["detected_subject"] = detected
             return data

@@ -48,9 +48,11 @@ class RetrievalService:
         self.web_db = pinecone_web_db
         self.llm_db = pinecone_llm_db
         
-        # Subject configurations
+        # Subject configurations (include aliases for backward compatibility)
         self.subject_namespaces = {
-            "Mathematics": "mathematics",
+            "Maths": "maths",
+            "Mathematics": "maths",  # Alias
+            "Math": "maths",  # Alias
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",
@@ -64,7 +66,9 @@ class RetrievalService:
         }
         
         self.subject_class_ranges = {
-            "Mathematics": list(range(5, 13)),
+            "Maths": list(range(5, 13)),
+            "Mathematics": list(range(5, 13)),  # Alias
+            "Math": list(range(5, 13)),  # Alias
             "Physics": list(range(11, 13)),
             "Chemistry": list(range(11, 13)),
             "Biology": list(range(11, 13)),
@@ -77,7 +81,7 @@ class RetrievalService:
             "Hindi": list(range(5, 13))
         }
         
-        logger.info(f"✅ {self.config.component_name} initialized")
+        logger.info(f"{self.config.component_name} initialized")
     
     @measure_latency("embedding_generation")
     def generate_embedding(self, text: str) -> List[float]:
@@ -138,7 +142,7 @@ class RetrievalService:
         Returns:
             Dict with textbook_chunks, llm_chunks, web_chunks, class_distribution, query_embedding
         """
-        logger.info(f"🔍 [{self.config.component_name}] Retrieving for: {query_text[:50]}...")
+        logger.info(f" [{self.config.component_name}] Retrieving for: {query_text[:50]}...")
         
         # Generate embedding ONCE (optimized)
         query_embedding = self.generate_embedding(query_text)
@@ -216,7 +220,7 @@ class RetrievalService:
             return all_chunks, class_distribution
             
         except Exception as e:
-            logger.error(f"❌ Textbook query failed: {e}")
+            logger.error(f" Textbook query failed: {e}")
             return [], {}
     
     def query_llm_cache(self, query_embedding: List[float], subject: str) -> List[Dict]:

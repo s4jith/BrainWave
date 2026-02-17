@@ -57,7 +57,7 @@ class GeminiKeyManager:
                     "key": api_key,
                     "index": i - 1
                 })
-                logger.info(f"✅ Loaded {key_name} (ending in ...{api_key[-6:]})")
+                logger.info(f"Loaded {key_name} (ending in ...{api_key[-6:]})")
         
         if not self.keys:
             # Fallback to legacy single key
@@ -68,10 +68,10 @@ class GeminiKeyManager:
                     "key": legacy_key,
                     "index": 0
                 })
-                logger.warning("⚠️  Using legacy single API key. Add GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc. for rotation.")
+                logger.warning("  Using legacy single API key. Add GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc. for rotation.")
         
         if not self.keys:
-            raise ValueError("❌ No Gemini API keys found in environment variables!")
+            raise ValueError(" No Gemini API keys found in environment variables!")
     
     def _init_db(self):
         """Initialize MongoDB connection for quota tracking."""
@@ -85,9 +85,9 @@ class GeminiKeyManager:
             # Ensure indexes
             self.quota_collection.create_index("key_id", unique=True)
             
-            logger.info("✅ MongoDB connection initialized for quota tracking")
+            logger.info("MongoDB connection initialized for quota tracking")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize MongoDB for quota tracking: {e}")
+            logger.error(f" Failed to initialize MongoDB for quota tracking: {e}")
             self.db = None
     
     def _get_current_pacific_date(self) -> str:
@@ -166,7 +166,7 @@ class GeminiKeyManager:
                 # Key has available quota
                 api_key = key_info["key"]
                 logger.info(
-                    f"✅ Using {key_id} "
+                    f"Using {key_id} "
                     f"({quota_data['request_count'] + 1}/{self.daily_limit} requests today)"
                 )
                 
@@ -177,14 +177,14 @@ class GeminiKeyManager:
             else:
                 # Key exhausted, try next one
                 logger.warning(
-                    f"⚠️ {key_id} quota exhausted "
+                    f" {key_id} quota exhausted "
                     f"({quota_data['request_count']}/{self.daily_limit}). "
                     f"Rotating to next key..."
                 )
                 self.current_key_index = (self.current_key_index + 1) % len(self.keys)
         
         # All keys exhausted or invalid
-        logger.error("❌ All API keys exhausted or invalid! All quotas used for today.")
+        logger.error(" All API keys exhausted or invalid! All quotas used for today.")
         return None
     
     def mark_key_invalid(self, key_id: str):
@@ -251,7 +251,7 @@ class GeminiKeyManager:
     def force_reset_all_quotas(self):
         """Force reset all quota counters (for testing purposes)."""
         if self.db is None:
-            logger.warning("⚠️  Cannot reset quotas: MongoDB not initialized")
+            logger.warning("  Cannot reset quotas: MongoDB not initialized")
             return
         
         current_date = self._get_current_pacific_date()

@@ -2,14 +2,14 @@
 
 ## 🎯 Features
 
-### ✅ Fully Integrated RAG Chatbot
+### Fully Integrated RAG Chatbot
 - **AI Explanations**: 5 modes (Simple, Meaning, Story, Example, Summary)
 - **Greeting Detection**: Cost-optimized (no LLM calls for greetings)
 - **Strict RAG**: No hallucination - only context-based answers
 - **Vector Database**: 2,193 embeddings from 16 NCERT PDFs in Pinecone
 - **AI Model**: Gemini 2.5 Flash
 
-### ✅ Backend (FastAPI)
+### Backend (FastAPI)
 - **RAG Chat API**: `/api/chat/` - Context-aware explanations
 - **MCQ Generation**: `/api/mcq/generate` - Auto-generate questions
 - **Evaluation**: `/api/evaluate/mcq` & `/api/evaluate/assessment`
@@ -17,7 +17,7 @@
 - **MongoDB Atlas**: Persistent storage
 - **Pinecone**: Vector search
 
-### ✅ Frontend (React + Vite)
+### Frontend (React + Vite)
 - **PDF Viewer**: 16 NCERT Social Science lessons
 - **AI Panel**: Real-time explanations via backend
 - **Notes System**: Highlight and save notes
@@ -25,7 +25,7 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.10+
@@ -83,7 +83,7 @@ Frontend will start at: **http://localhost:5173**
 
 ---
 
-## 📚 Usage
+## Usage
 
 ### 1. Open the App
 Visit **http://localhost:5173** in your browser

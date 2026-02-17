@@ -52,7 +52,7 @@ class IngestionService:
         # Embedding uploader for Pinecone
         self.embedding_uploader = PineconeEmbeddingUploader()
         
-        logger.info(f"✅ {self.config.component_name} initialized")
+        logger.info(f"{self.config.component_name} initialized")
     
     @measure_latency("ingestion_full_pipeline")
     def ingest_pdf(
@@ -83,7 +83,7 @@ class IngestionService:
         )
         
         if not result.success:
-            logger.error(f"❌ [IngestionService] PDF processing failed: {result.errors}")
+            logger.error(f" [IngestionService] PDF processing failed: {result.errors}")
             return result
         
         # Step 2: Create chunks
@@ -102,7 +102,7 @@ class IngestionService:
         
         result.total_embeddings = upload_result.get("uploaded", 0)
         
-        logger.info(f"✅ [IngestionService] Ingestion complete: {result.total_embeddings} embeddings uploaded")
+        logger.info(f"[IngestionService] Ingestion complete: {result.total_embeddings} embeddings uploaded")
         
         return result
     

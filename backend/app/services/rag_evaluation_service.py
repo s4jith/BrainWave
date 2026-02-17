@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 
 # Subject name normalization to fix typos
 SUBJECT_CORRECTIONS = {
-    "mathematicss": "Mathematics",
-    "mathematic": "Mathematics",
-    "maths": "Mathematics",
-    "math": "Mathematics",
+    "mathematicss": "Maths",
+    "mathematic": "Maths",
+    "mathematics": "Maths",
+    "maths": "Maths",
+    "math": "Maths",
     "science": "Science",
     "sciences": "Science",
     "english": "English",
@@ -200,7 +201,7 @@ class RAGEvaluationService:
             evaluation_status=evaluation_status
         )
         
-        logger.info(f"✅ Evaluation complete: {auto_percentage}% ({correct_count}/{len(objective_pairs)} objective correct), status={evaluation_status}")
+        logger.info(f"Evaluation complete: {auto_percentage}% ({correct_count}/{len(objective_pairs)} objective correct), status={evaluation_status}")
         
         return {
             "session_id": session_id,
@@ -622,7 +623,7 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
                 elif percentage_score >= 40:
                     encouragement = "💪 Don't give up! Focus on the specific topics listed above and try again!"
                 else:
-                    encouragement = "📚 Review the specific topics mentioned above and practice them. You'll get better!"
+                    encouragement = "Review the specific topics mentioned above and practice them. You'll get better!"
                 
                 return {
                     "summary": feedback_data.get("summary", f"You scored {percentage_score}% on {topic_name}"),
@@ -679,11 +680,11 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
             }
         else:
             return {
-                "summary": f"📚 More practice needed on '{topic_name}'. You scored {percentage_score}%. " + (f"Start with: {', '.join(weak_topic_names[:2])}." if weak_topic_names else f"Review {chapter_ref} carefully."),
+                "summary": f"More practice needed on '{topic_name}'. You scored {percentage_score}%. " + (f"Start with: {', '.join(weak_topic_names[:2])}." if weak_topic_names else f"Review {chapter_ref} carefully."),
                 "strengths": specific_strengths,
                 "improvements": specific_improvements,
                 "topics_to_study": weak_topic_names[:5],
-                "encouragement": "📚 Every expert was once a beginner. Review the topics and try again!"
+                "encouragement": "Every expert was once a beginner. Review the topics and try again!"
             }
     
     def _calculate_topic_analytics(self, questions: List[Dict], evaluations: List[Dict]) -> Dict:

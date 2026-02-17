@@ -55,7 +55,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     setImageUrl(null); // Reset image
 
     try {
-      console.log("🚀 Calling backend API...", {
+      console.log("Calling backend API...", {
         chapter: currentLesson?.number || 1,
         text: selectedText?.text,
         action: action.id
@@ -70,11 +70,11 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         currentLesson?.number || 1
       );
       
-      console.log("✅ Backend response received:", result);
+      console.log("Backend response received:", result);
       setResponse(result.answer);
       setIsProcessing(false);
     } catch (err) {
-      console.error("❌ AI API Error:", err);
+      console.error(" AI API Error:", err);
       setError(err.message || "Failed to get AI response");
       setIsProcessing(false);
     }

@@ -246,7 +246,7 @@ const QuestionBank = () => {
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-2xl font-bold">Question Bank</h1>
-                        <p className="text-gray-400">Manage and organize all test questions</p>
+                        <p className="text-gray-600 dark:text-gray-400">Manage and organize all test questions</p>
                     </div>
                     <button
                         onClick={handleAddNew}
@@ -257,12 +257,12 @@ const QuestionBank = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-4 mb-6 border-b border-gray-700">
+                <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={() => setActiveTab("bank")}
                         className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === "bank"
                             ? "border-blue-500 text-blue-500"
-                            : "border-transparent text-gray-400 hover:text-gray-300"
+                            : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
                             }`}
                     >
                         Question Bank
@@ -271,7 +271,7 @@ const QuestionBank = () => {
                         onClick={() => setActiveTab("approvals")}
                         className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === "approvals"
                             ? "border-yellow-500 text-yellow-500"
-                            : "border-transparent text-gray-400 hover:text-gray-300"
+                            : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
                             }`}
                     >
                         Pending Approvals
@@ -279,20 +279,20 @@ const QuestionBank = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        <Search className="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400" size={18} />
                         <input
                             type="text"
                             placeholder="Search questions..."
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-blue-500"
+                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-blue-500"
                             value={filters.search}
                             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
 
                     <select
-                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
                         value={filters.groupName}
                         onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
                     >
@@ -309,7 +309,7 @@ const QuestionBank = () => {
                     </select>
 
                     <select
-                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
                         value={filters.difficulty}
                         onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
                     >
@@ -321,7 +321,7 @@ const QuestionBank = () => {
                     </select>
 
                     <select
-                        className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
                         value={filters.type}
                         onChange={(e) => setFilters({ ...filters, type: e.target.value })}
                     >
@@ -334,13 +334,13 @@ const QuestionBank = () => {
                 </div>
 
                 {/* Questions List */}
-                <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {loading ? (
-                        <div className="p-8 text-center text-gray-400">Loading questions...</div>
+                        <div className="p-8 text-center text-gray-600 dark:text-gray-400">Loading questions...</div>
                     ) : questions.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
+                        <div className="p-8 text-center text-gray-600 dark:text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
                     ) : (
-                        <div className="divide-y divide-gray-700">
+                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
                             {questions.map((q) => (
                                 <div key={q.id} className="p-4 hover:bg-gray-750 transition-colors">
                                     <div className="flex justify-between items-start">
@@ -352,7 +352,7 @@ const QuestionBank = () => {
                                                             'bg-red-900 text-red-300'}`}>
                                                     {q.difficulty.toUpperCase()}
                                                 </span>
-                                                <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-xs">
+                                                <span className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
                                                     {q.type.replace('_', ' ').toUpperCase()}
                                                 </span>
                                                 <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs">
@@ -367,12 +367,12 @@ const QuestionBank = () => {
                                                     </span>
                                                 )}
                                             </div>
-                                            <h3 className="text-lg font-medium text-white mb-2">{q.text}</h3>
+                                            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{q.text}</h3>
 
                                             {q.type === 'mcq' && (
                                                 <div className="grid grid-cols-2 gap-2 mt-2">
                                                     {q.options.map((opt, idx) => (
-                                                        <div key={idx} className={`p-2 rounded text-sm ${opt === q.correct_answer ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/30'}`}>
+                                                        <div key={idx} className={`p-2 rounded text-sm ${opt === q.correct_answer ? 'bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700' : 'bg-gray-100 dark:bg-gray-700/30'}`}>
                                                             <span className="font-bold mr-2">{String.fromCharCode(65 + idx)}.</span> {opt}
                                                         </div>
                                                     ))}
@@ -380,8 +380,8 @@ const QuestionBank = () => {
                                             )}
 
                                             {q.type !== 'mcq' && (
-                                                <div className="mt-2 text-sm text-gray-400">
-                                                    <span className="font-semibold text-gray-300">Answer:</span> {q.correct_answer}
+                                                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">Answer:</span> {q.correct_answer}
                                                 </div>
                                             )}
 
@@ -420,7 +420,7 @@ const QuestionBank = () => {
                                             )}
                                             <button
                                                 onClick={() => handleEdit(q)}
-                                                className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 title="Edit"
                                                 disabled={isTeacher && q.created_role !== 'teacher' && q.created_by !== user.user_id && q.triggered_by !== user.user_id}
                                             >
@@ -428,7 +428,7 @@ const QuestionBank = () => {
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(q.id)}
-                                                className="p-2 hover:bg-red-900/30 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                                                className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                                                 title="Delete"
                                             >
                                                 <Trash2 size={18} />
@@ -441,13 +441,13 @@ const QuestionBank = () => {
                     )}
 
                     {/* Pagination settings */}
-                    <div className="p-4 border-t border-gray-700 flex justify-between items-center text-sm text-gray-400">
+                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
                         <div>Showing {questions.length} of {pagination.total} questions</div>
                         <div className="flex gap-2">
                             <button
                                 disabled={pagination.page === 1}
                                 onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                                className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
                             >
                                 Previous
                             </button>
@@ -455,7 +455,7 @@ const QuestionBank = () => {
                             <button
                                 disabled={pagination.page === pagination.pages}
                                 onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                                className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
                             >
                                 Next
                             </button>

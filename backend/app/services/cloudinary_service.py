@@ -46,10 +46,10 @@ class CloudinaryService:
             api_key = os.getenv('CLOUDINARY_API_KEY')
             api_secret = os.getenv('CLOUDINARY_API_SECRET')
             
-            logger.info(f"🔍 Cloudinary init check - cloud_name: {cloud_name}, api_key: {'set' if api_key else 'not set'}, api_secret: {'set' if api_secret else 'not set'}")
+            logger.info(f" Cloudinary init check - cloud_name: {cloud_name}, api_key: {'set' if api_key else 'not set'}, api_secret: {'set' if api_secret else 'not set'}")
             
             if not all([cloud_name, api_key, api_secret]):
-                logger.warning("⚠️ Cloudinary credentials not found in environment")
+                logger.warning(" Cloudinary credentials not found in environment")
                 logger.info("   Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET to .env")
                 logger.info("   Sign up free at: https://cloudinary.com/users/register_free")
                 return
@@ -63,11 +63,11 @@ class CloudinaryService:
             
             self.cloud_name = cloud_name
             self.initialized = True
-            logger.info("✅ Cloudinary service initialized successfully")
+            logger.info("Cloudinary service initialized successfully")
             logger.info(f"   Cloud: {cloud_name}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Cloudinary: {e}")
+            logger.error(f" Failed to initialize Cloudinary: {e}")
             self.initialized = False
     
     def is_available(self) -> bool:
@@ -103,7 +103,7 @@ class CloudinaryService:
             Dict with URL and metadata, or None if failed
         """
         if not self.is_available():
-            logger.warning("⚠️ Cloudinary not available, skipping upload")
+            logger.warning(" Cloudinary not available, skipping upload")
             return None
         
         try:
@@ -144,7 +144,7 @@ class CloudinaryService:
                     type="upload"  # Use 'upload' type for public access
                 )
             else:
-                logger.error("❌ No file path or content provided")
+                logger.error(" No file path or content provided")
                 return None
             
             # Use the actual secure_url returned by Cloudinary
@@ -152,7 +152,7 @@ class CloudinaryService:
             secure_url = result.get('secure_url')
             public_id_result = result.get('public_id')
             
-            logger.info(f"✅ Uploaded PDF to Cloudinary: {public_id_result}")
+            logger.info(f"Uploaded PDF to Cloudinary: {public_id_result}")
             logger.info(f"   URL: {secure_url}")
             
             return {
@@ -166,7 +166,7 @@ class CloudinaryService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Cloudinary upload failed: {e}")
+            logger.error(f" Cloudinary upload failed: {e}")
             return None
     
     def delete_file(self, public_id: str) -> bool:
@@ -181,14 +181,14 @@ class CloudinaryService:
             )
             
             if result.get('result') == 'ok':
-                logger.info(f"✅ Deleted from Cloudinary: {public_id}")
+                logger.info(f"Deleted from Cloudinary: {public_id}")
                 return True
             else:
-                logger.warning(f"⚠️ Cloudinary delete returned: {result.get('result')}")
+                logger.warning(f" Cloudinary delete returned: {result.get('result')}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Cloudinary delete failed: {e}")
+            logger.error(f" Cloudinary delete failed: {e}")
             return False
     
     def get_url(self, public_id: str) -> Optional[str]:
@@ -200,7 +200,7 @@ class CloudinaryService:
             url = cloudinary.CloudinaryResource(public_id, resource_type="raw").build_url(secure=True)
             return url
         except Exception as e:
-            logger.error(f"❌ Failed to get Cloudinary URL: {e}")
+            logger.error(f" Failed to get Cloudinary URL: {e}")
             return None
 
 

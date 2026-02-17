@@ -352,7 +352,7 @@ async def get_categories():
     """Get list of available course categories."""
     # These align with NCERT subjects
     categories = [
-        "Mathematics",
+        "Maths",
         "Physics",
         "Chemistry",
         "Biology",

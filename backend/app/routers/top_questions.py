@@ -77,7 +77,7 @@ async def get_top_questions(request: GetTopQuestionsRequest):
         )
         
     except Exception as e:
-        logger.error(f"❌ Error getting top questions: {e}")
+        logger.error(f" Error getting top questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -123,7 +123,7 @@ async def get_recommendations(request: GetRecommendationsRequest):
         )
         
     except Exception as e:
-        logger.error(f"❌ Error getting recommendations: {e}")
+        logger.error(f" Error getting recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -178,7 +178,7 @@ async def track_question(request: TrackQuestionRequest):
             raise HTTPException(status_code=500, detail="Failed to track question")
         
     except Exception as e:
-        logger.error(f"❌ Error tracking question: {e}")
+        logger.error(f" Error tracking question: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -223,7 +223,7 @@ async def update_feedback(request: UpdateFeedbackRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error updating feedback: {e}")
+        logger.error(f" Error updating feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -267,7 +267,7 @@ async def get_trending_questions(request: TrendingQuestionsRequest):
         )
         
     except Exception as e:
-        logger.error(f"❌ Error getting trending questions: {e}")
+        logger.error(f" Error getting trending questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -306,7 +306,7 @@ async def get_top_questions_simple(
         }
         
     except Exception as e:
-        logger.error(f"❌ Error in simple GET endpoint: {e}")
+        logger.error(f" Error in simple GET endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -343,7 +343,7 @@ async def get_recommendations_simple(
         }
         
     except Exception as e:
-        logger.error(f"❌ Error in simple GET endpoint: {e}")
+        logger.error(f" Error in simple GET endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -371,7 +371,7 @@ async def get_available_subjects(class_level: int):
       "class_level": 10,
       "subjects": [
         {"name": "Hindi", "value": "hindi"},
-        {"name": "Mathematics", "value": "mathematics"},
+        {"name": "Maths", "value": "maths"},
         {"name": "Science", "value": "science"}
       ],
       "count": 3
@@ -382,7 +382,7 @@ async def get_available_subjects(class_level: int):
         if class_level < 6 or class_level > 12:
             raise HTTPException(status_code=400, detail="Class level must be between 6 and 12")
         
-        logger.info(f"📚 Getting available subjects for class {class_level}")
+        logger.info(f"Getting available subjects for class {class_level}")
         
         subjects = subject_service.get_available_subjects_for_class(class_level)
         
@@ -396,7 +396,7 @@ async def get_available_subjects(class_level: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error getting available subjects: {e}")
+        logger.error(f" Error getting available subjects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -458,7 +458,7 @@ async def get_subject_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error getting subject stats: {e}")
+        logger.error(f" Error getting subject stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -532,7 +532,7 @@ async def get_doubt_history(
         }
         
     except Exception as e:
-        logger.error(f"❌ Error getting doubt history: {e}")
+        logger.error(f" Error getting doubt history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -580,5 +580,5 @@ async def get_doubt_detail(user_id: str, qa_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error getting doubt detail: {e}")
+        logger.error(f" Error getting doubt detail: {e}")
         raise HTTPException(status_code=500, detail=str(e))

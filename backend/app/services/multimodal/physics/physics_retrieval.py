@@ -27,13 +27,13 @@ class PhysicsRetrieval:
         self.api_key = api_key or os.getenv("PINECONE_API_KEY")
         self.index_name = index_name
         
-        logger.info(f"🔍 Initializing Physics Retrieval...")
+        logger.info(f" Initializing Physics Retrieval...")
         
         # Connect to Pinecone
         self.pc = Pinecone(api_key=self.api_key)
         self.index = self.pc.Index(self.index_name)
         
-        logger.info(f"✅ Physics Retrieval ready")
+        logger.info(f"Physics Retrieval ready")
     
     def search(
         self,

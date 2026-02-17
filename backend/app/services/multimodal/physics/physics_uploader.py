@@ -28,7 +28,7 @@ class PhysicsUploader:
         self.index = self.pc.Index(self.index_name)
         
         logger.info(f"   Connected to index: {self.index_name}")
-        logger.info(f"✅ Physics Uploader ready")
+        logger.info(f"Physics Uploader ready")
     
     def upload_chunks(
         self,
@@ -82,7 +82,7 @@ class PhysicsUploader:
             'namespace_vector_count': namespace_stats.get('vector_count', 0)
         }
         
-        logger.info(f"✅ Upload complete:")
+        logger.info(f"Upload complete:")
         logger.info(f"   Total chunks: {result['total_chunks']}")
         logger.info(f"   Uploaded: {result['uploaded']}")
         logger.info(f"   Failed: {result['failed']}")
@@ -160,10 +160,10 @@ class PhysicsUploader:
     
     def delete_namespace(self, namespace: str = "physics"):
         """Delete all vectors in namespace"""
-        logger.warning(f"⚠️  Deleting all vectors in namespace '{namespace}'...")
+        logger.warning(f"  Deleting all vectors in namespace '{namespace}'...")
         
         try:
             self.index.delete(delete_all=True, namespace=namespace)
-            logger.info(f"✅ Namespace '{namespace}' cleared")
+            logger.info(f"Namespace '{namespace}' cleared")
         except Exception as e:
             logger.error(f"Failed to delete namespace: {e}")

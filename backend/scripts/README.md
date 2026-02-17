@@ -84,7 +84,7 @@ All scripts require:
   - `GEMINI_API_KEY`
 - Required packages installed (`requirements.txt`)
 
-## 🚀 Typical Workflow
+## Typical Workflow
 
 1. **Setup Architecture**
    ```bash

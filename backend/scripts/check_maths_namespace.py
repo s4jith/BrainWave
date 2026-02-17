@@ -28,7 +28,7 @@ try:
         include_metadata=True
     )
     
-    print(f"✅ Found {len(results.matches)} vectors in 'maths' namespace")
+    print(f"Found {len(results.matches)} vectors in 'maths' namespace")
     print("\nSample metadata:")
     
     for i, match in enumerate(results.matches[:5], 1):
@@ -46,6 +46,6 @@ try:
         print(f"   Total vectors: {maths_stats.get('vector_count', 0):,}")
     
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f" Error: {e}")
     import traceback
     traceback.print_exc()

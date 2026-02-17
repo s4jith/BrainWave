@@ -84,7 +84,7 @@ class PhysicsChunker:
         )
         chunks.extend(numerical_chunks)
         
-        logger.info(f"✅ Created {len(chunks)} semantic chunks")
+        logger.info(f"Created {len(chunks)} semantic chunks")
         self._log_chunk_distribution(chunks)
         
         return chunks

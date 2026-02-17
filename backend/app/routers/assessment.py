@@ -140,9 +140,9 @@ Example:
         questions = questions[:request.num_questions]
         
         if len(questions) < request.num_questions:
-            logger.warning(f"⚠️ Could only generate {len(questions)} questions instead of {request.num_questions}")
+            logger.warning(f" Could only generate {len(questions)} questions instead of {request.num_questions}")
         
-        logger.info(f"✅ Generated {len(questions)} questions successfully")
+        logger.info(f"Generated {len(questions)} questions successfully")
         
         return QuestionResponse(
             questions=questions,
@@ -153,7 +153,7 @@ Example:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Question generation error: {e}")
+        logger.error(f" Question generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -169,7 +169,7 @@ async def generate_enhanced_questions(request: EnhancedQuestionRequest):
     Questions are cached in MongoDB and reused across students.
     """
     try:
-        logger.info(f"📚 Enhanced question request for {request.subject} Ch.{request.chapter} pages {request.page_range}")
+        logger.info(f"Enhanced question request for {request.subject} Ch.{request.chapter} pages {request.page_range}")
         
         # Check if questions already exist
         if not request.force_regenerate:
@@ -181,7 +181,7 @@ async def generate_enhanced_questions(request: EnhancedQuestionRequest):
             )
             
             if existing_questions:
-                logger.info(f"✅ Returning cached questions (used {existing_questions.times_used} times)")
+                logger.info(f"Returning cached questions (used {existing_questions.times_used} times)")
                 
                 # Combine questions in order
                 all_questions = []
@@ -241,7 +241,7 @@ async def generate_enhanced_questions(request: EnhancedQuestionRequest):
                 "page_range": q.page_range
             })
         
-        logger.info(f"✅ Generated {len(all_questions)} new questions")
+        logger.info(f"Generated {len(all_questions)} new questions")
         
         return {
             "questions": all_questions,
@@ -253,7 +253,7 @@ async def generate_enhanced_questions(request: EnhancedQuestionRequest):
         }
     
     except Exception as e:
-        logger.error(f"❌ Enhanced question generation error: {e}")
+        logger.error(f" Enhanced question generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -265,7 +265,7 @@ async def evaluate_answers(request: EvaluationRequest):
     Compares answers against textbook content and provides detailed feedback.
     """
     try:
-        logger.info(f"🔍 Evaluating {len(request.answers)} answers for Class {request.class_level}, {request.subject}, Ch. {request.chapter}")
+        logger.info(f" Evaluating {len(request.answers)} answers for Class {request.class_level}, {request.subject}, Ch. {request.chapter}")
 
         # Get chapter content for evaluation context
         context = rag_service.retrieve_chapter_context(
@@ -412,7 +412,7 @@ TOPICS_TO_STUDY:
                 topics_to_study = [s.strip('- ').strip() for s in topics_text.split('\n') if s.strip().startswith('-')]
 
         except Exception as parse_error:
-            logger.warning(f"⚠️ Could not parse evaluation response: {parse_error}")
+            logger.warning(f" Could not parse evaluation response: {parse_error}")
 
         # Ensure at least default question scores
         while len(question_scores) < len(request.answers):
@@ -422,7 +422,7 @@ TOPICS_TO_STUDY:
                 "hint": "Review the chapter content for this question"
             })
 
-        logger.info(f"✅ Evaluation complete. Score: {score}/100")
+        logger.info(f"Evaluation complete. Score: {score}/100")
 
         return EvaluationResponse(
             score=score,
@@ -434,5 +434,5 @@ TOPICS_TO_STUDY:
         )
 
     except Exception as e:
-        logger.error(f"❌ Evaluation error: {e}")
+        logger.error(f" Evaluation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

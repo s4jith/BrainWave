@@ -97,6 +97,14 @@ class AssessmentService:
             # Send notifications
             await self._notify_users(doc)
             
+            # Save new questions (not from bank) to question_bank collection
+            await self._save_new_questions_to_bank(
+                questions_list, 
+                request.subject, 
+                request.class_level, 
+                instructor_id
+            )
+            
             return self._to_response(doc)
             
         except Exception as e:
@@ -200,6 +208,63 @@ class AssessmentService:
             logger.error(f"Failed to send notifications: {e}")
             # Don't fail the assessment creation just because of notifications
     
+    async def _save_new_questions_to_bank(
+        self, 
+        questions_list: list, 
+        subject: str, 
+        class_level: int, 
+        instructor_id: str
+    ):
+        """Save newly created questions (not from question bank) to the questions collection."""
+        try:
+            new_questions = []
+            now = datetime.utcnow().isoformat()
+            
+            for q in questions_list:
+                # Skip questions that came from the question bank
+                if q.get("is_bank_question"):
+                    continue
+                
+                # Create question document for the questions collection
+                question_doc = {
+                    "text": q.get("text", q.get("question_text", "")),
+                    "subject": subject,
+                    "class_level": class_level,
+                    "chapter": q.get("chapter", 1),
+                    "topic": q.get("topic", ""),
+                    "type": q.get("type", "mcq"),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "marks": q.get("marks", q.get("points", 1)),
+                    "options": q.get("options", []),
+                    "correct_answer": q.get("correct_answer", ""),
+                    "status": "approved",  # Auto-approve when created during test
+                    "created_by": instructor_id,
+                    "created_role": "teacher",
+                    "is_ai_generated": False,
+                    "created_at": now,
+                    "updated_at": now
+                }
+                
+                # Handle different answer types
+                if q.get("correct_answers"):
+                    question_doc["correct_answers"] = q.get("correct_answers")
+                if q.get("fillup_answers"):
+                    question_doc["correct_answer"] = q.get("fillup_answers")
+                if q.get("answer_text"):
+                    question_doc["correct_answer"] = q.get("answer_text")
+                
+                new_questions.append(question_doc)
+            
+            # Insert new questions to the questions collection (used by question bank)
+            if new_questions:
+                from app.db.mongo import db as sync_db
+                sync_db.questions.insert_many(new_questions)
+                logger.info(f"Saved {len(new_questions)} new questions to question bank")
+                
+        except Exception as e:
+            logger.error(f"Failed to save questions to bank: {e}")
+            # Don't fail assessment creation if this fails
+
     async def get_assessment(
         self,
         assessment_id: str,
@@ -259,7 +324,7 @@ class AssessmentService:
                 groups = await mongodb.db.groups.find(group_query).to_list(length=100)
                 teacher_group_ids = [str(g["_id"]) for g in groups]
                 
-                logger.info(f"🔍 Teacher {teacher_id} filter debug:")
+                logger.info(f" Teacher {teacher_id} filter debug:")
                 logger.info(f"   - Teacher user_id: {teacher_id}")
                 logger.info(f"   - Teacher MongoDB _id: {teacher_mongo_id}")
                 logger.info(f"   - Found {len(groups)} groups")
@@ -325,7 +390,7 @@ class AssessmentService:
                 }).to_list(length=100)
                 student_group_ids = [str(g["_id"]) for g in student_groups]
                 
-                logger.info(f"🔍 Student {student_id} assessment filter:")
+                logger.info(f" Student {student_id} assessment filter:")
                 logger.info(f"   - user_id: {student_id}")
                 logger.info(f"   - mongo_id: {student_mongo_id}")
                 logger.info(f"   - class_level: {student_class} (type: {type(student_class).__name__})")
@@ -1468,26 +1533,32 @@ class AssessmentService:
                 elif isinstance(raw_options[0], dict):
                     options_text = [str(opt.get("text", "")) for opt in raw_options]
         
-        # 3. Determine Correct Index(es)
+        # 3. Determine Correct Index(es) - Auto-detect single vs multi
         q_type = q.get("type", "mcq")
         correct_indices = set()
         
-        if q_type == "mcq_multi":
-            # Multi-select MCQ: correct_answers is array of indices
+        # For MCQ type, check correct_answers array
+        if q_type == "mcq":
             correct_answers_raw = q.get("correct_answers", [])
             for ca in correct_answers_raw:
                 try:
                     correct_indices.add(int(ca))
                 except (ValueError, TypeError):
                     pass
-        else:
-            # Single-select MCQ
-            raw_correct = q.get("correct_answer")
-            try:
-                correct_indices.add(int(raw_correct))
-            except (ValueError, TypeError):
-                if isinstance(raw_correct, str) and raw_correct in options_text:
-                    correct_indices.add(options_text.index(raw_correct))
+            
+            # Fallback to correct_answer (single value) if correct_answers is empty
+            if not correct_indices:
+                raw_correct = q.get("correct_answer")
+                if raw_correct is not None:
+                    try:
+                        correct_indices.add(int(raw_correct))
+                    except (ValueError, TypeError):
+                        if isinstance(raw_correct, str) and raw_correct in options_text:
+                            correct_indices.add(options_text.index(raw_correct))
+            
+            # Auto-detect: if more than 1 correct answer, set type to mcq_multi
+            if len(correct_indices) > 1:
+                q["type"] = "mcq_multi"
         
         # 4. Construct QuestionOption objects
         new_options = []
@@ -1510,7 +1581,7 @@ class AssessmentService:
         if "id" not in q:
             q["id"] = str(uuid.uuid4())
         
-        # 6. Default Type
+        # 6. Default Type (fallback)
         if "type" not in q:
             q["type"] = "mcq"
 

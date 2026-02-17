@@ -177,7 +177,7 @@ export default function Dashboard() {
   const fetchAvailableSubjects = async () => {
     try {
       const classLevel = user.classLevel || 10;
-      console.log(`📚 Fetching subjects for class ${classLevel}`);
+      console.log(`Fetching subjects for class ${classLevel}`);
       
       // Try curriculum API first
       const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true&class_level=${classLevel}`);
@@ -186,7 +186,7 @@ export default function Dashboard() {
         const subjectList = Array.isArray(data) ? data : [];
         
         if (subjectList.length === 0) {
-          console.log("📚 No subjects found in curriculum for this class level, trying books API");
+          console.log("No subjects found in curriculum for this class level, trying books API");
           // Fallback: try books API
           await fetchSubjectsFromBooks();
           return;
@@ -215,14 +215,14 @@ export default function Dashboard() {
           color: colorMap[s.subject_name] || 'bg-gray-100 text-gray-600'
         }));
 
-        console.log("📚 Mapped curriculum courses:", mappedCourses);
+        console.log("Mapped curriculum courses:", mappedCourses);
         setDynamicCourses(mappedCourses);
       } else {
         // Fallback to books API
         await fetchSubjectsFromBooks();
       }
     } catch (err) {
-      console.error("📚 Failed to fetch subjects:", err);
+      console.error("Failed to fetch subjects:", err);
       await fetchSubjectsFromBooks();
     }
   };
@@ -262,7 +262,7 @@ export default function Dashboard() {
         setDynamicCourses(mappedCourses);
       }
     } catch (err) {
-      console.error("📚 Failed to fetch subjects from books:", err);
+      console.error("Failed to fetch subjects from books:", err);
     }
   };
 

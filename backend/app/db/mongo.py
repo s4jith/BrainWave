@@ -391,11 +391,11 @@ class PineconeLLMDB:
                 
                 # Test connection
                 stats = self.index.describe_index_stats()
-                logger.info(f"✅ Connected to Pinecone LLM Content DB successfully")
+                logger.info(f"Connected to Pinecone LLM Content DB successfully")
                 logger.info(f"Index: {settings.PINECONE_LLM_INDEX}")
                 logger.info(f"Total LLM vectors: {stats.get('total_vector_count', 0)}")
             else:
-                logger.warning("⚠️ PINECONE_LLM_HOST not configured - LLM storage disabled")
+                logger.warning(" PINECONE_LLM_HOST not configured - LLM storage disabled")
                 logger.warning("To enable: Create 'ncert-llm' index (768 dim) and add PINECONE_LLM_HOST to .env")
             
         except Exception as e:
@@ -451,7 +451,7 @@ class PineconeLLMDB:
                 namespace=subject.lower()
             )
             
-            logger.info(f"✅ Stored LLM answer: {vector_id} in {subject} namespace")
+            logger.info(f"Stored LLM answer: {vector_id} in {subject} namespace")
             return True
             
         except Exception as e:
@@ -532,7 +532,7 @@ class SubjectWisePineconeDB:
         self.pc = None
         self.indexes = {}
         self.subject_config = {
-            "Mathematics": {
+            "Maths": {
                 "index_name": settings.PINECONE_MATH_INDEX,
                 "host": settings.PINECONE_MATH_HOST,
                 "classes": ["5", "6", "7", "8", "9", "10", "11", "12"]
@@ -587,18 +587,18 @@ class SubjectWisePineconeDB:
                     stats = index.describe_index_stats()
                     self.indexes[subject] = index
                     
-                    logger.info(f"✅ Connected to {subject} index")
+                    logger.info(f"Connected to {subject} index")
                     logger.info(f"   Classes: {', '.join(config['classes'])}")
                     logger.info(f"   Vectors: {stats.get('total_vector_count', 0)}")
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ Failed to connect to {subject} index: {e}")
+                    logger.warning(f" Failed to connect to {subject} index: {e}")
                     self.indexes[subject] = None
             
-            logger.info(f"📚 Subject-wise DB: {len([i for i in self.indexes.values() if i])} subjects connected")
+            logger.info(f"Subject-wise DB: {len([i for i in self.indexes.values() if i])} subjects connected")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize subject-wise Pinecone: {e}")
+            logger.error(f" Failed to initialize subject-wise Pinecone: {e}")
     
     def get_index(self, subject: str):
         """
@@ -705,7 +705,7 @@ class SubjectWisePineconeDB:
                     if int(c) <= student_class_int
                 ]
             
-            logger.info(f"🔍 Progressive query for {subject}: {', '.join(classes_to_search)}")
+            logger.info(f" Progressive query for {subject}: {', '.join(classes_to_search)}")
             
             # Query each class level
             progressive_results = {}
@@ -768,9 +768,11 @@ class NamespaceDB:
         self.pc = None
         self.index = None
         
-        # Subject to namespace mapping
+        # Subject to namespace mapping (include aliases for backward compatibility)
         self.subject_namespaces = {
-            "Mathematics": "mathematics",
+            "Maths": "maths",
+            "Mathematics": "maths",  # Alias for backward compatibility
+            "Math": "maths",  # Alias
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",
@@ -779,9 +781,11 @@ class NamespaceDB:
             "Hindi": "hindi"
         }
         
-        # Class ranges for each subject
+        # Class ranges for each subject (include aliases)
         self.subject_classes = {
-            "Mathematics": list(range(5, 13)),  # 5-12
+            "Maths": list(range(5, 13)),  # 5-12
+            "Mathematics": list(range(5, 13)),  # Alias
+            "Math": list(range(5, 13)),  # Alias
             "Physics": list(range(9, 13)),      # 9-12
             "Chemistry": list(range(9, 13)),    # 9-12
             "Biology": list(range(9, 13)),      # 9-12
@@ -806,7 +810,7 @@ class NamespaceDB:
             stats = self.index.describe_index_stats()
             
             logger.info("="*60)
-            logger.info("📚 Connected to Master Index (Namespace Architecture)")
+            logger.info("Connected to Master Index (Namespace Architecture)")
             logger.info(f"   Index: {settings.PINECONE_MASTER_INDEX}")
             logger.info(f"   Total vectors: {stats.get('total_vector_count', 0)}")
             
@@ -1012,7 +1016,7 @@ class NamespaceDB:
         try:
             namespace = self.get_namespace(subject)
             self.index.upsert(vectors=vectors, namespace=namespace)
-            logger.info(f"✅ Upserted {len(vectors)} vectors to namespace '{namespace}'")
+            logger.info(f"Upserted {len(vectors)} vectors to namespace '{namespace}'")
         except Exception as e:
             logger.error(f"Upsert failed for {subject}: {e}")
             raise
@@ -1044,7 +1048,7 @@ async def init_databases():
     await mongodb.connect()
     
     # Connect to Legacy Pinecone (textbook content) - will be deprecated
-    # logger.info("\n⚠️  Legacy DB (will be deprecated):")
+    # logger.info("\n  Legacy DB (will be deprecated):")
     pinecone_db.connect()
     
     # Connect to Pinecone Web Content DB
@@ -1054,10 +1058,10 @@ async def init_databases():
     pinecone_llm_db.connect()
     
     # Connect to NEW Namespace-Based DB (PRODUCTION)
-    logger.info("\n🚀 Connecting to Production Namespace Architecture:")
+    logger.info("\nConnecting to Production Namespace Architecture:")
     namespace_db.connect()
     
-    logger.info("\n✅ All databases initialized successfully")
+    logger.info("\nAll databases initialized successfully")
 
 
 async def close_databases():

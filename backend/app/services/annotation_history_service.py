@@ -38,11 +38,11 @@ class AnnotationHistoryService:
                 **document
             )
             
-            logger.info(f"✅ Annotation history saved: {item.id}")
+            logger.info(f"Annotation history saved: {item.id}")
             return item
         
         except Exception as e:
-            logger.error(f"❌ Failed to save annotation history: {e}")
+            logger.error(f" Failed to save annotation history: {e}")
             raise
     
     async def get_history_by_student(
@@ -91,7 +91,7 @@ class AnnotationHistoryService:
             return history
         
         except Exception as e:
-            logger.error(f"❌ Failed to retrieve annotation history: {e}")
+            logger.error(f" Failed to retrieve annotation history: {e}")
             raise
 
     async def delete_entry(self, entry_id: str) -> bool:
@@ -105,7 +105,7 @@ class AnnotationHistoryService:
                 
             return True
         except Exception as e:
-            logger.error(f"❌ Failed to delete history entry: {e}")
+            logger.error(f" Failed to delete history entry: {e}")
             raise
 
 

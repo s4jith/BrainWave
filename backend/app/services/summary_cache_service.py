@@ -56,7 +56,7 @@ class SummaryCacheService:
             cached = await collection.find_one({"cache_key": cache_key})
             
             if cached:
-                logger.info(f"✅ Cache HIT: {summary_type} summary for {subject} Class {class_level}, Ch {chapter}" + 
+                logger.info(f"Cache HIT: {summary_type} summary for {subject} Class {class_level}, Ch {chapter}" + 
                            (f", Page {page_number}" if page_number else ""))
                 
                 # Update access count and last accessed
@@ -74,12 +74,12 @@ class SummaryCacheService:
                     "source": "cache"
                 }
             
-            logger.info(f"❌ Cache MISS: {summary_type} summary for {subject} Class {class_level}, Ch {chapter}" +
+            logger.info(f" Cache MISS: {summary_type} summary for {subject} Class {class_level}, Ch {chapter}" +
                        (f", Page {page_number}" if page_number else ""))
             return None
             
         except Exception as e:
-            logger.error(f"❌ Cache lookup error: {e}")
+            logger.error(f" Cache lookup error: {e}")
             return None
     
     async def save_summary(
@@ -125,12 +125,12 @@ class SummaryCacheService:
                 upsert=True
             )
             
-            logger.info(f"✅ Saved {summary_type} summary to cache: {subject} Class {class_level}, Ch {chapter}" +
+            logger.info(f"Saved {summary_type} summary to cache: {subject} Class {class_level}, Ch {chapter}" +
                        (f", Page {page_number}" if page_number else ""))
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to save summary to cache: {e}")
+            logger.error(f" Failed to save summary to cache: {e}")
             return False
     
     async def get_cache_stats(self) -> dict:
@@ -148,7 +148,7 @@ class SummaryCacheService:
                 "chapter_summaries": chapter_summaries
             }
         except Exception as e:
-            logger.error(f"❌ Failed to get cache stats: {e}")
+            logger.error(f" Failed to get cache stats: {e}")
             return {"total_cached": 0}
     
     async def delete_chapter_summaries(
@@ -194,7 +194,7 @@ class SummaryCacheService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Failed to delete chapter summaries: {e}")
+            logger.error(f" Failed to delete chapter summaries: {e}")
             return {
                 "success": False,
                 "error": str(e),

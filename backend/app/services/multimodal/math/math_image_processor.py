@@ -75,11 +75,11 @@ class ImageProcessor:
             self.projector = CLIPProjector(input_dim=512, output_dim=768).to(self.device)
             self.projector.eval()
             
-            logger.info(f"✅ CLIP model loaded: {model_name}")
+            logger.info(f"CLIP model loaded: {model_name}")
             logger.info(f"   Output dimension: 768 (projected from 512)")
         
         except Exception as e:
-            logger.error(f"❌ Failed to load CLIP model: {e}")
+            logger.error(f" Failed to load CLIP model: {e}")
             raise
     
     def embed_image(
@@ -122,7 +122,7 @@ class ImageProcessor:
             return embedding
         
         except Exception as e:
-            logger.error(f"❌ Failed to embed image {image_path}: {e}")
+            logger.error(f" Failed to embed image {image_path}: {e}")
             raise
     
     def embed_images_batch(
@@ -183,7 +183,7 @@ class ImageProcessor:
             batch_embeddings = projected_features.cpu().numpy()
             embeddings.extend(batch_embeddings)
         
-        logger.info(f"✅ Generated {len(embeddings)} image embeddings")
+        logger.info(f"Generated {len(embeddings)} image embeddings")
         
         return embeddings
     
@@ -318,6 +318,6 @@ if __name__ == "__main__":
     # print(f"Embedding shape: {embedding.shape}")
     # print(f"Embedding norm: {np.linalg.norm(embedding)}")
     
-    print("✅ Image processor ready for use")
+    print("Image processor ready for use")
     print(f"   Model device: {processor.device}")
     print(f"   Output dimension: 768")

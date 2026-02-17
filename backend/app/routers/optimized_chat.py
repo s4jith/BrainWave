@@ -112,10 +112,10 @@ async def optimized_chat(request: OptimizedChatRequest):
                     mode=tracking_mode,
                     chapter=request.chapter
                 )
-                logger.info(f"✅ Question tracked for user {request.user_id}")
+                logger.info(f"Question tracked for user {request.user_id}")
             except Exception as track_error:
                 # Don't fail the request if tracking fails
-                logger.warning(f"⚠️ Failed to track question: {track_error}")
+                logger.warning(f" Failed to track question: {track_error}")
         
         return OptimizedChatResponse(
             answer=result["answer"],
@@ -127,7 +127,7 @@ async def optimized_chat(request: OptimizedChatRequest):
         )
     
     except Exception as e:
-        logger.error(f"❌ Optimized chat error: {e}")
+        logger.error(f" Optimized chat error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

@@ -294,26 +294,26 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-gray-800 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-gray-700 shadow-2xl">
-                <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-10">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700 shadow-2xl">
+                <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center z-10">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         {question ? "Edit Question" : "Add Question"}
-                        {question && question.status === 'pending' && <span className="text-sm bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded ml-2">Pending Approval</span>}
+                        {question && question.status === 'pending' && <span className="text-sm bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded ml-2">Pending Approval</span>}
                     </h2>
-                    <button onClick={() => onClose(false)} className="text-gray-400 hover:text-white"><X /></button>
+                    <button onClick={() => onClose(false)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white"><X /></button>
                 </div>
 
                 <div className="p-6">
                     {!question && (
-                        <div className="flex gap-4 mb-6 border-b border-gray-700 pb-2">
+                        <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700 pb-2">
                             <button
-                                className={`pb-2 px-4 ${activeTab === 'manual' ? 'text-blue-400 border-b-2 border-blue-400 font-medium' : 'text-gray-400'}`}
+                                className={`pb-2 px-4 ${activeTab === 'manual' ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}
                                 onClick={() => setActiveTab('manual')}
                             >
                                 Manual Entry
                             </button>
                             <button
-                                className={`pb-2 px-4 flex items-center gap-2 ${activeTab === 'ai' ? 'text-purple-400 border-b-2 border-purple-400 font-medium' : 'text-gray-400'}`}
+                                className={`pb-2 px-4 flex items-center gap-2 ${activeTab === 'ai' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}
                                 onClick={() => setActiveTab('ai')}
                             >
                                 <Sparkles size={16} /> AI Generate
@@ -321,20 +321,20 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         </div>
                     )}
 
-                    {error && <div className="bg-red-900/50 text-red-200 p-3 rounded-lg mb-4 text-sm">{error}</div>}
+                    {error && <div className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 p-3 rounded-lg mb-4 text-sm">{error}</div>}
 
                     {activeTab === 'manual' ? (
                         <form onSubmit={handleManualSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Subject <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Subject <span className="text-red-500">*</span></label>
                                     {loadingCurriculum ? (
-                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                        <div className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
                                             <Loader2 size={14} className="animate-spin" /> Loading subjects...
                                         </div>
                                     ) : (
                                         <select
-                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                             value={formData.subject}
                                             onChange={e => {
                                                 setFormData({ ...formData, subject: e.target.value, chapter: "", chapter_name: "", topic: "" });
@@ -356,9 +356,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Class <span className="text-red-500">*</span></label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.class_level}
                                         onChange={e => {
                                             setFormData({ ...formData, class_level: parseInt(e.target.value), chapter: "", chapter_name: "", topic: "" });
@@ -373,14 +373,14 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Chapter <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Chapter <span className="text-red-500">*</span></label>
                                     {loadingSubjectDetail ? (
-                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                        <div className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
                                             <Loader2 size={14} className="animate-spin" /> Loading chapters...
                                         </div>
                                     ) : (
                                         <select
-                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                             value={formData.chapter}
                                             onChange={e => {
                                                 const chNum = parseInt(e.target.value);
@@ -408,9 +408,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Topic <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Topic <span className="text-red-500">*</span></label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.topic}
                                         onChange={e => setFormData({ ...formData, topic: e.target.value })}
                                         required
@@ -431,9 +431,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Type</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Type</label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.type}
                                         onChange={e => setFormData({ ...formData, type: e.target.value })}
                                     >
@@ -444,9 +444,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Difficulty</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Difficulty</label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.difficulty}
                                         onChange={e => setFormData({ ...formData, difficulty: e.target.value })}
                                     >
@@ -457,10 +457,10 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Marks</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Marks</label>
                                     <input
                                         type="number"
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.marks}
                                         onChange={e => setFormData({ ...formData, marks: parseInt(e.target.value) })}
                                     />
@@ -468,9 +468,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                             </div>
 
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Question Text</label>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Question Text</label>
                                 <textarea
-                                    className="w-full bg-gray-900 border border-gray-700 rounded p-2 h-24"
+                                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 h-24 text-gray-900 dark:text-white"
                                     value={formData.text}
                                     onChange={e => setFormData({ ...formData, text: e.target.value })}
                                     required
@@ -479,7 +479,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
                             {formData.type === 'mcq' && (
                                 <div className="space-y-2">
-                                    <label className="block text-sm text-gray-400">Options</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400">Options</label>
                                     {formData.options.map((opt, idx) => {
                                         const correctAnswers = (formData.correct_answer || "").split("|").filter(Boolean);
                                         const isChecked = opt !== "" && correctAnswers.includes(opt);
@@ -488,7 +488,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                 <span className="w-6 text-center text-gray-500">{String.fromCharCode(65 + idx)}</span>
                                                 <input
                                                     type="text"
-                                                    className="flex-1 bg-gray-900 border border-gray-700 rounded p-2"
+                                                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                                     value={opt}
                                                     onChange={e => {
                                                         const newOpts = [...formData.options];
@@ -525,7 +525,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
                             {formData.type === 'fillup' && (
                                 <div className="space-y-2">
-                                    <label className="block text-sm text-gray-400 mb-1">Acceptable Answers</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Acceptable Answers</label>
                                     <p className="text-xs text-gray-500 mb-2">Add all acceptable answers. Student's answer will be matched against any of these (case-insensitive).</p>
                                     {(formData.correct_answer || "").split("|").filter((a, i, arr) => i === 0 || a !== "").concat("").slice(0, Math.max((formData.correct_answer || "").split("|").length, 1) + 1 > 10 ? 10 : Math.max((formData.correct_answer || "").split("|").length, 1) + (formData.correct_answer && !formData.correct_answer.endsWith("|") ? 1 : 0)).map((ans, idx) => {
                                         const answers = (formData.correct_answer || "").split("|");
@@ -534,7 +534,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                 <span className="w-6 text-center text-gray-500 text-sm">{idx + 1}.</span>
                                                 <input
                                                     type="text"
-                                                    className="flex-1 bg-gray-900 border border-gray-700 rounded p-2"
+                                                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                                     value={answers[idx] || ""}
                                                     onChange={e => {
                                                         const newAnswers = [...answers];
@@ -575,9 +575,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
                             {formData.type !== 'mcq' && formData.type !== 'fillup' && (
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Correct Answer / Key Points</label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Correct Answer / Key Points</label>
                                     <textarea
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={formData.correct_answer}
                                         onChange={e => setFormData({ ...formData, correct_answer: e.target.value })}
                                         required
@@ -585,8 +585,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </div>
                             )}
 
-                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
-                                <button type="button" onClick={() => onClose(false)} className="px-4 py-2 hover:bg-gray-700 rounded text-gray-300">Cancel</button>
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button type="button" onClick={() => onClose(false)} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300">Cancel</button>
                                 <button
                                     type="submit"
                                     disabled={loading}
@@ -601,14 +601,14 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         <div className="space-y-6">
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Subject <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Subject <span className="text-red-500">*</span></label>
                                     {loadingCurriculum ? (
-                                        <div className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
+                                        <div className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
                                             <Loader2 size={14} className="animate-spin" /> Loading...
                                         </div>
                                     ) : (
                                         <select
-                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                             value={aiConfig.subject}
                                             onChange={e => setAiConfig({ ...aiConfig, subject: e.target.value, chapter: "" })}
                                         >
@@ -628,7 +628,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={aiConfig.class_level}
                                         onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value), chapter: "" })}
                                     >
@@ -637,9 +637,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Chapter <span className="text-red-400">*</span></label>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Chapter <span className="text-red-500">*</span></label>
                                     <select
-                                        className="w-full bg-gray-900 border border-gray-700 rounded p-2"
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                         value={aiConfig.chapter}
                                         onChange={e => setAiConfig({ ...aiConfig, chapter: parseInt(e.target.value) || "" })}
                                     >
@@ -657,10 +657,10 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </div>
                             </div>
 
-                            <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-                                <h3 className="font-medium text-gray-300 mb-4 flex justify-between">
+                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-4 flex justify-between">
                                     <span>Question Distribution</span>
-                                    <span className="text-blue-400 text-sm">Total: {getTotalAiQuestions()}</span>
+                                    <span className="text-blue-600 dark:text-blue-400 text-sm">Total: {getTotalAiQuestions()}</span>
                                 </h3>
 
                                 <div className="space-y-6">
@@ -671,7 +671,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                     diff === 'medium' ? 'bg-yellow-500' :
                                                         diff === 'hard' ? 'bg-orange-500' : 'bg-red-500'
                                                     }`}></span>
-                                                <span className="capitalize font-medium text-gray-300">{diff}</span>
+                                                <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{diff}</span>
                                             </div>
                                             <div className="grid grid-cols-4 gap-4">
                                                 {['mcq', 'fillup', 'short_answer', 'long_answer'].map(type => (
@@ -681,7 +681,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                             type="number"
                                                             min="0"
                                                             max="20"
-                                                            className="w-full bg-gray-800 border border-gray-700 rounded p-1 text-center"
+                                                            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-1 text-center text-gray-900 dark:text-white"
                                                             value={aiConfig.difficulty_dist[diff][type]}
                                                             onChange={e => updateAiDist(diff, type, e.target.value)}
                                                         />
@@ -693,8 +693,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
-                                <button onClick={() => onClose(false)} className="px-4 py-2 hover:bg-gray-700 rounded text-gray-300">Cancel</button>
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button onClick={() => onClose(false)} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300">Cancel</button>
                                 <button
                                     onClick={handleAiGenerate}
                                     disabled={loading || getTotalAiQuestions() === 0}

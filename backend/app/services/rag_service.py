@@ -123,7 +123,7 @@ class RAGService:
             is_broad = self.is_broad_query(query_text)
             if is_broad and mode == "quick":
                 top_k = 15  # Get more chunks for comprehensive coverage
-                logger.info(f"📚 Broad query detected - retrieving {top_k} chunks for comprehensive answer")
+                logger.info(f"Broad query detected - retrieving {top_k} chunks for comprehensive answer")
             
             # Step 4: Generate embedding for query
             logger.info(f"Generating embedding for: {query_text[:50]}...")
@@ -223,7 +223,7 @@ class RAGService:
                 )
                 logger.info(f"✓ Gemini response received: {len(answer)} chars - '{answer[:100]}...'")
             except Exception as e:
-                logger.error(f"❌ Gemini generation failed: {type(e).__name__}: {str(e)}")
+                logger.error(f" Gemini generation failed: {type(e).__name__}: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
                 answer = "No answer found in the book."
@@ -231,7 +231,7 @@ class RAGService:
             return answer, chunks
         
         except Exception as e:
-            logger.error(f"❌ RAG query failed: {e}")
+            logger.error(f" RAG query failed: {e}")
             raise
     
     def query_with_rag_progressive(
@@ -276,7 +276,7 @@ class RAGService:
             is_broad = self.is_broad_query(query_text)
             if is_broad and mode == "quick":
                 top_k = 20  # Get more chunks for comprehensive multi-class coverage
-                logger.info(f"📚 Broad progressive query - retrieving {top_k} chunks across classes")
+                logger.info(f"Broad progressive query - retrieving {top_k} chunks across classes")
             
             # Step 4: Generate embedding for query
             logger.info(f"🎓 Progressive Query: Class {class_level} {subject}, Mode: {mode}")
@@ -328,7 +328,7 @@ class RAGService:
                 classes_found.add(class_str)
             
             if len(classes_found) > 1:
-                logger.info(f"📚 Multi-class results: Found content from classes {sorted(classes_found)}")
+                logger.info(f"Multi-class results: Found content from classes {sorted(classes_found)}")
             
             # Step 7: Extract text chunks
             chunks = []
@@ -372,7 +372,7 @@ class RAGService:
                 )
                 logger.info(f"✓ Gemini response received: {len(answer)} chars")
             except Exception as e:
-                logger.error(f"❌ Gemini generation failed: {type(e).__name__}: {str(e)}")
+                logger.error(f" Gemini generation failed: {type(e).__name__}: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
                 answer = "No answer found in the book."
@@ -380,7 +380,7 @@ class RAGService:
             return answer, chunks
         
         except Exception as e:
-            logger.error(f"❌ Progressive RAG query failed: {e}")
+            logger.error(f" Progressive RAG query failed: {e}")
             raise
     
     def retrieve_chapter_context(
@@ -422,7 +422,7 @@ class RAGService:
                 "chapter_number": chapter
             }
             
-            logger.info(f"📚 Querying namespace '{namespace}' with filter: {metadata_filter}")
+            logger.info(f"Querying namespace '{namespace}' with filter: {metadata_filter}")
             
             # Connect to the same Pinecone index where books are uploaded
             # pdf_processor uses PINECONE_HOST (legacy index)
@@ -444,14 +444,14 @@ class RAGService:
                     chunks.append(match['metadata']['text'])
             
             if not chunks:
-                logger.warning(f"⚠️ No content found for Class {class_level}, {subject}, Chapter {chapter} (namespace: {namespace})")
+                logger.warning(f" No content found for Class {class_level}, {subject}, Chapter {chapter} (namespace: {namespace})")
                 return ""  # Return empty string instead of raising error
             
-            logger.info(f"✅ Retrieved {len(chunks)} chunks for chapter {chapter}")
+            logger.info(f"Retrieved {len(chunks)} chunks for chapter {chapter}")
             return "\n\n".join(chunks)
         
         except Exception as e:
-            logger.error(f"❌ Chapter context retrieval error: {e}")
+            logger.error(f" Chapter context retrieval error: {e}")
             return ""  # Return empty string on error
     
     def query_with_rag_deepdive(
@@ -479,7 +479,7 @@ class RAGService:
             Tuple of (comprehensive_answer, combined_source_chunks)
         """
         try:
-            logger.info(f"🔍 DeepDive mode for Class {class_level}: {query_text[:50]}...")
+            logger.info(f" DeepDive mode for Class {class_level}: {query_text[:50]}...")
             
             # Check for greetings first
             greeting_response = self.detect_greeting(query_text)
@@ -596,7 +596,7 @@ Generate a thorough, well-structured explanation:"""
             return answer, textbook_chunks + web_chunks
         
         except Exception as e:
-            logger.error(f"❌ DeepDive query failed: {e}")
+            logger.error(f" DeepDive query failed: {e}")
             raise
 
 

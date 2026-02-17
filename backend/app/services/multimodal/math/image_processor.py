@@ -61,14 +61,14 @@ class ImageProcessor:
                 torch.nn.init.xavier_uniform_(self._projection.weight)
                 self._projection.eval()
                 
-                logger.info("✅ CLIP model and projection loaded successfully")
+                logger.info("CLIP model and projection loaded successfully")
             
             except ImportError as e:
-                logger.error(f"❌ Failed to import CLIP: {e}")
+                logger.error(f" Failed to import CLIP: {e}")
                 logger.error("Install with: pip install transformers torch pillow")
                 raise
             except Exception as e:
-                logger.error(f"❌ Failed to load CLIP model: {e}")
+                logger.error(f" Failed to load CLIP model: {e}")
                 raise
     
     def embed_image(self, image_path: Union[str, Path]) -> np.ndarray:
@@ -108,12 +108,12 @@ class ImageProcessor:
             return embedding.cpu().numpy()
         
         except FileNotFoundError:
-            logger.error(f"❌ Image not found: {image_path}")
+            logger.error(f" Image not found: {image_path}")
             # Return zero vector as fallback
             return np.zeros(768, dtype=np.float32)
         
         except Exception as e:
-            logger.error(f"❌ Failed to embed image {image_path}: {e}")
+            logger.error(f" Failed to embed image {image_path}: {e}")
             # Return zero vector as fallback
             return np.zeros(768, dtype=np.float32)
     
@@ -152,7 +152,7 @@ class ImageProcessor:
                         images.append(img)
                         valid_indices.append(idx)
                     except Exception as e:
-                        logger.warning(f"⚠️ Failed to load image {path}: {e}")
+                        logger.warning(f" Failed to load image {path}: {e}")
                         # Add zero vector for failed images
                         embeddings.append(np.zeros(768, dtype=np.float32))
                 
@@ -180,7 +180,7 @@ class ImageProcessor:
                     embeddings.append(embedding)
             
             except Exception as e:
-                logger.error(f"❌ Batch embedding failed: {e}")
+                logger.error(f" Batch embedding failed: {e}")
                 # Add zero vectors for entire batch
                 for _ in batch_paths:
                     embeddings.append(np.zeros(768, dtype=np.float32))

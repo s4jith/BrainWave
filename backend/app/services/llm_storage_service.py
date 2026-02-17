@@ -21,7 +21,7 @@ class LLMStorageService:
     
     def __init__(self):
         """Initialize LLM storage service with Gemini embedding model."""
-        logger.info(f"✅ LLM Storage Service initialized with {EMBEDDING_MODEL}")
+        logger.info(f"LLM Storage Service initialized with {EMBEDDING_MODEL}")
     
     def _generate_embedding(self, text: str) -> list:
         """Generate embedding using same Gemini model as textbook index."""
@@ -92,7 +92,7 @@ class LLMStorageService:
             
             if success:
                 grounded_status = "GROUNDED" if textbook_chunks else "UNVERIFIED"
-                logger.info(f"✅ Stored LLM answer [{grounded_status}] for: {topic} (Class {class_level}, {subject})")
+                logger.info(f"Stored LLM answer [{grounded_status}] for: {topic} (Class {class_level}, {subject})")
             
             return success
             
@@ -295,7 +295,7 @@ class LLMStorageService:
             
             if matching_answers:
                 scores_list = [f"{a['score']:.2f}" for a in matching_answers]
-                logger.info(f"🔍 Found {len(matching_answers)} stored LLM answers (scores: {scores_list})")
+                logger.info(f" Found {len(matching_answers)} stored LLM answers (scores: {scores_list})")
             
             return matching_answers
             

@@ -98,7 +98,7 @@ async def generate_questions_for_chapter(class_level: int, subject: str, chapter
         # Store in database
         if all_questions:
             await store_questions(class_level, subject, chapter_num, chapter_name, topics, all_questions)
-            logger.info(f"✅ Generated and stored {len(all_questions)} questions for Chapter {chapter_num}")
+            logger.info(f"Generated and stored {len(all_questions)} questions for Chapter {chapter_num}")
             return len(all_questions)
         
     except Exception as e:
@@ -280,7 +280,7 @@ async def store_questions(class_level, subject, chapter_num, chapter_name, topic
 async def main():
     """Main function to generate questions."""
     
-    logger.info("🚀 Starting question generation from existing PDFs...")
+    logger.info("Starting question generation from existing PDFs...")
     
     # Connect to MongoDB
     await mongodb.connect()
@@ -304,7 +304,7 @@ async def main():
         # Small delay to avoid rate limiting
         await asyncio.sleep(2)
     
-    logger.info(f"\n✅ COMPLETE! Generated {total_questions} total questions")
+    logger.info(f"\nCOMPLETE! Generated {total_questions} total questions")
     logger.info(f"Question bank is ready for testing!")
     
     # Close MongoDB  

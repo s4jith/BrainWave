@@ -64,7 +64,7 @@ class TopicQuestionBankService:
         
         Returns list of topics with page ranges.
         """
-        logger.info(f"📚 Extracting topics from {subject} Ch.{chapter_number}: {chapter_name}")
+        logger.info(f"Extracting topics from {subject} Ch.{chapter_number}: {chapter_name}")
         
         prompt = f"""Analyze this textbook chapter content and identify ALL distinct topics/concepts.
 
@@ -106,7 +106,7 @@ Output ONLY the JSON array, no other text."""
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
                 topics = json.loads(json_match.group())
-                logger.info(f"✅ Extracted {len(topics)} topics from chapter")
+                logger.info(f"Extracted {len(topics)} topics from chapter")
                 return topics
             else:
                 logger.warning("Could not parse topics JSON, using fallback")
@@ -177,7 +177,7 @@ Output ONLY the JSON array, no other text."""
             )
             questions.extend(batch)
         
-        logger.info(f"✅ Generated {len(questions)} questions for {topic_name}")
+        logger.info(f"Generated {len(questions)} questions for {topic_name}")
         return questions
     
     async def _generate_question_batch(
@@ -318,12 +318,12 @@ Output ONLY the JSON array."""
                 {"_id": existing["_id"]},
                 {"$set": bank_doc}
             )
-            logger.info(f"✅ Updated question bank for {subject} Ch.{chapter_number}")
+            logger.info(f"Updated question bank for {subject} Ch.{chapter_number}")
             return str(existing["_id"])
         else:
             # Insert new
             result = await collection.insert_one(bank_doc)
-            logger.info(f"✅ Created question bank for {subject} Ch.{chapter_number}")
+            logger.info(f"Created question bank for {subject} Ch.{chapter_number}")
             return str(result.inserted_id)
     
     async def get_chapter_question_bank(
@@ -351,7 +351,7 @@ Output ONLY the JSON array."""
         Get all subjects available for a class level.
         Checks MongoDB books collection, question bank, AND Pinecone namespaces.
         """
-        logger.info(f"🔍 get_available_subjects called for class_level={class_level}")
+        logger.info(f" get_available_subjects called for class_level={class_level}")
         subjects_map = {}  # Use dict to merge and count chapters
         
         # Method 1: Check books collection (Primary source - actual textbook content)
@@ -369,9 +369,9 @@ Output ONLY the JSON array."""
             }}
         ]
         
-        logger.info(f"🔍 Querying books collection with class_level={class_level}")
+        logger.info(f" Querying books collection with class_level={class_level}")
         books_results = await books_collection.aggregate(books_pipeline).to_list(100)
-        logger.info(f"📚 Books query result for class {class_level}: {books_results}")
+        logger.info(f"Books query result for class {class_level}: {books_results}")
         for r in books_results:
             subject = r.get("subject", "").title()
             if subject:
@@ -805,7 +805,7 @@ Output ONLY the JSON array."""
                 "time_estimate": q.get("time_estimate_seconds", 60)
             })
         
-        logger.info(f"✅ Serving {len(formatted)} questions for topic: {topic_name}")
+        logger.info(f"Serving {len(formatted)} questions for topic: {topic_name}")
         return formatted, topic_name
     
     # ==================== STUDENT PERFORMANCE TRACKING ====================
@@ -1082,7 +1082,7 @@ Output ONLY the JSON array."""
         existing = await collection.find_one(cache_key)
         
         if existing and existing.get("questions"):
-            logger.info(f"✅ Cache hit: Found {len(existing['questions'])} questions for {subject} Ch.{chapter_number}")
+            logger.info(f"Cache hit: Found {len(existing['questions'])} questions for {subject} Ch.{chapter_number}")
             
             # Update last_used timestamp
             await collection.update_one(
@@ -1106,7 +1106,7 @@ Output ONLY the JSON array."""
             }
         
         # Step 2: Retrieve content from Pinecone
-        logger.info(f"📚 Generating questions for {subject} Ch.{chapter_number}...")
+        logger.info(f"Generating questions for {subject} Ch.{chapter_number}...")
         
         try:
             content = await self._retrieve_chapter_content(class_level, subject, chapter_number)
@@ -1177,7 +1177,7 @@ Output ONLY the JSON array."""
             else:
                 await collection.insert_one(question_doc)
             
-            logger.info(f"✅ Generated and cached {len(all_questions)} questions for {subject} Ch.{chapter_number}")
+            logger.info(f"Generated and cached {len(all_questions)} questions for {subject} Ch.{chapter_number}")
             
             return {
                 "status": "generated",
@@ -1208,35 +1208,61 @@ Output ONLY the JSON array."""
             from app.db.mongo import namespace_db
             from app.services.llm_storage_service import llm_storage_service
             
+            # Ensure namespace DB is connected
             if not namespace_db.index:
-                logger.error("Namespace DB not connected")
+                logger.info("Namespace DB not connected, attempting to connect...")
+                namespace_db.connect()
+                
+            if not namespace_db.index:
+                logger.error("Failed to connect to Namespace DB")
                 return None
             
             namespace = namespace_db.get_namespace(subject)
+            logger.info(f"Using namespace '{namespace}' for subject '{subject}'")
             
             # Create embedding for chapter query
             query_text = f"{subject} class {class_level} chapter {chapter_number}"
             query_embedding = llm_storage_service._generate_embedding(query_text)
             
-            # Query Pinecone with chapter filter
+            # Query Pinecone with chapter and class filter
             results = namespace_db.index.query(
                 vector=query_embedding,
                 namespace=namespace,
                 top_k=50,  # Get enough chunks to cover the chapter
-                filter={"chapter_number": chapter_number},
+                filter={
+                    "chapter_number": chapter_number,
+                    "class_level": class_level
+                },
                 include_metadata=True
             )
             
+            logger.info(f"Query for {subject} class {class_level} ch.{chapter_number}: {len(results.get('matches', []))} matches")
+            
             if not results.get('matches'):
-                # Try without filter
+                # Try with just chapter filter
+                logger.info(f"No matches with class filter, trying chapter-only filter...")
+                results = namespace_db.index.query(
+                    vector=query_embedding,
+                    namespace=namespace,
+                    top_k=50,
+                    filter={"chapter_number": chapter_number},
+                    include_metadata=True
+                )
+                logger.info(f"Chapter-only query: {len(results.get('matches', []))} matches")
+            
+            if not results.get('matches'):
+                # Try without any filter (semantic search only)
+                logger.info(f"No matches with chapter filter, trying semantic search...")
                 results = namespace_db.index.query(
                     vector=query_embedding,
                     namespace=namespace,
                     top_k=50,
                     include_metadata=True
                 )
+                logger.info(f"Semantic-only query: {len(results.get('matches', []))} matches")
             
             if not results.get('matches'):
+                logger.warning(f"No content found in namespace '{namespace}' for any filter")
                 return None
             
             # Combine text from all chunks
@@ -1517,31 +1543,26 @@ Output ONLY the JSON object."""
     CHAPTER_TEST_COLLECTION = "chapter_test_questions"
     
     # Test format: 15 questions (5 MCQ + 5 Fill-up + 5 two-mark) = 20 marks, 40 minutes
-    # Difficulty per type: 2 easy, 2 medium, 1 hard
-    # 3 variants stored to avoid repeat questions
+    # Difficulty-based: Student selects Easy/Medium/Hard, gets questions of that difficulty only
+    # 10 variants per difficulty level to avoid repeat questions
     CHAPTER_TEST_FORMAT = {
         "mcq": {
             "pool_per_variant": 5,  # 5 MCQs per variant
-            "total_pool": 15,       # 3 variants × 5 = 15 MCQs total
-            "marks": 1,
-            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
+            "marks": 1
         },
         "fillup": {
             "pool_per_variant": 5,  # 5 Fill-ups per variant
-            "total_pool": 15,       # 3 variants × 5 = 15 Fill-ups total
-            "marks": 1,
-            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
+            "marks": 1
         },
         "two_mark": {
             "pool_per_variant": 5,  # 5 two-mark per variant
-            "total_pool": 15,       # 3 variants × 5 = 15 two-mark total
-            "marks": 2,
-            "difficulty_mix": {"easy": 2, "medium": 2, "hard": 1}
+            "marks": 2
         },
         "total_questions": 15,
         "total_marks": 20,
         "time_limit_minutes": 40,
-        "num_variants": 3
+        "variants_per_difficulty": 10,  # 10 variants for each difficulty level
+        "difficulties": ["easy", "medium", "hard"]
     }
     
     async def check_chapter_test_pool_exists(
@@ -1593,17 +1614,18 @@ Output ONLY the JSON object."""
         chapter_number: int
     ) -> Dict:
         """
-        Generate chapter test question pool with 3 variants.
+        Generate chapter test question pool with 10 variants per difficulty level.
         
         Each variant has:
-        - 5 MCQs (2 easy, 2 medium, 1 hard) × 1 mark = 5 marks
-        - 5 Fill-ups (2 easy, 2 medium, 1 hard) × 1 mark = 5 marks  
-        - 5 Two-mark (2 easy, 2 medium, 1 hard) × 2 marks = 10 marks
+        - 5 MCQs × 1 mark = 5 marks
+        - 5 Fill-ups × 1 mark = 5 marks  
+        - 5 Two-mark × 2 marks = 10 marks
         Total: 15 questions, 20 marks per variant
         
-        3 variants × 15 = 45 questions total stored.
+        Structure: {easy: 10 variants, medium: 10 variants, hard: 10 variants}
+        Total: 30 variants × 15 = 450 questions stored.
         """
-        logger.info(f"🎯 Generating chapter test pool (3 variants) for {subject} Ch.{chapter_number}...")
+        logger.info(f"🎯 Generating chapter test pool (10 variants per difficulty) for {subject} Ch.{chapter_number}...")
         
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
@@ -1632,8 +1654,8 @@ Output ONLY the JSON object."""
         chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
         content_text = content.get("text", "")
         
-        # Step 2: Generate all 3 variants in a single API call
-        all_variants = await self._generate_all_variants(
+        # Step 2: Generate variants for each difficulty level
+        difficulty_variants = await self._generate_all_variants(
             content_text=content_text,
             class_level=class_level,
             subject=subject,
@@ -1641,17 +1663,39 @@ Output ONLY the JSON object."""
             chapter_number=chapter_number
         )
         
-        if not all_variants or len(all_variants) == 0:
+        # Check if we got any variants
+        total_variants = sum(len(v) for v in difficulty_variants.values())
+        if total_variants == 0:
             return {"status": "error", "error": "Failed to generate questions. Please try again."}
         
-        # Step 3: Store in MongoDB
+        # Calculate question stats for logging
+        question_stats = {"easy": {}, "medium": {}, "hard": {}}
+        for diff in ["easy", "medium", "hard"]:
+            variants = difficulty_variants.get(diff, [])
+            mcq_total = sum(len(v.get("mcq_pool", [])) for v in variants)
+            fillup_total = sum(len(v.get("fillup_pool", [])) for v in variants)
+            two_mark_total = sum(len(v.get("two_mark_pool", [])) for v in variants)
+            question_stats[diff] = {
+                "variants": len(variants),
+                "mcq": mcq_total,
+                "fillup": fillup_total,
+                "two_mark": two_mark_total,
+                "total": mcq_total + fillup_total + two_mark_total
+            }
+        
+        # Step 3: Store in MongoDB with difficulty-based structure
         pool_doc = {
             "class_level": class_level,
             "subject": subject,
             "chapter_number": chapter_number,
             "chapter_name": chapter_name,
-            "variants": all_variants,
-            "num_variants": len(all_variants),
+            "variants_by_difficulty": difficulty_variants,  # {easy: [...], medium: [...], hard: [...]}
+            "variants_count": {
+                "easy": len(difficulty_variants.get("easy", [])),
+                "medium": len(difficulty_variants.get("medium", [])),
+                "hard": len(difficulty_variants.get("hard", []))
+            },
+            "question_stats": question_stats,  # Detailed stats per difficulty
             "format": {
                 "mcq_count": 5,
                 "fillup_count": 5,
@@ -1676,17 +1720,22 @@ Output ONLY the JSON object."""
             upsert=True
         )
         
-        total_q = sum(
-            len(v.get("mcq_pool", [])) + len(v.get("fillup_pool", [])) + len(v.get("two_mark_pool", []))
-            for v in all_variants
-        )
+        total_q = sum(stats["total"] for stats in question_stats.values())
         
-        logger.info(f"✅ Stored chapter test pool: {len(all_variants)} variants, {total_q} total questions")
+        logger.info(f"💾 Saved to MongoDB: {subject} Ch.{chapter_number} '{chapter_name}'")
+        logger.info(f"   📊 Question Stats Stored:")
+        for diff in ["easy", "medium", "hard"]:
+            stats = question_stats[diff]
+            logger.info(f"      {diff.upper()}: {stats['variants']} variants | "
+                       f"MCQ: {stats['mcq']}, Fill-up: {stats['fillup']}, 2-mark: {stats['two_mark']} "
+                       f"(Total: {stats['total']})")
+        logger.info(f"   📈 Grand Total: {total_variants} variants, {total_q} questions")
         
         return {
             "status": "generated",
             "chapter_name": chapter_name,
-            "num_variants": len(all_variants),
+            "variants_count": pool_doc['variants_count'],
+            "question_stats": question_stats,
             "total_questions": total_q
         }
     
@@ -1697,182 +1746,323 @@ Output ONLY the JSON object."""
         subject: str,
         chapter_name: str,
         chapter_number: int = 1
-    ) -> List[Dict]:
-        """Generate 3 variants of questions (MCQ + Fill-up + 2-mark) in a single Gemini call."""
+    ) -> Dict[str, List[Dict]]:
+        """Generate 10 variants per difficulty level (easy, medium, hard) in batches.
         
-        prompt = f"""You are an expert question paper setter for Class {class_level} {subject}.
+        Generates 5 variants at a time (2 API calls per difficulty = 10 variants total).
+        Returns a dict with keys 'easy', 'medium', 'hard', each containing 10 variants.
+        """
+        
+        all_difficulty_variants = {"easy": [], "medium": [], "hard": []}
+        
+        # Use Gemini 3 Pro Preview for test generation (5M batch tokens)
+        # This allows generating more variants reliably without truncation
+        PRO_MODEL = "models/gemini-3-pro-preview"
+        
+        for difficulty in ["easy", "medium", "hard"]:
+            difficulty_display = {
+                "easy": "Easy (direct recall, definitions, basic facts)",
+                "medium": "Medium (understanding, application, some thinking)",
+                "hard": "Hard (analysis, higher-order thinking, complex)"
+            }[difficulty]
+            
+            # Generate 2 variants per batch using Pro model (5 batches = 10 variants per difficulty)
+            for batch_num in range(5):
+                
+                prompt = f"""Generate 2 test variants for Class {class_level} {subject} - {chapter_name}.
 
-**Chapter:** {chapter_name}
+Content: {content_text[:8000]}
 
-**Textbook Content:**
-{content_text[:18000]}
+Create EXACTLY 2 unique variants at {difficulty_display} level. Each variant needs:
+- 5 MCQs (4 options A-D, 1 correct)
+- 5 Fill-in-the-blanks  
+- 5 Two-mark short answers
 
-**TASK:** Generate 3 VARIANTS of a test paper. Each variant must have:
-- 5 MCQs (Multiple Choice - 4 options, 1 correct) → 1 mark each
-- 5 Fill-in-the-blanks → 1 mark each
-- 5 Short answer questions → 2 marks each
+{difficulty.upper()} level: {self._get_difficulty_guidelines(difficulty)[:400]}
 
-**DIFFICULTY DISTRIBUTION (for each question type in each variant):**
-- 2 Easy questions (recall, definitions, basic facts)
-- 2 Medium questions (understanding, application)
-- 1 Hard question (analysis, higher-order thinking)
+RULES:
+- Questions from textbook content only
+- MCQs: 4 options, clear correct answer
+- Fill-ups: single word/phrase answer
+- Include "topic" field for each question
+- Each variant must have DIFFERENT questions
 
-**CRITICAL RULES:**
-1. ALL questions MUST be directly answerable from the provided textbook content
-2. Each variant must cover DIFFERENT aspects/concepts - NO question should repeat across variants
-3. MCQs must have exactly 4 options (A, B, C, D) with exactly 1 correct answer
-4. Fill-ups must have a clear single correct answer (the blank word/phrase)
-5. Two-mark questions need detailed answers (2-4 sentences)
-6. Questions must be age-appropriate for Class {class_level} students
-7. Cover diverse topics from throughout the chapter
-8. For numerical subjects: include calculation-based questions
-9. Every question MUST include a "topic" field — the specific sub-topic/concept being tested
+OUTPUT JSON ONLY (no markdown):
+{{"variants": [
+  {{"variant_id": {batch_num * 2 + 1}, "mcq": [{{"question_text": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}}, "correct_option": "A", "expected_answer": "...", "topic": "...", "keywords": ["k1"]}}], "fillup": [{{"question_text": "... _____ ...", "expected_answer": "...", "topic": "...", "keywords": ["k1"]}}], "two_mark": [{{"question_text": "...", "expected_answer": "2-3 sentence answer", "topic": "...", "keywords": ["k1"]}}]}},
+  {{"variant_id": {batch_num * 2 + 2}, "mcq": [...], "fillup": [...], "two_mark": [...]}}
+]}}"""
 
-**OUTPUT FORMAT (JSON Object):**
-{{
-  "variants": [
-    {{
-      "variant_id": 1,
-      "mcq": [
-        {{
-          "question_text": "Which of the following...",
-          "options": {{"A": "option1", "B": "option2", "C": "option3", "D": "option4"}},
-          "correct_option": "B",
-          "expected_answer": "option2",
-          "topic": "Specific sub-topic this question tests",
-          "difficulty": "easy",
-          "keywords": ["keyword1"]
-        }}
-      ],
-      "fillup": [
-        {{
-          "question_text": "The process of ______ is used to...",
-          "expected_answer": "photosynthesis",
-          "topic": "Specific sub-topic this question tests",
-          "difficulty": "easy",
-          "keywords": ["photosynthesis"]
-        }}
-      ],
-      "two_mark": [
-        {{
-          "question_text": "Explain the significance of...",
-          "expected_answer": "Detailed answer explaining the concept...",
-          "topic": "Specific sub-topic this question tests",
-          "difficulty": "easy",
-          "keywords": ["keyword1", "keyword2"],
-          "solution_steps": "Step 1: ... Step 2: ..."
-        }}
-      ]
-    }},
-    {{
-      "variant_id": 2,
-      "mcq": [...],
-      "fillup": [...],
-      "two_mark": [...]
-    }},
-    {{
-      "variant_id": 3,
-      "mcq": [...],
-      "fillup": [...],
-      "two_mark": [...]
-    }}
-  ]
-}}
-
-Generate EXACTLY 3 variants with 5 questions each type (5 MCQ + 5 fillup + 5 two_mark = 15 per variant).
-Output ONLY the JSON object, no other text."""
-
+                try:
+                    logger.info(f"Generating {difficulty} variants batch {batch_num + 1}/5 for {subject} Ch.{chapter_number} (using Gemini 3 Pro)...")
+                    response = self.gemini.generate_response(
+                        prompt, 
+                        max_output_tokens=16384,  # Pro model supports large outputs
+                        model_name=PRO_MODEL
+                    )
+                    
+                    # Clean and parse JSON response
+                    data = self._extract_json_from_response(response, f"{difficulty}_batch{batch_num + 1}")
+                    
+                    if not data:
+                        logger.error(f"Failed to parse {difficulty} batch {batch_num + 1}/5 JSON from Gemini response")
+                        continue
+                    
+                    raw_variants = data.get("variants", [])
+                    
+                    if not raw_variants:
+                        logger.error(f"No {difficulty} variants found in batch {batch_num + 1}/5")
+                        continue
+                    
+                    # Process variants from this batch (2 variants per batch)
+                    mcq_count_batch = 0
+                    fillup_count_batch = 0
+                    two_mark_count_batch = 0
+                    
+                    for v_idx, variant in enumerate(raw_variants):
+                        # Calculate global variant index: batch_num * 2 + v_idx
+                        global_v_idx = batch_num * 2 + v_idx
+                        timestamp = datetime.utcnow().timestamp()
+                        prefix = f"{subject.lower().replace(' ', '_')}_ch{chapter_number}"
+                        
+                        # Process MCQs
+                        mcq_pool = []
+                        for i, q in enumerate(variant.get("mcq", [])):
+                            if not q.get("question_text") or not q.get("expected_answer"):
+                                continue
+                            mcq_pool.append({
+                                "question_id": f"{prefix}_{difficulty}_mcq_v{global_v_idx}_{i}_{timestamp}",
+                                "question_text": q["question_text"],
+                                "question_type": "mcq",
+                                "options": q.get("options", {}),
+                                "correct_option": q.get("correct_option", ""),
+                                "expected_answer": q["expected_answer"],
+                                "topic": q.get("topic", chapter_name),
+                                "difficulty": difficulty,
+                                "keywords": q.get("keywords", []),
+                                "marks": 1
+                            })
+                        
+                        # Process Fill-ups
+                        fillup_pool = []
+                        for i, q in enumerate(variant.get("fillup", [])):
+                            if not q.get("question_text") or not q.get("expected_answer"):
+                                continue
+                            fillup_pool.append({
+                                "question_id": f"{prefix}_{difficulty}_fillup_v{global_v_idx}_{i}_{timestamp}",
+                                "question_text": q["question_text"],
+                                "question_type": "fillup",
+                                "expected_answer": q["expected_answer"],
+                                "topic": q.get("topic", chapter_name),
+                                "difficulty": difficulty,
+                                "keywords": q.get("keywords", []),
+                                "marks": 1
+                            })
+                        
+                        # Process Two-mark questions
+                        two_mark_pool = []
+                        for i, q in enumerate(variant.get("two_mark", [])):
+                            if not q.get("question_text") or not q.get("expected_answer"):
+                                continue
+                            two_mark_pool.append({
+                                "question_id": f"{prefix}_{difficulty}_2mark_v{global_v_idx}_{i}_{timestamp}",
+                                "question_text": q["question_text"],
+                                "question_type": "two_mark",
+                                "expected_answer": q["expected_answer"],
+                                "topic": q.get("topic", chapter_name),
+                                "difficulty": difficulty,
+                                "keywords": q.get("keywords", []),
+                                "marks": 2,
+                                "solution_steps": q.get("solution_steps", "")
+                            })
+                        
+                        mcq_count_batch += len(mcq_pool)
+                        fillup_count_batch += len(fillup_pool)
+                        two_mark_count_batch += len(two_mark_pool)
+                        
+                        all_difficulty_variants[difficulty].append({
+                            "variant_id": global_v_idx + 1,
+                            "mcq_pool": mcq_pool,
+                            "fillup_pool": fillup_pool,
+                            "two_mark_pool": two_mark_pool,
+                            "total_questions": len(mcq_pool) + len(fillup_pool) + len(two_mark_pool)
+                        })
+                    
+                    logger.info(f"✅ Batch {batch_num + 1}/5 complete: {len(raw_variants)} variants | "
+                               f"MCQ={mcq_count_batch}, Fill-up={fillup_count_batch}, 2-mark={two_mark_count_batch}")
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parse error in {difficulty} batch {batch_num + 1}/5: {e}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error generating {difficulty} batch {batch_num + 1}/5: {e}")
+                    continue
+            
+            # Log summary for this difficulty
+            total_variants = len(all_difficulty_variants[difficulty])
+            if total_variants > 0:
+                mcq_total = sum(len(v.get("mcq_pool", [])) for v in all_difficulty_variants[difficulty])
+                fillup_total = sum(len(v.get("fillup_pool", [])) for v in all_difficulty_variants[difficulty])
+                two_mark_total = sum(len(v.get("two_mark_pool", [])) for v in all_difficulty_variants[difficulty])
+                logger.info(f"✅ {difficulty.upper()} complete: {total_variants} variants | "
+                           f"MCQ={mcq_total}, Fill-up={fillup_total}, 2-mark={two_mark_total} "
+                           f"(Total: {mcq_total + fillup_total + two_mark_total} questions)")
+            else:
+                logger.warning(f"⚠️ {difficulty.upper()}: 0 variants generated!")
+        
+        # Final summary log
+        total_variants = sum(len(v) for v in all_difficulty_variants.values())
+        logger.info(f"📊 Question Generation Summary for {subject} Ch.{chapter_number}:")
+        for diff in ["easy", "medium", "hard"]:
+            variants = all_difficulty_variants[diff]
+            if variants:
+                mcq_total = sum(len(v.get("mcq_pool", [])) for v in variants)
+                fillup_total = sum(len(v.get("fillup_pool", [])) for v in variants)
+                two_mark_total = sum(len(v.get("two_mark_pool", [])) for v in variants)
+                logger.info(f"   {diff.upper()}: {len(variants)} variants | MCQ: {mcq_total}, Fill-up: {fillup_total}, 2-mark: {two_mark_total}")
+            else:
+                logger.warning(f"   {diff.upper()}: 0 variants generated!")
+        
+        return all_difficulty_variants
+    
+    def _extract_json_from_response(self, response: str, difficulty: str) -> Dict:
+        """Extract and parse JSON from Gemini response with multiple fallback strategies."""
+        if not response:
+            logger.error(f"Empty response received for {difficulty} variants")
+            return None
+        
+        # Log first 1000 chars for debugging
+        logger.debug(f"{difficulty.upper()} response preview (first 1000 chars): {response[:1000]}")
+        
+        # Strategy 1: Try direct JSON parse (cleanest response)
         try:
-            response = self.gemini.generate_response(prompt)
+            return json.loads(response.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 2: Remove markdown code blocks
+        cleaned = response.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 3: Find JSON object with balanced braces
+        try:
+            start_idx = response.find('{')
+            if start_idx == -1:
+                logger.error(f"No opening brace found in {difficulty} response")
+                return None
             
-            # Parse JSON
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                logger.error("Failed to parse variants JSON from Gemini response")
-                return []
+            brace_count = 0
+            end_idx = start_idx
+            for i, char in enumerate(response[start_idx:], start_idx):
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_idx = i + 1
+                        break
             
-            data = json.loads(json_match.group())
-            raw_variants = data.get("variants", [])
+            if end_idx > start_idx:
+                json_str = response[start_idx:end_idx]
+                # Log the extracted JSON for debugging
+                logger.debug(f"Extracted JSON length: {len(json_str)} chars")
+                return json.loads(json_str)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Strategy 3 failed: {e}")
+            pass
+        
+        # Strategy 4: Regex extraction (last resort)
+        try:
+            json_match = re.search(r'\{[\s\S]*"variants"[\s\S]*\}', response)
+            if json_match:
+                return json.loads(json_match.group())
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Strategy 4 failed: {e}")
+            pass
+        
+        # Strategy 5: Try to salvage truncated JSON by extracting complete variants
+        try:
+            # Find the start of the JSON
+            start_idx = cleaned.find('{"variants":')
+            if start_idx == -1:
+                start_idx = cleaned.find('{')
             
-            if not raw_variants:
-                logger.error("No variants found in Gemini response")
-                return []
-            
-            # Process and validate each variant
-            processed_variants = []
-            for v_idx, variant in enumerate(raw_variants):
-                timestamp = datetime.utcnow().timestamp()
-                prefix = f"{subject.lower().replace(' ', '_')}_ch{chapter_number}"
+            if start_idx != -1:
+                json_part = cleaned[start_idx:]
                 
-                # Process MCQs
-                mcq_pool = []
-                for i, q in enumerate(variant.get("mcq", [])):
-                    if not q.get("question_text") or not q.get("expected_answer"):
-                        continue
-                    mcq_pool.append({
-                        "question_id": f"{prefix}_mcq_v{v_idx}_{i}_{timestamp}",
-                        "question_text": q["question_text"],
-                        "question_type": "mcq",
-                        "options": q.get("options", {}),
-                        "correct_option": q.get("correct_option", ""),
-                        "expected_answer": q["expected_answer"],
-                        "topic": q.get("topic", chapter_name),
-                        "difficulty": q.get("difficulty", "medium"),
-                        "keywords": q.get("keywords", []),
-                        "marks": 1
-                    })
+                # Try to find complete variant objects and build valid JSON
+                # Look for complete variants (ends with }] pattern for each variant)
+                variant_pattern = r'\{\s*"variant_id"\s*:\s*\d+[^}]*(?:\{[^}]*\}[^}]*)*\}'
+                variants = re.findall(variant_pattern, json_part, re.DOTALL)
                 
-                # Process Fill-ups
-                fillup_pool = []
-                for i, q in enumerate(variant.get("fillup", [])):
-                    if not q.get("question_text") or not q.get("expected_answer"):
-                        continue
-                    fillup_pool.append({
-                        "question_id": f"{prefix}_fillup_v{v_idx}_{i}_{timestamp}",
-                        "question_text": q["question_text"],
-                        "question_type": "fillup",
-                        "expected_answer": q["expected_answer"],
-                        "topic": q.get("topic", chapter_name),
-                        "difficulty": q.get("difficulty", "medium"),
-                        "keywords": q.get("keywords", []),
-                        "marks": 1
-                    })
+                if variants:
+                    # Reconstruct valid JSON with found variants
+                    reconstructed = '{"variants": [' + ','.join(variants) + ']}'
+                    try:
+                        return json.loads(reconstructed)
+                    except json.JSONDecodeError:
+                        pass
                 
-                # Process Two-mark questions
-                two_mark_pool = []
-                for i, q in enumerate(variant.get("two_mark", [])):
-                    if not q.get("question_text") or not q.get("expected_answer"):
-                        continue
-                    two_mark_pool.append({
-                        "question_id": f"{prefix}_2mark_v{v_idx}_{i}_{timestamp}",
-                        "question_text": q["question_text"],
-                        "question_type": "two_mark",
-                        "expected_answer": q["expected_answer"],
-                        "topic": q.get("topic", chapter_name),
-                        "difficulty": q.get("difficulty", "medium"),
-                        "keywords": q.get("keywords", []),
-                        "marks": 2,
-                        "solution_steps": q.get("solution_steps", "")
-                    })
+                # Simpler approach: just close open brackets
+                open_brackets = json_part.count('[') - json_part.count(']')
+                open_braces = json_part.count('{') - json_part.count('}')
                 
-                processed_variants.append({
-                    "variant_id": v_idx + 1,
-                    "mcq_pool": mcq_pool,
-                    "fillup_pool": fillup_pool,
-                    "two_mark_pool": two_mark_pool,
-                    "total_questions": len(mcq_pool) + len(fillup_pool) + len(two_mark_pool)
-                })
-                
-                logger.info(f"Variant {v_idx+1}: {len(mcq_pool)} MCQ, {len(fillup_pool)} Fillup, {len(two_mark_pool)} 2-mark")
-            
-            return processed_variants
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error in variant generation: {e}")
-            return []
+                fixed = json_part + ']' * max(0, open_brackets) + '}' * max(0, open_braces)
+                try:
+                    result = json.loads(fixed)
+                    logger.warning(f"Salvaged truncated JSON by closing {open_brackets} brackets, {open_braces} braces")
+                    return result
+                except json.JSONDecodeError:
+                    pass
         except Exception as e:
-            logger.error(f"Error generating question variants: {e}")
-            return []
+            logger.error(f"Strategy 5 (salvage) failed: {e}")
+            pass
+        
+        # Log the problematic response for manual inspection
+        logger.error(f"All JSON extraction strategies failed for {difficulty} response")
+        logger.error(f"Response length: {len(response)} chars")
+        logger.error(f"Response starts with: {response[:200]}")
+        logger.error(f"Response ends with: {response[-200:]}")
+        return None
+    
+    def _get_difficulty_guidelines(self, difficulty: str) -> str:
+        """Return specific guidelines for each difficulty level."""
+        guidelines = {
+            "easy": """
+- Direct recall questions from the text
+- Simple definitions and facts
+- Basic terminology identification
+- Straightforward fill-in-the-blanks with obvious answers
+- Questions that can be answered directly by reading the text
+- No complex calculations or multi-step reasoning required""",
+            "medium": """
+- Application of concepts to simple scenarios
+- Understanding relationships between concepts  
+- Moderate fill-in-the-blanks requiring understanding
+- Questions requiring interpretation of information
+- Simple calculations or single-step problem solving
+- Connecting two or more related concepts""",
+            "hard": """
+- Analysis and evaluation questions
+- Complex problem-solving requiring multiple steps
+- Higher-order thinking and critical reasoning
+- Application to new/unfamiliar scenarios
+- Multi-concept questions requiring integration
+- Challenging calculations or abstract reasoning
+- "Why" and "How" questions requiring deep understanding"""
+        }
+        return guidelines.get(difficulty, guidelines["medium"])
     
     def _has_valid_answer(self, question: Dict) -> bool:
         """Check if question has a valid expected answer."""
@@ -1887,10 +2077,13 @@ Output ONLY the JSON object, no other text."""
         class_level: int,
         subject: str,
         chapter_number: int,
-        student_id: str = None
+        student_id: str = None,
+        difficulty: str = "medium"
     ) -> Dict:
         """
-        Select 15 questions from a variant for a chapter test.
+        Select 15 questions from a variant for a chapter test based on difficulty.
+        - Student selects difficulty level (easy/medium/hard)
+        - All 15 questions are of the same difficulty
         - 5 MCQ questions (1 mark each, with options)
         - 5 Fill-in-the-blank questions (1 mark each)
         - 5 Two-mark questions (2 marks each)
@@ -1903,6 +2096,10 @@ Output ONLY the JSON object, no other text."""
         """
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
+        # Validate difficulty parameter
+        if difficulty not in ["easy", "medium", "hard"]:
+            difficulty = "medium"
+        
         pool = await collection.find_one({
             "class_level": class_level,
             "subject": subject,
@@ -1912,12 +2109,90 @@ Output ONLY the JSON object, no other text."""
         if not pool:
             return {"status": "error", "error": "Question pool not found"}
         
-        # Check for new variant format
-        variants = pool.get("variants", [])
+        # Check for new difficulty-based format
+        variants_by_difficulty = pool.get("variants_by_difficulty", {})
         
-        if variants and len(variants) > 0:
-            # NEW FORMAT: variant-based selection
+        if variants_by_difficulty and difficulty in variants_by_difficulty:
+            # NEW FORMAT: difficulty-based variant selection
+            difficulty_variants = variants_by_difficulty[difficulty]
+            
+            if not difficulty_variants:
+                return {"status": "error", "error": f"No {difficulty} variants available"}
+            
             # Determine which variant to use based on student's attempt count
+            variant_index = 0
+            if student_id:
+                attempt_count = await mongodb.db.test_sessions.count_documents({
+                    "student_id": student_id,
+                    "class_level": class_level,
+                    "subject": subject,
+                    "chapter_number": chapter_number,
+                    "difficulty": difficulty,
+                    "test_type": {"$in": ["chapter_test", "ai_with_topics"]}
+                })
+                variant_index = attempt_count % len(difficulty_variants)
+            
+            variant = difficulty_variants[variant_index]
+            mcq_pool = variant.get("mcq_pool", [])
+            fillup_pool = variant.get("fillup_pool", [])
+            two_mark_pool = variant.get("two_mark_pool", [])
+            
+            logger.info(f"🎯 Using {difficulty.upper()} variant {variant_index + 1}/{len(difficulty_variants)} for student {student_id}")
+            
+            # Build ordered question list: MCQs first, then fill-ups, then 2-mark
+            formatted_questions = []
+            q_num = 1
+            
+            for q in mcq_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"mcq_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": difficulty,
+                    "question_type": "mcq",
+                    "marks": 1,
+                    "time_estimate": 90,
+                    "options": q.get("options", {}),
+                    "correct_option": q.get("correct_option", ""),
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "topic": q.get("topic", "")
+                })
+                q_num += 1
+            
+            for q in fillup_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"fillup_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": difficulty,
+                    "question_type": "fillup",
+                    "marks": 1,
+                    "time_estimate": 60,
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "topic": q.get("topic", "")
+                })
+                q_num += 1
+            
+            for q in two_mark_pool:
+                formatted_questions.append({
+                    "question_number": q_num,
+                    "question_id": q.get("question_id", f"2mark_{q_num}"),
+                    "question_text": q.get("question_text", ""),
+                    "difficulty": difficulty,
+                    "question_type": "two_mark",
+                    "marks": 2,
+                    "time_estimate": 150,
+                    "expected_answer": q.get("expected_answer", ""),
+                    "keywords": q.get("keywords", []),
+                    "solution_steps": q.get("solution_steps", ""),
+                    "topic": q.get("topic", "")
+                })
+                q_num += 1
+        elif pool.get("variants"):
+            # BACKWARD COMPAT: Old format with mixed-difficulty variants
+            variants = pool.get("variants", [])
             variant_index = 0
             if student_id:
                 attempt_count = await mongodb.db.test_sessions.count_documents({
@@ -1934,9 +2209,6 @@ Output ONLY the JSON object, no other text."""
             fillup_pool = variant.get("fillup_pool", [])
             two_mark_pool = variant.get("two_mark_pool", [])
             
-            logger.info(f"Using variant {variant_index + 1}/{len(variants)} for student {student_id}")
-            
-            # Build ordered question list: MCQs first, then fill-ups, then 2-mark
             formatted_questions = []
             q_num = 1
             
@@ -2029,8 +2301,9 @@ Output ONLY the JSON object, no other text."""
         fillup_count = len([q for q in formatted_questions if q["question_type"] == "fillup"])
         two_mark_count = len([q for q in formatted_questions if q["question_type"] == "two_mark"])
         
-        logger.info(f"✅ Selected {len(formatted_questions)} questions for {subject} Ch.{chapter_number} "
-                     f"(MCQ:{mcq_count}, Fillup:{fillup_count}, 2-mark:{two_mark_count})")
+        logger.info(f"📚 Retrieved from MongoDB (no Gemini call): {subject} Ch.{chapter_number}")
+        logger.info(f"   Selected {len(formatted_questions)} {difficulty.upper()} questions: "
+                     f"MCQ={mcq_count}, Fill-up={fillup_count}, 2-mark={two_mark_count}")
         
         return {
             "status": "success",
@@ -2039,6 +2312,7 @@ Output ONLY the JSON object, no other text."""
             "total_questions": len(formatted_questions),
             "total_marks": 20,
             "time_limit_minutes": 40,
+            "difficulty": difficulty,
             "mcq_count": mcq_count,
             "fillup_count": fillup_count,
             "two_mark_count": two_mark_count
@@ -2064,7 +2338,7 @@ Output ONLY the JSON object, no other text."""
         
         Returns questions with topic_id and topic_name for each question.
         """
-        logger.info(f"📚 Generating topic-tagged questions for {subject} Ch.{chapter_number}")
+        logger.info(f"Generating topic-tagged questions for {subject} Ch.{chapter_number}")
         
         try:
             # Step 1: Retrieve content
@@ -2112,7 +2386,7 @@ Output ONLY the JSON object, no other text."""
                 if topic_id and topic_id not in unique_topics:
                     unique_topics[topic_id] = q.get("topic_name", "Unknown Topic")
             
-            logger.info(f"✅ Generated {len(questions_with_topics)} questions covering {len(unique_topics)} topics")
+            logger.info(f"Generated {len(questions_with_topics)} questions covering {len(unique_topics)} topics")
             
             return {
                 "status": "generated",

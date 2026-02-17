@@ -35,7 +35,7 @@ async def create_note(request: NoteCreateRequest):
         return note
     
     except Exception as e:
-        logger.error(f"❌ Create note error: {e}")
+        logger.error(f" Create note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -72,7 +72,7 @@ async def get_notes(
         )
     
     except Exception as e:
-        logger.error(f"❌ Get notes error: {e}")
+        logger.error(f" Get notes error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -104,7 +104,7 @@ async def update_note(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Update note error: {e}")
+        logger.error(f" Update note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -128,5 +128,5 @@ async def delete_note(note_id: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Delete note error: {e}")
+        logger.error(f" Delete note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

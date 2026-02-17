@@ -89,7 +89,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
 
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ Subject created successfully!\n\n${result.total_chapters} chapters, ${result.total_topics} topics`);
+        alert(`Subject created successfully!\n\n${result.total_chapters} chapters, ${result.total_topics} topics`);
         
         // Remove from pending list
         setPendingItems(prev => prev.filter(i => i.pending_id !== pendingId));
@@ -210,7 +210,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
           item.pending_id === pendingId ? updated : item
         ));
         setEditingItem(null);
-        alert("✅ Changes saved successfully!");
+        alert("Changes saved successfully!");
       } else {
         const error = await response.json();
         alert(`Error: ${error.detail}`);
@@ -375,7 +375,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                     {/* Summary */}
                     <div className="flex items-center gap-4 text-sm mb-4">
                       <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                        📚 {editingItem === item.pending_id ? editForm.extracted_chapters?.length : item.extracted_chapters?.length || 0} Chapters
+                        {editingItem === item.pending_id ? editForm.extracted_chapters?.length : item.extracted_chapters?.length || 0} Chapters
                       </span>
                       <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                         📝 {editingItem === item.pending_id 

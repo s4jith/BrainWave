@@ -51,7 +51,7 @@ class OrchestratorService:
         self.generation = generation or generation_service
         self.llm_storage = llm_storage_service
         
-        logger.info(f"✅ {self.config.component_name} initialized")
+        logger.info(f"{self.config.component_name} initialized")
     
     @measure_latency("rag_full_pipeline")
     def answer_question(
@@ -120,7 +120,7 @@ class OrchestratorService:
         
         source_chunks = textbook_chunks + llm_chunks + web_chunks
         
-        logger.info(f"✅ [{self.config.component_name}] Pipeline complete ({len(answer)} chars, {len(source_chunks)} sources)")
+        logger.info(f"[{self.config.component_name}] Pipeline complete ({len(answer)} chars, {len(source_chunks)} sources)")
         
         return answer, source_chunks
     

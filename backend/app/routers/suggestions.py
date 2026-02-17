@@ -64,7 +64,7 @@ async def create_suggestion(request: CreateSuggestionRequest):
         
         result = await mongodb.db.suggestions.insert_one(suggestion_doc)
         
-        logger.info(f"✅ Suggestion created: {result.inserted_id} from {request.student_name}")
+        logger.info(f"Suggestion created: {result.inserted_id} from {request.student_name}")
         
         # Resolve login user_id from MongoDB ObjectId for notifications
         student_login_id = request.student_id
@@ -244,7 +244,7 @@ async def respond_to_suggestion(
         except Exception as ne:
             logger.error(f"Failed to create notification for suggestion response: {ne}")
         
-        logger.info(f"✅ Admin responded to suggestion: {suggestion_id}")
+        logger.info(f"Admin responded to suggestion: {suggestion_id}")
         
         return {
             "status": "success",
@@ -267,7 +267,7 @@ async def delete_suggestion(suggestion_id: str):
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Suggestion not found")
         
-        logger.info(f"✅ Suggestion deleted: {suggestion_id}")
+        logger.info(f"Suggestion deleted: {suggestion_id}")
         
         return {
             "status": "success",

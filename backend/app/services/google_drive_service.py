@@ -76,7 +76,7 @@ class GoogleDriveService:
         """Initialize the Google Drive API service."""
         try:
             if not self.credentials_path or not os.path.exists(self.credentials_path):
-                logger.warning("⚠️ Google Drive credentials not found. Drive upload disabled.")
+                logger.warning(" Google Drive credentials not found. Drive upload disabled.")
                 logger.info("   To enable: Create a service account and save credentials as 'google_drive_credentials.json' in backend folder")
                 return
             
@@ -87,10 +87,10 @@ class GoogleDriveService:
             
             self.service = build('drive', 'v3', credentials=credentials)
             self.initialized = True
-            logger.info("✅ Google Drive service initialized successfully")
+            logger.info("Google Drive service initialized successfully")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Google Drive service: {e}")
+            logger.error(f" Failed to initialize Google Drive service: {e}")
             self.initialized = False
     
     def is_available(self) -> bool:
@@ -148,7 +148,7 @@ class GoogleDriveService:
             return folder_id
             
         except HttpError as e:
-            logger.error(f"❌ Error finding/creating folder {folder_name}: {e}")
+            logger.error(f" Error finding/creating folder {folder_name}: {e}")
             return None
     
     def create_class_subject_structure(self, class_level: int, subject: str, chapter_number: int) -> Optional[str]:
@@ -185,7 +185,7 @@ class GoogleDriveService:
             return chapter_folder_id
             
         except Exception as e:
-            logger.error(f"❌ Error creating folder structure: {e}")
+            logger.error(f" Error creating folder structure: {e}")
             return None
     
     def upload_pdf(
@@ -214,7 +214,7 @@ class GoogleDriveService:
             Dict with file info including shareable link, or None if failed
         """
         if not self.is_available():
-            logger.warning("⚠️ Google Drive not available, skipping upload")
+            logger.warning(" Google Drive not available, skipping upload")
             return None
         
         try:
@@ -226,7 +226,7 @@ class GoogleDriveService:
                     class_level, subject, chapter_number
                 )
                 if not target_folder_id:
-                    logger.error("❌ Failed to create folder structure")
+                    logger.error(" Failed to create folder structure")
                     return None
             else:
                 target_folder_id = ROOT_FOLDER_ID
@@ -261,7 +261,7 @@ class GoogleDriveService:
                     resumable=True
                 )
             else:
-                logger.error("❌ No file path or content provided")
+                logger.error(" No file path or content provided")
                 return None
             
             file = self.service.files().create(
@@ -272,7 +272,7 @@ class GoogleDriveService:
             ).execute()
             
             file_id = file.get('id')
-            logger.info(f"✅ Uploaded PDF to Google Drive: {filename} (ID: {file_id})")
+            logger.info(f"Uploaded PDF to Google Drive: {filename} (ID: {file_id})")
             
             # Make file accessible via link
             self._set_file_permissions(file_id)
@@ -293,14 +293,14 @@ class GoogleDriveService:
         except HttpError as e:
             error_details = str(e)
             if 'storageQuotaExceeded' in error_details or 'Service Accounts do not have storage quota' in error_details:
-                logger.warning("⚠️ Google Drive: Service accounts cannot upload to personal drives.")
+                logger.warning(" Google Drive: Service accounts cannot upload to personal drives.")
                 logger.info("   Solution: Use a Google Workspace Shared Drive instead of a personal folder.")
                 logger.info("   The PDF will be served from local storage.")
             else:
-                logger.error(f"❌ Error uploading PDF to Google Drive: {e}")
+                logger.error(f" Error uploading PDF to Google Drive: {e}")
             return None
         except Exception as e:
-            logger.error(f"❌ Unexpected error uploading PDF: {e}")
+            logger.error(f" Unexpected error uploading PDF: {e}")
             return None
     
     def _find_file_in_folder(self, filename: str, folder_id: str) -> Optional[Dict]:
@@ -319,7 +319,7 @@ class GoogleDriveService:
             return files[0] if files else None
             
         except Exception as e:
-            logger.error(f"❌ Error finding file: {e}")
+            logger.error(f" Error finding file: {e}")
             return None
     
     def _update_file(self, file_id: str, file_path: str = None, file_content: bytes = None) -> Optional[Dict]:
@@ -343,7 +343,7 @@ class GoogleDriveService:
                 supportsAllDrives=True  # Use owner's storage quota, not service account's
             ).execute()
             
-            logger.info(f"✅ Updated file in Google Drive: {file.get('name')}")
+            logger.info(f"Updated file in Google Drive: {file.get('name')}")
             
             shareable_link = self._get_shareable_link(file_id)
             
@@ -358,7 +358,7 @@ class GoogleDriveService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error updating file: {e}")
+            logger.error(f" Error updating file: {e}")
             return None
     
     def _set_file_permissions(self, file_id: str):
@@ -373,14 +373,14 @@ class GoogleDriveService:
                 body=permission,
                 supportsAllDrives=True
             ).execute()
-            logger.info(f"✅ Set permissions for file: {file_id}")
+            logger.info(f"Set permissions for file: {file_id}")
             
         except HttpError as e:
             # Permission might already exist
             if e.resp.status == 400:
                 logger.info(f"ℹ️ Permissions already set for file: {file_id}")
             else:
-                logger.error(f"❌ Error setting permissions: {e}")
+                logger.error(f" Error setting permissions: {e}")
     
     def _get_shareable_link(self, file_id: str) -> str:
         """Get the shareable link for a file."""
@@ -411,7 +411,7 @@ class GoogleDriveService:
             }
             
         except HttpError as e:
-            logger.error(f"❌ Error getting file info: {e}")
+            logger.error(f" Error getting file info: {e}")
             return None
     
     def delete_file(self, file_id: str) -> bool:
@@ -421,11 +421,11 @@ class GoogleDriveService:
         
         try:
             self.service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
-            logger.info(f"✅ Deleted file from Google Drive: {file_id}")
+            logger.info(f"Deleted file from Google Drive: {file_id}")
             return True
             
         except HttpError as e:
-            logger.error(f"❌ Error deleting file: {e}")
+            logger.error(f" Error deleting file: {e}")
             return False
     
     def list_folder_contents(self, folder_id: str = None) -> Optional[list]:
@@ -449,7 +449,7 @@ class GoogleDriveService:
             return results.get('files', [])
             
         except HttpError as e:
-            logger.error(f"❌ Error listing folder contents: {e}")
+            logger.error(f" Error listing folder contents: {e}")
             return None
 
 

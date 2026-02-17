@@ -4,11 +4,11 @@
 
 A comprehensive Subject/Chapter/Topic management system has been added to organize your academic content hierarchically. This provides:
 
-✅ **Centralized curriculum structure**  
-✅ **Easy subject, chapter, and topic management**  
-✅ **Visual organization with icons and colors**  
-✅ **Integration with existing book and question systems**  
-✅ **Admin-friendly interface**
+**Centralized curriculum structure**  
+**Easy subject, chapter, and topic management**  
+**Visual organization with icons and colors**  
+**Integration with existing book and question systems**  
+**Admin-friendly interface**
 
 ## File Changes
 
@@ -185,13 +185,13 @@ Access the Subjects Management page:
 
 ## Next Steps
 
-1. ✅ Run migration to populate initial data
-2. ✅ Review auto-created subjects
-3. ✅ Add missing chapters or topics
-4. ✅ Customize icons and colors for subjects
-5. ✅ Add learning objectives and keywords to topics
-6. ✅ Link questions to curriculum topics
-7. ✅ Create tests using the new structure
+1. Run migration to populate initial data
+2. Review auto-created subjects
+3. Add missing chapters or topics
+4. Customize icons and colors for subjects
+5. Add learning objectives and keywords to topics
+6. Link questions to curriculum topics
+7. Create tests using the new structure
 
 ## Need Help?
 

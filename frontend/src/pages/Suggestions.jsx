@@ -66,13 +66,13 @@ export default function Suggestions() {
         setSubject("");
         setSuggestion("");
         fetchMySuggestions();
-        alert("✅ Suggestion submitted successfully!");
+        alert("Suggestion submitted successfully!");
       } else {
-        alert("❌ Failed to submit suggestion. Please try again.");
+        alert(" Failed to submit suggestion. Please try again.");
       }
     } catch (err) {
       console.error("Error submitting suggestion:", err);
-      alert("❌ Failed to submit suggestion. Please try again.");
+      alert(" Failed to submit suggestion. Please try again.");
     } finally {
       setLoading(false);
     }

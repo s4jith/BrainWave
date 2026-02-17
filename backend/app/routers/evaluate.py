@@ -51,5 +51,5 @@ async def evaluate_mcqs(request: EvaluationRequest):
         )
     
     except Exception as e:
-        logger.error(f"❌ Evaluation error: {e}")
+        logger.error(f" Evaluation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

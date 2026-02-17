@@ -53,7 +53,7 @@ def setup_namespace_architecture():
         pc = Pinecone(api_key=settings.PINECONE_API_KEY)
         
         logger.info("="*70)
-        logger.info("🚀 Setting Up Namespace-Based Subject Architecture")
+        logger.info("Setting Up Namespace-Based Subject Architecture")
         logger.info("="*70)
         
         # Check existing indexes
@@ -64,14 +64,14 @@ def setup_namespace_architecture():
         
         # Check if master index exists
         if MASTER_INDEX_NAME in existing_indexes:
-            logger.info(f"\n✅ Master index '{MASTER_INDEX_NAME}' already exists")
+            logger.info(f"\nMaster index '{MASTER_INDEX_NAME}' already exists")
             index = pc.Index(MASTER_INDEX_NAME)
         else:
             logger.info(f"\n📦 Creating master index: {MASTER_INDEX_NAME}")
             
             # Check if we need to delete an old index
             if len(existing_indexes) >= 5:
-                logger.warning(f"\n⚠️  Reached index limit (5). Consider deleting unused indexes:")
+                logger.warning(f"\n  Reached index limit (5). Consider deleting unused indexes:")
                 logger.warning("   - ncert-learning-rag (OLD chapter-based)")
                 logger.warning("   - intel-working (if not needed)")
                 logger.warning("\nRun: python scripts/cleanup_old_indexes.py")
@@ -87,7 +87,7 @@ def setup_namespace_architecture():
                     region="us-east-1"
                 )
             )
-            logger.info("✅ Master index created!")
+            logger.info("Master index created!")
             
             # Wait for index to be ready
             logger.info("⏳ Waiting for index to initialize...")
@@ -97,7 +97,7 @@ def setup_namespace_architecture():
         
         # Display namespace information
         logger.info(f"\n{'='*70}")
-        logger.info("📚 Subject Namespaces Configuration")
+        logger.info("Subject Namespaces Configuration")
         logger.info(f"{'='*70}")
         
         for namespace, config in SUBJECT_NAMESPACES.items():
@@ -127,7 +127,7 @@ def setup_namespace_architecture():
         
         # Success summary
         logger.info(f"\n{'='*70}")
-        logger.info("✅ Setup Complete!")
+        logger.info("Setup Complete!")
         logger.info(f"{'='*70}")
         logger.info(f"\n📝 Architecture:")
         logger.info(f"   Index: {MASTER_INDEX_NAME}")
@@ -140,14 +140,14 @@ def setup_namespace_architecture():
         logger.info("   3. Test cross-class learning")
         
         logger.info(f"\n💡 Benefits:")
-        logger.info("   ✅ Stays within free tier (5 index limit)")
-        logger.info("   ✅ Faster queries (single connection)")
-        logger.info("   ✅ Easier management")
-        logger.info("   ✅ Unlimited namespaces")
-        logger.info("   ✅ Better for progressive learning")
+        logger.info("   Stays within free tier (5 index limit)")
+        logger.info("   Faster queries (single connection)")
+        logger.info("   Easier management")
+        logger.info("   Unlimited namespaces")
+        logger.info("   Better for progressive learning")
         
     except Exception as e:
-        logger.error(f"❌ Setup failed: {e}")
+        logger.error(f" Setup failed: {e}")
         import traceback
         traceback.print_exc()
         raise

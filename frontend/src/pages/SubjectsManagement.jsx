@@ -254,6 +254,171 @@ export default function SubjectsManagement() {
     setExpandedSubjects(prev => ({ ...prev, [subjectId]: !prev[subjectId] }));
   };
 
+  const handleEditChapter = (chapter) => {
+    setEditingChapter({
+      ...chapter,
+      originalChapterName: chapter.chapter_name
+    });
+  };
+
+  const handleCancelEditChapter = () => {
+    setEditingChapter(null);
+  };
+
+  const handleSaveChapter = async () => {
+    if (!editingChapter || !selectedSubject) return;
+    
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${editingChapter.chapter_id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapter_name: editingChapter.chapter_name,
+            description: editingChapter.description || ""
+          })
+        }
+      );
+
+      if (response.ok) {
+        // Refresh selected subject details
+        const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+        if (updated) {
+          setSelectedSubject(updated);
+        }
+        setEditingChapter(null);
+        alert("Chapter updated successfully!");
+        fetchSubjects();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail}`);
+      }
+    } catch (err) {
+      alert("Failed to update chapter");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteChapter = async (chapterId) => {
+    if (!confirm("Are you sure you want to delete this chapter? All topics in this chapter will also be deleted.")) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      if (response.ok) {
+        // Refresh selected subject details
+        const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+        if (updated) {
+          setSelectedSubject(updated);
+        }
+        alert("Chapter deleted successfully!");
+        fetchSubjects();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail}`);
+      }
+    } catch (err) {
+      alert("Failed to delete chapter");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditTopic = (topic, chapterId) => {
+    setEditingTopic({
+      ...topic,
+      chapterId,
+      originalTopicName: topic.topic_name
+    });
+  };
+
+  const handleCancelEditTopic = () => {
+    setEditingTopic(null);
+  };
+
+  const handleSaveTopic = async () => {
+    if (!editingTopic || !selectedSubject) return;
+    
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${editingTopic.chapterId}/topics/${editingTopic.topic_id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic_name: editingTopic.topic_name,
+            description: editingTopic.description || "",
+            page_range: editingTopic.page_range || "",
+            difficulty_level: editingTopic.difficulty_level
+          })
+        }
+      );
+
+      if (response.ok) {
+        // Refresh selected subject details
+        const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+        if (updated) {
+          setSelectedSubject(updated);
+        }
+        setEditingTopic(null);
+        alert("Topic updated successfully!");
+        fetchSubjects();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail}`);
+      }
+    } catch (err) {
+      alert("Failed to update topic");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteTopic = async (topicId, chapterId) => {
+    if (!confirm("Are you sure you want to delete this topic?")) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}/topics/${topicId}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      if (response.ok) {
+        // Refresh selected subject details
+        const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+        if (updated) {
+          setSelectedSubject(updated);
+        }
+        alert("Topic deleted successfully!");
+        fetchSubjects();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail}`);
+      }
+    } catch (err) {
+      alert("Failed to delete topic");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const toggleChapter = (chapterId) => {
     setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
   };
@@ -531,29 +696,88 @@ export default function SubjectsManagement() {
                 ) : (
                   selectedSubject.chapters?.map((chapter) => (
                     <div key={chapter.chapter_id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      <div
-                        onClick={() => toggleChapter(chapter.chapter_id)}
-                        className="p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between transition"
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          {expandedChapters[chapter.chapter_id] ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                          )}
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
-                              Ch {chapter.chapter_number}
-                            </span>
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {chapter.chapter_name}
-                            </span>
+                      {editingChapter?.chapter_id === chapter.chapter_id ? (
+                        <div className="p-4 bg-white dark:bg-gray-800">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Chapter Name
+                              </label>
+                              <input
+                                type="text"
+                                value={editingChapter.chapter_name}
+                                onChange={(e) => setEditingChapter({ ...editingChapter, chapter_name: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                placeholder="Chapter name"
+                              />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={handleCancelEditChapter}
+                                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveChapter}
+                                disabled={submitting || !editingChapter.chapter_name.trim()}
+                                className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+                              >
+                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Save
+                              </button>
+                            </div>
                           </div>
-                          <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto mr-4">
-                            {chapter.topics?.length || 0} topics
-                          </span>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                          <div className="flex items-center justify-between">
+                            <div
+                              onClick={() => toggleChapter(chapter.chapter_id)}
+                              className="flex items-center gap-3 flex-1 cursor-pointer"
+                            >
+                              {expandedChapters[chapter.chapter_id] ? (
+                                <ChevronDown className="w-5 h-5 text-gray-400" />
+                              ) : (
+                                <ChevronRight className="w-5 h-5 text-gray-400" />
+                              )}
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
+                                  Ch {chapter.chapter_number}
+                                </span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {chapter.chapter_name}
+                                </span>
+                              </div>
+                              <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto mr-4">
+                                {chapter.topics?.length || 0} topics
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditChapter(chapter);
+                                }}
+                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                                title="Edit chapter"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteChapter(chapter.chapter_id);
+                                }}
+                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
+                                title="Delete chapter"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       {expandedChapters[chapter.chapter_id] && (
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
@@ -601,34 +825,108 @@ export default function SubjectsManagement() {
                           ) : (
                             <div className="space-y-2">
                               {chapter.topics?.map((topic, idx) => (
-                                <div
-                                  key={topic.topic_id}
-                                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg text-sm"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-gray-400 dark:text-gray-500 font-mono">
-                                      {idx + 1}.
-                                    </span>
-                                    <span className="text-gray-900 dark:text-white">
-                                      {topic.topic_name}
-                                    </span>
-                                    {topic.page_range && (
-                                      <span className="text-gray-500 dark:text-gray-400 text-xs">
-                                        (p. {topic.page_range})
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-xs px-2 py-1 rounded ${
-                                      topic.difficulty_level === "easy"
-                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                        : topic.difficulty_level === "hard"
-                                        ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                        : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                    }`}>
-                                      {topic.difficulty_level}
-                                    </span>
-                                  </div>
+                                <div key={topic.topic_id}>
+                                  {editingTopic?.topic_id === topic.topic_id ? (
+                                    <div className="p-3 bg-white dark:bg-gray-800 rounded-lg space-y-3">
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                          Topic Name
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={editingTopic.topic_name}
+                                          onChange={(e) => setEditingTopic({ ...editingTopic, topic_name: e.target.value })}
+                                          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                          placeholder="Topic name"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Page Range
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={editingTopic.page_range || ""}
+                                            onChange={(e) => setEditingTopic({ ...editingTopic, page_range: e.target.value })}
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                            placeholder="e.g., 1-10"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Difficulty
+                                          </label>
+                                          <select
+                                            value={editingTopic.difficulty_level}
+                                            onChange={(e) => setEditingTopic({ ...editingTopic, difficulty_level: e.target.value })}
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                          >
+                                            <option value="easy">Easy</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="hard">Hard</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 justify-end">
+                                        <button
+                                          onClick={handleCancelEditTopic}
+                                          className="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={handleSaveTopic}
+                                          disabled={submitting || !editingTopic.topic_name.trim()}
+                                          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                          {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                          Save
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg text-sm">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-gray-400 dark:text-gray-500 font-mono">
+                                          {idx + 1}.
+                                        </span>
+                                        <span className="text-gray-900 dark:text-white">
+                                          {topic.topic_name}
+                                        </span>
+                                        {topic.page_range && (
+                                          <span className="text-gray-500 dark:text-gray-400 text-xs">
+                                            (p. {topic.page_range})
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-xs px-2 py-1 rounded ${
+                                          topic.difficulty_level === "easy"
+                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            : topic.difficulty_level === "hard"
+                                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                            : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                        }`}>
+                                          {topic.difficulty_level}
+                                        </span>
+                                        <button
+                                          onClick={() => handleEditTopic(topic, chapter.chapter_id)}
+                                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                                          title="Edit topic"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteTopic(topic.topic_id, chapter.chapter_id)}
+                                          className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
+                                          title="Delete topic"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>

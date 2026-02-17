@@ -8,7 +8,7 @@ from app.core.config import settings
 
 # Get all books
 books = list(db.books.find({}))
-print(f'\n📚 Total books in MongoDB: {len(books)}\n')
+print(f'\nTotal books in MongoDB: {len(books)}\n')
 
 if books:
     print('Books found:')
@@ -24,8 +24,8 @@ if books:
         print(f'    Embeddings: {"✓" if embeddings_status else "✗"}')
         print()
 else:
-    print('❌ No books found in MongoDB!')
-    print('⚠️  But you have 49,421 vectors in Pinecone "mathematics" namespace')
+    print(' No books found in MongoDB!')
+    print('  But you have 49,421 vectors in Pinecone "mathematics" namespace')
     print('This means the data exists in Pinecone but not in MongoDB.')
     print('\nYou need to either:')
     print('1. Re-upload the books through the Book Management page')

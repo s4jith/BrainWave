@@ -119,7 +119,7 @@ JSON:"""
                 return []
                 
         except Exception as e:
-            logger.error(f"❌ Flashcard generation failed: {e}")
+            logger.error(f" Flashcard generation failed: {e}")
             return []
     
     def get_saved_flashcards(
@@ -155,7 +155,7 @@ JSON:"""
             return result
             
         except Exception as e:
-            logger.error(f"❌ Get flashcards failed: {e}")
+            logger.error(f" Get flashcards failed: {e}")
             return []
 
 

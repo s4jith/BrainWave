@@ -11,7 +11,10 @@ import {
   Star,
   Lightbulb,
   CheckCircle,
-  Loader2
+  Loader2,
+  Zap,
+  Award,
+  Flame
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { testService } from "../../services/api";
@@ -20,7 +23,7 @@ import { testService } from "../../services/api";
  * TopicSelector Component
  * 
  * Implements topic-based test selection:
- * Subject → Chapter → Test Configuration
+ * Subject → Chapter → Difficulty → Start Test
  */
 export default function TopicSelector({
   studentId,
@@ -28,10 +31,9 @@ export default function TopicSelector({
   onSelectTopic,
   onCancel
 }) {
-  const [step, setStep] = useState(1); // 1=Subject, 2=Chapter
+  const [step, setStep] = useState(1); // 1=Subject, 2=Chapter, 3=Difficulty
   const [loading, setLoading] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   // Selection state
   const [subjects, setSubjects] = useState([]);
@@ -40,6 +42,7 @@ export default function TopicSelector({
 
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState(null);
 
   // Fixed test format - no user config needed
   // 15 questions (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 minutes
@@ -98,20 +101,27 @@ export default function TopicSelector({
 
   const handleSelectChapter = (chapter) => {
     setSelectedChapter(chapter);
-    // Show confirmation modal
-    setShowConfirm(true);
+    // Go to difficulty selection step
+    setStep(3);
+  };
+
+  const handleSelectDifficulty = (difficulty) => {
+    setSelectedDifficulty(difficulty);
   };
 
   const handleStartTest = () => {
+    if (!selectedDifficulty) return;
+    
     // Fixed format: 15Q (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 min
     onSelectTopic({
       subject: selectedSubject.subject,
       chapter_number: selectedChapter.chapter_number,
       chapter_name: selectedChapter.chapter_name,
+      difficulty: selectedDifficulty,
       num_questions: 15,
       total_marks: 20,
       time_limit_minutes: 40,
-      use_chapter_test: true  // Flag for new endpoint
+      test_type: 'ai_with_analytics'  // Use AI test endpoint with difficulty support
     });
   };
 
@@ -122,16 +132,18 @@ export default function TopicSelector({
       chapter_number: rec.chapter,
       chapter_name: rec.chapter_name
     });
-    setShowConfirm(true);
+    setStep(3);
   };
 
   const goBack = () => {
-    if (step === 2) {
+    if (step === 3) {
+      setStep(2);
+      setSelectedDifficulty(null);
+    } else if (step === 2) {
       setStep(1);
       setSelectedChapter(null);
       setChapters([]);
     }
-    setShowConfirm(false);
   };
 
   const getTrendIcon = (trend) => {
@@ -164,15 +176,15 @@ export default function TopicSelector({
               <h2 className="text-xl font-bold text-gray-800">
                 {step === 1 && "Select Subject"}
                 {step === 2 && "Select Chapter"}
-                {step === 3 && "Select Topic"}
+                {step === 3 && "Select Difficulty"}
               </h2>
             </div>
             <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
           </div>
 
-          {/* Progress Steps - Only 2 steps now */}
+          {/* Progress Steps - 3 steps */}
           <div className="flex items-center gap-2">
-            {[1, 2].map((s) => (
+            {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${s < step ? "bg-green-500 text-white" :
                   s === step ? "bg-orange-600 text-white" :
@@ -180,7 +192,7 @@ export default function TopicSelector({
                   }`}>
                   {s < step ? <CheckCircle className="w-4 h-4" /> : s}
                 </div>
-                {s < 2 && <div className={`w-12 h-1 rounded ${s < step ? "bg-green-500" : "bg-gray-200"}`} />}
+                {s < 3 && <div className={`w-12 h-1 rounded ${s < step ? "bg-green-500" : "bg-gray-200"}`} />}
               </div>
             ))}
           </div>
@@ -288,71 +300,145 @@ export default function TopicSelector({
                   </div>
                 </div>
               )}
+
+              {/* Step 3: Difficulty Selection */}
+              {step === 3 && selectedChapter && (
+                <div className="space-y-6">
+                  {/* Chapter Info */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 font-bold text-lg">
+                        {selectedChapter.chapter_number}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800">{selectedChapter.chapter_name}</h4>
+                        <p className="text-sm text-gray-500">{selectedSubject?.subject}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Difficulty Options */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-700 mb-4">Choose your difficulty level:</h4>
+                    
+                    {/* Easy */}
+                    <button
+                      onClick={() => handleSelectDifficulty("easy")}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
+                        selectedDifficulty === "easy"
+                          ? "border-green-500 bg-green-50"
+                          : "border-gray-200 bg-white hover:border-green-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                          selectedDifficulty === "easy" ? "bg-green-500" : "bg-green-100"
+                        }`}>
+                          <Zap className={`w-6 h-6 ${selectedDifficulty === "easy" ? "text-white" : "text-green-600"}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-semibold text-gray-800 text-lg">Easy</h5>
+                          <p className="text-sm text-gray-500">Basic concepts, definitions & simple recall questions</p>
+                        </div>
+                        {selectedDifficulty === "easy" && (
+                          <CheckCircle className="w-6 h-6 text-green-500" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Medium */}
+                    <button
+                      onClick={() => handleSelectDifficulty("medium")}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
+                        selectedDifficulty === "medium"
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-gray-200 bg-white hover:border-orange-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                          selectedDifficulty === "medium" ? "bg-orange-500" : "bg-orange-100"
+                        }`}>
+                          <Award className={`w-6 h-6 ${selectedDifficulty === "medium" ? "text-white" : "text-orange-600"}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-semibold text-gray-800 text-lg">Medium</h5>
+                          <p className="text-sm text-gray-500">Application-based questions requiring understanding</p>
+                        </div>
+                        {selectedDifficulty === "medium" && (
+                          <CheckCircle className="w-6 h-6 text-orange-500" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Hard */}
+                    <button
+                      onClick={() => handleSelectDifficulty("hard")}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
+                        selectedDifficulty === "hard"
+                          ? "border-red-500 bg-red-50"
+                          : "border-gray-200 bg-white hover:border-red-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                          selectedDifficulty === "hard" ? "bg-red-500" : "bg-red-100"
+                        }`}>
+                          <Flame className={`w-6 h-6 ${selectedDifficulty === "hard" ? "text-white" : "text-red-600"}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-semibold text-gray-800 text-lg">Hard</h5>
+                          <p className="text-sm text-gray-500">Advanced analysis & higher-order thinking questions</p>
+                        </div>
+                        {selectedDifficulty === "hard" && (
+                          <CheckCircle className="w-6 h-6 text-red-500" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Test Info */}
+                  <div className="bg-gray-50 rounded-xl p-4 mt-4">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-2xl font-bold text-orange-600">15</p>
+                        <p className="text-xs text-gray-500">Questions</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-orange-600">20</p>
+                        <p className="text-xs text-gray-500">Marks</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-orange-600">40</p>
+                        <p className="text-xs text-gray-500">Minutes</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="text-sm text-gray-600 text-center">
+                        <span className="font-medium">5 MCQ</span> + <span className="font-medium">5 Fill-ups</span> + <span className="font-medium">5 Short Answer</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
-
-        {/* Confirmation Modal */}
-        {showConfirm && selectedChapter && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Brain className="w-8 h-8 text-orange-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Start Chapter Test</h3>
-                <p className="text-gray-500 mt-2">
-                  Chapter {selectedChapter.chapter_number}: {selectedChapter.chapter_name}
-                </p>
-              </div>
-
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 mb-6">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-2xl font-bold text-orange-600">15</p>
-                    <p className="text-xs text-gray-500">Questions</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-orange-600">20</p>
-                    <p className="text-xs text-gray-500">Marks</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-orange-600">40</p>
-                    <p className="text-xs text-gray-500">Minutes</p>
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-blue-100">
-                  <p className="text-sm text-gray-600 text-center">
-                    <span className="font-medium">5 MCQ</span> + <span className="font-medium">5 Fill-ups</span> + <span className="font-medium">5 Short Answer</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowConfirm(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleStartTest}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white gap-2"
-                >
-                  <Brain className="w-4 h-4" />
-                  Start Test
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-100 flex justify-between">
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
+          {step === 3 && selectedDifficulty && (
+            <Button
+              onClick={handleStartTest}
+              className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
+            >
+              <Brain className="w-4 h-4" />
+              Start Test
+            </Button>
+          )}
         </div>
       </div>
     </div>

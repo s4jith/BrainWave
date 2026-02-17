@@ -121,8 +121,9 @@ class SubjectService:
             subject_display_names = {
                 "hindi": "Hindi",
                 "english": "English",
-                "mathematics": "Mathematics",
-                "math": "Mathematics",
+                "maths": "Maths",
+                "mathematics": "Maths",
+                "math": "Maths",
                 "science": "Science",
                 "physics": "Physics",
                 "chemistry": "Chemistry",

@@ -40,8 +40,8 @@ export default function StudentChatbot({ currentLesson }) {
     const modeMessage = {
       role: "assistant",
       content: mode === "quick" 
-        ? "✅ **Quick Mode activated!** I'll give you direct, exam-style answers from your textbook."
-        : "✅ **DeepDive Mode activated!** I'll provide comprehensive explanations covering all aspects of the topic, including background context and related information.",
+        ? "**Quick Mode activated!** I'll give you direct, exam-style answers from your textbook."
+        : "**DeepDive Mode activated!** I'll provide comprehensive explanations covering all aspects of the topic, including background context and related information.",
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, modeMessage]);
@@ -64,7 +64,7 @@ export default function StudentChatbot({ currentLesson }) {
     setIsTyping(true);
 
     try {
-      console.log("🚀 Sending chat request:", {
+      console.log("Sending chat request:", {
         question: userMessage.content,
         classLevel: user.classLevel || 6,
         subject: effectiveSubject,

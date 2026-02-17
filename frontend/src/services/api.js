@@ -981,6 +981,7 @@ export const testService = {
           class_level: params.classLevel || 10,
           subject: params.subject,
           chapter_number: params.chapter_number,
+          difficulty: params.difficulty || "medium",
           num_questions: params.num_questions || 15
         }),
       });

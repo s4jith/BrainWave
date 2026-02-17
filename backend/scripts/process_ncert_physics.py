@@ -52,7 +52,7 @@ class PhysicsProcessor:
         self.embedder = PhysicsEmbedder()
         self.uploader = PhysicsUploader()
         
-        logger.info("✅ All components initialized")
+        logger.info("All components initialized")
     
     def process_pdf(
         self,
@@ -75,7 +75,7 @@ class PhysicsProcessor:
                 chapter_num=chapter_num
             )
             
-            logger.info(f"   ✅ Extracted:")
+            logger.info(f"   Extracted:")
             logger.info(f"      Text blocks: {len(extracted_data['text_blocks'])}")
             logger.info(f"      Diagrams: {len(extracted_data['diagrams'])}")
             logger.info(f"      Tables: {len(extracted_data['tables'])}")
@@ -86,7 +86,7 @@ class PhysicsProcessor:
             logger.info("\n[2/5] Extracting formulas...")
             all_text = " ".join([block['text'] for block in extracted_data['text_blocks']])
             formulas = self.formula_extractor.extract_formulas(all_text)
-            logger.info(f"   ✅ Found {len(formulas)} formulas")
+            logger.info(f"   Found {len(formulas)} formulas")
             
             # Step 3: Chunk content
             logger.info("\n[3/5] Chunking content...")
@@ -95,12 +95,12 @@ class PhysicsProcessor:
                 class_num,
                 chapter_num
             )
-            logger.info(f"   ✅ Created {len(chunks)} chunks")
+            logger.info(f"   Created {len(chunks)} chunks")
             
             # Step 4: Generate embeddings
             logger.info("\n[4/5] Generating embeddings...")
             chunks_with_embeddings = self.embedder.embed_chunks_batch(chunks)
-            logger.info(f"   ✅ Generated {len(chunks_with_embeddings)} embeddings")
+            logger.info(f"   Generated {len(chunks_with_embeddings)} embeddings")
             
             # Step 5: Upload to Pinecone
             logger.info("\n[5/5] Uploading to Pinecone...")
@@ -109,7 +109,7 @@ class PhysicsProcessor:
                 namespace="physics"
             )
             
-            logger.info(f"✅ PDF processing complete!")
+            logger.info(f"PDF processing complete!")
             
             return {
                 'pdf_name': pdf_path.name,
@@ -127,7 +127,7 @@ class PhysicsProcessor:
             }
             
         except Exception as e:
-            logger.error(f"❌ Failed to process {pdf_path.name}: {e}", exc_info=True)
+            logger.error(f" Failed to process {pdf_path.name}: {e}", exc_info=True)
             return {
                 'pdf_name': pdf_path.name,
                 'error': str(e)
@@ -135,7 +135,7 @@ class PhysicsProcessor:
     
     def scan_physics_pdfs(self, dataset_dir: Path) -> list:
         """Scan for NCERT Physics PDFs"""
-        logger.info("\n🔍 Scanning for Physics PDFs...")
+        logger.info("\n Scanning for Physics PDFs...")
         
         pdfs = []
         
@@ -183,14 +183,14 @@ class PhysicsProcessor:
             logger.info(f"   Filtering to Class {class_filter}: {len(pdfs)} PDFs")
         
         if not pdfs:
-            logger.error("❌ No Physics PDFs found!")
+            logger.error(" No Physics PDFs found!")
             return
         
         # Process each PDF
         results = []
         
         logger.info(f"\n{'='*80}")
-        logger.info(f"🚀 Processing {len(pdfs)} Physics PDFs")
+        logger.info(f"Processing {len(pdfs)} Physics PDFs")
         logger.info(f"{'='*80}\n")
         
         for pdf_info in tqdm(pdfs, desc="Processing PDFs"):
@@ -210,8 +210,8 @@ class PhysicsProcessor:
         failed = [r for r in results if 'error' in r]
         
         logger.info(f"Total PDFs: {len(results)}")
-        logger.info(f"✅ Successful: {len(successful)}")
-        logger.info(f"❌ Failed: {len(failed)}")
+        logger.info(f"Successful: {len(successful)}")
+        logger.info(f" Failed: {len(failed)}")
         
         if successful:
             total_chunks = sum(r['chunks'] for r in successful)
@@ -230,7 +230,7 @@ class PhysicsProcessor:
             logger.info(f"   Numericals: {total_numericals}")
         
         if failed:
-            logger.info(f"\n❌ Failed PDFs:")
+            logger.info(f"\n Failed PDFs:")
             for r in failed:
                 logger.info(f"   {r['pdf_name']}: {r['error']}")
         
@@ -241,7 +241,7 @@ class PhysicsProcessor:
         logger.info(f"   Total index: {final_stats['total_vectors']} vectors")
         
         logger.info("\n" + "="*80)
-        logger.info("✅ PHYSICS PROCESSING COMPLETE")
+        logger.info("PHYSICS PROCESSING COMPLETE")
         logger.info("="*80)
 
 
@@ -275,7 +275,7 @@ def main():
         dataset_path = backend_dir / dataset_path
     
     if not dataset_path.exists():
-        logger.error(f"❌ Dataset directory not found: {dataset_path}")
+        logger.error(f" Dataset directory not found: {dataset_path}")
         return
     
     # Process

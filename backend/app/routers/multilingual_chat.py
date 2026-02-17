@@ -129,7 +129,7 @@ async def multilingual_chat(request: MultilingualChatRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Multilingual chat failed: {e}")
+        logger.error(f" Multilingual chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

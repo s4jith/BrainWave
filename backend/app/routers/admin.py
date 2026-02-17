@@ -45,7 +45,7 @@ async def get_quota_status():
         return status
     
     except Exception as e:
-        logger.error(f"❌ Failed to get quota status: {e}")
+        logger.error(f" Failed to get quota status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -66,7 +66,7 @@ async def force_reset_quota():
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to reset quotas: {e}")
+        logger.error(f" Failed to reset quotas: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -95,7 +95,7 @@ async def health_check():
         }
     
     except Exception as e:
-        logger.error(f"❌ Health check failed: {e}")
+        logger.error(f" Health check failed: {e}")
         return {
             "status": "error",
             "error": str(e),

@@ -85,11 +85,11 @@ class EvaluationService:
                 result=result
             )
             
-            logger.info(f"✅ Evaluation completed: {correct}/{total} ({percentage:.1f}%)")
+            logger.info(f"Evaluation completed: {correct}/{total} ({percentage:.1f}%)")
             return result, evaluation_id
         
         except Exception as e:
-            logger.error(f"❌ Evaluation failed: {e}")
+            logger.error(f" Evaluation failed: {e}")
             raise
     
     def _generate_feedback(self, correct: int, total: int, percentage: float) -> str:
@@ -132,7 +132,7 @@ class EvaluationService:
             return str(result_doc.inserted_id)
         
         except Exception as e:
-            logger.error(f"❌ Failed to save evaluation: {e}")
+            logger.error(f" Failed to save evaluation: {e}")
             raise
 
 

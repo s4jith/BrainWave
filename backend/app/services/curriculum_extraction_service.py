@@ -17,7 +17,7 @@ class CurriculumExtractionService:
     
     def __init__(self):
         self.gemini = gemini_service
-        logger.info("📚 Curriculum Extraction Service initialized")
+        logger.info("Curriculum Extraction Service initialized")
     
     async def extract_from_image(
         self, 
@@ -39,7 +39,7 @@ class CurriculumExtractionService:
             List of ExtractedChapter objects
         """
         try:
-            logger.info(f"🔍 Extracting curriculum from image for {subject_name} Class {class_level}")
+            logger.info(f" Extracting curriculum from image for {subject_name} Class {class_level}")
             
             # Build detailed prompt for Gemini Vision
             prompt = self._build_extraction_prompt(subject_name, class_level)
@@ -52,16 +52,16 @@ class CurriculumExtractionService:
                 max_output_tokens=8000  # High limit for complete table of contents
             )
             
-            logger.info(f"✅ Gemini Vision response received ({len(response_text)} chars), parsing structure...")
+            logger.info(f"Gemini Vision response received ({len(response_text)} chars), parsing structure...")
             
             # Parse the response into structured data
             chapters = self._parse_extraction_response(response_text)
             
-            logger.info(f"✅ Extracted {len(chapters)} chapters from image")
+            logger.info(f"Extracted {len(chapters)} chapters from image")
             return chapters
             
         except Exception as e:
-            logger.error(f"❌ Curriculum extraction failed: {e}")
+            logger.error(f" Curriculum extraction failed: {e}")
             raise
     
     async def extract_from_pdf(
@@ -145,16 +145,16 @@ Return only the JSON array, no markdown formatting, no explanations.
             # Use Gemini to extract structure from text with high token limit
             response_text = self.gemini.generate_response(prompt, max_output_tokens=8000)
             
-            logger.info(f"✅ Gemini response received ({len(response_text)} chars), parsing structure...")
+            logger.info(f"Gemini response received ({len(response_text)} chars), parsing structure...")
             
             # Parse the response into structured data
             chapters = self._parse_extraction_response(response_text)
             
-            logger.info(f"✅ Extracted {len(chapters)} chapters from PDF")
+            logger.info(f"Extracted {len(chapters)} chapters from PDF")
             return chapters
             
         except Exception as e:
-            logger.error(f"❌ PDF extraction failed: {e}")
+            logger.error(f" PDF extraction failed: {e}")
             raise
     
     def _build_extraction_prompt(self, subject_name: str, class_level: int) -> str:
@@ -257,13 +257,13 @@ Important:
             return chapters
             
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Failed to p (first 1000 chars): {response_text[:1000]}")
+            logger.error(f" Failed to p (first 1000 chars): {response_text[:1000]}")
             logger.error(f"Response text (last 500 chars): {response_text[-500:]}")
             logger.error(f"Total response length: {len(response_text)} chars")
             logger.error(f"Response text: {response_text[:500]}")
             raise ValueError(f"Invalid JSON response from AI: {str(e)}")
         except Exception as e:
-            logger.error(f"❌ Failed to parse extraction response: {e}")
+            logger.error(f" Failed to parse extraction response: {e}")
             raise
 
 

@@ -55,11 +55,11 @@ class MultimodalEmbedder:
             if len(test_emb) != 768:
                 raise ValueError(f"Text model must output 768-dim vectors, got {len(test_emb)}")
             
-            logger.info(f"✅ Text model loaded: {text_model_name}")
+            logger.info(f"Text model loaded: {text_model_name}")
             logger.info(f"   Output dimension: {len(test_emb)}")
         
         except Exception as e:
-            logger.error(f"❌ Failed to load text model: {e}")
+            logger.error(f" Failed to load text model: {e}")
             raise
         
         # Image processor (lazy load when needed)
@@ -71,7 +71,7 @@ class MultimodalEmbedder:
         if self._image_processor is None:
             from .image_processor import ImageProcessor
             self._image_processor = ImageProcessor(device=self.device)
-            logger.info("✅ Image processor loaded (lazy)")
+            logger.info("Image processor loaded (lazy)")
         return self._image_processor
     
     def embed_chunk(self, chunk: Dict) -> np.ndarray:
@@ -148,7 +148,7 @@ class MultimodalEmbedder:
             return embedding.astype(np.float32)
         
         except Exception as e:
-            logger.error(f"❌ Failed to embed text: {e}")
+            logger.error(f" Failed to embed text: {e}")
             return np.zeros(768, dtype=np.float32)
     
     def embed_text_batch(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
@@ -175,7 +175,7 @@ class MultimodalEmbedder:
             return embeddings.astype(np.float32)
         
         except Exception as e:
-            logger.error(f"❌ Batch embedding failed: {e}")
+            logger.error(f" Batch embedding failed: {e}")
             return np.zeros((len(texts), 768), dtype=np.float32)
     
     def embed_text_and_image(
@@ -283,7 +283,7 @@ class MultimodalEmbedder:
                 )
                 result_embeddings[idx] = emb
         
-        logger.info(f"✅ Generated {len(result_embeddings)} embeddings")
+        logger.info(f"Generated {len(result_embeddings)} embeddings")
         
         # Add embeddings back to chunks
         for i, chunk in enumerate(chunks):
@@ -340,4 +340,4 @@ if __name__ == "__main__":
         print(f"Embedding shape: {emb.shape}")
         print(f"Norm: {np.linalg.norm(emb):.4f}")
     
-    print("\n✅ Embedder ready for production use")
+    print("\nEmbedder ready for production use")

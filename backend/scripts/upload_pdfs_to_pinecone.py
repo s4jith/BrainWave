@@ -285,7 +285,7 @@ class PineconeUploader:
             chunks: List of text chunks with metadata
             batch_size: Number of vectors per batch
         """
-        print(f"\n🚀 Uploading {len(chunks)} chunks to Pinecone...")
+        print(f"\nUploading {len(chunks)} chunks to Pinecone...")
         
         vectors = []
         
@@ -375,7 +375,7 @@ async def main():
     """Main function to process PDFs and upload to Pinecone"""
     
     print("=" * 70)
-    print("  📚 NCERT PDF to Pinecone Upload with OCR")
+    print("  NCERT PDF to Pinecone Upload with OCR")
     print("=" * 70)
     
     # Initialize processors
@@ -427,7 +427,7 @@ async def main():
         # Show final stats
         stats = uploader.index.describe_index_stats()
         print("\n" + "=" * 70)
-        print(f"  ✅ SUCCESS! Uploaded {stats.total_vector_count} vectors to Pinecone")
+        print(f"  SUCCESS! Uploaded {stats.total_vector_count} vectors to Pinecone")
         print("=" * 70)
     else:
         print("\n✗ No chunks to upload")

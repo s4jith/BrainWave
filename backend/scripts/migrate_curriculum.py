@@ -37,7 +37,7 @@ async def migrate_subjects_from_books():
         
         book_groups = await books_collection.aggregate(pipeline).to_list(200)
         
-        logger.info(f"📚 Found {len(book_groups)} subject-class combinations in books")
+        logger.info(f"Found {len(book_groups)} subject-class combinations in books")
         
         subjects_collection = mongodb.db[SUBJECTS_COLLECTION]
         created_count = 0
@@ -130,16 +130,16 @@ async def migrate_subjects_from_books():
             }
             
             await subjects_collection.insert_one(subject_doc)
-            logger.info(f"✅ Created subject: {subject_name} Class {class_level} with {len(chapters)} chapters")
+            logger.info(f"Created subject: {subject_name} Class {class_level} with {len(chapters)} chapters")
             created_count += 1
         
         logger.info(f"\n📊 Migration Summary:")
-        logger.info(f"   ✅ Created: {created_count} subjects")
+        logger.info(f"   Created: {created_count} subjects")
         logger.info(f"   ✓ Skipped (existing): {updated_count} subjects")
-        logger.info(f"   📚 Total: {created_count + updated_count} subjects")
+        logger.info(f"   Total: {created_count + updated_count} subjects")
         
     except Exception as e:
-        logger.error(f"❌ Migration failed: {e}")
+        logger.error(f" Migration failed: {e}")
         import traceback
         traceback.print_exc()
 
@@ -197,30 +197,30 @@ async def migrate_topics_from_question_bank():
             
             if result.modified_count > 0:
                 updated_count += 1
-                logger.info(f"✅ Added topic '{bank['topic_name']}' to {subject_name} Ch.{chapter_number}")
+                logger.info(f"Added topic '{bank['topic_name']}' to {subject_name} Ch.{chapter_number}")
         
         logger.info(f"\n📊 Topic Migration Summary:")
-        logger.info(f"   ✅ Added {updated_count} topics to curriculum")
+        logger.info(f"   Added {updated_count} topics to curriculum")
         
     except Exception as e:
-        logger.error(f"❌ Topic migration failed: {e}")
+        logger.error(f" Topic migration failed: {e}")
         import traceback
         traceback.print_exc()
 
 
 async def main():
     """Run all migrations"""
-    logger.info("🚀 Starting curriculum migration...")
+    logger.info("Starting curriculum migration...")
     
     await mongodb.connect()
     
-    logger.info("\n📚 Step 1: Migrating subjects and chapters from books...")
+    logger.info("\nStep 1: Migrating subjects and chapters from books...")
     await migrate_subjects_from_books()
     
     logger.info("\n📝 Step 2: Migrating topics from question bank...")
     await migrate_topics_from_question_bank()
     
-    logger.info("\n✅ Migration complete!")
+    logger.info("\nMigration complete!")
     
     await mongodb.close()
 

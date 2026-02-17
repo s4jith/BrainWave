@@ -48,11 +48,11 @@ class NotesService:
                 **document
             )
             
-            logger.info(f"✅ Note created: {note.id}")
+            logger.info(f"Note created: {note.id}")
             return note
         
         except Exception as e:
-            logger.error(f"❌ Failed to create note: {e}")
+            logger.error(f" Failed to create note: {e}")
             raise
     
     async def get_notes_by_student(
@@ -110,11 +110,11 @@ class NotesService:
                 )
                 notes.append(note)
             
-            logger.info(f"✅ Retrieved {len(notes)} notes for student {student_id}")
+            logger.info(f"Retrieved {len(notes)} notes for student {student_id}")
             return notes
         
         except Exception as e:
-            logger.error(f"❌ Failed to retrieve notes: {e}")
+            logger.error(f" Failed to retrieve notes: {e}")
             raise
     
     async def update_note(
@@ -169,11 +169,11 @@ class NotesService:
                 updated_at=result.get("updated_at")
             )
             
-            logger.info(f"✅ Note updated: {note_id}")
+            logger.info(f"Note updated: {note_id}")
             return note
         
         except Exception as e:
-            logger.error(f"❌ Failed to update note: {e}")
+            logger.error(f" Failed to update note: {e}")
             raise
     
     async def delete_note(self, note_id: str) -> bool:
@@ -194,11 +194,11 @@ class NotesService:
             if result.deleted_count == 0:
                 raise ValueError(f"Note {note_id} not found")
             
-            logger.info(f"✅ Note deleted: {note_id}")
+            logger.info(f"Note deleted: {note_id}")
             return True
         
         except Exception as e:
-            logger.error(f"❌ Failed to delete note: {e}")
+            logger.error(f" Failed to delete note: {e}")
             raise
 
 

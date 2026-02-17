@@ -210,14 +210,14 @@ class AdvancedPDFProcessor:
             result.success = result.processed_pages > 0
             result.processing_time = time.time() - start_time
             
-            logger.info(f"✅ PDF processing complete: {result.processed_pages}/{result.total_pages} pages in {result.processing_time:.2f}s")
+            logger.info(f"PDF processing complete: {result.processed_pages}/{result.total_pages} pages in {result.processing_time:.2f}s")
             
             return result
             
         except Exception as e:
             result.errors.append(f"PDF processing failed: {str(e)}")
             result.processing_time = time.time() - start_time
-            logger.error(f"❌ PDF processing failed: {e}")
+            logger.error(f" PDF processing failed: {e}")
             return result
     
     def _process_single_page(
@@ -457,7 +457,7 @@ class AdvancedPDFProcessor:
                     
                     # Handle Quota Exceeded (429) - Permanent fail for this session
                     if "429" in error_str or "quota" in error_str.lower():
-                        logger.warning(f"⚠️ Vision API quota exceeded. Disabling Vision features for remaining pages.")
+                        logger.warning(f" Vision API quota exceeded. Disabling Vision features for remaining pages.")
                         self.vision_api_enabled = False
                         return []
                     
@@ -720,7 +720,7 @@ class PineconeEmbeddingUploader:
             'errors': []
         }
         
-        logger.info(f"🚀 Uploading {len(chunks)} chunks to namespace '{namespace}'")
+        logger.info(f"Uploading {len(chunks)} chunks to namespace '{namespace}'")
         
         # Process in batches
         total_batches = (len(chunks) + self.batch_size - 1) // self.batch_size
@@ -782,7 +782,7 @@ class PineconeEmbeddingUploader:
                 stats['failed'] += len(batch_chunks)
                 stats['errors'].append(str(e))
         
-        logger.info(f"✅ Upload complete: {stats['successful']} successful, {stats['failed']} failed")
+        logger.info(f"Upload complete: {stats['successful']} successful, {stats['failed']} failed")
         return stats
 
     

@@ -383,7 +383,7 @@ export default function AITestModal({ test, studentId, onComplete, onClose }) {
           </div>
 
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {result.score >= 80 ? "🎉 Excellent!" : result.score >= 60 ? "👍 Good Job!" : "📚 Keep Learning!"}
+            {result.score >= 80 ? "🎉 Excellent!" : result.score >= 60 ? "👍 Good Job!" : "Keep Learning!"}
           </h2>
           <p className="text-gray-600 mb-6">{result.feedback}</p>
 

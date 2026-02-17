@@ -210,7 +210,7 @@ class MathChunker:
             chunks.append(chunk)
             chunk_counter += 1
         
-        logger.info(f"✅ Created {len(chunks)} semantic chunks")
+        logger.info(f"Created {len(chunks)} semantic chunks")
         
         # Add topics to chunks
         chunks = self._add_topics(chunks)

@@ -439,7 +439,7 @@ async def start_chapter_test(request: StartChapterTestRequest):
             for q in questions
         ]
         
-        logger.info(f"✅ Started chapter test: {session_id} ({len(questions)} questions)")
+        logger.info(f"Started chapter test: {session_id} ({len(questions)} questions)")
         
         return ChapterTestResponse(
             session_id=session_id,
@@ -683,7 +683,7 @@ async def start_test_v2(request: StartTestRequestV2):
             for q in formatted_questions
         ]
         
-        logger.info(f"✅ Started test session {session_id} with {len(formatted_questions)} questions ({question_source})")
+        logger.info(f"Started test session {session_id} with {len(formatted_questions)} questions ({question_source})")
         
         return StartTestResponseV2(
             session_id=session_id,
@@ -762,7 +762,7 @@ async def start_test(request: StartTestRequest):
             for q in questions
         ]
         
-        logger.info(f"✅ Started test session {session_id} with {len(questions)} questions")
+        logger.info(f"Started test session {session_id} with {len(questions)} questions")
         
         return StartTestResponse(
             session_id=session_id,
@@ -866,7 +866,7 @@ async def start_test_v2(request: StartTestRequestV2):
             for i, q in enumerate(questions)
         ]
         
-        logger.info(f"✅ Started V2 test session {session_id} with {len(questions)} questions ({question_source})")
+        logger.info(f"Started V2 test session {session_id} with {len(questions)} questions ({question_source})")
         
         response_data = {
             "session_id": session_id,
@@ -899,6 +899,7 @@ class StartAITestRequest(BaseModel):
     class_level: int = Field(default=10, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter_number: int = Field(..., description="Chapter number")
+    difficulty: str = Field(default="medium", description="Difficulty level (easy, medium, hard)")
     num_questions: int = Field(default=15, ge=5, le=20, description="Number of questions")
 
 
@@ -922,15 +923,20 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
     """
     Start an AI test with topic-level analytics support.
     
-    Uses pre-generated chapter test pool (3 variants) for efficiency:
+    Uses pre-generated chapter test pool (10 variants per difficulty) for efficiency:
     1. Check if question pool exists for this chapter
-    2. If not, generate 3 variants (one Gemini call)
-    3. Select variant based on student's attempt count (different questions each time)
+    2. If not, generate 10 variants per difficulty (2 batches of 5 each = 30 variants total)
+    3. Select variant based on student's chosen difficulty and attempt count
     4. Add topic tagging for topic-level analytics
     5. After completion, evaluation provides topic-level performance breakdown
     """
     try:
-        logger.info(f"📝 Starting AI test for {request.subject} Ch.{request.chapter_number}")
+        # Validate difficulty
+        difficulty = request.difficulty.lower() if request.difficulty else "medium"
+        if difficulty not in ["easy", "medium", "hard"]:
+            difficulty = "medium"
+        
+        logger.info(f"📝 Starting AI test for {request.subject} Ch.{request.chapter_number} (Difficulty: {difficulty})")
         
         # Step 1: Check if chapter test pool exists
         pool_status = await topic_question_bank_service.check_chapter_test_pool_exists(
@@ -939,9 +945,9 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
             chapter_number=request.chapter_number
         )
         
-        # Step 2: Generate pool if first time (one Gemini call for 3 variants = 45 questions)
+        # Step 2: Generate pool if first time (2 batches per difficulty × 3 difficulties = 6 API calls, 30 variants total)
         if not pool_status.get("exists"):
-            logger.info(f"🎯 First test for {request.subject} Ch.{request.chapter_number} - Generating 3 variants...")
+            logger.info(f"🎯 First test for {request.subject} Ch.{request.chapter_number} - Generating variants for all difficulties...")
             gen_result = await topic_question_bank_service.generate_chapter_test_pool(
                 class_level=request.class_level,
                 subject=request.subject,
@@ -952,13 +958,16 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
                     status_code=500,
                     detail=f"Failed to generate questions: {gen_result.get('error')}"
                 )
+        else:
+            logger.info(f"✅ Question pool already exists for {request.subject} Ch.{request.chapter_number} - Using cached questions")
         
-        # Step 3: Select variant based on student's attempt count
+        # Step 3: Select variant based on student's difficulty and attempt count
         selection = await topic_question_bank_service.select_chapter_test_questions(
             class_level=request.class_level,
             subject=request.subject,
             chapter_number=request.chapter_number,
-            student_id=request.student_id
+            student_id=request.student_id,
+            difficulty=difficulty
         )
         
         if selection.get("status") != "success":
@@ -1005,6 +1014,7 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
             "subject": request.subject,
             "chapter_number": request.chapter_number,
             "chapter_name": chapter_name,
+            "difficulty": difficulty,
             "test_type": "ai_with_topics",
             "num_questions": len(questions),
             "total_marks": total_marks,
@@ -1034,7 +1044,7 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
             for i, q in enumerate(questions)
         ]
         
-        logger.info(f"✅ Started AI test {session_id} with {len(questions)} questions ({mcq_count} MCQ, {fillup_count} Fill-up, {short_count} Short Answer)")
+        logger.info(f"Started AI test {session_id} with {len(questions)} questions ({mcq_count} MCQ, {fillup_count} Fill-up, {short_count} Short Answer)")
         
         return StartAITestResponse(
             session_id=session_id,

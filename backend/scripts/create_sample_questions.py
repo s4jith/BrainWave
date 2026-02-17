@@ -180,7 +180,7 @@ async def create_sample_questions():
             upsert=True
         )
     
-    logger.info(f"✅ Created {len(questions_data)} topics with sample questions")
+    logger.info(f"Created {len(questions_data)} topics with sample questions")
     logger.info(f"   - Class 10 Mathematics")
     logger.info(f"   - Chapter 1: Real Numbers (2 topics)")
     logger.info(f"   - Chapter 2: Polynomials (1 topic)")

@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["Voice Chat"])
 async def voice_chat(
     audio: UploadFile = File(...),
     student_class: int = Form(6),
-    subject: str = Form("Mathematics"),
+    subject: str = Form("Maths"),
     chapter: Optional[int] = Form(None),
     student_id: Optional[str] = Form(None)
 ):
@@ -103,7 +103,7 @@ async def voice_chat(
         }
         
     except Exception as e:
-        logger.error(f"❌ Voice chat failed: {e}")
+        logger.error(f" Voice chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

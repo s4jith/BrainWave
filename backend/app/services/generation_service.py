@@ -39,7 +39,7 @@ class GenerationService:
         self.config = config or GenerationConfig()
         self.gemini = gemini_service
         
-        logger.info(f"✅ {self.config.component_name} initialized")
+        logger.info(f"{self.config.component_name} initialized")
     
     @measure_latency("rag_generation")
     def generate_answer(
@@ -84,7 +84,7 @@ class GenerationService:
         # Generate answer
         answer = self.gemini.generate_response(prompt)
         
-        logger.info(f"✅ [{self.config.component_name}] Generated answer ({len(answer)} chars)")
+        logger.info(f"[{self.config.component_name}] Generated answer ({len(answer)} chars)")
         
         return answer
     
@@ -154,7 +154,7 @@ Generate a {'comprehensive' if mode == 'deepdive' else 'clear and focused'} answ
     
     def _generate_fallback_answer(self, question: str, student_class: int, subject: str) -> str:
         """Generate fallback answer using general knowledge."""
-        logger.info(f"⚠️ [{self.config.component_name}] No RAG content, using fallback")
+        logger.info(f" [{self.config.component_name}] No RAG content, using fallback")
         
         prompt = f"""You are an expert tutor for Class {student_class} {subject}.
 The student asked: "{question}"

@@ -102,7 +102,7 @@ async def process_book_embeddings(
             }
         
         # Upload to Pinecone
-        logger.info(f"🚀 Uploading {len(chunks)} chunks to Pinecone...")
+        logger.info(f"Uploading {len(chunks)} chunks to Pinecone...")
         upload_stats = uploader.upload_chunks(chunks, namespace)
         
         return {
@@ -118,7 +118,7 @@ async def process_book_embeddings(
         }
         
     except Exception as e:
-        logger.error(f"❌ Embedding generation failed: {e}")
+        logger.error(f" Embedding generation failed: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -233,7 +233,7 @@ async def upload_book(
         
         cloud_url = cloud_info.get('url')
         cloud_public_id = cloud_info.get('public_id')
-        logger.info(f"✅ PDF uploaded to Cloudinary: {cloud_url}")
+        logger.info(f"PDF uploaded to Cloudinary: {cloud_url}")
         
         # Create namespace for embeddings - ONE namespace per subject (all classes together)
         namespace = subject.lower().replace(' ', '_')
@@ -266,7 +266,7 @@ async def upload_book(
         result = db.books.insert_one(book_doc)
         mongo_id = str(result.inserted_id)
         
-        logger.info(f"✅ Book record created: {title} (ID: {mongo_id}, book_id: {book_id})")
+        logger.info(f"Book record created: {title} (ID: {mongo_id}, book_id: {book_id})")
         
         # Generate embeddings if requested
         embedding_result = None
@@ -320,10 +320,10 @@ async def upload_book(
                     }
                 )
                 
-                logger.info(f"✅ Embeddings generated: {embedding_result.get('embedding_count', 0)} vectors")
+                logger.info(f"Embeddings generated: {embedding_result.get('embedding_count', 0)} vectors")
                 
             except Exception as e:
-                logger.error(f"❌ Embedding generation failed: {e}")
+                logger.error(f" Embedding generation failed: {e}")
                 db.books.update_one(
                     {"_id": ObjectId(mongo_id)},
                     {
@@ -350,8 +350,8 @@ async def upload_book(
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"\n{'='*60}\n❌ UPLOAD ERROR:\n{error_trace}\n{'='*60}\n")
-        logger.error(f"❌ Book upload failed: {e}")
+        print(f"\n{'='*60}\n UPLOAD ERROR:\n{error_trace}\n{'='*60}\n")
+        logger.error(f" Book upload failed: {e}")
         logger.error(f"Traceback:\n{error_trace}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -439,7 +439,7 @@ async def regenerate_embeddings(book_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Regenerate embeddings failed: {e}")
+        logger.error(f" Regenerate embeddings failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -469,7 +469,7 @@ async def add_chapter(book_id: str, chapter: ChapterCreate):
         return {"success": True, "message": "Chapter added successfully"}
         
     except Exception as e:
-        logger.error(f"❌ Add chapter failed: {e}")
+        logger.error(f" Add chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -499,7 +499,7 @@ async def list_all_books():
         return {"books": result, "total": len(result)}
         
     except Exception as e:
-        logger.error(f"❌ List books failed: {e}")
+        logger.error(f" List books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -521,11 +521,11 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
                 cloud_service = get_cloudinary_service()
                 if cloud_service.is_available():
                     if cloud_service.delete_file(cloudinary_public_id):
-                        logger.info(f"✅ Deleted PDF from Cloudinary: {cloudinary_public_id}")
+                        logger.info(f"Deleted PDF from Cloudinary: {cloudinary_public_id}")
                     else:
-                        logger.warning(f"⚠️ Could not delete PDF from Cloudinary: {cloudinary_public_id}")
+                        logger.warning(f" Could not delete PDF from Cloudinary: {cloudinary_public_id}")
             except Exception as cloud_error:
-                logger.warning(f"⚠️ Cloudinary deletion failed: {cloud_error}")
+                logger.warning(f" Cloudinary deletion failed: {cloud_error}")
         
         # Delete embeddings from Pinecone if requested
         if delete_embeddings and book.get("has_embeddings"):
@@ -548,7 +548,7 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
                         filter={"book_id": book_id},
                         namespace=namespace
                     )
-                    logger.info(f"✅ Deleted embeddings for book {book_id} from Pinecone")
+                    logger.info(f"Deleted embeddings for book {book_id} from Pinecone")
                 except Exception as pe:
                     logger.warning(f"Could not delete embeddings: {pe}")
                 
@@ -558,7 +558,7 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
         # Delete from MongoDB
         db.books.delete_one({"_id": ObjectId(book_id)})
         
-        logger.info(f"✅ Book deleted: {book['title']} (ID: {book_id})")
+        logger.info(f"Book deleted: {book['title']} (ID: {book_id})")
         
         return {
             "success": True,
@@ -568,7 +568,7 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete book failed: {e}")
+        logger.error(f" Delete book failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -600,7 +600,7 @@ Or use the existing multimodal uploader for math/physics content.
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Generate embeddings failed: {e}")
+        logger.error(f" Generate embeddings failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -631,7 +631,7 @@ async def update_embedding_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Update embedding status failed: {e}")
+        logger.error(f" Update embedding status failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -730,12 +730,12 @@ async def get_available_subjects(
                 "questions_asked": questions  # Extra info for dashboard
             })
         
-        logger.info(f"📚 Found {len(subject_info)} subjects with {sum(s['total_chapters'] for s in subject_info)} total chapters for Class {class_level}")
+        logger.info(f"Found {len(subject_info)} subjects with {sum(s['total_chapters'] for s in subject_info)} total chapters for Class {class_level}")
         
         return {"subjects": subject_info, "class_level": class_level}
         
     except Exception as e:
-        logger.error(f"❌ Get subjects failed: {e}")
+        logger.error(f" Get subjects failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -770,7 +770,7 @@ async def get_books_for_student(
         return {"books": result, "total": len(result)}
         
     except Exception as e:
-        logger.error(f"❌ Get student books failed: {e}")
+        logger.error(f" Get student books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -810,7 +810,7 @@ async def generate_flashcards(
         }
         
     except Exception as e:
-        logger.error(f"❌ Flashcard generation failed: {e}")
+        logger.error(f" Flashcard generation failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -840,7 +840,7 @@ async def generate_smart_notes(
         return notes
         
     except Exception as e:
-        logger.error(f"❌ Smart notes generation failed: {e}")
+        logger.error(f" Smart notes generation failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -872,7 +872,7 @@ async def save_smart_notes(
             raise HTTPException(status_code=500, detail="Failed to save notes")
             
     except Exception as e:
-        logger.error(f"❌ Save notes failed: {e}")
+        logger.error(f" Save notes failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -895,7 +895,7 @@ async def get_user_notes(
         return {"notes": notes, "total": len(notes)}
         
     except Exception as e:
-        logger.error(f"❌ Get notes failed: {e}")
+        logger.error(f" Get notes failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -916,7 +916,7 @@ async def get_lessons_for_student(
         # Normalize subject to namespace format
         # Map subject names to Pinecone namespaces
         subject_namespace_map = {
-            "Mathematics": "maths",
+            "Maths": "maths",
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",
@@ -955,13 +955,13 @@ async def get_lessons_for_student(
                 
             except Exception as conn_error:
                 if attempt < max_retries - 1:
-                    logger.warning(f"⚠️ Pinecone connection attempt {attempt + 1} failed, retrying in 2s...")
+                    logger.warning(f" Pinecone connection attempt {attempt + 1} failed, retrying in 2s...")
                     time.sleep(2)
                 else:
                     raise conn_error
         
         matches = query_response.get("matches", []) if query_response else []
-        logger.info(f"🔍 Pinecone query returned {len(matches)} matches for namespace='{namespace}', class={class_level}")
+        logger.info(f" Pinecone query returned {len(matches)} matches for namespace='{namespace}', class={class_level}")
         
         # Filter and group by chapter for this class level
         chapters_found = {}
@@ -1055,7 +1055,7 @@ async def get_lessons_for_student(
             })
             lesson_number += 1
         
-        logger.info(f"📚 Found {len(lessons)} chapters for {subject} Class {class_level}")
+        logger.info(f"Found {len(lessons)} chapters for {subject} Class {class_level}")
         
         return {
             "lessons": lessons,
@@ -1065,7 +1065,7 @@ async def get_lessons_for_student(
         }
         
     except Exception as e:
-        logger.error(f"❌ Get lessons failed: {e}")
+        logger.error(f" Get lessons failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1136,7 +1136,7 @@ async def serve_pdf(file_path: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Serve PDF failed: {e}")
+        logger.error(f" Serve PDF failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1219,7 +1219,7 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Render PDF page failed: {e}")
+        logger.error(f" Render PDF page failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1271,7 +1271,7 @@ async def get_pdf_info(file_path: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get PDF info failed: {e}")
+        logger.error(f" Get PDF info failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1318,7 +1318,7 @@ async def get_book_pdf_info(book_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get book PDF info failed: {e}")
+        logger.error(f" Get book PDF info failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1383,7 +1383,7 @@ async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Render book PDF page failed: {e}")
+        logger.error(f" Render book PDF page failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1465,7 +1465,7 @@ async def sync_existing_books():
             }
             db.books.insert_one(chapter_book)
         
-        logger.info("✅ Synced existing Math lessons to MongoDB")
+        logger.info("Synced existing Math lessons to MongoDB")
         
         return {
             "success": True,
@@ -1474,7 +1474,7 @@ async def sync_existing_books():
         }
         
     except Exception as e:
-        logger.error(f"❌ Sync existing books failed: {e}")
+        logger.error(f" Sync existing books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1523,7 +1523,7 @@ async def get_pinecone_stats():
         }
         
     except Exception as e:
-        logger.error(f"❌ Get Pinecone stats failed: {e}")
+        logger.error(f" Get Pinecone stats failed: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -1594,7 +1594,7 @@ async def fix_missing_fields():
         }
         
     except Exception as e:
-        logger.error(f"❌ Fix missing fields failed: {e}")
+        logger.error(f" Fix missing fields failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1695,7 +1695,7 @@ async def get_hierarchical_structure():
         }
         
     except Exception as e:
-        logger.error(f"❌ Get hierarchical structure failed: {e}")
+        logger.error(f" Get hierarchical structure failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1757,16 +1757,16 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
                         if drive_service.delete_file(google_drive_file_id):
                             drive_deleted_count += 1
                     except Exception as gd_error:
-                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
         
         if drive_deleted_count > 0:
-            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
+            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
         # Delete all books from MongoDB for this subject
         mongo_result = db.books.delete_many({"subject": {"$regex": f"^{subject}$", "$options": "i"}})
         books_deleted = mongo_result.deleted_count
         
-        logger.info(f"✅ Deleted subject '{subject}': {vectors_to_delete} vectors, {books_deleted} book records")
+        logger.info(f"Deleted subject '{subject}': {vectors_to_delete} vectors, {books_deleted} book records")
         
         return {
             "success": True,
@@ -1782,7 +1782,7 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete subject failed: {e}")
+        logger.error(f" Delete subject failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1873,10 +1873,10 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
                         if drive_service.delete_file(google_drive_file_id):
                             drive_deleted_count += 1
                     except Exception as gd_error:
-                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
         
         if drive_deleted_count > 0:
-            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
+            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
         # Delete books from MongoDB for this subject and class
         mongo_result = db.books.delete_many({
@@ -1885,7 +1885,7 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
         })
         books_deleted = mongo_result.deleted_count
         
-        logger.info(f"✅ Deleted Class {class_level} from {subject}: {vectors_to_delete} vectors, {books_deleted} book records")
+        logger.info(f"Deleted Class {class_level} from {subject}: {vectors_to_delete} vectors, {books_deleted} book records")
         
         return {
             "success": True,
@@ -1901,7 +1901,7 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete class failed: {e}")
+        logger.error(f" Delete class failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2000,10 +2000,10 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
                         if drive_service.delete_file(google_drive_file_id):
                             drive_deleted_count += 1
                     except Exception as gd_error:
-                        logger.warning(f"⚠️ Could not delete {book.get('title')} from Google Drive: {gd_error}")
+                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
         
         if drive_deleted_count > 0:
-            logger.info(f"✅ Deleted {drive_deleted_count} PDFs from Google Drive")
+            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
         # Delete book record from MongoDB
         mongo_result = db.books.delete_many({
@@ -2022,7 +2022,7 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         )
         summaries_deleted = cache_result.get("summaries_deleted", 0)
         
-        logger.info(f"✅ Deleted Chapter {chapter_number} from {subject} Class {class_level}: {vectors_to_delete} vectors, {books_deleted} book records, {summaries_deleted} cached summaries")
+        logger.info(f"Deleted Chapter {chapter_number} from {subject} Class {class_level}: {vectors_to_delete} vectors, {books_deleted} book records, {summaries_deleted} cached summaries")
         
         return {
             "success": True,
@@ -2040,7 +2040,7 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete chapter failed: {e}")
+        logger.error(f" Delete chapter failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

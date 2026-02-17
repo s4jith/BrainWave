@@ -122,7 +122,7 @@ JSON:"""
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Smart notes generation failed: {e}")
+            logger.error(f" Smart notes generation failed: {e}")
             return {
                 "success": False,
                 "message": str(e)
@@ -155,7 +155,7 @@ JSON:"""
             return str(result.inserted_id)
             
         except Exception as e:
-            logger.error(f"❌ Save notes failed: {e}")
+            logger.error(f" Save notes failed: {e}")
             return None
     
     def get_user_notes(
@@ -192,7 +192,7 @@ JSON:"""
             return result
             
         except Exception as e:
-            logger.error(f"❌ Get notes failed: {e}")
+            logger.error(f" Get notes failed: {e}")
             return []
 
 

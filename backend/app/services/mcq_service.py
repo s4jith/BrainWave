@@ -65,7 +65,7 @@ class MCQService:
             )
         
         except Exception as e:
-            logger.error(f"❌ MCQ generation failed: {e}")
+            logger.error(f" MCQ generation failed: {e}")
             raise
     
     def _generate_with_gemini(
@@ -94,7 +94,7 @@ class MCQService:
         # Convert to Pydantic models
         mcqs = [MCQ(**mcq) for mcq in mcq_dicts]
         
-        logger.info(f"✅ Generated {len(mcqs)} MCQs with Gemini in {inference_time_ms:.1f}ms")
+        logger.info(f"Generated {len(mcqs)} MCQs with Gemini in {inference_time_ms:.1f}ms")
         return mcqs, "gemini", inference_time_ms
 
 

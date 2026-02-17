@@ -60,14 +60,14 @@ class PineconeUploader:
             
             # Get index stats
             stats = self.index.describe_index_stats()
-            logger.info(f"✅ Connected to Pinecone index")
+            logger.info(f"Connected to Pinecone index")
             logger.info(f"   Total vectors: {stats.get('total_vector_count', 0)}")
             logger.info(f"   Dimension: {stats.get('dimension', 'unknown')}")
             
             self.index_name = index_name
         
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Pinecone: {e}")
+            logger.error(f" Failed to initialize Pinecone: {e}")
             raise
     
     def upload_chunks(
@@ -139,11 +139,11 @@ class PineconeUploader:
                 time.sleep(0.1)
             
             except Exception as e:
-                logger.error(f"❌ Failed to upload batch starting at {i}: {e}")
+                logger.error(f" Failed to upload batch starting at {i}: {e}")
                 failed_uploads.extend([v['id'] for v in batch])
                 continue
         
-        logger.info(f"✅ Upload complete!")
+        logger.info(f"Upload complete!")
         logger.info(f"   Successful: {total_uploaded}")
         logger.info(f"   Failed: {len(failed_uploads)}")
         
@@ -240,7 +240,7 @@ class PineconeUploader:
             return results
         
         except Exception as e:
-            logger.error(f"❌ Query failed: {e}")
+            logger.error(f" Query failed: {e}")
             raise
     
     def delete_namespace(self, namespace: str):
@@ -254,10 +254,10 @@ class PineconeUploader:
         
         try:
             self.index.delete(delete_all=True, namespace=namespace)
-            logger.info(f"✅ Namespace '{namespace}' cleared")
+            logger.info(f"Namespace '{namespace}' cleared")
         
         except Exception as e:
-            logger.error(f"❌ Failed to delete namespace: {e}")
+            logger.error(f" Failed to delete namespace: {e}")
             raise
     
     def get_namespace_stats(self, namespace: str) -> Dict:
@@ -288,7 +288,7 @@ class PineconeUploader:
                 }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get namespace stats: {e}")
+            logger.error(f" Failed to get namespace stats: {e}")
             return {"error": str(e)}
     
     def update_metadata_batch(
@@ -321,7 +321,7 @@ class PineconeUploader:
                 logger.error(f"Failed to update {vector_id}: {e}")
                 continue
         
-        logger.info(f"✅ Metadata updates complete")
+        logger.info(f"Metadata updates complete")
 
 
 if __name__ == "__main__":
@@ -339,4 +339,4 @@ if __name__ == "__main__":
     # test_embeddings = [...]
     # results = uploader.upload_chunks(test_chunks, test_embeddings)
     
-    print("✅ Pinecone uploader ready for production use")
+    print("Pinecone uploader ready for production use")

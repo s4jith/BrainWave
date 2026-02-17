@@ -68,7 +68,7 @@ class MathPDFPipeline:
             output_dir: Directory for extracted images
         """
         logger.info("="*80)
-        logger.info("🚀 Initializing NCERT Math Multimodal Pipeline")
+        logger.info("Initializing NCERT Math Multimodal Pipeline")
         logger.info("="*80)
         
         # Initialize components
@@ -82,7 +82,7 @@ class MathPDFPipeline:
             index_host=pinecone_host
         )
         
-        logger.info("✅ All components initialized successfully")
+        logger.info("All components initialized successfully")
         logger.info("")
     
     def process_pdf(
@@ -107,7 +107,7 @@ class MathPDFPipeline:
         start_time = time.time()
         
         logger.info("="*80)
-        logger.info(f"📚 Processing: {Path(pdf_path).name}")
+        logger.info(f"Processing: {Path(pdf_path).name}")
         logger.info(f"   Class: {class_num}, Chapter: {chapter_num}")
         logger.info("="*80)
         
@@ -180,13 +180,13 @@ class MathPDFPipeline:
             logger.info(f"   ✓ Uploaded {upload_results['uploaded']}/{upload_results['total']} chunks")
             
             if upload_results['failed'] > 0:
-                logger.warning(f"   ⚠️ Failed to upload {upload_results['failed']} chunks")
+                logger.warning(f"    Failed to upload {upload_results['failed']} chunks")
             
             # Calculate timing
             elapsed = time.time() - start_time
             
             logger.info("\n" + "="*80)
-            logger.info("✅ Pipeline Complete!")
+            logger.info("Pipeline Complete!")
             logger.info("="*80)
             logger.info(f"Total time: {elapsed:.2f} seconds")
             logger.info(f"Chunks processed: {len(chunks)}")
@@ -206,7 +206,7 @@ class MathPDFPipeline:
             }
         
         except Exception as e:
-            logger.error(f"\n❌ Pipeline failed: {e}")
+            logger.error(f"\n Pipeline failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
             
@@ -233,7 +233,7 @@ class MathPDFPipeline:
         pdf_dir = Path(pdf_directory)
         pdf_files = list(pdf_dir.glob(pattern))
         
-        logger.info(f"📚 Found {len(pdf_files)} PDF files in {pdf_directory}")
+        logger.info(f"Found {len(pdf_files)} PDF files in {pdf_directory}")
         logger.info("")
         
         results = []
@@ -256,7 +256,7 @@ class MathPDFPipeline:
                 result = self.process_pdf(str(pdf_path), class_num, chapter_num)
                 results.append(result)
             else:
-                logger.warning(f"⚠️ Skipping {pdf_path.name}: Cannot parse class/chapter from filename")
+                logger.warning(f" Skipping {pdf_path.name}: Cannot parse class/chapter from filename")
                 logger.warning(f"   Expected format: classX_chapterY.pdf or classX_chY.pdf")
         
         # Summary
@@ -340,7 +340,7 @@ def main():
             output_dir=args.output_dir
         )
     except Exception as e:
-        logger.error(f"❌ Failed to initialize pipeline: {e}")
+        logger.error(f" Failed to initialize pipeline: {e}")
         sys.exit(1)
     
     # Process

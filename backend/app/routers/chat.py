@@ -67,10 +67,10 @@ async def chat(request: ChatRequest):
                     mode=tracking_mode,
                     chapter=request.chapter
                 )
-                logger.info(f"✅ Question tracked for user {request.user_id}")
+                logger.info(f"Question tracked for user {request.user_id}")
             except Exception as track_error:
                 # Don't fail the request if tracking fails
-                logger.warning(f"⚠️ Failed to track question: {track_error}")
+                logger.warning(f" Failed to track question: {track_error}")
         
         return ChatResponse(
             answer=answer,
@@ -79,7 +79,7 @@ async def chat(request: ChatRequest):
         )
     
     except Exception as e:
-        logger.error(f"❌ Chat endpoint error: {e}")
+        logger.error(f" Chat endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -162,7 +162,7 @@ Focus on the steps and connections."""
         # For now, return a placeholder
         image_url = f"https://via.placeholder.com/800x600/6366f1/ffffff?text=Flow+Diagram:+{request.highlight_text[:30]}"
         
-        logger.info(f"✅ Stick Flow generated successfully")
+        logger.info(f"Stick Flow generated successfully")
         
         return StickFlowResponse(
             imageUrl=image_url,
@@ -170,7 +170,7 @@ Focus on the steps and connections."""
         )
     
     except Exception as e:
-        logger.error(f"❌ Stick Flow error: {e}")
+        logger.error(f" Stick Flow error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -245,7 +245,7 @@ async def student_chatbot(request: StudentChatRequest):
             # Convert chunk format
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
         
-        logger.info(f"✅ Answer generated: {len(answer)} chars, {len(source_chunks)} sources")
+        logger.info(f"Answer generated: {len(answer)} chars, {len(source_chunks)} sources")
         
         return ChatResponse(
             answer=answer,
@@ -254,7 +254,7 @@ async def student_chatbot(request: StudentChatRequest):
         )
     
     except Exception as e:
-        logger.error(f"❌ Student chat error: {e}")
+        logger.error(f" Student chat error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -277,7 +277,7 @@ class StreamingChatRequest(BaseModel):
 @router.post("/student/stream")
 async def student_chatbot_stream(request: StreamingChatRequest):
     """
-    🚀 STREAMING Student Chatbot - Reduced Perceived Latency
+    STREAMING Student Chatbot - Reduced Perceived Latency
     
     Same as /chat/student but streams the response token-by-token.
     Uses Server-Sent Events (SSE) for real-time text streaming.
@@ -308,7 +308,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
     
     async def generate_stream():
         try:
-            logger.info(f"🚀 Streaming chat: Class {request.class_level}, {request.subject}")
+            logger.info(f"Streaming chat: Class {request.class_level}, {request.subject}")
             logger.info(f"   Question: {request.question[:100]}...")
             
             # Step 1: Retrieve context (this part is not streamed)
@@ -438,7 +438,7 @@ Generate your answer:"""
                 elif msg_type == "error":
                     yield f"data: {json.dumps({'error': data})}\n\n"
                     return            
-            logger.info(f"✅ Streaming complete: {len(full_response)} chars")
+            logger.info(f"Streaming complete: {len(full_response)} chars")
             
             # Step 5: Send completion signal with sources
             source_texts = [c.get('text', '')[:200] for c in textbook_chunks[:3]]
@@ -457,10 +457,10 @@ Generate your answer:"""
                         quality_score=0.9
                     )
             except Exception as store_error:
-                logger.warning(f"⚠️ Failed to store answer: {store_error}")
+                logger.warning(f" Failed to store answer: {store_error}")
         
         except Exception as e:
-            logger.error(f"❌ Streaming error: {e}")
+            logger.error(f" Streaming error: {e}")
             import traceback
             logger.error(traceback.format_exc())
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -635,7 +635,7 @@ async def image_chat(
         # Convert chunk format for response
         source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
         
-        logger.info(f"✅ Image chat complete: {len(answer)} chars, {len(source_chunks)} sources")
+        logger.info(f"Image chat complete: {len(answer)} chars, {len(source_chunks)} sources")
         
         return ImageChatResponse(
             answer=answer,
@@ -647,7 +647,7 @@ async def image_chat(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Image chat error: {e}")
+        logger.error(f" Image chat error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -724,7 +724,7 @@ async def save_chat_session(request: SaveSessionRequest):
         }
         
     except Exception as e:
-        logger.error(f"❌ Save session error: {e}")
+        logger.error(f" Save session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -771,7 +771,7 @@ async def get_user_sessions(
         return {"sessions": result, "total": len(result)}
         
     except Exception as e:
-        logger.error(f"❌ Get sessions error: {e}")
+        logger.error(f" Get sessions error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -810,7 +810,7 @@ async def load_chat_session(user_id: str, session_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Load session error: {e}")
+        logger.error(f" Load session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -839,5 +839,5 @@ async def delete_chat_session(user_id: str, session_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete session error: {e}")
+        logger.error(f" Delete session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

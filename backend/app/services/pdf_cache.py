@@ -61,18 +61,18 @@ def get_cached_pdf(url: str) -> Optional[str]:
         response = requests.get(url, timeout=60)
         
         if response.status_code != 200:
-            logger.error(f"❌ Failed to download PDF: {response.status_code}")
+            logger.error(f" Failed to download PDF: {response.status_code}")
             return None
         
         # Save to cache
         with open(cache_path, 'wb') as f:
             f.write(response.content)
         
-        logger.info(f"✅ Cached PDF: {cache_path} ({len(response.content)} bytes)")
+        logger.info(f"Cached PDF: {cache_path} ({len(response.content)} bytes)")
         return cache_path
         
     except Exception as e:
-        logger.error(f"❌ PDF download failed: {e}")
+        logger.error(f" PDF download failed: {e}")
         return None
 
 

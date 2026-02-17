@@ -22,7 +22,7 @@ try:
 except ImportError:
     SCRAPING_ENABLED = False
     logger_temp = logging.getLogger(__name__)
-    logger_temp.warning("⚠️ Web scraping dependencies not installed")
+    logger_temp.warning(" Web scraping dependencies not installed")
     logger_temp.warning("Install: pip install googlesearch-python requests beautifulsoup4 lxml")
 
 logger = logging.getLogger(__name__)
@@ -61,9 +61,9 @@ class WebScraperService:
         self.scraped_topics = set()
         
         if self.enabled:
-            logger.info("✅ Web Scraper Service initialized")
+            logger.info("Web Scraper Service initialized")
         else:
-            logger.warning("⚠️ Web Scraper Service disabled (missing dependencies)")
+            logger.warning(" Web Scraper Service disabled (missing dependencies)")
     
     def scrape_topic(
         self,
@@ -115,7 +115,7 @@ class WebScraperService:
             # Add to cache
             if stored_count > 0:
                 self.scraped_topics.add(cache_key)
-                logger.info(f"✅ Scraped and stored content from {stored_count} sources")
+                logger.info(f"Scraped and stored content from {stored_count} sources")
                 return True
             
             return False
@@ -218,7 +218,7 @@ class WebScraperService:
             )
             
             if stored:
-                logger.info(f"✅ Stored {len(chunks)} chunks from: {url[:50]}...")
+                logger.info(f"Stored {len(chunks)} chunks from: {url[:50]}...")
             
             return stored
             

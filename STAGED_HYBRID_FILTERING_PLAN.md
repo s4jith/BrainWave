@@ -105,7 +105,7 @@ Different upload scripts stored metadata with different key names:
 | `upload_pdfs_to_pinecone.py` | `class` (string "6") | `lesson_number` | — |
 | `process_ncert_maths.py` | `class` (int) | `chapter` | `page` |
 | `process_ncert_physics.py` | `class` (int) | `chapter` | `page` |
-| `enhanced_rag_service.py` reads | `class_level` ❌ | `chapter_number` | `page_number` |
+| `enhanced_rag_service.py` reads | `class_level`  | `chapter_number` | `page_number` |
 
 **Fix**: Query filter should use `class` (the actual stored key). The read-side code already tries both:
 ```python

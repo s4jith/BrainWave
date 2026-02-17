@@ -61,27 +61,34 @@ async def get_all_subjects(
         collection = mongodb.db[SUBJECTS_COLLECTION]
         subjects = await collection.find(query).sort("class_level", 1).to_list(200)
         
-        logger.info(f"📚 Query: {query}, Retrieved {len(subjects)} subjects")
+        logger.info(f"Query: {query}, Retrieved {len(subjects)} subjects")
         
         # Convert to summary format
         summaries = []
         for subject in subjects:
+            # Filter active chapters and topics for counts
+            active_chapters = [ch for ch in subject.get("chapters", []) if ch.get("is_active", True) != False]
+            total_topics = sum(
+                len([t for t in ch.get("topics", []) if t.get("is_active", True) != False]) 
+                for ch in active_chapters
+            )
+            
             summaries.append(SubjectSummary(
                 subject_id=subject["subject_id"],
                 subject_name=subject["subject_name"],
                 class_level=subject["class_level"],
                 icon=subject.get("icon", "📚"),
                 color=subject.get("color", "#3B82F6"),
-                total_chapters=len(subject.get("chapters", [])),
-                total_topics=sum(len(ch.get("topics", [])) for ch in subject.get("chapters", [])),
+                total_chapters=len(active_chapters),
+                total_topics=total_topics,
                 is_active=subject.get("is_active", True)
             ))
         
-        logger.info(f"📚 Retrieved {len(summaries)} subjects")
+        logger.info(f"Retrieved {len(summaries)} subjects")
         return summaries
         
     except Exception as e:
-        logger.error(f"❌ Get subjects failed: {e}")
+        logger.error(f" Get subjects failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -97,6 +104,16 @@ async def get_subject_details(subject_id: str):
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
         
+        # Filter out inactive chapters and topics
+        active_chapters = []
+        for chapter in subject.get("chapters", []):
+            if chapter.get("is_active", True) != False:
+                # Also filter out inactive topics within the chapter
+                chapter_copy = chapter.copy()
+                active_topics = [t for t in chapter_copy.get("topics", []) if t.get("is_active", True) != False]
+                chapter_copy["topics"] = active_topics
+                active_chapters.append(chapter_copy)
+        
         # Convert MongoDB document to Subject model
         subject_data = {
             "subject_id": subject["subject_id"],
@@ -106,9 +123,9 @@ async def get_subject_details(subject_id: str):
             "description": subject.get("description", ""),
             "icon": subject.get("icon", "📚"),
             "color": subject.get("color", "#3B82F6"),
-            "chapters": subject.get("chapters", []),
-            "total_topics": sum(len(ch.get("topics", [])) for ch in subject.get("chapters", [])),
-            "total_chapters": len(subject.get("chapters", [])),
+            "chapters": active_chapters,
+            "total_topics": sum(len(ch.get("topics", [])) for ch in active_chapters),
+            "total_chapters": len(active_chapters),
             "is_active": subject.get("is_active", True),
             "created_at": subject.get("created_at", datetime.utcnow()),
             "updated_at": subject.get("updated_at", datetime.utcnow())
@@ -119,7 +136,7 @@ async def get_subject_details(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get subject details failed: {e}")
+        logger.error(f" Get subject details failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -166,7 +183,7 @@ async def create_subject(request: CreateSubjectRequest):
                     }
                 }
             )
-            logger.info(f"✅ Reactivated subject: {request.subject_name} for Class {request.class_level}")
+            logger.info(f"Reactivated subject: {request.subject_name} for Class {request.class_level}")
             # Return the reactivated subject
             updated_subject = await collection.find_one({"subject_id": subject_id})
             subject_data = {
@@ -207,7 +224,7 @@ async def create_subject(request: CreateSubjectRequest):
         result = await collection.insert_one(subject_doc)
         
         if result.inserted_id:
-            logger.info(f"✅ Created subject: {request.subject_name} for Class {request.class_level}")
+            logger.info(f"Created subject: {request.subject_name} for Class {request.class_level}")
             return Subject(**subject_doc)
         else:
             raise HTTPException(status_code=500, detail="Failed to create subject")
@@ -215,7 +232,7 @@ async def create_subject(request: CreateSubjectRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Create subject failed: {e}")
+        logger.error(f" Create subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -250,7 +267,7 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
         if not result:
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        logger.info(f"✅ Updated subject: {subject_id}")
+        logger.info(f"Updated subject: {subject_id}")
         
         # Convert to Subject model
         subject_data = {
@@ -274,7 +291,7 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Update subject failed: {e}")
+        logger.error(f" Update subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -287,7 +304,7 @@ async def delete_subject(subject_id: str):
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
         # Log before deletion
-        logger.info(f"🔍 Attempting to delete subject: {subject_id}")
+        logger.info(f" Attempting to delete subject: {subject_id}")
         
         result = await collection.find_one_and_update(
             {"subject_id": subject_id},
@@ -296,7 +313,7 @@ async def delete_subject(subject_id: str):
         )
         
         if not result:
-            logger.warning(f"❌ Subject not found: {subject_id}")
+            logger.warning(f" Subject not found: {subject_id}")
             raise HTTPException(status_code=404, detail="Subject not found")
         
         logger.info(f"🗑️ Deleted subject: {subject_id}, is_active now: {result.get('is_active', 'NOT SET')}")
@@ -305,7 +322,7 @@ async def delete_subject(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete subject failed: {e}")
+        logger.error(f" Delete subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -342,7 +359,7 @@ async def get_chapters(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get chapters failed: {e}")
+        logger.error(f" Get chapters failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -394,7 +411,7 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
         )
         
         if result.modified_count > 0:
-            logger.info(f"✅ Created chapter {request.chapter_number} in {subject_id}")
+            logger.info(f"Created chapter {request.chapter_number} in {subject_id}")
             return Chapter(**chapter_doc)
         else:
             raise HTTPException(status_code=500, detail="Failed to create chapter")
@@ -402,7 +419,7 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Create chapter failed: {e}")
+        logger.error(f" Create chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -456,13 +473,13 @@ async def update_chapter(
         if not updated_chapter:
             raise HTTPException(status_code=404, detail="Chapter not found")
         
-        logger.info(f"✅ Updated chapter: {chapter_id}")
+        logger.info(f"Updated chapter: {chapter_id}")
         return Chapter(**updated_chapter)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Update chapter failed: {e}")
+        logger.error(f" Update chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -494,7 +511,7 @@ async def delete_chapter(subject_id: str, chapter_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete chapter failed: {e}")
+        logger.error(f" Delete chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -541,7 +558,7 @@ async def get_topics(subject_id: str, chapter_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get topics failed: {e}")
+        logger.error(f" Get topics failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -586,7 +603,7 @@ async def create_topic(
         )
         
         if result.modified_count > 0:
-            logger.info(f"✅ Created topic '{request.topic_name}' in {chapter_id}")
+            logger.info(f"Created topic '{request.topic_name}' in {chapter_id}")
             return Topic(**topic_doc)
         else:
             raise HTTPException(status_code=500, detail="Failed to create topic")
@@ -594,7 +611,7 @@ async def create_topic(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Create topic failed: {e}")
+        logger.error(f" Create topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -665,13 +682,13 @@ async def update_topic(
         if not updated_topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
-        logger.info(f"✅ Updated topic: {topic_id}")
+        logger.info(f"Updated topic: {topic_id}")
         return Topic(**updated_topic)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Update topic failed: {e}")
+        logger.error(f" Update topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -706,7 +723,7 @@ async def delete_topic(subject_id: str, chapter_id: str, topic_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f="❌ Delete topic failed: {e}")
+        logger.error(f=" Delete topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -765,7 +782,7 @@ async def get_available_books():
             for subject, classes in subject_class_map.items()
         }
         
-        logger.info(f"📚 Available books: {len(subjects)} subjects, {len(classes)} classes")
+        logger.info(f"Available books: {len(subjects)} subjects, {len(classes)} classes")
         
         return {
             "subjects": subjects,
@@ -774,7 +791,7 @@ async def get_available_books():
         }
         
     except Exception as e:
-        logger.error(f"❌ Get available books failed: {e}")
+        logger.error(f" Get available books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -865,7 +882,7 @@ async def extract_curriculum_from_upload(
         result = await collection.insert_one(pending_item)
         
         if result.inserted_id:
-            logger.info(f"✅ Created pending curriculum item: {pending_id} ({len(extracted_chapters)} chapters)")
+            logger.info(f"Created pending curriculum item: {pending_id} ({len(extracted_chapters)} chapters)")
             return PendingCurriculumItem(**pending_item)
         else:
             raise HTTPException(status_code=500, detail="Failed to save pending item")
@@ -873,7 +890,7 @@ async def extract_curriculum_from_upload(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Curriculum extraction failed: {e}")
+        logger.error(f" Curriculum extraction failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -907,7 +924,7 @@ async def get_pending_curriculum_items(
         return pending_items
         
     except Exception as e:
-        logger.error(f"❌ Get pending items failed: {e}")
+        logger.error(f" Get pending items failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -934,7 +951,7 @@ async def get_pending_curriculum_item(pending_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Get pending item failed: {e}")
+        logger.error(f" Get pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1001,7 +1018,7 @@ async def update_pending_curriculum_item(
         # Get updated item
         updated_item = await collection.find_one({"pending_id": pending_id})
         
-        logger.info(f"✅ Updated pending item: {pending_id}")
+        logger.info(f"Updated pending item: {pending_id}")
         return PendingCurriculumItem(**updated_item)
         
     except HTTPException:
@@ -1009,7 +1026,7 @@ async def update_pending_curriculum_item(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format for extracted_chapters")
     except Exception as e:
-        logger.error(f"❌ Update pending item failed: {e}")
+        logger.error(f" Update pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1075,7 +1092,7 @@ async def approve_or_reject_pending_item(
                 }
             )
             
-            logger.info(f"❌ Rejected pending item: {pending_id}")
+            logger.info(f" Rejected pending item: {pending_id}")
             return {
                 "success": True,
                 "message": "Pending item rejected",
@@ -1094,12 +1111,6 @@ async def approve_or_reject_pending_item(
                 "subject_id": subject_id,
                 "is_active": True
             })
-            
-            if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Subject '{subject_name}' already exists for Class {pending_item['class_level']}"
-                )
             
             # Convert extracted chapters to proper Chapter format
             chapters = []
@@ -1157,7 +1168,80 @@ async def approve_or_reject_pending_item(
                 "updated_at": datetime.utcnow()
             }
             
-            # Insert subject
+            # If subject exists, MERGE chapters instead of creating new
+            if existing:
+                # Get existing chapters and find which new ones to add
+                existing_chapters = existing.get("chapters", [])
+                existing_chapter_numbers = set(ch.get("chapter_number") for ch in existing_chapters)
+                
+                # Add only new chapters (those not already present)
+                new_chapters_to_add = [ch for ch in chapters if ch["chapter_number"] not in existing_chapter_numbers]
+                
+                if new_chapters_to_add:
+                    merged_chapters = existing_chapters + new_chapters_to_add
+                    merged_chapters.sort(key=lambda ch: ch.get("chapter_number", 0))
+                    
+                    # Update existing subject with merged chapters
+                    total_topics = sum(len(ch.get("topics", [])) for ch in merged_chapters)
+                    await subjects_collection.update_one(
+                        {"subject_id": subject_id},
+                        {
+                            "$set": {
+                                "chapters": merged_chapters,
+                                "total_chapters": len(merged_chapters),
+                                "total_topics": total_topics,
+                                "updated_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                    
+                    # Update pending item status
+                    await pending_collection.update_one(
+                        {"pending_id": pending_id},
+                        {
+                            "$set": {
+                                "status": "approved",
+                                "reviewed_by": reviewed_by,
+                                "reviewed_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                    
+                    logger.info(f"Approved and merged {len(new_chapters_to_add)} chapters into existing subject: {subject_id}")
+                    return {
+                        "success": True,
+                        "message": f"Pending item approved. Merged {len(new_chapters_to_add)} new chapters into existing subject.",
+                        "action": "approved",
+                        "subject_id": subject_id,
+                        "total_chapters": len(merged_chapters),
+                        "total_topics": total_topics,
+                        "merged": True,
+                        "new_chapters_added": len(new_chapters_to_add)
+                    }
+                else:
+                    # All chapters already exist - just mark as approved
+                    await pending_collection.update_one(
+                        {"pending_id": pending_id},
+                        {
+                            "$set": {
+                                "status": "approved",
+                                "reviewed_by": reviewed_by,
+                                "reviewed_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                    
+                    logger.info(f"Approved pending item for {subject_id} - all chapters already exist")
+                    return {
+                        "success": True,
+                        "message": "Pending item approved. All chapters already exist in subject.",
+                        "action": "approved",
+                        "subject_id": subject_id,
+                        "merged": True,
+                        "new_chapters_added": 0
+                    }
+            
+            # Insert NEW subject
             result = await subjects_collection.insert_one(subject_doc)
             
             if result.inserted_id:
@@ -1173,7 +1257,7 @@ async def approve_or_reject_pending_item(
                     }
                 )
                 
-                logger.info(f"✅ Approved and created subject: {subject_id} ({len(chapters)} chapters, {subject_doc['total_topics']} topics)")
+                logger.info(f"Approved and created subject: {subject_id} ({len(chapters)} chapters, {subject_doc['total_topics']} topics)")
                 return {
                     "success": True,
                     "message": "Pending item approved and subject created",
@@ -1193,7 +1277,7 @@ async def approve_or_reject_pending_item(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Approve/reject pending item failed: {e}")
+        logger.error(f" Approve/reject pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1221,6 +1305,6 @@ async def delete_pending_item(pending_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Delete pending item failed: {e}")
+        logger.error(f" Delete pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))

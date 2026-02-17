@@ -140,7 +140,7 @@ async def get_streak_data(student_id: str):
         )
         
     except Exception as e:
-        logger.error(f"❌ Get streak error: {e}")
+        logger.error(f" Get streak error: {e}")
         # Return default data on error
         today = datetime.utcnow().date()
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -223,7 +223,7 @@ async def get_progress_data(
         )
         
     except Exception as e:
-        logger.error(f"❌ Get progress error: {e}")
+        logger.error(f" Get progress error: {e}")
         return ProgressData(
             overall_progress=0,
             total_tests=10,
@@ -286,7 +286,7 @@ async def get_dashboard_data(
         )
         
     except Exception as e:
-        logger.error(f"❌ Get dashboard error: {e}")
+        logger.error(f" Get dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -315,12 +315,12 @@ async def log_activity(
             upsert=True
         )
         
-        logger.info(f"✅ Logged activity for {student_id}: +{hours}h on {today}")
+        logger.info(f"Logged activity for {student_id}: +{hours}h on {today}")
         
         return {"message": "Activity logged", "date": today, "hours_added": hours}
         
     except Exception as e:
-        logger.error(f"❌ Log activity error: {e}")
+        logger.error(f" Log activity error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -423,5 +423,5 @@ async def get_student_analytics(
         }
         
     except Exception as e:
-        logger.error(f"❌ Get analytics error: {e}")
+        logger.error(f" Get analytics error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

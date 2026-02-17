@@ -239,7 +239,7 @@ class OptimizedRagService:
         self.queries_processed = 0
         self.gemini_calls_saved = 0
         
-        logger.info("✅ OptimizedRagService initialized (max 2 Gemini calls/query)")
+        logger.info("OptimizedRagService initialized (max 2 Gemini calls/query)")
     
     @property
     def gemini_service(self):
@@ -366,7 +366,7 @@ class OptimizedRagService:
         if high_confidence_chunks:
             all_chunks = high_confidence_chunks
         else:
-            logger.warning(f"⚠️ Low confidence retrieval (Top score: {all_chunks[0]['score'] if all_chunks else 0:.4f})")
+            logger.warning(f" Low confidence retrieval (Top score: {all_chunks[0]['score'] if all_chunks else 0:.4f})")
             # Keep extremely few chunks if confidence is low to avoid noise
             all_chunks = all_chunks[:2]
         
@@ -486,7 +486,7 @@ Answer:"""
         q_lower = question.lower().strip()
         for popular_q, data in POPULAR_HINDI_QUERIES.items():
             if popular_q in q_lower:
-                logger.info(f"📚 Popular query matched: {popular_q}")
+                logger.info(f"Popular query matched: {popular_q}")
                 return {
                     "answer": data["summary"],
                     "sources": [],
@@ -509,7 +509,7 @@ Answer:"""
         # Lower threshold to 0.60 to ensure we catch mismatches
         # User explicitly requested strict checking
         if confidence > 0.60 and detected_subject.lower() != subject.lower():
-             logger.warning(f"⚠️ Subject mismatch: User={subject}, Detected={detected_subject}")
+             logger.warning(f" Subject mismatch: User={subject}, Detected={detected_subject}")
              return {
                  "answer": "The specific topic is not present in the book. Change the book or question.",
                  "blocked": True,
@@ -535,7 +535,7 @@ Answer:"""
         namespaces = [n for n in namespaces if n]  # Remove None
         
         chunks = self.batch_retrieve(query_embedding, namespaces, top_k=5)
-        logger.info(f"📚 Retrieved {len(chunks)} chunks from {len(namespaces)} namespaces")
+        logger.info(f"Retrieved {len(chunks)} chunks from {len(namespaces)} namespaces")
         
         # Skip web for annotation/literature (optimization)
         skip_web = (
@@ -561,7 +561,7 @@ Answer:"""
         gemini_calls_after = len(api_tracker.calls)
         calls_used = gemini_calls_after - gemini_calls_before
         
-        logger.info(f"✅ Optimized query complete: {calls_used} Gemini calls (target: ≤2)")
+        logger.info(f"Optimized query complete: {calls_used} Gemini calls (target: ≤2)")
         
         result = {
             "answer": answer,
