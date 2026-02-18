@@ -1067,6 +1067,297 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== QUESTION BANK TEST ENDPOINTS ====================
+
+class StartQBTestRequest(BaseModel):
+    """Request to start a Question Bank test."""
+    student_id: str = Field(..., description="Student ID")
+    class_level: int = Field(default=10, description="Class level")
+    subject: str = Field(..., description="Subject name")
+    chapter: int = Field(..., description="Chapter number")
+    difficulty: str = Field(default="medium", description="Difficulty level (easy, medium, hard)")
+    mcq_count: int = Field(default=0, ge=0, le=50, description="Number of MCQ questions")
+    fillup_count: int = Field(default=0, ge=0, le=50, description="Number of fill-up questions")
+    short_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 2-mark questions")
+    long_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 5-mark questions")
+    time_limit_minutes: Optional[int] = Field(default=None, ge=1, le=300, description="Optional timer in minutes (null = no timer)")
+
+
+@router.get("/qb-test/subjects/{class_level}")
+async def get_qb_subjects(class_level: int):
+    """
+    Get distinct subjects from the approved question bank for a class level.
+    Only returns subjects that have approved questions.
+    """
+    try:
+        pipeline = [
+            {"$match": {"class_level": class_level, "status": "approved"}},
+            {"$group": {
+                "_id": "$subject",
+                "total_questions": {"$sum": 1}
+            }},
+            {"$project": {
+                "subject": "$_id",
+                "total_questions": 1,
+                "_id": 0
+            }},
+            {"$sort": {"subject": 1}}
+        ]
+        results = await mongodb.db.questions.aggregate(pipeline).to_list(100)
+        return results
+    except Exception as e:
+        logger.error(f"Error fetching QB subjects: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/qb-test/chapters/{class_level}/{subject}")
+async def get_qb_chapters(class_level: int, subject: str):
+    """
+    Get chapters with per-type approved question counts for a subject.
+    Returns chapter number, chapter name, and count of each question type.
+    """
+    try:
+        pipeline = [
+            {
+                "$match": {
+                    "class_level": class_level,
+                    "subject": {"$regex": f"^{subject}$", "$options": "i"},
+                    "status": "approved"
+                }
+            },
+            {
+                "$group": {
+                    "_id": {"chapter": "$chapter", "type": "$type", "difficulty": "$difficulty"},
+                    "count": {"$sum": 1},
+                    "chapter_name": {"$first": "$chapter_name"}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$_id.chapter",
+                    "chapter_name": {"$first": "$chapter_name"},
+                    "type_difficulty_counts": {
+                        "$push": {
+                            "type": "$_id.type",
+                            "difficulty": "$_id.difficulty",
+                            "count": "$count"
+                        }
+                    },
+                    "total_questions": {"$sum": "$count"}
+                }
+            },
+            {"$sort": {"_id": 1}}
+        ]
+        results = await mongodb.db.questions.aggregate(pipeline).to_list(100)
+
+        chapters = []
+        for r in results:
+            # Initialize counts
+            counts = {
+                "mcq": 0, "fillup": 0, "short_answer": 0, "long_answer": 0,
+                "mcq_easy": 0, "mcq_medium": 0, "mcq_hard": 0,
+                "fillup_easy": 0, "fillup_medium": 0, "fillup_hard": 0,
+                "short_answer_easy": 0, "short_answer_medium": 0, "short_answer_hard": 0,
+                "long_answer_easy": 0, "long_answer_medium": 0, "long_answer_hard": 0,
+            }
+
+            for item in r.get("type_difficulty_counts", []):
+                q_type = item.get("type")
+                difficulty = item.get("difficulty", "medium").lower() # Ensure lowercase
+                count = item.get("count", 0)
+
+                if q_type in ["mcq", "fillup", "short_answer", "long_answer"]:
+                    # Total count for type
+                    counts[q_type] += count
+                    # Specific count for type+difficulty
+                    key = f"{q_type}_{difficulty}"
+                    if key in counts:
+                        counts[key] += count
+
+            chapters.append({
+                "chapter": r["_id"],
+                "chapter_name": r.get("chapter_name", f"Chapter {r['_id']}"),
+                "total_questions": r.get("total_questions", 0),
+                "mcq_count": counts["mcq"],
+                "fillup_count": counts["fillup"],
+                "short_answer_count": counts["short_answer"],
+                "long_answer_count": counts["long_answer"],
+                # Detailed breakdown
+                "mcq_easy": counts["mcq_easy"],
+                "mcq_medium": counts["mcq_medium"],
+                "mcq_hard": counts["mcq_hard"],
+                "fillup_easy": counts["fillup_easy"],
+                "fillup_medium": counts["fillup_medium"],
+                "fillup_hard": counts["fillup_hard"],
+                "short_answer_easy": counts["short_answer_easy"],
+                "short_answer_medium": counts["short_answer_medium"],
+                "short_answer_hard": counts["short_answer_hard"],
+                "long_answer_easy": counts["long_answer_easy"],
+                "long_answer_medium": counts["long_answer_medium"],
+                "long_answer_hard": counts["long_answer_hard"],
+            })
+
+        return chapters
+    except Exception as e:
+        logger.error(f"Error fetching QB chapters: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/qb-test/start")
+async def start_qb_test(request: StartQBTestRequest):
+    """
+    Start a Question Bank test by pulling approved questions from the questions collection.
+    
+    - Only approved questions are used (pending/rejected are excluded)
+    - Students configure how many of each type they want
+    - Optional timer support (null = no time limit)
+    - If not enough questions, creates a partial test with a note
+    """
+    import random
+
+    total_requested = request.mcq_count + request.fillup_count + request.short_answer_count + request.long_answer_count
+    if total_requested == 0:
+        raise HTTPException(status_code=400, detail="Please select at least one question")
+
+    try:
+        base_query = {
+            "class_level": request.class_level,
+            "subject": {"$regex": f"^{request.subject}$", "$options": "i"},
+            "chapter": request.chapter,
+            "status": "approved"
+        }
+
+        # Add difficulty filter (only if not "mixed")
+        if request.difficulty and request.difficulty.lower() not in ("mixed", "all"):
+            base_query["difficulty"] = request.difficulty.lower()
+
+        all_questions = []
+        notes = []
+
+        # Fetch each type separately and randomly sample
+        type_configs = [
+            ("mcq", request.mcq_count, 1),
+            ("fillup", request.fillup_count, 1),
+            ("short_answer", request.short_answer_count, 2),
+            ("long_answer", request.long_answer_count, 5),
+        ]
+
+        for q_type, requested_count, marks in type_configs:
+            if requested_count <= 0:
+                continue
+
+            query = {**base_query, "type": q_type}
+            cursor = mongodb.db.questions.find(query)
+            available = await cursor.to_list(500)
+
+            if len(available) < requested_count:
+                notes.append(f"Requested {requested_count} {q_type} questions but only {len(available)} available")
+                selected = available
+            else:
+                selected = random.sample(available, requested_count)
+
+            for i, q in enumerate(selected):
+                all_questions.append({
+                    "question_number": 0,  # Will renumber below
+                    "question_id": str(q["_id"]),
+                    "question_text": q.get("text", ""),
+                    "difficulty": q.get("difficulty", "medium"),
+                    "question_type": q_type,
+                    "marks": q.get("marks", marks),
+                    "time_estimate": marks * 60,  # Rough estimate
+                    "expected_answer": q.get("correct_answer", ""),
+                    "correct_option": q.get("correct_answer", "") if q_type == "mcq" else None,
+                    "options": q.get("options", {}),
+                    "topic": q.get("topic", ""),
+                    "topic_name": q.get("topic", ""),
+                    "chapter_name": q.get("chapter_name", f"Chapter {request.chapter}"),
+                    "keywords": []
+                })
+
+        if not all_questions:
+            raise HTTPException(
+                status_code=404,
+                detail="No approved questions found for this configuration. The question bank may need more questions for this chapter and difficulty."
+            )
+
+        # Renumber questions
+        for i, q in enumerate(all_questions):
+            q["question_number"] = i + 1
+
+        # Build MCQ options as dict if stored as list
+        for q in all_questions:
+            if q["question_type"] == "mcq" and isinstance(q.get("options"), list):
+                options_list = q["options"]
+                q["options"] = {chr(65 + j): opt for j, opt in enumerate(options_list)}
+
+        total_marks = sum(q["marks"] for q in all_questions)
+        chapter_name = all_questions[0].get("chapter_name", f"Chapter {request.chapter}")
+
+        # Create session
+        session_id = str(uuid.uuid4())
+        session_doc = {
+            "session_id": session_id,
+            "student_id": request.student_id,
+            "class_level": request.class_level,
+            "subject": request.subject,
+            "chapter_number": request.chapter,
+            "chapter_name": chapter_name,
+            "difficulty": request.difficulty,
+            "test_type": "qb_test",
+            "num_questions": len(all_questions),
+            "total_marks": total_marks,
+            "questions_served": all_questions,
+            "answers": [],
+            "status": "started",
+            "started_at": datetime.utcnow(),
+            "time_limit_minutes": request.time_limit_minutes,  # None = no timer
+            "topic_name": chapter_name,
+            "topic_id": f"ch_{request.chapter}"
+        }
+
+        await mongodb.db.test_sessions.insert_one(session_doc)
+
+        # Build response (exclude expected_answer and correct_option from frontend)
+        response_questions = [
+            {
+                "question_number": q["question_number"],
+                "question_id": q["question_id"],
+                "question_text": q["question_text"],
+                "difficulty": q["difficulty"],
+                "question_type": q["question_type"],
+                "marks": q["marks"],
+                "time_estimate": q["time_estimate"],
+                "options": q.get("options") if q["question_type"] == "mcq" else None
+            }
+            for q in all_questions
+        ]
+
+        logger.info(f"Started QB test {session_id}: {len(all_questions)} questions, {total_marks} marks, timer={request.time_limit_minutes}")
+
+        response = {
+            "session_id": session_id,
+            "chapter_name": chapter_name,
+            "questions": response_questions,
+            "total_questions": len(all_questions),
+            "total_marks": total_marks,
+            "time_limit": request.time_limit_minutes,
+            "time_limit_minutes": request.time_limit_minutes,
+            "started_at": session_doc["started_at"].isoformat(),
+            "notes": notes
+        }
+
+        if notes:
+            response["note"] = " | ".join(notes)
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting QB test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/answer")
 async def submit_answer(request: SubmitAnswerRequest):
     """

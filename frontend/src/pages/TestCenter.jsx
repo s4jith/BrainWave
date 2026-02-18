@@ -75,7 +75,7 @@ export default function TestCenter() {
   };
 
   const tabs = [
-    { id: "ai", label: "AI Tests", icon: Brain },
+    { id: "ai", label: "Tests", icon: Brain },
     { id: "staff", label: "Staff Tests", icon: FileText },
   ];
 

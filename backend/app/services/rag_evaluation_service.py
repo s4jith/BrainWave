@@ -107,55 +107,78 @@ class RAGEvaluationService:
         # Auto-evaluate objective questions (no Gemini)
         auto_evaluations = self._auto_evaluate_objective(objective_pairs)
         
-        # Mark subjective questions as pending manual evaluation
-        pending_evaluations = []
-        for qa in subjective_pairs:
-            pending_evaluations.append({
-                "question_id": qa["question_id"],
-                "question_text": qa["question"],
-                "student_answer": qa["answer"],
-                "is_correct": False,
-                "score": 0,
-                "max_score": qa.get("marks", 10),
-                "feedback": "Pending evaluation by staff/admin.",
-                "correct_answer": qa.get("expected_answer", ""),
-                "topic": qa.get("topic", ""),
-                "evaluation_status": "pending"
-            })
+        # Evaluate subjective questions using Gemini 2.5 Flash
+        subjective_evaluations = []
+        if subjective_pairs:
+            logger.info(f"Sending {len(subjective_pairs)} subjective questions to Gemini for evaluation")
+            
+            # Get context for RAG
+            context = await self._get_topic_context(
+                class_level=class_level,
+                subject=subject,
+                topic_id=topic_id,
+                topic_name=topic_name
+            )
+            
+            # Batch evaluate
+            subjective_evaluations = await self._batch_evaluate_all_answers(
+                qa_pairs=subjective_pairs,
+                context=context,
+                class_level=class_level,
+                subject=subject,
+                topic_name=topic_name
+            )
         
         # Combine evaluations (order by question_number)
-        all_evaluations = auto_evaluations + pending_evaluations
+        all_evaluations = auto_evaluations + subjective_evaluations
+        
+        # Sort by question number to maintain order
+        all_evaluations.sort(key=lambda x: x.get("question_number", 0))
         
         # Determine overall evaluation status
-        has_pending = len(subjective_pairs) > 0
-        evaluation_status = "pending_manual_review" if has_pending else "completed"
+        evaluation_status = "completed"
         
-        # Calculate scores (only from auto-evaluated for now)
+        # Calculate scores
         total_score = 0
         correct_count = 0
         max_possible = 0
         
         for e in all_evaluations:
-            if e.get("evaluation_status") != "pending":
-                total_score += e.get("score", 0)
-                max_possible += e.get("max_score", 10)
-                if e.get("is_correct", False):
-                    correct_count += 1
+            # Ensure safe numeric conversion
+            score = float(e.get("score", 0))
+            max_score = float(e.get("max_score", 1))
+            
+            total_score += score
+            max_possible += max_score
+            
+            # Mark as correct if > 60% marks obtained
+            if max_score > 0 and (score / max_score) >= 0.6:
+                correct_count += 1
+                e["is_correct"] = True
             else:
-                max_possible += e.get("max_score", 10)
+                e["is_correct"] = False
         
-        # Calculate percentage (auto-evaluated portion only)
-        auto_percentage = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
+        # Calculate percentage
+        percentage = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
         
-        # Generate feedback for auto-evaluated portion
-        auto_evals_only = [e for e in all_evaluations if e.get("evaluation_status") != "pending"]
+        # Generate detailed feedback
         overall_feedback = {
-            "summary": f"Auto-evaluation complete: {correct_count}/{len(objective_pairs)} objective questions correct." + (f" {len(subjective_pairs)} subjective question(s) pending staff review." if has_pending else ""),
-            "strengths": [f"Correctly answered {correct_count} out of {len(objective_pairs)} MCQ/Fill-up questions"] if correct_count > 0 else ["Attempted the test"],
+            "summary": f"You scored {total_score}/{max_possible} ({percentage}%). {correct_count}/{len(all_evaluations)} answers were correct/satisfactory.",
+            "strengths": [],
             "improvements": [],
             "topics_to_study": [],
-            "encouragement": ""
+            "encouragement": "Keep practicing!" if percentage < 70 else "Great job!"
         }
+        
+        # Collect strengths and improvements from individual evaluations
+        for e in all_evaluations:
+            fb = e.get("feedback", "")
+            if e.get("is_correct"):
+                if len(overall_feedback["strengths"]) < 3:
+                    overall_feedback["strengths"].append(f"Q{e.get('question_number', '?')}: {fb}")
+            else:
+                if len(overall_feedback["improvements"]) < 3:
+                    overall_feedback["improvements"].append(f"Q{e.get('question_number', '?')}: {fb}")
         
         # Add specific topic feedback from wrong answers
         wrong_topics = list(set(e.get("topic", "") for e in auto_evals_only if not e.get("is_correct") and e.get("topic")))
@@ -465,17 +488,26 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
                     # Find matching result
                     result = next((r for r in results if r.get("q") == i + 1), None)
                     
+                    question_marks = float(qa.get("marks", 2))
+                    
                     if result:
+                        # Scale score from 10 to question marks
+                        gemini_score = float(result.get("score", 0))
+                        scaled_score = (gemini_score / 10.0) * question_marks
+                        scaled_score = round(scaled_score, 1)
+                        
                         evaluations.append({
+                            "question_number": qa.get("question_number", 0),
                             "question_id": qa["question_id"],
                             "question_text": qa["question"],
                             "student_answer": qa["answer"],
                             "is_correct": result.get("is_correct", False),
-                            "score": min(10, max(0, result.get("score", 0))),
-                            "max_score": 10,
+                            "score": scaled_score,
+                            "max_score": question_marks,
                             "feedback": result.get("feedback", ""),
                             "correct_answer": result.get("correct_answer", qa.get("expected_answer", "")),
-                            "topic": qa.get("topic", "")
+                            "topic": qa.get("topic", ""),
+                            "evaluation_status": "completed"
                         })
                     else:
                         # Fallback for missing result

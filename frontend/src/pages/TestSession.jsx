@@ -79,8 +79,12 @@ export default function TestSession() {
         let newSession;
 
         // Check test type
-        if (testConfig.test_type === 'ai_with_analytics') {
-          // New AI test with topic-level analytics and difficulty selection
+        // Check test type
+        if (testConfig.test_type === 'qb_test') {
+          // New QB test
+          newSession = await testService.startQBTest(testConfig);
+        } else if (testConfig.test_type === 'ai_with_analytics') {
+          // AI test with topic-level analytics and difficulty selection
           newSession = await testService.startAITest({
             studentId: user?.id || user?.sub || "guest",
             classLevel: testConfig.class_level || user?.classLevel || 11,
@@ -107,8 +111,12 @@ export default function TestSession() {
         }
 
         setSession(newSession);
-        // Set timer from response (40 min for chapter test = 2400 seconds)
-        setTimeRemaining(newSession.time_limit_minutes * 60);
+        // Set timer from response (null if no timer)
+        if (newSession.time_limit) {
+          setTimeRemaining(newSession.time_limit * 60);
+        } else {
+          setTimeRemaining(null);
+        }
       } catch (err) {
         console.error("Failed to start test:", err);
         setError("Failed to start test session. Please try again.");
@@ -159,7 +167,7 @@ export default function TestSession() {
 
   // Timer
   useEffect(() => {
-    if (timeRemaining <= 0) return;
+    if (timeRemaining === null || timeRemaining <= 0) return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -219,6 +227,7 @@ export default function TestSession() {
   }, [testCompleted, session]);
 
   const formatTime = (seconds) => {
+    if (seconds === null) return "--:--";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -378,11 +387,14 @@ export default function TestSession() {
 
             <div className="flex items-center gap-4">
               {/* Timer */}
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl ${timeRemaining < 60 ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-700"
-                }`}>
-                <Clock className="w-4 h-4" />
-                <span className="font-mono font-semibold">{formatTime(timeRemaining)}</span>
-              </div>
+              {/* Timer - only show if active */}
+              {timeRemaining !== null && (
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl ${timeRemaining < 60 ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-700"
+                  }`}>
+                  <Clock className="w-4 h-4" />
+                  <span className="font-mono font-semibold">{formatTime(timeRemaining)}</span>
+                </div>
+              )}
 
               {/* Progress */}
               <div className="text-sm text-gray-500">
@@ -418,14 +430,13 @@ export default function TestSession() {
           {/* Question Text */}
           <div className="p-6">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${
-                currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
-                currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
-                'bg-green-100 text-green-700'
-              }`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
+                  currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
+                    'bg-green-100 text-green-700'
+                }`}>
                 {currentQuestion?.question_type === 'mcq' ? 'Multiple Choice' :
-                 currentQuestion?.question_type === 'fillup' ? 'Fill in the Blank' :
-                 'Short Answer'}
+                  currentQuestion?.question_type === 'fillup' ? 'Fill in the Blank' :
+                    'Short Answer'}
               </span>
             </div>
             <p className="text-lg text-gray-800 leading-relaxed">
@@ -446,17 +457,15 @@ export default function TestSession() {
                         key={key}
                         onClick={() => !testBlocked && setCurrentAnswer(key)}
                         disabled={testBlocked}
-                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${
-                          currentAnswer === key
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${currentAnswer === key
                             ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                          } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                          currentAnswer === key
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${currentAnswer === key
                             ? 'bg-orange-500 text-white'
                             : 'bg-gray-100 text-gray-600'
-                        }`}>
+                          }`}>
                           {key}
                         </span>
                         <span className="text-gray-800">{value}</span>
@@ -493,16 +502,19 @@ export default function TestSession() {
                     onCut={(e) => e.preventDefault()}
                     disabled={testBlocked}
                     placeholder={testBlocked ? "Test blocked due to suspicious activity" : "Type your answer here..."}
-                    className={`w-full p-4 border rounded-xl focus:outline-none focus:ring-2 ${
-                      testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
-                    }`}
+                    className={`w-full p-4 border rounded-xl focus:outline-none focus:ring-2 ${testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
+                      }`}
                     autoComplete="off"
                   />
                 </>
               ) : (
-                /* Two-mark / Short Answer - Textarea with voice input */
+                /* Two-mark / Short Answer / Long Answer - Textarea with voice input */
                 <>
-                  <label className="text-sm font-medium text-gray-700">Your Answer (2-4 sentences):</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    {currentQuestion?.question_type === 'long_answer'
+                      ? "Your Answer (Detailed explanation, approx 150 words):"
+                      : "Your Answer (2-4 sentences):"}
+                  </label>
                   <div className="relative">
                     <textarea
                       value={currentAnswer}
@@ -569,9 +581,8 @@ export default function TestSession() {
                       onCut={(e) => e.preventDefault()}
                       disabled={testBlocked}
                       placeholder={testBlocked ? "Test blocked due to suspicious activity" : "Type your answer here or use voice input..."}
-                      className={`w-full h-40 p-4 border rounded-xl resize-none focus:outline-none focus:ring-2 ${
-                        testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
-                      }`}
+                      className={`w-full h-40 p-4 border rounded-xl resize-none focus:outline-none focus:ring-2 ${testBlocked ? 'bg-red-50 border-red-300 cursor-not-allowed' : 'border-gray-200 focus:ring-blue-500 focus:border-transparent'
+                        }`}
                     />
 
                     {/* Voice Input Button */}
@@ -581,7 +592,7 @@ export default function TestSession() {
                         className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isRecording
                           ? "bg-red-500 text-white animate-pulse"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
+                          }`}
                         title={isRecording ? "Stop recording" : "Start voice input"}
                       >
                         {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -623,7 +634,7 @@ export default function TestSession() {
                       Total warnings: {typingWarnings.length}
                     </p>
                     <p className="text-xs text-red-900 font-semibold mt-2 bg-red-200 p-2 rounded">
-                       This incident will be reported to staff. You can only submit the test as-is.
+                      This incident will be reported to staff. You can only submit the test as-is.
                     </p>
                   </div>
                   <button
@@ -706,14 +717,14 @@ export default function TestSession() {
         {/* Question Navigator */}
         <div className="mt-6 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Questions Overview</h4>
-          
+
           {/* Question type legend */}
           <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> MCQ</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Fill-up</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> Short Answer</span>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             {session.questions.map((q, index) => {
               const isAnswered = !!answers[q.question_id] || (index === currentQuestionIndex && currentAnswer.trim());

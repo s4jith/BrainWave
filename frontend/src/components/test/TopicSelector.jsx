@@ -13,8 +13,13 @@ import {
   CheckCircle,
   Loader2,
   Zap,
+  Sparkles,
   Award,
-  Flame
+  Flame,
+  Clock,
+  Settings,
+  Plus,
+  Minus
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { testService } from "../../services/api";
@@ -44,6 +49,20 @@ export default function TopicSelector({
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
 
+  // QB Test Config
+  const [testConfig, setTestConfig] = useState({
+    mcq: 5,
+    fillup: 5,
+    short: 5,
+    long: 2,
+    timer: false,
+    timeLimit: 40
+  });
+
+  // Calculate totals
+  const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.short || 0) + (testConfig.long || 0);
+  const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.short || 0) * 2 + (testConfig.long || 0) * 5;
+
   // Fixed test format - no user config needed
   // 15 questions (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 minutes
 
@@ -55,9 +74,9 @@ export default function TopicSelector({
   const fetchSubjects = async () => {
     setLoading(true);
     try {
-      console.log("Fetching subjects for class:", classLevel);
-      const data = await testService.getAvailableSubjects(classLevel);
-      console.log("Subjects API response:", data);
+      console.log("Fetching QB subjects for class:", classLevel);
+      const data = await testService.getQBSubjects(classLevel);
+      console.log("QB Subjects API response:", data);
 
       if (Array.isArray(data) && data.length > 0) {
         setSubjects(data);
@@ -79,17 +98,14 @@ export default function TopicSelector({
     setSelectedSubject(subject);
     setLoading(true);
     try {
-      console.log("Fetching chapters for:", { classLevel, subject: subject.subject });
-      const [chapterData, recsData] = await Promise.all([
-        testService.getChaptersForSubject(classLevel, subject.subject, studentId),
-        testService.getRecommendations(classLevel, subject.subject, studentId)
-      ]);
+      console.log("Fetching QB chapters for:", { classLevel, subject: subject.subject });
+      const chapterData = await testService.getQBChapters(classLevel, subject.subject);
 
-      console.log("Chapters received:", chapterData);
-      console.log("Recommendations received:", recsData);
+      console.log("QB Chapters received:", chapterData);
 
       setChapters(Array.isArray(chapterData) ? chapterData : []);
-      setRecommendations(Array.isArray(recsData) ? recsData : []);
+      // Recommendations not yet supported for QB
+      setRecommendations([]);
       setStep(2);
     } catch (error) {
       console.error("Failed to fetch chapters:", error);
@@ -107,22 +123,50 @@ export default function TopicSelector({
 
   const handleSelectDifficulty = (difficulty) => {
     setSelectedDifficulty(difficulty);
+    // Go to config step
+    setStep(4);
   };
 
   const handleStartTest = () => {
-    if (!selectedDifficulty) return;
-    
-    // Fixed format: 15Q (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 min
+    if (!selectedDifficulty || totalQuestions === 0) return;
+
     onSelectTopic({
       subject: selectedSubject.subject,
-      chapter_number: selectedChapter.chapter_number,
+      chapter_number: selectedChapter.chapter_number || selectedChapter.chapter,
       chapter_name: selectedChapter.chapter_name,
       difficulty: selectedDifficulty,
-      num_questions: 15,
-      total_marks: 20,
-      time_limit_minutes: 40,
-      test_type: 'ai_with_analytics'  // Use AI test endpoint with difficulty support
+
+      // Config
+      mcq_count: testConfig.mcq,
+      fillup_count: testConfig.fillup,
+      short_answer_count: testConfig.short,
+      long_answer_count: testConfig.long,
+
+      total_marks: totalMarks,
+      time_limit_minutes: testConfig.timer ? testConfig.timeLimit : null,
+
+      test_type: 'qb_test'
     });
+  };
+
+  const handleConfigChange = (type, value) => {
+    // Validate against available
+    let max = 0;
+    if (selectedChapter) {
+      const diffSuffix = selectedDifficulty ? `_${selectedDifficulty}` : '';
+      if (type === 'mcq') max = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
+      if (type === 'fillup') max = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
+      if (type === 'short') max = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
+      if (type === 'long') max = selectedChapter[`long_answer${diffSuffix}`] || selectedChapter.long_answer_count || 0;
+    }
+
+    // Allow up to 50 or available (whichever is lower, logic handled by user input usually but let's clamp)
+    const newValue = Math.max(0, Math.min(value, max));
+
+    setTestConfig(prev => ({
+      ...prev,
+      [type]: newValue
+    }));
   };
 
   const handleRecommendationClick = (rec) => {
@@ -143,6 +187,9 @@ export default function TopicSelector({
       setStep(1);
       setSelectedChapter(null);
       setChapters([]);
+    } else if (step === 4) {
+      setStep(3);
+      // setSelectedDifficulty(null); // Keep selection
     }
   };
 
@@ -182,9 +229,9 @@ export default function TopicSelector({
             <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
           </div>
 
-          {/* Progress Steps - 3 steps */}
+          {/* Progress Steps - 4 steps */}
           <div className="flex items-center gap-2">
-            {[1, 2, 3].map((s) => (
+            {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${s < step ? "bg-green-500 text-white" :
                   s === step ? "bg-orange-600 text-white" :
@@ -192,7 +239,7 @@ export default function TopicSelector({
                   }`}>
                   {s < step ? <CheckCircle className="w-4 h-4" /> : s}
                 </div>
-                {s < 3 && <div className={`w-12 h-1 rounded ${s < step ? "bg-green-500" : "bg-gray-200"}`} />}
+                {s < 4 && <div className={`w-12 h-1 rounded ${s < step ? "bg-green-500" : "bg-gray-200"}`} />}
               </div>
             ))}
           </div>
@@ -277,13 +324,13 @@ export default function TopicSelector({
                   <div className="space-y-2">
                     {chapters.map((chapter) => (
                       <button
-                        key={chapter.chapter_number}
+                        key={chapter.chapter || chapter.chapter_number}
                         onClick={() => handleSelectChapter(chapter)}
                         className="w-full p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 transition-all text-left group flex items-center justify-between"
                       >
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 font-semibold">
-                            {chapter.chapter_number}
+                            {chapter.chapter || chapter.chapter_number}
                           </div>
                           <div>
                             <h4 className="font-medium text-gray-800">{chapter.chapter_name}</h4>
@@ -320,20 +367,18 @@ export default function TopicSelector({
                   {/* Difficulty Options */}
                   <div className="space-y-3">
                     <h4 className="font-medium text-gray-700 mb-4">Choose your difficulty level:</h4>
-                    
+
                     {/* Easy */}
                     <button
                       onClick={() => handleSelectDifficulty("easy")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
-                        selectedDifficulty === "easy"
-                          ? "border-green-500 bg-green-50"
-                          : "border-gray-200 bg-white hover:border-green-300"
-                      }`}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "easy"
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-200 bg-white hover:border-green-300"
+                        }`}
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          selectedDifficulty === "easy" ? "bg-green-500" : "bg-green-100"
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "easy" ? "bg-green-500" : "bg-green-100"
+                          }`}>
                           <Zap className={`w-6 h-6 ${selectedDifficulty === "easy" ? "text-white" : "text-green-600"}`} />
                         </div>
                         <div className="flex-1">
@@ -349,16 +394,14 @@ export default function TopicSelector({
                     {/* Medium */}
                     <button
                       onClick={() => handleSelectDifficulty("medium")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
-                        selectedDifficulty === "medium"
-                          ? "border-orange-500 bg-orange-50"
-                          : "border-gray-200 bg-white hover:border-orange-300"
-                      }`}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "medium"
+                        ? "border-orange-500 bg-orange-50"
+                        : "border-gray-200 bg-white hover:border-orange-300"
+                        }`}
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          selectedDifficulty === "medium" ? "bg-orange-500" : "bg-orange-100"
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "medium" ? "bg-orange-500" : "bg-orange-100"
+                          }`}>
                           <Award className={`w-6 h-6 ${selectedDifficulty === "medium" ? "text-white" : "text-orange-600"}`} />
                         </div>
                         <div className="flex-1">
@@ -374,16 +417,14 @@ export default function TopicSelector({
                     {/* Hard */}
                     <button
                       onClick={() => handleSelectDifficulty("hard")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${
-                        selectedDifficulty === "hard"
-                          ? "border-red-500 bg-red-50"
-                          : "border-gray-200 bg-white hover:border-red-300"
-                      }`}
+                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "hard"
+                        ? "border-red-500 bg-red-50"
+                        : "border-gray-200 bg-white hover:border-red-300"
+                        }`}
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          selectedDifficulty === "hard" ? "bg-red-500" : "bg-red-100"
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "hard" ? "bg-red-500" : "bg-red-100"
+                          }`}>
                           <Flame className={`w-6 h-6 ${selectedDifficulty === "hard" ? "text-white" : "text-red-600"}`} />
                         </div>
                         <div className="flex-1">
@@ -398,25 +439,218 @@ export default function TopicSelector({
                   </div>
 
                   {/* Test Info */}
-                  <div className="bg-gray-50 rounded-xl p-4 mt-4">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-2xl font-bold text-orange-600">15</p>
-                        <p className="text-xs text-gray-500">Questions</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-orange-600">20</p>
-                        <p className="text-xs text-gray-500">Marks</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-orange-600">40</p>
-                        <p className="text-xs text-gray-500">Minutes</p>
+                  <div className="bg-blue-50/50 rounded-xl p-4 mt-6 border border-blue-100">
+                    <p className="text-sm text-blue-800 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Select a difficulty to proceed to question configuration
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Question Config (NEW) */}
+              {step === 4 && selectedChapter && (
+                <div className="space-y-6">
+                  {/* Summary Header */}
+                  <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100">
+                    <div>
+                      <h3 className="font-semibold text-gray-800">{selectedChapter.chapter_name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {selectedSubject?.subject} • <span className="capitalize">{selectedDifficulty}</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Available ({selectedDifficulty})</span>
+                      <div className="flex gap-3 mt-1 text-sm font-medium text-gray-600">
+                        <span>MCQ: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}</span>
+                        <span>Fill: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}</span>
+                        <span>Short: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}</span>
+                        <span>Long: {selectedChapter[`long_answer_${selectedDifficulty}`] || 0}</span>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 text-center">
-                        <span className="font-medium">5 MCQ</span> + <span className="font-medium">5 Fill-ups</span> + <span className="font-medium">5 Short Answer</span>
-                      </p>
+                  </div>
+
+                  {/* Config Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* MCQ Config */}
+                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <h4 className="font-medium text-gray-700">MCQ</h4>
+                            <p className="text-xs text-gray-400">1 mark each</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
+                          Max: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('mcq', (testConfig.mcq || 0) - 1)}
+                          disabled={(testConfig.mcq || 0) <= 0}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xl font-bold w-12 text-center">{testConfig.mcq || 0}</span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('mcq', (testConfig.mcq || 0) + 1)}
+                          disabled={(testConfig.mcq || 0) >= (selectedChapter[`mcq_${selectedDifficulty}`] || 0)}
+                          title={(testConfig.mcq || 0) >= (selectedChapter[`mcq_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Fillup Config */}
+                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-5 h-5 text-purple-500" />
+                          <div>
+                            <h4 className="font-medium text-gray-700">Fill-ups</h4>
+                            <p className="text-xs text-gray-400">1 mark each</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
+                          Max: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('fillup', (testConfig.fillup || 0) - 1)}
+                          disabled={(testConfig.fillup || 0) <= 0}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xl font-bold w-12 text-center">{testConfig.fillup || 0}</span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('fillup', (testConfig.fillup || 0) + 1)}
+                          disabled={(testConfig.fillup || 0) >= (selectedChapter[`fillup_${selectedDifficulty}`] || 0)}
+                          title={(testConfig.fillup || 0) >= (selectedChapter[`fillup_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Short Answer Config */}
+                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <Zap className="w-5 h-5 text-amber-500" />
+                          <div>
+                            <h4 className="font-medium text-gray-700">Short Answer</h4>
+                            <p className="text-xs text-gray-400">2 marks each</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
+                          Max: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('short', (testConfig.short || 0) - 1)}
+                          disabled={(testConfig.short || 0) <= 0}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xl font-bold w-12 text-center">{testConfig.short || 0}</span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('short', (testConfig.short || 0) + 1)}
+                          disabled={(testConfig.short || 0) >= (selectedChapter[`short_answer_${selectedDifficulty}`] || 0)}
+                          title={(testConfig.short || 0) >= (selectedChapter[`short_answer_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Long Answer Config */}
+                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-5 h-5 text-blue-600" />
+                          <div>
+                            <h4 className="font-medium text-gray-700">Long Answer</h4>
+                            <p className="text-xs text-gray-400">5 marks each</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
+                          Max: {selectedChapter[`long_answer_${selectedDifficulty}`] || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('long', (testConfig.long || 0) - 1)}
+                          disabled={(testConfig.long || 0) <= 0}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xl font-bold w-12 text-center">{testConfig.long || 0}</span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('long', (testConfig.long || 0) + 1)}
+                          disabled={(testConfig.long || 0) >= (selectedChapter[`long_answer_${selectedDifficulty}`] || 0)}
+                          title={(testConfig.long || 0) >= (selectedChapter[`long_answer_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timer Settings */}
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-gray-600" />
+                        <span className="font-medium text-gray-700">Test Timer</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={testConfig.timer}
+                          onChange={(e) => setTestConfig(prev => ({ ...prev, timer: e.target.checked }))}
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                      </label>
+                    </div>
+
+                    {testConfig.timer && (
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="5" max="180" step="5"
+                          value={testConfig.timeLimit}
+                          onChange={(e) => setTestConfig(prev => ({ ...prev, timeLimit: parseInt(e.target.value) }))}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                        />
+                        <span className="font-bold text-gray-700 w-24 text-right">{testConfig.timeLimit} mins</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Total Summary */}
+                  <div className="flex items-center justify-between p-4 bg-orange-50 rounded-xl border border-orange-100">
+                    <div className="text-center">
+                      <span className="block text-2xl font-bold text-gray-800">{totalQuestions}</span>
+                      <span className="text-xs text-gray-500 uppercase">Questions</span>
+                    </div>
+                    <div className="h-8 w-px bg-orange-200 mx-4"></div>
+                    <div className="text-center">
+                      <span className="block text-2xl font-bold text-gray-800">{totalMarks}</span>
+                      <span className="text-xs text-gray-500 uppercase">Total Marks</span>
                     </div>
                   </div>
                 </div>
@@ -430,10 +664,11 @@ export default function TopicSelector({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          {step === 3 && selectedDifficulty && (
+          {step === 4 && (
             <Button
               onClick={handleStartTest}
               className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
+              disabled={totalQuestions === 0}
             >
               <Brain className="w-4 h-4" />
               Start Test
@@ -441,6 +676,6 @@ export default function TopicSelector({
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 }

@@ -655,6 +655,77 @@ export const historyService = {
  * Test Service - AI and Staff Tests
  */
 export const testService = {
+  // ==================== QB TEST SELECTION (NEW) ====================
+
+  /**
+   * Get available subjects from Question Bank
+   * @param {number} classLevel
+   * @returns {Promise<array>}
+   */
+  async getQBSubjects(classLevel) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/subjects/${classLevel}`);
+      if (!response.ok) throw new Error(`QB Subjects API Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Get QB Subjects Error:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Get chapters from Question Bank with question counts
+   * @param {number} classLevel
+   * @param {string} subject
+   * @returns {Promise<array>}
+   */
+  async getQBChapters(classLevel, subject) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/chapters/${classLevel}/${encodeURIComponent(subject)}`);
+      if (!response.ok) throw new Error(`QB Chapters API Error: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error("Get QB Chapters Error:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Start a Question Bank Test
+   * @param {object} params - {studentId, classLevel, subject, chapter, difficulty, mcq_count, fillup_count, short_answer_count, long_answer_count, time_limit_minutes}
+   * @returns {Promise<object>}
+   */
+  async startQBTest(params) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: params.studentId || params.student_id,
+          class_level: params.classLevel || params.class_level,
+          subject: params.subject,
+          chapter: params.chapter || params.chapter_number,
+          difficulty: params.difficulty,
+          mcq_count: params.mcq_count || 0,
+          fillup_count: params.fillup_count || 0,
+          short_answer_count: params.short_answer_count || 0,
+          long_answer_count: params.long_answer_count || 0,
+          time_limit_minutes: params.time_limit_minutes || null
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Start QB Test Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Start QB Test API Error:", error);
+      throw error;
+    }
+  },
+
   // ==================== TOPIC-BASED TEST SELECTION ====================
 
   /**
@@ -1171,7 +1242,7 @@ export const testService = {
       }
 
       // Get auth token for the assessments endpoint
-      const token = localStorage.getItem("token") 
+      const token = localStorage.getItem("token")
         || JSON.parse(localStorage.getItem("user-storage") || '{}')?.state?.accessToken;
       if (!token) {
         console.error("No auth token found");
