@@ -12,7 +12,11 @@ import {
   X,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2
 } from 'lucide-react';
 import useUserStore from '../stores/userStore';
 import { Button } from '../components/ui/button';
@@ -31,6 +35,7 @@ const TABS = [
   { id: 'academics', label: 'Academics', icon: GraduationCap },
   { id: 'avatar', label: 'Avatar', icon: Palette },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'security', label: 'Security', icon: Lock },
   { id: 'privacy', label: 'Privacy', icon: Shield },
 ];
 
@@ -90,6 +95,16 @@ export default function Settings() {
 
   // Privacy state
   const [privacy, setPrivacy] = useState(privacySettings);
+
+  // Security / Change Password state
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [showOldPwd, setShowOldPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdError, setPwdError] = useState('');
+  const [pwdSuccess, setPwdSuccess] = useState('');
 
   // Show save message temporarily
   const showSaveMessage = (message) => {
@@ -198,6 +213,33 @@ export default function Settings() {
     setPrivacy(updated);
     updatePrivacySettings(updated);
     showSaveMessage('Privacy setting updated!');
+  };
+
+  // Change password handler
+  const handleChangePassword = async () => {
+    setPwdError('');
+    setPwdSuccess('');
+    if (!oldPassword || !newPwd || !confirmPwd) { setPwdError('All fields are required.'); return; }
+    if (newPwd.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
+    if (newPwd !== confirmPwd) { setPwdError('Passwords do not match.'); return; }
+    setPwdLoading(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/auth/change-password-secure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.user_id, old_password: oldPassword, new_password: newPwd, confirm_password: confirmPwd })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPwdSuccess('Password changed successfully!');
+        setOldPassword(''); setNewPwd(''); setConfirmPwd('');
+      } else {
+        setPwdError(data.error || 'Failed to change password.');
+      }
+    } catch {
+      setPwdError('Network error. Please try again.');
+    }
+    setPwdLoading(false);
   };
 
   // Generate calendar grid
@@ -652,6 +694,73 @@ export default function Settings() {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'security':
+        return (
+          <div className="space-y-6">
+            <p className="text-sm text-gray-500">
+              Update your password. You'll need your current password to make changes.
+            </p>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+              <div className="relative">
+                <input
+                  type={showOldPwd ? 'text' : 'password'}
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full h-12 px-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+                />
+                <button type="button" onClick={() => setShowOldPwd(!showOldPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showOldPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+              <div className="relative">
+                <input
+                  type={showNewPwd ? 'text' : 'password'}
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="w-full h-12 px-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+                />
+                <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmPwd}
+                onChange={(e) => setConfirmPwd(e.target.value)}
+                placeholder="Re-enter new password"
+                className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+              />
+              {newPwd && confirmPwd && newPwd !== confirmPwd && (
+                <p className="text-red-500 text-xs mt-1">Passwords do not match</p>
+              )}
+            </div>
+
+            {pwdError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{pwdError}</p>}
+            {pwdSuccess && <p className="text-green-600 text-sm text-center bg-green-50 p-2 rounded-lg">{pwdSuccess}</p>}
+
+            <Button
+              onClick={handleChangePassword}
+              disabled={pwdLoading}
+              className="w-full h-12"
+            >
+              {pwdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
+              {pwdLoading ? 'Changing...' : 'Change Password'}
+            </Button>
           </div>
         );
 

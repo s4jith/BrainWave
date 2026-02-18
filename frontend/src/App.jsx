@@ -39,6 +39,8 @@ import TeacherGroups from "./pages/TeacherGroups";
 import QuestionBank from "./pages/QuestionBank";
 import TeacherTests from "./pages/TeacherTests";
 import TeacherReports from "./pages/TeacherReports";
+import CurriculumManagement from "./pages/CurriculumManagement";
+import ForgotPassword from "./pages/ForgotPassword";
 import "./App.css";
 
 // Protected Route wrapper - For authenticated users
@@ -55,7 +57,7 @@ function ProtectedRoute({ children }) {
   // Admin should only access admin routes
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -192,6 +194,7 @@ function App() {
             </PublicRoute>
           }
         />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/teacher" element={<TeacherPlaceholder />} />
 
         {/* Onboarding Route */}
@@ -398,6 +401,14 @@ function App() {
           element={
             <StaffRoute>
               <AdminSuggestions />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/curriculum-management"
+          element={
+            <StaffRoute>
+              <CurriculumManagement />
             </StaffRoute>
           }
         />

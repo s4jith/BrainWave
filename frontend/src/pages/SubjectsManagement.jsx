@@ -3,7 +3,7 @@
  * Hierarchical content organization for curriculum management
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
 import AIExtractionModal from "../components/AIExtractionModal";
@@ -22,44 +22,104 @@ export default function SubjectsManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
-  
+
   // Modals
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showAIExtractionModal, setShowAIExtractionModal] = useState(false);
   const [showPendingReview, setShowPendingReview] = useState(false);
-  
+
   // Forms
   const [subjectForm, setSubjectForm] = useState({
     subject_name: "",
     class_level: 10,
     description: ""
   });
-  
+
   const [chapterForm, setChapterForm] = useState({
     chapter_number: 1,
     chapter_name: "",
     description: ""
   });
-  
+
   const [topicForm, setTopicForm] = useState({
     topic_name: "",
     description: "",
     page_range: "",
     difficulty_level: "medium"
   });
-  
+
   // Expansion states
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
-  
+
   // Editing states
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingChapter, setEditingChapter] = useState(null);
   const [editingTopic, setEditingTopic] = useState(null);
-  
+
   const [submitting, setSubmitting] = useState(false);
+
+  // Summary editor state
+  const [summaryModal, setSummaryModal] = useState(null); // { subjectId, chapterId, chapterName, chapterNumber, summary }
+  const [summarySaving, setSummarySaving] = useState(false);
+  const [summarySaveStatus, setSummarySaveStatus] = useState(null);
+  const summaryEditorRef = useRef(null);
+
+  const execFormat = useCallback((command, value = null) => {
+    summaryEditorRef.current?.focus();
+    document.execCommand(command, false, value);
+  }, []);
+
+  const openSummaryEditor = (chapter) => {
+    setSummaryModal({
+      subjectId: selectedSubject.subject_id,
+      chapterId: chapter.chapter_id,
+      chapterName: chapter.chapter_name,
+      chapterNumber: chapter.chapter_number,
+      summary: chapter.summary || ""
+    });
+    setSummarySaveStatus(null);
+  };
+
+  useEffect(() => {
+    if (summaryModal && summaryEditorRef.current) {
+      summaryEditorRef.current.innerHTML = summaryModal.summary || "";
+      summaryEditorRef.current.focus();
+    }
+  }, [summaryModal]);
+
+  const handleSaveSummary = async () => {
+    if (!summaryModal) return;
+    setSummarySaving(true);
+    setSummarySaveStatus(null);
+    try {
+      const html = summaryEditorRef.current?.innerHTML || "";
+      const res = await fetch(
+        `${API_URL}/api/curriculum/subjects/${summaryModal.subjectId}/chapters/${summaryModal.chapterId}/summary`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ summary: html })
+        }
+      );
+      if (!res.ok) throw new Error("Save failed");
+      setSummarySaveStatus("success");
+      // Update local chapter summary
+      if (selectedSubject) {
+        const updatedChapters = selectedSubject.chapters.map(ch =>
+          ch.chapter_id === summaryModal.chapterId ? { ...ch, summary: html } : ch
+        );
+        setSelectedSubject({ ...selectedSubject, chapters: updatedChapters });
+      }
+      setTimeout(() => { setSummaryModal(null); setSummarySaveStatus(null); }, 1000);
+    } catch (err) {
+      setSummarySaveStatus("error");
+    } finally {
+      setSummarySaving(false);
+    }
+  };
 
   useEffect(() => {
     fetchSubjects();
@@ -72,7 +132,7 @@ export default function SubjectsManagement() {
       if (selectedClass !== "all") {
         url += `?class_level=${selectedClass}`;
       }
-      
+
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -101,14 +161,14 @@ export default function SubjectsManagement() {
   const handleAddSubject = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    
+
     try {
       const response = await fetch(`${API_URL}/api/curriculum/subjects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subjectForm)
       });
-      
+
       if (response.ok) {
         alert("Subject created successfully!");
         setShowAddSubjectModal(false);
@@ -134,9 +194,9 @@ export default function SubjectsManagement() {
   const handleAddChapter = async (e) => {
     e.preventDefault();
     if (!selectedSubject) return;
-    
+
     setSubmitting(true);
-    
+
     try {
       const response = await fetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters`,
@@ -146,7 +206,7 @@ export default function SubjectsManagement() {
           body: JSON.stringify(chapterForm)
         }
       );
-      
+
       if (response.ok) {
         alert("Chapter added successfully!");
         setChapterForm({
@@ -155,7 +215,7 @@ export default function SubjectsManagement() {
           description: ""
         });
         fetchSubjects();
-        
+
         // Refresh selected subject details
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
@@ -177,9 +237,9 @@ export default function SubjectsManagement() {
       alert("Please enter a topic name");
       return;
     }
-    
+
     setSubmitting(true);
-    
+
     try {
       const response = await fetch(
         `${API_URL}/api/curriculum/subjects/${subjectId}/chapters/${chapterId}/topics`,
@@ -189,7 +249,7 @@ export default function SubjectsManagement() {
           body: JSON.stringify(topicForm)
         }
       );
-      
+
       if (response.ok) {
         alert("Topic added successfully!");
         setTopicForm({
@@ -199,7 +259,7 @@ export default function SubjectsManagement() {
           difficulty_level: "medium"
         });
         fetchSubjects();
-        
+
         // Refresh selected subject details
         if (selectedSubject && selectedSubject.subject_id === subjectId) {
           const updated = await fetchSubjectDetails(subjectId);
@@ -222,21 +282,21 @@ export default function SubjectsManagement() {
     if (!confirm("Are you sure you want to delete this subject? This will hide it from students.")) {
       return;
     }
-    
+
     try {
       const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`, {
         method: "DELETE"
       });
-      
+
       if (response.ok) {
         // Optimistically remove from local state immediately
         setSubjects(prev => prev.filter(s => s.subject_id !== subjectId));
-        
+
         if (selectedSubject && selectedSubject.subject_id === subjectId) {
           setSelectedSubject(null);
           setShowChapterModal(false);
         }
-        
+
         alert("Subject deleted successfully!");
         // Refresh from server to ensure consistency
         fetchSubjects();
@@ -267,7 +327,7 @@ export default function SubjectsManagement() {
 
   const handleSaveChapter = async () => {
     if (!editingChapter || !selectedSubject) return;
-    
+
     try {
       setSubmitting(true);
       const response = await fetch(
@@ -349,7 +409,7 @@ export default function SubjectsManagement() {
 
   const handleSaveTopic = async () => {
     if (!editingTopic || !selectedSubject) return;
-    
+
     try {
       setSubmitting(true);
       const response = await fetch(
@@ -459,7 +519,7 @@ export default function SubjectsManagement() {
             className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        
+
         <select
           value={selectedClass}
           onChange={(e) => setSelectedClass(e.target.value)}
@@ -470,21 +530,21 @@ export default function SubjectsManagement() {
             <option key={cls} value={cls}>Class {cls}</option>
           ))}
         </select>
-        
+
         <button
           onClick={() => setShowPendingReview(true)}
           className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
         >
           <Clock className="w-5 h-5" /> Pending Review
         </button>
-        
+
         <button
           onClick={() => setShowAIExtractionModal(true)}
           className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
         >
           <Sparkles className="w-5 h-5" /> AI Extract
         </button>
-        
+
         <button
           onClick={() => setShowAddSubjectModal(true)}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
@@ -520,7 +580,7 @@ export default function SubjectsManagement() {
                     </p>
                   </div>
                 </div>
-                
+
                 <button
                   onClick={() => handleDeleteSubject(subject.subject_id)}
                   className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
@@ -528,7 +588,7 @@ export default function SubjectsManagement() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              
+
               <div className="flex gap-4 mb-4 text-sm">
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">{subject.total_chapters} chapters</span>
@@ -537,7 +597,7 @@ export default function SubjectsManagement() {
                   <span className="text-gray-500 dark:text-gray-400">{subject.total_topics} topics</span>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => handleViewChapters(subject)}
                 className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2"
@@ -562,7 +622,7 @@ export default function SubjectsManagement() {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddSubject} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -577,7 +637,7 @@ export default function SubjectsManagement() {
                   placeholder="e.g., Mathematics, Physics, English"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Class Level
@@ -592,7 +652,7 @@ export default function SubjectsManagement() {
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Description
@@ -605,7 +665,7 @@ export default function SubjectsManagement() {
                   placeholder="Brief description..."
                 />
               </div>
-              
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -653,7 +713,7 @@ export default function SubjectsManagement() {
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6">
               {/* Add Chapter Form */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
@@ -685,7 +745,7 @@ export default function SubjectsManagement() {
                   </button>
                 </form>
               </div>
-              
+
               {/* Chapters List */}
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {selectedSubject.chapters?.length === 0 ? (
@@ -757,6 +817,16 @@ export default function SubjectsManagement() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  openSummaryEditor(chapter);
+                                }}
+                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition"
+                                title="Edit chapter summary"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleEditChapter(chapter);
                                 }}
                                 className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
@@ -778,7 +848,7 @@ export default function SubjectsManagement() {
                           </div>
                         </div>
                       )}
-                      
+
                       {expandedChapters[chapter.chapter_id] && (
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                           {/* Add Topic Form */}
@@ -816,7 +886,7 @@ export default function SubjectsManagement() {
                               </button>
                             </div>
                           </div>
-                          
+
                           {/* Topics List */}
                           {chapter.topics?.length === 0 ? (
                             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
@@ -901,13 +971,12 @@ export default function SubjectsManagement() {
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <span className={`text-xs px-2 py-1 rounded ${
-                                          topic.difficulty_level === "easy"
+                                        <span className={`text-xs px-2 py-1 rounded ${topic.difficulty_level === "easy"
                                             ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                                             : topic.difficulty_level === "hard"
-                                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                            : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                        }`}>
+                                              ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                              : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                          }`}>
                                           {topic.difficulty_level}
                                         </span>
                                         <button
@@ -941,7 +1010,7 @@ export default function SubjectsManagement() {
           </div>
         </div>
       )}
-      
+
       {/* AI Extraction Modal */}
       <AIExtractionModal
         isOpen={showAIExtractionModal}
@@ -951,7 +1020,7 @@ export default function SubjectsManagement() {
           setShowPendingReview(true);
         }}
       />
-      
+
       {/* Pending Review Modal */}
       <PendingCurriculumReview
         isOpen={showPendingReview}
@@ -960,6 +1029,105 @@ export default function SubjectsManagement() {
           fetchSubjects();
         }}
       />
+
+      {/* Chapter Summary Rich Text Editor Modal */}
+      {summaryModal && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Chapter {summaryModal.chapterNumber} Summary</p>
+                  <h2 className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{summaryModal.chapterName}</h2>
+                </div>
+              </div>
+              <button onClick={() => setSummaryModal(null)} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-1 px-4 py-2 border-b bg-white dark:bg-gray-900">
+              <button onClick={() => execFormat("bold")} className="smry-btn font-bold" title="Bold">B</button>
+              <button onClick={() => execFormat("italic")} className="smry-btn italic" title="Italic">I</button>
+              <button onClick={() => execFormat("underline")} className="smry-btn underline" title="Underline">U</button>
+              <button onClick={() => execFormat("strikeThrough")} className="smry-btn line-through" title="Strikethrough">S</button>
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <span className="text-xs text-gray-400 mr-1">Size:</span>
+              {[["S", "1"], ["M", "3"], ["L", "5"], ["XL", "7"]].map(([label, val]) => (
+                <button key={val} onClick={() => execFormat("fontSize", val)} className="smry-btn text-xs px-2">{label}</button>
+              ))}
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <span className="text-xs text-gray-400 mr-1">Font:</span>
+              {[["Sans", "Arial, sans-serif"], ["Serif", "Georgia, serif"], ["Mono", "Courier New, monospace"]].map(([label, val]) => (
+                <button key={label} onClick={() => execFormat("fontName", val)} className="smry-btn text-xs px-2" style={{ fontFamily: val }}>{label}</button>
+              ))}
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <button onClick={() => execFormat("insertUnorderedList")} className="smry-btn text-xs px-2">• List</button>
+              <button onClick={() => execFormat("insertOrderedList")} className="smry-btn text-xs px-2">1. List</button>
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <span className="text-xs text-gray-400 mr-1">Color:</span>
+              {["#1e293b", "#dc2626", "#2563eb", "#16a34a", "#9333ea", "#ea580c"].map(c => (
+                <button key={c} onClick={() => execFormat("foreColor", c)} className="w-5 h-5 rounded-full border border-gray-200 hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
+              ))}
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <span className="text-xs text-gray-400 mr-1">Highlight:</span>
+              {["#fef08a", "#bbf7d0", "#bfdbfe", "#fecaca"].map(c => (
+                <button key={c} onClick={() => execFormat("hiliteColor", c)} className="w-5 h-5 rounded border border-gray-200 hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
+              ))}
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <button onClick={() => execFormat("removeFormat")} className="smry-btn text-xs text-red-500 px-2">Clear</button>
+            </div>
+
+            {/* Editor */}
+            <div className="flex-1 overflow-auto p-6">
+              <div
+                ref={summaryEditorRef}
+                contentEditable
+                suppressContentEditableWarning
+                className="min-h-full outline-none text-gray-800 dark:text-gray-200 text-base leading-relaxed"
+                style={{ minHeight: "300px" }}
+                data-placeholder="Write the chapter summary here..."
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 dark:bg-gray-800">
+              <p className="text-xs text-gray-500">This summary is shown to students in Book to Bot when they click "Summarize Chapter"</p>
+              <div className="flex items-center gap-3">
+                {summarySaveStatus === "success" && <span className="text-sm text-green-600 flex items-center gap-1"><Check className="h-4 w-4" /> Saved!</span>}
+                {summarySaveStatus === "error" && <span className="text-sm text-red-500 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Failed</span>}
+                <button onClick={() => setSummaryModal(null)} className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm">Cancel</button>
+                <button onClick={handleSaveSummary} disabled={summarySaving} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition text-sm flex items-center gap-2 disabled:opacity-50">
+                  {summarySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {summarySaving ? "Saving..." : "Save Summary"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .smry-btn {
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #374151;
+          background: transparent;
+          border: 1px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s;
+          line-height: 1.4;
+        }
+        .smry-btn:hover { background: #f3f4f6; border-color: #e5e7eb; }
+        .dark .smry-btn { color: #d1d5db; }
+        .dark .smry-btn:hover { background: #374151; border-color: #4b5563; }
+        [contenteditable]:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; }
+      `}</style>
     </AdminLayout>
   );
 }

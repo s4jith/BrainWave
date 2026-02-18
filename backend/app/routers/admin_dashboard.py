@@ -14,6 +14,7 @@ import hashlib
 import logging
 
 from app.db.mongo import db
+from app.utils.email import send_credentials_email
 
 logger = logging.getLogger(__name__)
 
@@ -685,6 +686,14 @@ async def create_student(student: StudentCreate):
             "password": password,  # Plain text for admin to share
             "note": "Share these credentials with the student. They will be prompted to change password on first login."
         }
+        
+        # Send email
+        email_sent = send_credentials_email(student.email, user_id, password, student.name)
+        if email_sent:
+            response["generated_credentials"]["email_status"] = "sent"
+        else:
+            response["generated_credentials"]["email_status"] = "failed"
+            logger.warning(f"Failed to send email to {student.email}")
         
         logger.info(f"Created student: {user_id} ({student.name})")
         return response

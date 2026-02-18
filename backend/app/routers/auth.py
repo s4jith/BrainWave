@@ -19,6 +19,9 @@ import hashlib
 import uuid
 import jwt
 import logging
+import random
+import string
+from app.utils.email import send_credentials_email, send_otp_email
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +483,9 @@ async def create_teacher(
         
         result = db.users.insert_one(teacher_doc)
         
+        # Send credentials via email
+        email_sent = send_credentials_email(request.email, teacher_id, default_password, request.name)
+        
         logger.info(f"Teacher created: {teacher_id} by admin {current_user.email}")
         
         return {
@@ -491,7 +497,8 @@ async def create_teacher(
                 "name": request.name,
                 "email": request.email,
                 "subjects": request.subjects,
-                "default_password": default_password  # Return so admin can share with teacher
+                "default_password": default_password,
+                "email_status": "sent" if email_sent else "failed"
             }
         }
         
@@ -587,13 +594,11 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     Get current authenticated user's information.
     """
     try:
-        # user_id in token is now the human-readable ID (TCH...)
         user = db.users.find_one({"user_id": current_user.user_id})
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Get permissions
         role_enum = UserRole(user["role"])
         permissions = [p.value for p in get_role_permissions(role_enum)]
         
@@ -614,3 +619,203 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     except Exception as e:
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user info")
+
+
+# === Forgot Password / OTP Flow ===
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class VerifyOTPRequest(BaseModel):
+    email: str
+    otp: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    reset_token: str
+    new_password: str
+
+class ChangePasswordConfirmRequest(BaseModel):
+    user_id: str
+    old_password: str
+    new_password: str
+    confirm_password: str
+
+
+def generate_otp(length: int = 6) -> str:
+    """Generate a numeric OTP."""
+    return ''.join(random.choices(string.digits, k=length))
+
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    Send OTP to user's email for password reset.
+    OTP is valid for 10 minutes.
+    """
+    try:
+        user = db.users.find_one({"email": request.email})
+        if not user:
+            # Don't reveal whether email exists
+            return {"success": True, "message": "If an account with that email exists, an OTP has been sent."}
+        
+        otp = generate_otp()
+        otp_hash = hash_password(otp)
+        
+        # Store OTP in password_resets collection (TTL: 10 min)
+        db.password_resets.delete_many({"email": request.email})
+        db.password_resets.insert_one({
+            "email": request.email,
+            "otp_hash": otp_hash,
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(minutes=10),
+            "verified": False,
+            "attempts": 0
+        })
+        
+        email_sent = send_otp_email(request.email, otp)
+        if not email_sent:
+            logger.warning(f"Failed to send OTP email to {request.email}")
+        
+        return {"success": True, "message": "If an account with that email exists, an OTP has been sent."}
+        
+    except Exception as e:
+        logger.error(f"Forgot password error: {e}")
+        return {"success": False, "error": "Something went wrong. Please try again."}
+
+
+@router.post("/verify-otp")
+async def verify_otp(request: VerifyOTPRequest):
+    """
+    Verify OTP and return a temporary reset token.
+    Max 5 attempts. After that the OTP is invalidated.
+    """
+    try:
+        record = db.password_resets.find_one({"email": request.email})
+        
+        if not record:
+            return {"success": False, "error": "No OTP request found. Please request a new OTP."}
+        
+        # Check expiry
+        if datetime.utcnow() > record["expires_at"]:
+            db.password_resets.delete_one({"_id": record["_id"]})
+            return {"success": False, "error": "OTP has expired. Please request a new one."}
+        
+        # Check attempts
+        if record.get("attempts", 0) >= 5:
+            db.password_resets.delete_one({"_id": record["_id"]})
+            return {"success": False, "error": "Too many failed attempts. Please request a new OTP."}
+        
+        # Verify OTP
+        if not verify_password(request.otp, record["otp_hash"]):
+            db.password_resets.update_one(
+                {"_id": record["_id"]},
+                {"$inc": {"attempts": 1}}
+            )
+            remaining = 5 - record.get("attempts", 0) - 1
+            return {"success": False, "error": f"Invalid OTP. {remaining} attempts remaining."}
+        
+        # OTP is valid — generate a reset token
+        reset_token = str(uuid.uuid4())
+        reset_token_hash = hash_password(reset_token)
+        
+        db.password_resets.update_one(
+            {"_id": record["_id"]},
+            {"$set": {
+                "verified": True,
+                "reset_token_hash": reset_token_hash,
+                "token_expires_at": datetime.utcnow() + timedelta(minutes=15)
+            }}
+        )
+        
+        return {"success": True, "reset_token": reset_token, "message": "OTP verified. You can now reset your password."}
+        
+    except Exception as e:
+        logger.error(f"Verify OTP error: {e}")
+        return {"success": False, "error": "Verification failed. Please try again."}
+
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """
+    Reset password using the reset token obtained after OTP verification.
+    """
+    try:
+        record = db.password_resets.find_one({"email": request.email, "verified": True})
+        
+        if not record:
+            return {"success": False, "error": "Invalid or expired reset request."}
+        
+        # Check token expiry
+        if datetime.utcnow() > record.get("token_expires_at", datetime.utcnow()):
+            db.password_resets.delete_one({"_id": record["_id"]})
+            return {"success": False, "error": "Reset token has expired. Please start over."}
+        
+        # Verify reset token
+        if not verify_password(request.reset_token, record.get("reset_token_hash", "")):
+            return {"success": False, "error": "Invalid reset token."}
+        
+        # Validate new password
+        if len(request.new_password) < 8:
+            return {"success": False, "error": "Password must be at least 8 characters."}
+        
+        # Update password
+        new_hashed = hash_password(request.new_password)
+        result = db.users.update_one(
+            {"email": request.email},
+            {"$set": {"password": new_hashed, "password_changed_at": datetime.utcnow()}}
+        )
+        
+        if result.modified_count == 0:
+            return {"success": False, "error": "User not found."}
+        
+        # Clean up
+        db.password_resets.delete_many({"email": request.email})
+        
+        return {"success": True, "message": "Password reset successfully. You can now login with your new password."}
+        
+    except Exception as e:
+        logger.error(f"Reset password error: {e}")
+        return {"success": False, "error": "Password reset failed. Please try again."}
+
+
+@router.post("/change-password-secure")
+async def change_password_secure(request: ChangePasswordConfirmRequest):
+    """
+    Change password with old password verification and confirmation.
+    Used from dashboard settings pages.
+    """
+    try:
+        # Validate confirmation
+        if request.new_password != request.confirm_password:
+            return {"success": False, "error": "New password and confirmation do not match."}
+        
+        # Validate length
+        if len(request.new_password) < 8:
+            return {"success": False, "error": "New password must be at least 8 characters."}
+        
+        # Find user
+        user = db.users.find_one({"user_id": request.user_id})
+        if not user:
+            return {"success": False, "error": "User not found."}
+        
+        # Verify old password
+        if not verify_password(request.old_password, user.get("password", "")):
+            return {"success": False, "error": "Current password is incorrect."}
+        
+        # Don't allow same password
+        if request.old_password == request.new_password:
+            return {"success": False, "error": "New password must be different from current password."}
+        
+        # Update
+        new_hashed = hash_password(request.new_password)
+        db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"password": new_hashed, "password_changed_at": datetime.utcnow()}}
+        )
+        
+        return {"success": True, "message": "Password changed successfully."}
+        
+    except Exception as e:
+        logger.error(f"Change password secure error: {e}")
+        return {"success": False, "error": "Failed to change password."}

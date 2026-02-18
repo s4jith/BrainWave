@@ -4,6 +4,7 @@ Admin endpoints for managing subjects, chapters, and topics hierarchy
 """
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -391,6 +392,7 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
             "chapter_number": request.chapter_number,
             "chapter_name": request.chapter_name,
             "description": request.description or "",
+            "summary": "",
             "topics": [],
             "pdf_url": request.pdf_url or "",
             "video_url": request.video_url or "",
@@ -441,6 +443,8 @@ async def update_chapter(
             update_fields["chapters.$.chapter_name"] = request.chapter_name
         if request.description is not None:
             update_fields["chapters.$.description"] = request.description
+        if request.summary is not None:
+            update_fields["chapters.$.summary"] = request.summary
         if request.pdf_url is not None:
             update_fields["chapters.$.pdf_url"] = request.pdf_url
         if request.video_url is not None:
@@ -512,6 +516,132 @@ async def delete_chapter(subject_id: str, chapter_id: str):
         raise
     except Exception as e:
         logger.error(f" Delete chapter failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== CHAPTER SUMMARY ENDPOINTS ====================
+
+class UpdateChapterSummaryRequest(BaseModel):
+    summary: str
+
+
+@router.put("/subjects/{subject_id}/chapters/{chapter_id}/summary")
+async def update_chapter_summary(
+    subject_id: str,
+    chapter_id: str,
+    request: UpdateChapterSummaryRequest
+):
+    """
+    Update the admin-written rich text summary for a chapter.
+    Summary is stored as HTML from the rich text editor.
+    """
+    try:
+        collection = mongodb.db[SUBJECTS_COLLECTION]
+        
+        result = await collection.find_one_and_update(
+            {"subject_id": subject_id, "chapters.chapter_id": chapter_id},
+            {
+                "$set": {
+                    "chapters.$.summary": request.summary,
+                    "chapters.$.updated_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            return_document=True
+        )
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+        
+        logger.info(f"Updated summary for chapter: {chapter_id}")
+        return {"success": True, "message": "Chapter summary updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f" Update chapter summary failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/subjects/{subject_id}/chapters/{chapter_id}/summary")
+async def get_chapter_summary(subject_id: str, chapter_id: str):
+    """
+    Get the admin-written summary for a chapter.
+    Used by students in BookToBot to display chapter summary.
+    """
+    try:
+        collection = mongodb.db[SUBJECTS_COLLECTION]
+        subject = await collection.find_one(
+            {"subject_id": subject_id},
+            {"chapters": 1}
+        )
+        
+        if not subject:
+            raise HTTPException(status_code=404, detail="Subject not found")
+        
+        chapter = next(
+            (ch for ch in subject.get("chapters", []) if ch["chapter_id"] == chapter_id),
+            None
+        )
+        
+        if not chapter:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+        
+        return {
+            "chapter_id": chapter_id,
+            "chapter_name": chapter.get("chapter_name", ""),
+            "summary": chapter.get("summary", ""),
+            "has_summary": bool(chapter.get("summary", "").strip())
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f" Get chapter summary failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chapter-summary-by-book")
+async def get_chapter_summary_by_book(
+    subject_name: str = Query(...),
+    class_level: int = Query(...),
+    chapter_number: int = Query(...)
+):
+    """
+    Get chapter summary by subject name, class level, and chapter number.
+    Used by BookToBot students who don't have subject_id directly.
+    """
+    try:
+        collection = mongodb.db[SUBJECTS_COLLECTION]
+        
+        # Find subject by name and class level (case-insensitive)
+        subject = await collection.find_one({
+            "subject_name": {"$regex": f"^{subject_name}$", "$options": "i"},
+            "class_level": class_level,
+            "is_active": {"$ne": False}
+        })
+        
+        if not subject:
+            return {"summary": "", "has_summary": False, "message": "Subject not found"}
+        
+        chapter = next(
+            (ch for ch in subject.get("chapters", []) if ch.get("chapter_number") == chapter_number),
+            None
+        )
+        
+        if not chapter:
+            return {"summary": "", "has_summary": False, "message": "Chapter not found"}
+        
+        summary = chapter.get("summary", "")
+        return {
+            "chapter_id": chapter.get("chapter_id", ""),
+            "chapter_name": chapter.get("chapter_name", ""),
+            "summary": summary,
+            "has_summary": bool(summary.strip())
+        }
+        
+    except Exception as e:
+        logger.error(f" Get chapter summary by book failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

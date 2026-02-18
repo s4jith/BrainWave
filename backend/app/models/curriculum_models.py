@@ -31,6 +31,7 @@ class Chapter(BaseModel):
     chapter_number: int = Field(..., description="Chapter number")
     chapter_name: str = Field(..., description="Chapter title")
     description: Optional[str] = Field("", description="Chapter overview")
+    summary: Optional[str] = Field("", description="Admin-written chapter summary (HTML rich text)")
     topics: List[Topic] = Field(default_factory=list, description="Topics in this chapter")
     pdf_url: Optional[str] = Field("", description="Link to chapter PDF")
     video_url: Optional[str] = Field("", description="Link to chapter video")
@@ -116,6 +117,7 @@ class UpdateChapterRequest(BaseModel):
     """Request to update chapter details"""
     chapter_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    summary: Optional[str] = None
     pdf_url: Optional[str] = None
     video_url: Optional[str] = None
     total_pages: Optional[int] = None

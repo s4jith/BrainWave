@@ -11,7 +11,7 @@ import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
-    MessageCircle
+    MessageCircle, BookMarked
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";

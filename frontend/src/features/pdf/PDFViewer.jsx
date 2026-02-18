@@ -14,10 +14,10 @@ import {
   Sparkles,
   X,
   Scissors,
-  FileText,
-  File,
   BookMarked,
   StickyNote,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import useAnnotationStore from "../../stores/annotationStore";
 import AIPanel from "../annotations/AIPanel";
@@ -57,9 +57,14 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [selectedArea, setSelectedArea] = useState(null);
   const [showActionPopup, setShowActionPopup] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Notes panel toggle state
   const [showNotes, setShowNotes] = useState(false);
+
+  // Admin chapter summary modal
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryData, setSummaryData] = useState(null); // { chapterName, summary, has_summary }
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
@@ -289,22 +294,30 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     };
   };
 
-  // Handle direct summarization (without selection)
-  const handleSummarize = (action) => {
-    // Set selected text for AI panel
-    setSelectedText({
-      text: action === "summarize_page" 
-        ? `Provide a summary of page ${pageNumber} from ${currentLesson?.title || 'this chapter'}` 
-        : `Provide a comprehensive summary of chapter ${currentLesson?.number || 1}: ${currentLesson?.title || 'this chapter'}`,
-      imageData: null,
-      action: action,
-      pageNumber: pageNumber,
-      lessonId: currentLesson?.id,
-      position: { x: 0, y: 0 },
-    });
 
-    // Open AI panel
-    setActivePanel("ai");
+
+  // Fetch admin-written chapter summary from curriculum API
+  const fetchAdminChapterSummary = async () => {
+    if (!currentLesson) return;
+    setSummaryLoading(true);
+    setShowSummaryModal(true);
+    setSummaryData(null);
+    try {
+      const subject = currentLesson.subject || currentLesson.book_subject || "";
+      const classLevel = currentLesson.class_level || currentLesson.book_class || 0;
+      const chapterNumber = currentLesson.chapter_number || currentLesson.number || 1;
+      const res = await fetch(
+        `${API_BASE}/api/curriculum/chapter-summary-by-book?subject_name=${encodeURIComponent(subject)}&class_level=${classLevel}&chapter_number=${chapterNumber}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch summary");
+      const data = await res.json();
+      setSummaryData(data);
+    } catch (err) {
+      console.error("Failed to fetch chapter summary:", err);
+      setSummaryData({ summary: "", has_summary: false, error: true });
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   // Handle action selection (Define, Stick Flow, Elaborate)
@@ -458,25 +471,13 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleSummarize("summarize_page")}
-            disabled={!currentLesson || isLoading}
-            className="bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-900/50"
-            title="Get AI summary of current page"
-          >
-            <File className="h-4 w-4 mr-2" />
-            Summarize Page
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleSummarize("summarize_chapter")}
+            onClick={fetchAdminChapterSummary}
             disabled={!currentLesson || isLoading}
             className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/50"
-            title="Get AI summary of entire chapter"
+            title="View chapter summary"
           >
             <BookMarked className="h-4 w-4 mr-2" />
-            Summarize Chapter
+            Summary
           </Button>
 
           <Button
@@ -692,45 +693,45 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                   onClick={() => handleAction("define")}
                   disabled={isProcessing}
                 >
-                    <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
-                      <BookOpen className="h-5 w-5 text-orange-600" />
-                    </div>
-                    <div className="text-left">
-                      <div className="font-medium">Define</div>
-                      <div className="text-xs text-muted-foreground">Simple explanation</div>
-                    </div>
-                  </Button>
+                  <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/50">
+                    <BookOpen className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium">Define</div>
+                    <div className="text-xs text-muted-foreground">Simple explanation</div>
+                  </div>
+                </Button>
 
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-4 justify-start gap-4 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-950/30"
-                    onClick={() => handleAction("stickflow")}
-                    disabled={isProcessing}
-                  >
-                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
-                      <GitBranch className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <div className="text-left">
-                      <div className="font-medium">Stick Flow</div>
-                      <div className="text-xs text-muted-foreground">Step-by-step breakdown</div>
-                    </div>
-                  </Button>
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-950/30"
+                  onClick={() => handleAction("stickflow")}
+                  disabled={isProcessing}
+                >
+                  <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                    <GitBranch className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium">Stick Flow</div>
+                    <div className="text-xs text-muted-foreground">Step-by-step breakdown</div>
+                  </div>
+                </Button>
 
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-4 justify-start gap-4 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-950/30"
-                    onClick={() => handleAction("elaborate")}
-                    disabled={isProcessing}
-                  >
-                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
-                      <Sparkles className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div className="text-left">
-                      <div className="font-medium">Elaborate</div>
-                      <div className="text-xs text-muted-foreground">Detailed explanation</div>
-                    </div>
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 px-4 justify-start gap-4 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-950/30"
+                  onClick={() => handleAction("elaborate")}
+                  disabled={isProcessing}
+                >
+                  <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                    <Sparkles className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium">Elaborate</div>
+                    <div className="text-xs text-muted-foreground">Detailed explanation</div>
+                  </div>
+                </Button>
+              </div>
 
               {isProcessing && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-muted-foreground">
@@ -763,6 +764,70 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
           />
         )}
       </div>
+
+      {/* Admin Chapter Summary Modal */}
+      {showSummaryModal && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => setShowSummaryModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <BookMarked className="h-5 w-5 text-indigo-600" />
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Chapter Summary</p>
+                  <h2 className="font-bold text-gray-900 dark:text-white text-lg leading-tight">
+                    {summaryData?.chapter_name || currentLesson?.title || "Chapter Summary"}
+                  </h2>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSummaryModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto p-6">
+              {summaryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                  <span className="ml-3 text-gray-500">Loading summary...</span>
+                </div>
+              ) : summaryData?.error ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <AlertCircle className="h-10 w-10 text-amber-500 mb-3" />
+                  <p className="font-medium text-gray-700 dark:text-gray-300">Could not load summary</p>
+                  <p className="text-sm text-gray-500 mt-1">Please try again later</p>
+                </div>
+              ) : summaryData?.has_summary ? (
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: summaryData.summary }}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
+                  <p className="font-medium text-gray-600 dark:text-gray-400">No summary available yet</p>
+                  <p className="text-sm text-gray-400 mt-1">Your teacher hasn't written a summary for this chapter yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t bg-gray-50 dark:bg-gray-800 flex justify-end">
+              <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

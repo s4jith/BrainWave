@@ -9,7 +9,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import {
     Settings, Users, Bell, Shield, Database, Globe,
-    Save, Check
+    Save, Check, Lock, Eye, EyeOff, Loader2
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -40,6 +40,41 @@ export default function AdminSettings() {
         backupFrequency: "daily",
         retentionDays: 30
     });
+
+    // Change password state
+    const [oldPwd, setOldPwd] = useState("");
+    const [newPwd, setNewPwd] = useState("");
+    const [confirmPwd, setConfirmPwd] = useState("");
+    const [showOldPwd, setShowOldPwd] = useState(false);
+    const [showNewPwd, setShowNewPwd] = useState(false);
+    const [pwdLoading, setPwdLoading] = useState(false);
+    const [pwdError, setPwdError] = useState("");
+    const [pwdSuccess, setPwdSuccess] = useState("");
+
+    const handleChangePassword = async () => {
+        setPwdError(""); setPwdSuccess("");
+        if (!oldPwd || !newPwd || !confirmPwd) { setPwdError("All fields are required."); return; }
+        if (newPwd.length < 8) { setPwdError("Password must be at least 8 characters."); return; }
+        if (newPwd !== confirmPwd) { setPwdError("Passwords do not match."); return; }
+        setPwdLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/auth/change-password-secure`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: user.user_id, old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPwdSuccess("Password changed successfully!");
+                setOldPwd(""); setNewPwd(""); setConfirmPwd("");
+            } else {
+                setPwdError(data.error || "Failed to change password.");
+            }
+        } catch {
+            setPwdError("Network error.");
+        }
+        setPwdLoading(false);
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -206,6 +241,55 @@ export default function AdminSettings() {
                             </div>
                             <ToggleRow label="Require Strong Passwords" description="Must include uppercase, lowercase, and numbers"
                                 enabled={settings.requireStrongPassword} onChange={(v) => setSettings({ ...settings, requireStrongPassword: v })} />
+                        </div>
+
+                        {/* Change Password Sub-section */}
+                        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Change Your Password</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Update your admin account password</p>
+                            <div className="space-y-4 max-w-md">
+                                <div className="relative">
+                                    <input
+                                        type={showOldPwd ? "text" : "password"}
+                                        value={oldPwd}
+                                        onChange={(e) => setOldPwd(e.target.value)}
+                                        placeholder="Current password"
+                                        className="w-full px-4 py-2.5 pr-10 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    />
+                                    <button type="button" onClick={() => setShowOldPwd(!showOldPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                        {showOldPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type={showNewPwd ? "text" : "password"}
+                                        value={newPwd}
+                                        onChange={(e) => setNewPwd(e.target.value)}
+                                        placeholder="New password (min 8 characters)"
+                                        className="w-full px-4 py-2.5 pr-10 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                    />
+                                    <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                        {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                                <input
+                                    type="password"
+                                    value={confirmPwd}
+                                    onChange={(e) => setConfirmPwd(e.target.value)}
+                                    placeholder="Confirm new password"
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                />
+                                {pwdError && <p className="text-red-500 text-xs">{pwdError}</p>}
+                                {pwdSuccess && <p className="text-green-600 text-xs">{pwdSuccess}</p>}
+                                <button
+                                    onClick={handleChangePassword}
+                                    disabled={pwdLoading}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 text-sm font-medium transition"
+                                >
+                                    {pwdLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                                    {pwdLoading ? "Changing..." : "Change Password"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
