@@ -7,6 +7,9 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+// Import user store for auth token access
+import useUserStore from "../stores/userStore";
+
 /**
  * Chat Service - AI Explanations with RAG
  * Integrates with the backend RAG system for annotations and assessment
@@ -912,7 +915,7 @@ export const testService = {
    * @param {string} studentId - Student ID
    * @returns {Promise<{score, evaluations, feedback, strengths, improvements}>}
    */
-  async completeTest(sessionId, studentId) {
+  async completeTest(sessionId, studentId, answers = [], completionData = {}) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/complete`, {
         method: "POST",
@@ -920,6 +923,8 @@ export const testService = {
         body: JSON.stringify({
           session_id: sessionId,
           student_id: studentId,
+          answers: answers,
+          ...completionData
         }),
       });
 
@@ -1242,8 +1247,7 @@ export const testService = {
       }
 
       // Get auth token for the assessments endpoint
-      const token = localStorage.getItem("token")
-        || JSON.parse(localStorage.getItem("user-storage") || '{}')?.state?.accessToken;
+      const token = useUserStore.getState().accessToken;
       if (!token) {
         console.error("No auth token found");
         return [];

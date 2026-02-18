@@ -168,7 +168,7 @@ function BookToBot() {
                   </Button>
                 ))
               ) : (
-                ["Mathematics", "Social Science"].map((subject) => (
+                ["Maths", "Social Science"].map((subject) => (
                   <Button
                     key={subject}
                     variant={user.preferredSubject === subject ? "default" : "outline"}

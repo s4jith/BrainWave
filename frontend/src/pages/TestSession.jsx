@@ -329,7 +329,20 @@ export default function TestSession() {
         warnings: typingWarnings
       };
 
-      const result = await testService.completeTest(session.session_id, user.id, completionData);
+      // Construct final answers array
+      const finalAnswersMap = { ...answers };
+      if (currentAnswer.trim() && currentQuestion) {
+        finalAnswersMap[currentQuestion.question_id] = currentAnswer.trim();
+      }
+
+      const formattedAnswers = session.questions.map((q, index) => ({
+        session_id: session.session_id,
+        question_id: q.question_id,
+        question_number: index + 1,
+        answer: finalAnswersMap[q.question_id] || ""
+      }));
+
+      const result = await testService.completeTest(session.session_id, user.id, formattedAnswers, completionData);
 
       // Mark test as completed to allow navigation
       setTestCompleted(true);
@@ -431,8 +444,8 @@ export default function TestSession() {
           <div className="p-6">
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
-                  currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
-                    'bg-green-100 text-green-700'
+                currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
+                  'bg-green-100 text-green-700'
                 }`}>
                 {currentQuestion?.question_type === 'mcq' ? 'Multiple Choice' :
                   currentQuestion?.question_type === 'fillup' ? 'Fill in the Blank' :
@@ -458,13 +471,13 @@ export default function TestSession() {
                         onClick={() => !testBlocked && setCurrentAnswer(key)}
                         disabled={testBlocked}
                         className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${currentAnswer === key
-                            ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                           } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
                         <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${currentAnswer === key
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-gray-100 text-gray-600'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-100 text-gray-600'
                           }`}>
                           {key}
                         </span>

@@ -917,6 +917,7 @@ async def get_lessons_for_student(
         # Map subject names to Pinecone namespaces
         subject_namespace_map = {
             "Maths": "maths",
+            "Mathematics": "maths",
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",
@@ -925,8 +926,13 @@ async def get_lessons_for_student(
             "Hindi": "hindi"
         }
         
-        namespace = subject_namespace_map.get(subject, subject.lower().replace(' ', '_'))
-        logger.info(f"📖 Getting lessons for {subject} (namespace: {namespace}), Class {class_level}")
+        # Normalize subject name (Mathematics → Maths)
+        subject_normalized = subject
+        if subject.lower() in ["mathematics", "math"]:
+            subject_normalized = "Maths"
+        
+        namespace = subject_namespace_map.get(subject, subject_namespace_map.get(subject_normalized, subject.lower().replace(' ', '_')))
+        logger.info(f"Getting lessons for {subject} (normalized: {subject_normalized}, namespace: {namespace}), Class {class_level}")
         
         # Use random vector for querying (zero vector doesn't work well with cosine similarity)
         random_vec = [random.random() for _ in range(768)]
@@ -1021,7 +1027,7 @@ async def get_lessons_for_student(
         # Also check MongoDB for PDF URLs
         mongo_books = list(db.books.find({
             "class_level": class_level,
-            "subject": {"$regex": f"^{subject}$", "$options": "i"}
+            "subject": {"$regex": f"^(maths|mathematics)$" if subject_normalized == "Maths" else f"^{subject_normalized}$", "$options": "i"}
         }).sort("chapter_number", 1))
         
         # Build lessons list

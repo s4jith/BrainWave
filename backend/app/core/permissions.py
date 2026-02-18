@@ -47,11 +47,13 @@ def decode_token(token: str) -> TokenData:
         )
         
     except jwt.ExpiredSignatureError:
+        logger.warning("JWT token has expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired"
         )
     except jwt.InvalidTokenError as e:
+        logger.warning(f"JWT invalid token error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}"
@@ -77,8 +79,14 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-    logger.info(f"Token received, attempting decode...")
-    return decode_token(credentials.credentials)
+    logger.info(f"Token received, attempting decode... (token starts with: {credentials.credentials[:20]}...)")
+    try:
+        result = decode_token(credentials.credentials)
+        logger.info(f"Token decoded successfully for user: {result.user_id}, role: {result.role}")
+        return result
+    except Exception as e:
+        logger.error(f"Token decode FAILED: {type(e).__name__}: {str(e)}")
+        raise
 
 
 async def get_optional_user(

@@ -123,6 +123,24 @@ export default function TopicSelector({
 
   const handleSelectDifficulty = (difficulty) => {
     setSelectedDifficulty(difficulty);
+
+    // Set defaults based on availability (clamp to max available)
+    if (selectedChapter) {
+      const diffSuffix = difficulty ? `_${difficulty}` : '';
+      const maxMcq = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
+      const maxFill = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
+      const maxShort = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
+      const maxLong = selectedChapter[`long_answer${diffSuffix}`] || selectedChapter.long_answer_count || 0;
+
+      setTestConfig(prev => ({
+        ...prev,
+        mcq: Math.min(5, maxMcq),
+        fillup: Math.min(5, maxFill),
+        short: Math.min(5, maxShort),
+        long: Math.min(2, maxLong)
+      }));
+    }
+
     // Go to config step
     setStep(4);
   };

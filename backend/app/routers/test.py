@@ -130,6 +130,7 @@ class CompleteTestRequest(BaseModel):
     """Complete test and get evaluation."""
     session_id: str
     student_id: str
+    answers: List[SubmitAnswerRequest]
 
 
 class EvaluationItem(BaseModel):
@@ -1176,7 +1177,7 @@ async def get_qb_chapters(class_level: int, subject: str):
 
             chapters.append({
                 "chapter": r["_id"],
-                "chapter_name": r.get("chapter_name", f"Chapter {r['_id']}"),
+                "chapter_name": r.get("chapter_name") or f"Chapter {r['_id']}",
                 "total_questions": r.get("total_questions", 0),
                 "mcq_count": counts["mcq"],
                 "fillup_count": counts["fillup"],
@@ -1223,13 +1224,13 @@ async def start_qb_test(request: StartQBTestRequest):
         base_query = {
             "class_level": request.class_level,
             "subject": {"$regex": f"^{request.subject}$", "$options": "i"},
-            "chapter": request.chapter,
+            "chapter": {"$in": [request.chapter, str(request.chapter)]},
             "status": "approved"
         }
 
         # Add difficulty filter (only if not "mixed")
         if request.difficulty and request.difficulty.lower() not in ("mixed", "all"):
-            base_query["difficulty"] = request.difficulty.lower()
+            base_query["difficulty"] = {"$regex": f"^{request.difficulty}$", "$options": "i"}
 
         all_questions = []
         notes = []
@@ -1392,65 +1393,44 @@ async def submit_answer(request: SubmitAnswerRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/complete", response_model=CompleteTestResponse)
+@router.post("/complete")
 async def complete_test(request: CompleteTestRequest):
     """
-    Complete test and get AI evaluation.
-    Uses RAG to retrieve context and evaluate answers.
+    Submit a completed test for evaluation.
+    Handles both legacy "ai_test" and new "qb_test".
     """
+    logger.info(f"Completing test session: {request.session_id}")
     try:
-        # Get session
+        # 1. Fetch the session
         session = await mongodb.db.test_sessions.find_one({"session_id": request.session_id})
         if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        if session.get("status") == "completed":
-            # Return cached result
-            return CompleteTestResponse(
-                session_id=request.session_id,
-                score=session.get("score", 0),
-                total_questions=len(session.get("questions_served", [])),
-                correct_answers=session.get("correct_count", 0),
-                evaluations=[EvaluationItem(**e) for e in session.get("evaluation_details", [])],
-                feedback=session.get("overall_feedback", {}).get("summary", ""),
-                strengths=session.get("overall_feedback", {}).get("strengths", []),
-                improvements=session.get("overall_feedback", {}).get("improvements", []),
-                topics_to_review=session.get("topics_to_review", []),
-                topic_analytics=session.get("topic_analytics"),
-                completed_at=session.get("completed_at", datetime.utcnow()).isoformat()
-            )
-        
-        # Evaluate using RAG
-        evaluation_result = await rag_evaluation_service.evaluate_test_session(
-            session_id=request.session_id,
-            student_id=request.student_id,
-            class_level=session.get("class_level", 10),
-            subject=session.get("subject", ""),
-            chapter_number=session.get("chapter_number", 1),
-            topic_id=session.get("topic_id", ""),
-            topic_name=session.get("topic_name", ""),
-            questions=session.get("questions_served", []),
-            answers=session.get("answers", [])
+            logger.error(f"Session not found: {request.session_id}")
+            raise HTTPException(status_code=404, detail="Test session not found")
+
+        # 2. Update with student answers and end time
+        await mongodb.db.test_sessions.update_one(
+            {"session_id": request.session_id},
+            {
+                "$set": {
+                    "answers": [a.dict() for a in request.answers],
+                    "end_time": datetime.utcnow(),
+                    "status": "completed"
+                }
+            }
         )
         
-        return CompleteTestResponse(
-            session_id=evaluation_result["session_id"],
-            score=evaluation_result["score"],
-            total_questions=evaluation_result["total_questions"],
-            correct_answers=evaluation_result["correct_answers"],
-            evaluations=[EvaluationItem(**e) for e in evaluation_result["evaluations"]],
-            feedback=evaluation_result["feedback"],
-            strengths=evaluation_result["strengths"],
-            improvements=evaluation_result["improvements"],
-            topics_to_review=evaluation_result["topics_to_review"],
-            topic_analytics=evaluation_result.get("topic_analytics"),
-            completed_at=evaluation_result["completed_at"]
-        )
+        # 3. Trigger Evaluation
+        logger.info(f"Triggering evaluation for session {request.session_id}, type: {session.get('test_type')}")
+        # Re-fetch to get updated answers
+        updated_session = await mongodb.db.test_sessions.find_one({"session_id": request.session_id})
         
-    except HTTPException:
-        raise
+        evaluation_result = await rag_evaluation_service.evaluate_test_session(updated_session)
+        logger.info(f"Evaluation completed for {request.session_id}")
+
+        return evaluation_result
+
     except Exception as e:
-        logger.error(f"Error completing test: {e}")
+        logger.error(f"Error completing test {request.session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

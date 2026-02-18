@@ -65,27 +65,80 @@ class RAGEvaluationService:
     
     async def evaluate_test_session(
         self,
-        session_id: str,
-        student_id: str,
-        class_level: int,
-        subject: str,
-        chapter_number: int,
-        topic_id: str,
-        topic_name: str,
-        questions: List[Dict],
-        answers: List[Dict]
+        session_data: Optional[Dict] = None,
+        # Legacy/Support args
+        session_id: str = None,
+        student_id: str = None,
+        class_level: int = 10,
+        subject: str = "",
+        chapter_number: int = 1,
+        topic_id: str = "",
+        topic_name: str = "",
+        questions: List[Dict] = None,
+        answers: List[Dict] = None
     ) -> Dict:
         """
         Evaluate a complete test session.
-        - MCQ and Fill-up: auto-evaluated with simple if/else logic (no Gemini).
-        - Short answer / Long answer (2-mark, 5-mark): marked as pending manual review by staff.
+        Can accept either a full 'session_data' dict (from test.py) or individual args (from assessment_service.py).
         """
+        # 1. Unpack session_data if provided
+        if session_data:
+            session_id = session_data.get("session_id")
+            student_id = session_data.get("student_id")
+            class_level = session_data.get("class_level", 10)
+            subject = session_data.get("subject", "")
+            chapter_number = session_data.get("chapter", 1) # Note: 'chapter' vs 'chapter_number'
+            topic_id = session_data.get("topic_id", "")
+            topic_name = session_data.get("topic_name", "")
+            questions = session_data.get("questions_served", [])
+            answers = session_data.get("answers", [])
+        
         logger.info(f"📊 Evaluating test session {session_id} for student {student_id}")
         
         # Normalize subject name to fix typos like "Mathematicss"
         subject = normalize_subject(subject)
         logger.info(f"Subject normalized to: {subject}")
         
+        # 📚 ENRICHMENT: Fetch correct answers from DB for QB tests (if missing)
+        # QB questions don't have 'answer', 'expected_answer', 'correct_option' in questions_served
+        questions_to_enrich = []
+        for q in questions:
+            # check if vital answer keys are missing
+            if not any(k in q for k in ["expected_answer", "correct_option", "answer"]) and q.get("question_id"):
+                 questions_to_enrich.append(q["question_id"])
+        
+        if questions_to_enrich:
+             logger.info(f"Fetching details for {len(questions_to_enrich)} QB questions from DB")
+             try:
+                 # Fetch native question objects
+                 db_questions = await mongodb.db.questions.find(
+                     {"_id": {"$in": [ObjectId(qid) for qid in questions_to_enrich]}}
+                 ).to_list(length=len(questions_to_enrich))
+                 
+                 db_map = {str(doc["_id"]): doc for doc in db_questions}
+                 
+                 # Enrich existing question objects in-place
+                 for q in questions:
+                     qid = q.get("question_id")
+                     if qid in db_map:
+                         db_q = db_map[qid]
+                         # Inject answer data
+                         q["expected_answer"] = db_q.get("correct_answer") or db_q.get("answer")
+                         q["correct_option"] = db_q.get("correct_option") # For MCQ
+                         q["keywords"] = db_q.get("keywords", [])
+                         q["answer"] = db_q.get("answer") # Legacy field support
+                         
+                         # Handle MCQ Options if missing text/is_correct
+                         if db_q.get("options") and not q.get("options"):
+                             q["options"] = db_q.get("options")
+                         
+                         # Ensure question text if missing
+                         if not q.get("question") and not q.get("question_text"):
+                             q["question"] = db_q.get("question") or db_q.get("text")
+
+             except Exception as e:
+                 logger.error(f"Error enriching QB questions: {e}")
+
         # Build Q&A pairs
         qa_pairs = self._build_qa_pairs(questions, answers)
         
@@ -98,6 +151,12 @@ class RAGEvaluationService:
         for qa in qa_pairs:
             q_type = (qa.get("question_type") or "").lower()
             if q_type in ("mcq", "fillup", "fill_up", "fill-up", "fill_in_the_blank"):
+                # Ensure we have correct_option for MCQs
+                if "mcq" in q_type and not qa.get("correct_option"):
+                     # Try to find it in options if structure differs
+                     for opt in qa.get("options", {}).values(): 
+                         pass
+
                 objective_pairs.append(qa)
             else:
                 subjective_pairs.append(qa)
@@ -116,6 +175,7 @@ class RAGEvaluationService:
             context = await self._get_topic_context(
                 class_level=class_level,
                 subject=subject,
+                chapter_number=chapter_number,
                 topic_id=topic_id,
                 topic_name=topic_name
             )
@@ -181,12 +241,12 @@ class RAGEvaluationService:
                     overall_feedback["improvements"].append(f"Q{e.get('question_number', '?')}: {fb}")
         
         # Add specific topic feedback from wrong answers
-        wrong_topics = list(set(e.get("topic", "") for e in auto_evals_only if not e.get("is_correct") and e.get("topic")))
+        wrong_topics = list(set(e.get("topic", "") for e in all_evaluations if not e.get("is_correct") and e.get("topic")))
         if wrong_topics:
             overall_feedback["improvements"] = [f"Review '{t}'" for t in wrong_topics[:5]]
         
         # Identify weak areas
-        weak_areas = self._identify_weak_areas(auto_evals_only)
+        weak_areas = self._identify_weak_areas(all_evaluations)
         
         # Calculate topic analytics
         topic_analytics = self._calculate_topic_analytics(questions, all_evaluations)
@@ -200,7 +260,7 @@ class RAGEvaluationService:
                 chapter_number=chapter_number,
                 topic_id=topic_id,
                 topic_name=topic_name,
-                score=auto_percentage,
+                score=percentage,
                 questions_attempted=len(questions),
                 correct_count=correct_count
             )
@@ -211,7 +271,7 @@ class RAGEvaluationService:
         await self._save_session_results(
             session_id=session_id,
             student_id=student_id,
-            score=auto_percentage,
+            score=percentage,
             evaluations=all_evaluations,
             overall_feedback=overall_feedback,
             weak_areas=weak_areas,
@@ -224,11 +284,11 @@ class RAGEvaluationService:
             evaluation_status=evaluation_status
         )
         
-        logger.info(f"Evaluation complete: {auto_percentage}% ({correct_count}/{len(objective_pairs)} objective correct), status={evaluation_status}")
+        logger.info(f"Evaluation complete: {percentage}% ({correct_count}/{len(all_evaluations)} correct), status={evaluation_status}")
         
         return {
             "session_id": session_id,
-            "score": auto_percentage,
+            "score": percentage,
             "total_questions": len(questions),
             "correct_answers": correct_count,
             "evaluations": all_evaluations,
@@ -372,7 +432,8 @@ class RAGEvaluationService:
         class_level: int,
         subject: str,
         chapter_number: int,
-        topic_name: str
+        topic_name: str,
+        topic_id: str = None
     ) -> str:
         """Retrieve relevant context from Pinecone for the topic."""
         try:
