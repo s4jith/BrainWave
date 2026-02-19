@@ -26,9 +26,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
 
-
-# === Course CRUD ===
-
 @router.post("", response_model=CourseResponse)
 async def create_course(
     request: CourseCreateRequest,
@@ -39,7 +36,6 @@ async def create_course(
     Course is created in DRAFT status.
     """
     try:
-        # Get instructor name from database
         from bson import ObjectId
         user = db.users.find_one({"_id": ObjectId(current_user.user_id)})
         instructor_name = user.get("name", "Unknown") if user else "Unknown"
@@ -55,7 +51,6 @@ async def create_course(
     except Exception as e:
         logger.error(f"Create course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to create course")
-
 
 @router.get("", response_model=CourseListResponse)
 async def list_courses(
@@ -76,12 +71,10 @@ async def list_courses(
     try:
         user_id = current_user.user_id if current_user else None
         
-        # Determine status filter
         status = None
         if current_user and current_user.role in [UserRole.TEACHER, UserRole.ADMIN]:
-            # Teachers can see their own drafts
             if instructor_id == current_user.user_id:
-                status = None  # Show all statuses
+                status = None
         
         return await course_service.list_courses(
             page=page,
@@ -98,7 +91,6 @@ async def list_courses(
     except Exception as e:
         logger.error(f"List courses error: {e}")
         raise HTTPException(status_code=500, detail="Failed to list courses")
-
 
 @router.get("/my-courses", response_model=CourseListResponse)
 async def get_my_courses(
@@ -117,7 +109,7 @@ async def get_my_courses(
                 page=page,
                 page_size=page_size,
                 instructor_id=current_user.user_id,
-                status=None  # Show all statuses
+                status=None
             )
         else:
             return await course_service.list_courses(
@@ -130,7 +122,6 @@ async def get_my_courses(
     except Exception as e:
         logger.error(f"Get my courses error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get courses")
-
 
 @router.get("/{course_id}", response_model=CourseDetailResponse)
 async def get_course(
@@ -153,7 +144,6 @@ async def get_course(
         logger.error(f"Get course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get course")
 
-
 @router.put("/{course_id}", response_model=CourseResponse)
 async def update_course(
     course_id: str,
@@ -162,10 +152,8 @@ async def update_course(
 ):
     """Update a course (owner or admin only)."""
     try:
-        # Admin can update any course, teachers only their own
         instructor_id = current_user.user_id
         if current_user.role == UserRole.ADMIN:
-            # Get actual instructor from course
             course = await course_service.get_course(course_id)
             if course:
                 instructor_id = course.instructor_id
@@ -182,7 +170,6 @@ async def update_course(
     except Exception as e:
         logger.error(f"Update course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update course")
-
 
 @router.delete("/{course_id}")
 async def delete_course(
@@ -210,7 +197,6 @@ async def delete_course(
         logger.error(f"Delete course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete course")
 
-
 @router.post("/{course_id}/publish", response_model=CourseResponse)
 async def publish_course(
     course_id: str,
@@ -230,9 +216,6 @@ async def publish_course(
     except Exception as e:
         logger.error(f"Publish course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to publish course")
-
-
-# === Module Management ===
 
 @router.post("/{course_id}/modules", response_model=Module)
 async def add_module(
@@ -258,7 +241,6 @@ async def add_module(
     except Exception as e:
         logger.error(f"Add module error: {e}")
         raise HTTPException(status_code=500, detail="Failed to add module")
-
 
 @router.post("/{course_id}/modules/{module_id}/content", response_model=ContentItem)
 async def add_content(
@@ -287,9 +269,6 @@ async def add_content(
         logger.error(f"Add content error: {e}")
         raise HTTPException(status_code=500, detail="Failed to add content")
 
-
-# === Student Actions ===
-
 @router.post("/{course_id}/enroll", response_model=EnrollmentResponse)
 async def enroll_in_course(
     course_id: str,
@@ -303,7 +282,6 @@ async def enroll_in_course(
         logger.error(f"Enrollment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to enroll")
 
-
 @router.delete("/{course_id}/enroll", response_model=EnrollmentResponse)
 async def unenroll_from_course(
     course_id: str,
@@ -316,7 +294,6 @@ async def unenroll_from_course(
     except Exception as e:
         logger.error(f"Unenrollment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to unenroll")
-
 
 @router.post("/{course_id}/rate")
 async def rate_course(
@@ -344,13 +321,9 @@ async def rate_course(
         logger.error(f"Rate course error: {e}")
         raise HTTPException(status_code=500, detail="Failed to rate course")
 
-
-# === Categories ===
-
 @router.get("/categories/list")
 async def get_categories():
     """Get list of available course categories."""
-    # These align with NCERT subjects
     categories = [
         "Maths",
         "Physics",

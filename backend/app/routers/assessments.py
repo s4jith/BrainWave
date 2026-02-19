@@ -5,7 +5,7 @@ API endpoints for assessment creation, question management,
 student submissions, and grading.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
@@ -31,9 +31,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assessments", tags=["assessments"])
 
-
-# === Assessment CRUD ===
-
 @router.post("", response_model=AssessmentResponse)
 async def create_assessment(
     request: AssessmentCreateRequest,
@@ -48,7 +45,6 @@ async def create_assessment(
     except Exception as e:
         logger.error(f"Create assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to create assessment")
-
 
 @router.get("", response_model=AssessmentListResponse)
 async def list_assessments(
@@ -65,16 +61,11 @@ async def list_assessments(
         instructor_id = None
         student_id = None
         
-        # Determine filters based on role
         teacher_id = None
         
         if current_user.role == UserRole.ADMIN:
-            # Admin sees everything - no filter
             pass
         elif current_user.role == UserRole.TEACHER:
-            # Pass teacher_id to service to enable visibility of:
-            # 1. Own tests
-            # 2. Admin tests matching assigned groups
             teacher_id = current_user.user_id
         else:
             student_id = current_user.user_id
@@ -89,7 +80,6 @@ async def list_assessments(
         logger.error(f"List assessments error: {e}")
         raise HTTPException(status_code=500, detail="Failed to list assessments")
 
-
 @router.get("/{assessment_id}", response_model=AssessmentDetailResponse)
 async def get_assessment(
     assessment_id: str,
@@ -97,14 +87,12 @@ async def get_assessment(
 ):
     """Get assessment details. Teachers see full details, students see limited view."""
     try:
-        # Teachers/Admins get full details
         if current_user.role in [UserRole.TEACHER, UserRole.ADMIN]:
             assessment = await assessment_service.get_assessment(assessment_id)
             if not assessment:
                 raise HTTPException(status_code=404, detail="Assessment not found")
             return assessment
         
-        # Students should use /start endpoint
         raise HTTPException(
             status_code=403,
             detail="Use /start endpoint to begin assessment"
@@ -115,7 +103,6 @@ async def get_assessment(
     except Exception as e:
         logger.error(f"Get assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get assessment")
-
 
 @router.put("/{assessment_id}", response_model=AssessmentResponse)
 async def update_assessment(
@@ -142,7 +129,6 @@ async def update_assessment(
         logger.error(f"Update assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update assessment")
 
-
 @router.post("/{assessment_id}/publish", response_model=AssessmentResponse)
 async def publish_assessment(
     assessment_id: str,
@@ -166,7 +152,6 @@ async def publish_assessment(
         logger.error(f"Publish assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to publish")
 
-
 @router.delete("/{assessment_id}")
 async def delete_assessment(
     assessment_id: str,
@@ -189,9 +174,6 @@ async def delete_assessment(
     except Exception as e:
         logger.error(f"Delete assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete assessment")
-
-
-# === Question Management ===
 
 @router.post("/{assessment_id}/questions", response_model=Question)
 async def add_question(
@@ -217,7 +199,6 @@ async def add_question(
     except Exception as e:
         logger.error(f"Add question error: {e}")
         raise HTTPException(status_code=500, detail="Failed to add question")
-
 
 @router.put("/{assessment_id}/questions/{question_id}")
 async def update_question(
@@ -246,7 +227,6 @@ async def update_question(
         logger.error(f"Update question error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update question")
 
-
 @router.delete("/{assessment_id}/questions/{question_id}")
 async def delete_question(
     assessment_id: str,
@@ -272,9 +252,6 @@ async def delete_question(
         logger.error(f"Delete question error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete question")
 
-
-# === Student Actions ===
-
 @router.get("/{assessment_id}/start", response_model=StudentAssessmentView)
 async def start_assessment(
     assessment_id: str,
@@ -285,7 +262,6 @@ async def start_assessment(
     This also starts an attempt.
     """
     try:
-        # Get student view
         view = await assessment_service.get_student_view(
             assessment_id=assessment_id,
             student_id=current_user.user_id
@@ -297,11 +273,9 @@ async def start_assessment(
                 detail="Assessment not available or attempt limit reached"
             )
         
-        # Get student name (user_id is login ID like roman149, not MongoDB ObjectId)
         user = db.users.find_one({"user_id": current_user.user_id})
         student_name = user.get("name", "Student") if user else "Student"
         
-        # Start attempt
         await assessment_service.start_attempt(
             assessment_id=assessment_id,
             student_id=current_user.user_id,
@@ -316,7 +290,6 @@ async def start_assessment(
         logger.error(f"Start assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to start assessment")
 
-
 @router.post("/{assessment_id}/submit", response_model=SubmissionDetailResponse)
 async def submit_assessment(
     assessment_id: str,
@@ -325,7 +298,6 @@ async def submit_assessment(
 ):
     """Submit answers for an assessment."""
     try:
-        # Find in-progress submission
         from app.db.mongo import mongodb
         submissions = mongodb.get_collection("submissions")
         
@@ -355,9 +327,6 @@ async def submit_assessment(
         logger.error(f"Submit assessment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit")
 
-
-# === Submissions & Grading ===
-
 @router.get("/{assessment_id}/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
     assessment_id: str,
@@ -373,7 +342,6 @@ async def get_submissions(
         logger.error(f"Get submissions error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get submissions")
 
-
 @router.get("/submissions/my", response_model=SubmissionListResponse)
 async def get_my_submissions(
     current_user: TokenData = Depends(get_current_user)
@@ -386,7 +354,6 @@ async def get_my_submissions(
     except Exception as e:
         logger.error(f"Get my submissions error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get submissions")
-
 
 @router.post("/submissions/{submission_id}/grade", response_model=SubmissionDetailResponse)
 async def grade_submission(
@@ -413,13 +380,9 @@ async def grade_submission(
         logger.error(f"Grade submission error: {e}")
         raise HTTPException(status_code=500, detail="Failed to grade submission")
 
-
-# === Comment / Feedback on Submissions ===
-
 class CommentRequest(BaseModel):
     """Request body for adding a comment."""
     comment: str = Field(..., min_length=1)
-
 
 @router.post("/submissions/{submission_id}/comment")
 async def add_submission_comment(
@@ -435,7 +398,6 @@ async def add_submission_comment(
         if not submission:
             raise HTTPException(status_code=404, detail="Submission not found")
         
-        # Update submission with comment
         await submissions_col.update_one(
             {"_id": ObjectId(submission_id)},
             {"$set": {
@@ -446,13 +408,11 @@ async def add_submission_comment(
             }}
         )
         
-        # Get assessment title for notification
         assessment = await mongodb.get_collection("assessments").find_one(
             {"_id": ObjectId(submission.get("assessment_id"))}
         )
         test_title = assessment.get("title", "Test") if assessment else "Test"
         
-        # Create notification for the student
         db.notifications.insert_one({
             "user_id": submission.get("student_id"),
             "type": "test_feedback",
@@ -475,7 +435,6 @@ async def add_submission_comment(
         logger.error(f"Add comment error: {e}")
         raise HTTPException(status_code=500, detail="Failed to add comment")
 
-
 @router.get("/submissions/{submission_id}/detail")
 async def get_submission_detail(
     submission_id: str,
@@ -489,12 +448,10 @@ async def get_submission_detail(
         if not submission:
             raise HTTPException(status_code=404, detail="Submission not found")
         
-        # Get assessment with questions
         assessment = await mongodb.get_collection("assessments").find_one(
             {"_id": ObjectId(submission.get("assessment_id"))}
         )
         
-        # Build questions list
         questions = []
         if assessment:
             for q in assessment.get("questions", []):
@@ -508,7 +465,6 @@ async def get_submission_detail(
                     "answer_text": q.get("answer_text", ""),
                 })
         
-        # Map answers by question_id
         answers_map = {}
         for ans in submission.get("answers", []):
             answers_map[ans.get("question_id")] = ans

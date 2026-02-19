@@ -15,11 +15,9 @@ import re
 
 logger = logging.getLogger(__name__)
 
-
 class TopQuestionService:
     """Service for managing top questions and recommendations."""
     
-    # MongoDB collections
     TOP_QUESTIONS_COLLECTION = "top_questions"
     QA_PAIRS_COLLECTION = "question_answer_pairs"
     
@@ -38,7 +36,6 @@ class TopQuestionService:
     def _ensure_indexes(self):
         """Ensure MongoDB indexes exist for better performance."""
         try:
-            # Index for top questions
             self.database[self.TOP_QUESTIONS_COLLECTION].create_index([
                 ("subject", 1),
                 ("class_level", 1),
@@ -49,7 +46,6 @@ class TopQuestionService:
                 ("last_asked", -1)
             ])
             
-            # Index for Q&A pairs
             self.database[self.QA_PAIRS_COLLECTION].create_index([
                 ("user_id", 1),
                 ("subject", 1),
@@ -64,8 +60,6 @@ class TopQuestionService:
             logger.info("Top questions indexes created/verified")
         except Exception as e:
             logger.warning(f" Could not create indexes: {e}")
-    
-    # ==================== TOP QUESTIONS ====================
     
     def get_top_questions(
         self, 
@@ -89,14 +83,12 @@ class TopQuestionService:
         try:
             collection = self.database[self.TOP_QUESTIONS_COLLECTION]
             
-            # Query for matching questions
             query = {
                 "subject": subject.lower(),
                 "class_level": class_level,
                 "mode": mode
             }
             
-            # Find and sort by ask_count
             cursor = collection.find(query).sort("ask_count", -1).limit(limit)
             
             questions = []
@@ -143,10 +135,8 @@ class TopQuestionService:
         try:
             collection = self.database[self.TOP_QUESTIONS_COLLECTION]
             
-            # Normalize question for matching (case-insensitive, trimmed)
             normalized_question = question.strip().lower()
             
-            # Try to find existing question
             existing = collection.find_one({
                 "question": {"$regex": f"^{re.escape(normalized_question)}$", "$options": "i"},
                 "subject": subject.lower(),
@@ -154,20 +144,18 @@ class TopQuestionService:
             })
             
             if existing:
-                # Update existing question
                 collection.update_one(
                     {"_id": existing["_id"]},
                     {
                         "$inc": {"ask_count": 1},
                         "$set": {
                             "last_asked": datetime.utcnow(),
-                            "mode": mode  # Update mode to latest
+                            "mode": mode
                         }
                     }
                 )
                 logger.info(f"📈 Updated question count: '{question[:50]}...'")
             else:
-                # Create new question entry
                 category = self._categorize_question(question)
                 
                 new_question = {
@@ -205,7 +193,6 @@ class TopQuestionService:
         """
         lower_q = question.lower()
         
-        # Check for different patterns
         if any(word in lower_q for word in ["explain", "what is", "define", "meaning"]):
             return "concept"
         elif any(word in lower_q for word in ["solve", "calculate", "find", "compute"]):
@@ -214,7 +201,7 @@ class TopQuestionService:
             return "theory"
         elif any(word in lower_q for word in ["example", "application", "real life"]):
             return "application"
-        elif re.search(r'\d+', question):  # Contains numbers
+        elif re.search(r'\d+', question):
             return "numerical"
         else:
             return "general"
@@ -232,7 +219,6 @@ class TopQuestionService:
         tags = []
         lower_q = question.lower()
         
-        # Common educational keywords
         keywords = [
             "photosynthesis", "prime numbers", "world war", "cell", "equation",
             "triangle", "democracy", "constitution", "energy", "matter"
@@ -242,9 +228,7 @@ class TopQuestionService:
             if keyword in lower_q:
                 tags.append(keyword)
         
-        return tags[:5]  # Limit to 5 tags
-    
-    # ==================== QUESTION-ANSWER TRACKING ====================
+        return tags[:5]
     
     def save_question_answer(
         self,
@@ -300,7 +284,6 @@ class TopQuestionService:
             
             result = collection.insert_one(qa_pair)
             
-            # Also track in top questions
             self.track_question(question, subject, class_level, mode, chapter)
             
             logger.info(f"💾 Saved Q&A pair for user {user_id}")
@@ -357,8 +340,6 @@ class TopQuestionService:
             logger.error(f" Error updating feedback: {e}")
             return False
     
-    # ==================== RECOMMENDATIONS ====================
-    
     def get_recommendations(
         self,
         user_id: str,
@@ -388,39 +369,32 @@ class TopQuestionService:
             qa_collection = self.database[self.QA_PAIRS_COLLECTION]
             top_collection = self.database[self.TOP_QUESTIONS_COLLECTION]
             
-            # Get user's question history
             user_questions = list(qa_collection.find({
                 "user_id": user_id,
                 "subject": subject.lower(),
                 "class_level": class_level
             }).sort("timestamp", -1).limit(20))
             
-            # Extract questions user has already asked
             asked_questions = {q["question"].lower().strip() for q in user_questions}
             
-            # Extract chapters and concepts user has studied
             studied_chapters = {q.get("chapter") for q in user_questions if q.get("chapter")}
             studied_concepts = set()
             for q in user_questions:
                 studied_concepts.update(q.get("concepts_covered", []))
             
-            # Build query for recommendations
             query = {
                 "subject": subject.lower(),
                 "class_level": class_level,
                 "mode": mode
             }
             
-            # If user has studied specific chapters, prioritize those
             if studied_chapters:
                 query["chapter"] = {"$in": list(studied_chapters)}
             
-            # Get top questions that user hasn't asked
             cursor = top_collection.find(query).sort("ask_count", -1).limit(limit * 3)
             
             recommendations = []
             for doc in cursor:
-                # Skip if user already asked this question
                 if doc["question"].lower().strip() in asked_questions:
                     continue
                 
@@ -438,7 +412,6 @@ class TopQuestionService:
                 if len(recommendations) >= limit:
                     break
             
-            # If not enough recommendations with chapter filter, get general top questions
             if len(recommendations) < limit:
                 general_query = {
                     "subject": subject.lower(),
@@ -452,7 +425,6 @@ class TopQuestionService:
                         if len(recommendations) >= limit:
                             break
                         
-                        # Check if already in recommendations
                         if not any(r.question == doc["question"] for r in recommendations):
                             recommendations.append(TopQuestionResponse(
                                 question=doc["question"],
@@ -470,10 +442,7 @@ class TopQuestionService:
             
         except Exception as e:
             logger.error(f" Error getting recommendations: {e}")
-            # Fallback to regular top questions
             return self.get_top_questions(subject, class_level, mode, limit)
-    
-    # ==================== TRENDING QUESTIONS ====================
     
     def get_trending_questions(
         self,
@@ -499,7 +468,6 @@ class TopQuestionService:
         try:
             collection = self.database[self.TOP_QUESTIONS_COLLECTION]
             
-            # Calculate cutoff date
             cutoff_date = datetime.utcnow() - timedelta(days=days)
             
             query = {
@@ -531,6 +499,4 @@ class TopQuestionService:
             logger.error(f" Error getting trending questions: {e}")
             return []
 
-
-# Global service instance
 top_question_service = TopQuestionService()

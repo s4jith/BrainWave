@@ -1,7 +1,3 @@
-/**
- * TeacherManagement - Admin page to manage teachers
- * Uses AdminLayout with light/dark theme support
- */
 
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
@@ -27,10 +23,11 @@ export default function TeacherManagement() {
     const [formData, setFormData] = useState({
         name: "",
         email: "",
+        mobile: "",
+        age: "",
         preferred_subject: ""
     });
 
-    // Curriculum subjects from API
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
     const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
@@ -40,7 +37,6 @@ export default function TeacherManagement() {
         fetchCurriculumSubjects();
     }, []);
 
-    // Auto-refresh on window focus
     useEffect(() => {
         const handleFocus = () => {
             fetchTeachers();
@@ -87,10 +83,11 @@ export default function TeacherManagement() {
         e.preventDefault();
         try {
             setSaving(true);
+            const dataToSend = { ...formData, age: parseInt(formData.age, 10) };
             const response = await fetch(`${API_URL}/api/admin/teachers`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(dataToSend)
             });
             if (!response.ok) {
                 const err = await response.json();
@@ -115,10 +112,13 @@ export default function TeacherManagement() {
         e.preventDefault();
         try {
             setSaving(true);
+            const dataToSend = { ...formData };
+            if (dataToSend.age) dataToSend.age = parseInt(dataToSend.age, 10);
+
             const response = await fetch(`${API_URL}/api/admin/teachers/${selectedTeacher.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(dataToSend)
             });
             if (!response.ok) throw new Error("Failed to update teacher");
             const updated = await response.json();
@@ -135,12 +135,11 @@ export default function TeacherManagement() {
 
     const handleDeleteTeacher = async (teacherId) => {
         if (!confirm("Are you sure you want to delete this teacher?")) return;
-        
-        // Optimistic update
+
         const deletedTeacher = teachers.find(t => t.id === teacherId);
         const updatedTeachers = teachers.filter(t => t.id !== teacherId);
         setTeachers(updatedTeachers);
-        
+
         try {
             const response = await fetch(`${API_URL}/api/admin/teachers/${teacherId}`, {
                 method: "DELETE",
@@ -150,7 +149,7 @@ export default function TeacherManagement() {
                 throw new Error("Failed to delete teacher");
             }
         } catch (err) {
-            // Revert on failure
+            
             alert("Error: " + err.message);
             setTeachers([...updatedTeachers, deletedTeacher]);
         }
@@ -177,7 +176,7 @@ export default function TeacherManagement() {
     };
 
     const resetForm = () => {
-        setFormData({ name: "", email: "", preferred_subject: "" });
+        setFormData({ name: "", email: "", mobile: "", age: "", preferred_subject: "" });
     };
 
     const openEditModal = (teacher) => {
@@ -185,6 +184,8 @@ export default function TeacherManagement() {
         setFormData({
             name: teacher.name,
             email: teacher.email,
+            mobile: teacher.mobile || "",
+            age: teacher.age || "",
             preferred_subject: teacher.preferred_subject || ""
         });
         setShowEditModal(true);
@@ -202,7 +203,7 @@ export default function TeacherManagement() {
 
     return (
         <AdminLayout title="Teacher Management" icon={GraduationCap}>
-            {/* Search and Actions */}
+            {}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-6">
                 <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
@@ -222,7 +223,7 @@ export default function TeacherManagement() {
                 </button>
             </div>
 
-            {/* Stats */}
+            {}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
@@ -407,6 +408,34 @@ export default function TeacherManagement() {
                                     placeholder="email@example.com"
                                 />
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile Number *</label>
+                                    <input
+                                        type="tel"
+                                        required
+                                        value={formData.mobile}
+                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                                        placeholder="10-digit number"
+                                        pattern="[0-9]{10}"
+                                        maxLength={10}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age *</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min={18}
+                                        max={100}
+                                        value={formData.age}
+                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                                        placeholder="Age"
+                                    />
+                                </div>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject</label>
                                 <select
@@ -468,6 +497,34 @@ export default function TeacherManagement() {
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile Number</label>
+                                    <input
+                                        type="tel"
+                                        required
+                                        value={formData.mobile}
+                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                                        placeholder="10-digit number"
+                                        pattern="[0-9]{10}"
+                                        maxLength={10}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min={18}
+                                        max={100}
+                                        value={formData.age}
+                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                                        placeholder="Age"
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject</label>

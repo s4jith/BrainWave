@@ -17,7 +17,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class FormulaExtractor:
     """
     Extracts mathematical formulas from text and converts to LaTeX.
@@ -27,37 +26,27 @@ class FormulaExtractor:
         formulas = extractor.extract_formulas("Solve: 2x + 3 = 7")
     """
     
-    # Math patterns for detection
     MATH_PATTERNS = [
-        # Equations with = sign
         r'([a-zA-Z0-9\s\+\-\*\/\(\)\^\²\³]+\s*=\s*[a-zA-Z0-9\s\+\-\*\/\(\)\^\²\³]+)',
         
-        # Fractions (numerator/denominator)
         r'(\d+\/\d+|\([^)]+\)\/\([^)]+\))',
         
-        # Exponents (x^2, x², a^n)
         r'([a-zA-Z]\^[0-9a-zA-Z]+|[a-zA-Z][²³⁴⁵⁶⁷⁸⁹])',
         
-        # Square roots (√)
         r'(√\s*[\da-zA-Z\(\)]+)',
         
-        # Greek letters (common in math)
         r'(α|β|γ|δ|ε|θ|λ|μ|π|σ|φ|ω|Δ|Σ|Π|Ω)',
         
-        # Inequalities
         r'([a-zA-Z0-9\s\+\-\*\/\(\)]+\s*[<>≤≥≠]\s*[a-zA-Z0-9\s\+\-\*\/\(\)]+)',
         
-        # Summation/Product notation
         r'(Σ|∑|Π|∏)',
         
-        # Calculus notation (derivatives, integrals)
         r'(d[a-zA-Z]\/d[a-zA-Z]|∫|∂)',
     ]
     
-    # LaTeX keyword markers in text
     LATEX_MARKERS = [
-        r'\$.*?\$',  # Inline math $...$
-        r'\$\$.*?\$\$',  # Display math $$...$$
+        r'\$.*?\$',
+        r'\$\$.*?\$\$',
         r'\\begin\{equation\}.*?\\end\{equation\}',
         r'\\begin\{align\}.*?\\end\{align\}',
         r'\\frac\{.*?\}\{.*?\}',
@@ -86,15 +75,12 @@ class FormulaExtractor:
         """
         formulas = []
         
-        # First check for existing LaTeX markup
         latex_formulas = self._extract_latex_formulas(text)
         formulas.extend(latex_formulas)
         
-        # Then detect math patterns
         pattern_formulas = self._detect_math_patterns(text)
         formulas.extend(pattern_formulas)
         
-        # Deduplicate by position
         formulas = self._deduplicate_formulas(formulas)
         
         logger.debug(f"   Found {len(formulas)} formulas")
@@ -116,7 +102,6 @@ class FormulaExtractor:
             for match in pattern.finditer(text):
                 formula_text = match.group(0)
                 
-                # Clean up LaTeX markers
                 latex = self._clean_latex(formula_text)
                 
                 formulas.append({
@@ -124,7 +109,7 @@ class FormulaExtractor:
                     "latex": latex,
                     "type": "display" if "$$" in formula_text or "\\begin" in formula_text else "inline",
                     "position": match.span(),
-                    "confidence": 1.0  # High confidence for explicit LaTeX
+                    "confidence": 1.0
                 })
         
         return formulas
@@ -145,11 +130,9 @@ class FormulaExtractor:
             for match in pattern.finditer(text):
                 formula_text = match.group(0).strip()
                 
-                # Skip if too short or looks like normal text
                 if len(formula_text) < 3 or self._is_likely_text(formula_text):
                     continue
                 
-                # Convert to LaTeX
                 latex = self._convert_to_latex(formula_text)
                 
                 formulas.append({
@@ -157,7 +140,7 @@ class FormulaExtractor:
                     "latex": latex,
                     "type": "inline",
                     "position": match.span(),
-                    "confidence": 0.8  # Medium confidence for pattern detection
+                    "confidence": 0.8
                 })
         
         return formulas
@@ -174,7 +157,6 @@ class FormulaExtractor:
         """
         latex = text
         
-        # Convert unicode superscripts to LaTeX
         superscript_map = {
             '²': '^2', '³': '^3', '⁴': '^4', '⁵': '^5',
             '⁶': '^6', '⁷': '^7', '⁸': '^8', '⁹': '^9'
@@ -182,19 +164,13 @@ class FormulaExtractor:
         for unicode_char, latex_char in superscript_map.items():
             latex = latex.replace(unicode_char, latex_char)
         
-        # Convert fractions: a/b → \frac{a}{b}
         latex = re.sub(r'(\d+)\/(\d+)', r'\\frac{\1}{\2}', latex)
         
-        # Convert sqrt: √x → \sqrt{x}
         latex = re.sub(r'√\s*([a-zA-Z0-9]+)', r'\\sqrt{\1}', latex)
         latex = re.sub(r'√\s*\(([^)]+)\)', r'\\sqrt{\1}', latex)
         
-        # Convert exponents: x^2 → x^{2}
         latex = re.sub(r'([a-zA-Z])\^([0-9a-zA-Z])', r'\1^{\2}', latex)
         
-        # Greek letters (already in unicode, keep as is)
-        
-        # Wrap in math delimiters
         if not latex.startswith('$'):
             latex = f"${latex}$"
         
@@ -210,17 +186,13 @@ class FormulaExtractor:
         Returns:
             Cleaned LaTeX
         """
-        # Remove display math markers for consistent format
         formula = formula.replace('$$', '$')
         
-        # Remove environment wrappers
         formula = re.sub(r'\\begin\{equation\}(.*?)\\end\{equation\}', r'\1', formula, flags=re.DOTALL)
         formula = re.sub(r'\\begin\{align\}(.*?)\\end\{align\}', r'\1', formula, flags=re.DOTALL)
         
-        # Trim whitespace
         formula = formula.strip()
         
-        # Ensure single $ wrapper
         if not formula.startswith('$'):
             formula = f"${formula}$"
         
@@ -236,12 +208,10 @@ class FormulaExtractor:
         Returns:
             True if likely not a formula
         """
-        # Check for too many regular words
         words = text.split()
         if len(words) > 6:
             return True
         
-        # Check for common non-math words
         common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'to', 'of', 'in', 'on'}
         if any(word.lower() in common_words for word in words):
             return True
@@ -261,16 +231,13 @@ class FormulaExtractor:
         if not formulas:
             return []
         
-        # Sort by position
         formulas.sort(key=lambda x: x['position'][0])
         
         deduplicated = []
         for formula in formulas:
-            # Check if this formula overlaps with any already added
             overlaps = False
             for existing in deduplicated:
                 if self._positions_overlap(formula['position'], existing['position']):
-                    # Keep the one with higher confidence
                     if formula['confidence'] > existing['confidence']:
                         deduplicated.remove(existing)
                     else:
@@ -306,7 +273,6 @@ class FormulaExtractor:
         Returns:
             Topic category
         """
-        # Simple keyword-based classification
         if any(op in latex for op in ['\\frac', '/', '÷']):
             return "arithmetic"
         elif any(op in latex for op in ['^', '²', '³', '\\sqrt']):
@@ -322,14 +288,11 @@ class FormulaExtractor:
         else:
             return "general"
 
-
 if __name__ == "__main__":
-    # Test the extractor
     logging.basicConfig(level=logging.DEBUG)
     
     extractor = FormulaExtractor()
     
-    # Test cases
     test_texts = [
         "Solve the equation: 2x + 3 = 7",
         "The area of a circle is A = πr²",

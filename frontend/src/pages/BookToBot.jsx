@@ -12,41 +12,26 @@ import useUserStore from "../stores/userStore";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * BookToBot Component
- *
- * PDF viewer interface with lesson navigation and AI chatbot.
- * Dynamically loads lessons/books from MongoDB based on user's class level.
- * Student can only select subject (class is fixed based on profile).
- * 
- * AI features (chatbot, annotations) only work for subjects with embeddings in Pinecone.
- */
-
 function BookToBot() {
   const navigate = useNavigate();
   const { user, setPreferredSubject } = useUserStore();
 
-  // State for available subjects and lessons from DB
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [currentLesson, setCurrentLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingLessons, setLoadingLessons] = useState(false);
 
-  // UI State
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatbotOpen, setChatbotOpen] = useState(false);
 
-  // Check if current subject has AI/RAG support
   const hasAISupport = currentLesson?.has_ai_support || SUBJECTS_WITH_RAG.includes(user.preferredSubject);
 
-  // Fetch available subjects for student's class level
   useEffect(() => {
     fetchAvailableSubjects();
   }, [user.classLevel]);
 
-  // Fetch lessons when subject changes
   useEffect(() => {
     if (user.preferredSubject) {
       fetchLessons(user.preferredSubject);
@@ -63,26 +48,25 @@ function BookToBot() {
         const subjects = data.subjects || [];
         setAvailableSubjects(subjects);
 
-        // If no subjects from DB, show empty state
         if (subjects.length === 0) {
           setLessons([]);
           setCurrentLesson(null);
         } else {
-          // Check if user's preferred subject is available
+          
           const subjectNames = subjects.map(s => s.name);
           if (!subjectNames.includes(user.preferredSubject)) {
-            // Switch to first available subject
+            
             setPreferredSubject(subjectNames[0]);
           }
         }
       } else {
-        // API failed - show empty state, don't use static fallback
+        
         setLessons([]);
         setCurrentLesson(null);
       }
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
-      // Error - show empty state, don't use static fallback
+      
       setLessons([]);
       setCurrentLesson(null);
     } finally {
@@ -101,23 +85,21 @@ function BookToBot() {
         const data = await response.json();
         const fetchedLessons = data.lessons || [];
 
-        // Convert relative PDF URLs to absolute URLs
         const lessonsWithAbsoluteUrls = fetchedLessons.map(lesson => ({
           ...lesson,
           pdfUrl: lesson.pdfUrl?.startsWith('http') ? lesson.pdfUrl : `${API_BASE}${lesson.pdfUrl}`
         }));
 
-        // Always use fetched lessons - never fall back to static data
         setLessons(lessonsWithAbsoluteUrls);
         setCurrentLesson(lessonsWithAbsoluteUrls.length > 0 ? lessonsWithAbsoluteUrls[0] : null);
       } else {
-        // API failed - show empty state
+        
         setLessons([]);
         setCurrentLesson(null);
       }
     } catch (err) {
       console.error("Failed to fetch lessons:", err);
-      // Error - show empty state
+      
       setLessons([]);
       setCurrentLesson(null);
     } finally {
@@ -139,13 +121,13 @@ function BookToBot() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Sidebar - Lesson Navigation */}
+      {}
       <div
         className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
           } overflow-hidden border-r`}
       >
         <div className="h-full flex flex-col">
-          {/* Subject Selector - Only show available subjects from DB */}
+          {}
           <div className="p-4 border-b bg-muted/30">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -186,7 +168,7 @@ function BookToBot() {
             </p>
           </div>
 
-          {/* Lessons List */}
+          {}
           {loadingLessons ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -201,10 +183,10 @@ function BookToBot() {
         </div>
       </div>
 
-      {/* Main Content - PDF Viewer */}
+      {}
       <div className="flex-1 flex flex-col">
 
-        {/* Header */}
+        {}
         <div className="px-6 py-4 border-b bg-card flex items-center gap-4">
           <Button
             variant="ghost"

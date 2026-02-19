@@ -21,7 +21,6 @@ import time
 
 logger = logging.getLogger(__name__)
 
-
 class PineconeUploader:
     """
     Uploads multimodal math chunks to Pinecone.
@@ -49,16 +48,13 @@ class PineconeUploader:
         logger.info(f"   Index: {index_name}")
         
         try:
-            # Initialize Pinecone client
             self.pc = Pinecone(api_key=api_key)
             
-            # Connect to index
             if index_host:
                 self.index = self.pc.Index(index_name, host=index_host)
             else:
                 self.index = self.pc.Index(index_name)
             
-            # Get index stats
             stats = self.index.describe_index_stats()
             logger.info(f"Connected to Pinecone index")
             logger.info(f"   Total vectors: {stats.get('total_vector_count', 0)}")
@@ -91,10 +87,8 @@ class PineconeUploader:
         Returns:
             Upload statistics
         """
-        # Extract embeddings from chunks if not provided separately
         if embeddings is None:
             embeddings = [chunk.get('embedding') for chunk in chunks]
-            # Filter out None values
             valid_indices = [i for i, emb in enumerate(embeddings) if emb is not None]
             chunks = [chunks[i] for i in valid_indices]
             embeddings = [embeddings[i] for i in valid_indices]
@@ -104,7 +98,6 @@ class PineconeUploader:
         
         logger.info(f"📤 Uploading {len(chunks)} chunks to namespace: {namespace}")
         
-        # Prepare vectors for upsert
         vectors = []
         for chunk, embedding in zip(chunks, embeddings):
             vector_id = chunk['chunk_id']
@@ -116,7 +109,6 @@ class PineconeUploader:
                 "metadata": metadata
             })
         
-        # Upload in batches
         total_uploaded = 0
         failed_uploads = []
         
@@ -126,7 +118,6 @@ class PineconeUploader:
             batch = vectors[i:i + batch_size]
             
             try:
-                # Upsert batch
                 self.index.upsert(
                     vectors=batch,
                     namespace=namespace
@@ -135,7 +126,6 @@ class PineconeUploader:
                 total_uploaded += len(batch)
                 logger.debug(f"   Uploaded batch {i // batch_size + 1}: {len(batch)} vectors")
                 
-                # Small delay to avoid rate limits
                 time.sleep(0.1)
             
             except Exception as e:
@@ -167,37 +157,29 @@ class PineconeUploader:
         """
         base_metadata = chunk.get('metadata', {}).copy()
         
-        # Add chunk-level fields
         base_metadata.update({
-            "text": chunk.get('raw_text', '')[:1000],  # Truncate to avoid size limits
+            "text": chunk.get('raw_text', '')[:1000],
             "has_formula": chunk.get('has_formula', False),
             "has_image": chunk.get('has_image', False),
             "content_type": chunk.get('content_type', 'unknown'),
         })
         
-        # Add formula if present
         if chunk.get('latex_formula'):
             base_metadata['formula'] = chunk['latex_formula'][:500]
         
-        # Add image path if present
         if chunk.get('image_path'):
             base_metadata['image_path'] = str(chunk['image_path'])
         
-        # Add step number if present
         if chunk.get('step_number') is not None:
             base_metadata['solution_step_number'] = chunk['step_number']
         
-        # Add topics as string (Pinecone doesn't support arrays in filters well)
         if 'topics' in base_metadata and isinstance(base_metadata['topics'], list):
             base_metadata['topics'] = ','.join(base_metadata['topics'])
         
-        # Clean metadata (remove None values, ensure correct types)
         clean_metadata = {}
         for key, value in base_metadata.items():
             if value is not None:
-                # Convert all to strings for safety (Pinecone metadata restrictions)
                 if isinstance(value, bool):
-                    # Keep booleans as strings "True" or "False" for consistency
                     clean_metadata[key] = "True" if value else "False"
                 elif isinstance(value, (int, float)):
                     clean_metadata[key] = str(value)
@@ -323,20 +305,7 @@ class PineconeUploader:
         
         logger.info(f"Metadata updates complete")
 
-
 if __name__ == "__main__":
-    # Test the uploader
     logging.basicConfig(level=logging.INFO)
-    
-    # Example usage (requires actual credentials)
-    # uploader = PineconeUploader(
-    #     api_key="your-api-key",
-    #     index_name="ncert-all-subjects"
-    # )
-    
-    # Test chunks
-    # test_chunks = [...]
-    # test_embeddings = [...]
-    # results = uploader.upload_chunks(test_chunks, test_embeddings)
     
     print("Pinecone uploader ready for production use")

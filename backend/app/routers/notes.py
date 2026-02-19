@@ -15,7 +15,6 @@ router = APIRouter(
     tags=["Notes"]
 )
 
-
 @router.post("/", response_model=Note)
 async def create_note(request: NoteCreateRequest):
     """
@@ -37,7 +36,6 @@ async def create_note(request: NoteCreateRequest):
     except Exception as e:
         logger.error(f" Create note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/{student_id}", response_model=NotesListResponse)
 async def get_notes(
@@ -75,7 +73,6 @@ async def get_notes(
         logger.error(f" Get notes error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.patch("/{note_id}", response_model=Note)
 async def update_note(
     note_id: str,
@@ -106,7 +103,6 @@ async def update_note(
     except Exception as e:
         logger.error(f" Update note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/{note_id}", response_model=SuccessResponse)
 async def delete_note(note_id: str):

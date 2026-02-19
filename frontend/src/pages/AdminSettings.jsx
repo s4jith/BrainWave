@@ -1,7 +1,3 @@
-/**
- * AdminSettings - Settings page for admin panel
- * Uses AdminLayout with light/dark theme support
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -41,7 +37,6 @@ export default function AdminSettings() {
         retentionDays: 30
     });
 
-    // Change password state
     const [oldPwd, setOldPwd] = useState("");
     const [newPwd, setNewPwd] = useState("");
     const [confirmPwd, setConfirmPwd] = useState("");
@@ -99,7 +94,7 @@ export default function AdminSettings() {
 
     return (
         <AdminLayout title="Settings" icon={Settings}>
-            {/* Save Button */}
+            {}
             <div className="flex justify-end mb-6 gap-4">
                 {saved && (
                     <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
@@ -118,7 +113,7 @@ export default function AdminSettings() {
             </div>
 
             <div className="max-w-4xl">
-                {/* Section Navigation */}
+                {}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
                     <div className="flex overflow-x-auto">
                         {sections.map((section) => (
@@ -171,7 +166,7 @@ export default function AdminSettings() {
                     </div>
                 )}
 
-                {/* User Management Settings */}
+                {}
                 {activeSection === "users" && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">User Management</h2>
@@ -197,7 +192,7 @@ export default function AdminSettings() {
                     </div>
                 )}
 
-                {/* Notification Settings */}
+                {}
                 {activeSection === "notifications" && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Notifications</h2>
@@ -215,7 +210,7 @@ export default function AdminSettings() {
                     </div>
                 )}
 
-                {/* Security Settings */}
+                {}
                 {activeSection === "security" && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Security</h2>
@@ -294,7 +289,7 @@ export default function AdminSettings() {
                     </div>
                 )}
 
-                {/* Database Settings */}
+                {}
                 {activeSection === "database" && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Database</h2>
@@ -336,7 +331,6 @@ export default function AdminSettings() {
     );
 }
 
-// Toggle Row Component
 function ToggleRow({ label, description, enabled, onChange, last = false }) {
     return (
         <div className={`flex items-center justify-between py-3 ${last ? "" : "border-b border-gray-100 dark:border-gray-700"}`}>

@@ -16,7 +16,6 @@ from app.db.mongo import mongodb
 
 logger = logging.getLogger(__name__)
 
-
 class AnalyticsService:
     """Service for analytics and gradebook functionality."""
     
@@ -51,8 +50,6 @@ class AnalyticsService:
             self._users = mongodb.get_collection("users")
         return self._users
     
-    # === Student Gradebook ===
-    
     async def get_student_grades(
         self,
         student_id: str,
@@ -63,17 +60,14 @@ class AnalyticsService:
             grades = []
             total_score = 0
             total_max = 0
-            topic_performance = {}  # topic -> {correct, total, scores}
+            topic_performance = {}
 
-            # Resolve MongoDB _id from login user_id (AI tests store mongo ObjectId as student_id)
             student_mongo_id = None
             user_doc = await self.users.find_one({"user_id": student_id})
             if user_doc:
                 student_mongo_id = str(user_doc["_id"])
             logger.info(f"📊 Resolved student: user_id={student_id}, mongo_id={student_mongo_id}")
 
-            # ── 1. Staff test submissions (from 'submissions' collection) ──
-            # Include both 'graded' and 'submitted' — auto-graded tests have scores even with 'submitted' status
             query = {"student_id": student_id, "status": {"$in": ["graded", "submitted"]}}
             if course_id:
                 course_assessments = await self.assessments.find(
@@ -114,7 +108,6 @@ class AnalyticsService:
                 total_score += score
                 total_max += max_score
                 
-                # Aggregate topic data from staff test questions if available
                 if assessment:
                     for q in assessment.get("questions", []):
                         topic = q.get("topic") or q.get("chapter_name", "General")
@@ -122,8 +115,6 @@ class AnalyticsService:
                             topic_performance[topic] = {"correct": 0, "total": 0, "scores": []}
                         topic_performance[topic]["total"] += 1
 
-            # ── 2. AI test sessions (from 'test_sessions' collection) ──
-            # AI tests store student_id as MongoDB ObjectId string, not login ID
             test_sessions_collection = mongodb.db["test_sessions"]
             ai_student_ids = [student_id]
             if student_mongo_id and student_mongo_id != student_id:
@@ -134,11 +125,10 @@ class AnalyticsService:
             }).sort("completed_at", -1).to_list(length=500)
             
             for session in ai_sessions:
-                session_score = session.get("score", 0)  # percentage
+                session_score = session.get("score", 0)
                 total_q = session.get("total_questions", 0)
                 correct = session.get("correct_count", 0)
-                # Calculate equivalent points (score is %, questions are out of marks)
-                max_marks = 20  # default AI test is 20 marks
+                max_marks = 20
                 earned = round(session_score * max_marks / 100, 1) if max_marks > 0 else 0
                 
                 chapter_name = session.get("chapter_name", f"Ch.{session.get('chapter_number', 0)}")
@@ -174,7 +164,6 @@ class AnalyticsService:
                 total_score += earned
                 total_max += max_marks
                 
-                # Aggregate topic performance from AI evaluations
                 for ev in session.get("evaluation_details", []):
                     t = ev.get("topic") or topic_name or chapter_name or "General"
                     if t not in topic_performance:
@@ -184,7 +173,6 @@ class AnalyticsService:
                         topic_performance[t]["correct"] += 1
                     topic_performance[t]["scores"].append(ev.get("score", 0))
 
-            # ── 3. Sort all grades by date (newest first) ──
             def _sort_key(g):
                 dt = g.get("completed_at")
                 if dt is None:
@@ -199,7 +187,6 @@ class AnalyticsService:
             
             overall_percentage = (total_score / total_max * 100) if total_max > 0 else 0
             
-            # ── 4. Build topic analysis (strengths / weaknesses) ──
             topic_analysis = []
             for topic, data in topic_performance.items():
                 avg_score = round(sum(data["scores"]) / len(data["scores"]), 1) if data["scores"] else 0
@@ -245,8 +232,6 @@ class AnalyticsService:
                 "weak_topics": [],
             }
     
-    # === Course Analytics ===
-    
     async def get_course_analytics(
         self,
         course_id: str,
@@ -254,7 +239,6 @@ class AnalyticsService:
     ) -> Dict[str, Any]:
         """Get analytics for a course."""
         try:
-            # Verify course ownership
             course = await self.courses.find_one({
                 "_id": ObjectId(course_id),
                 "instructor_id": instructor_id
@@ -263,20 +247,17 @@ class AnalyticsService:
             if not course:
                 return None
             
-            # Get assessments
             assessments = await self.assessments.find(
                 {"course_id": course_id}
             ).to_list(length=100)
             
             assessment_ids = [str(a["_id"]) for a in assessments]
             
-            # Get all submissions
             all_submissions = await self.submissions.find({
                 "assessment_id": {"$in": assessment_ids},
                 "status": "graded"
             }).to_list(length=10000)
             
-            # Calculate statistics
             total_submissions = len(all_submissions)
             if total_submissions == 0:
                 return {
@@ -296,7 +277,6 @@ class AnalyticsService:
             pass_count = sum(1 for s in all_submissions if s.get("passed", False))
             pass_rate = (pass_count / total_submissions * 100)
             
-            # Score distribution
             distribution = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
             for score in scores:
                 if score <= 20:
@@ -310,7 +290,6 @@ class AnalyticsService:
                 else:
                     distribution["81-100"] += 1
             
-            # Per-assessment stats
             assessment_stats = []
             for assessment in assessments:
                 a_id = str(assessment["_id"])
@@ -344,8 +323,6 @@ class AnalyticsService:
             logger.error(f"Get course analytics error: {e}")
             return None
     
-    # === Assessment Analytics ===
-    
     async def get_assessment_analytics(
         self,
         assessment_id: str,
@@ -377,7 +354,6 @@ class AnalyticsService:
             
             scores = [s.get("percentage", 0) for s in submissions]
             
-            # Question-by-question analysis
             questions = assessment.get("questions", [])
             question_stats = []
             
@@ -390,8 +366,6 @@ class AnalyticsService:
                     for ans in sub.get("answers", []):
                         if ans.get("question_id") == q_id:
                             total_answered += 1
-                            # Check if answer was correct (simplified)
-                            # In reality, we'd compare against correct answers
                             break
                 
                 question_stats.append({
@@ -420,8 +394,6 @@ class AnalyticsService:
             logger.error(f"Get assessment analytics error: {e}")
             return None
     
-    # === Class Gradebook ===
-    
     async def get_class_gradebook(
         self,
         course_id: str,
@@ -439,7 +411,6 @@ class AnalyticsService:
             
             enrolled_ids = course.get("enrolled_students", [])
             
-            # Get assessments
             assessments = await self.assessments.find({
                 "course_id": course_id,
                 "status": "published"
@@ -447,7 +418,6 @@ class AnalyticsService:
             
             assessment_map = {str(a["_id"]): a for a in assessments}
             
-            # Build gradebook
             students = []
             for student_id in enrolled_ids:
                 student = await self.users.find_one({"_id": ObjectId(student_id)})
@@ -459,7 +429,6 @@ class AnalyticsService:
                 total_max = 0
                 
                 for a_id, assessment in assessment_map.items():
-                    # Get best submission
                     submission = await self.submissions.find_one({
                         "assessment_id": a_id,
                         "student_id": student_id,
@@ -488,7 +457,6 @@ class AnalyticsService:
                     "overall_percentage": round(total_score / total_max * 100, 2) if total_max > 0 else 0
                 })
             
-            # Sort by name
             students.sort(key=lambda x: x["student_name"])
             
             return {
@@ -506,8 +474,6 @@ class AnalyticsService:
             logger.error(f"Get class gradebook error: {e}")
             return None
     
-    # === Export ===
-    
     async def export_grades_csv(
         self,
         course_id: str,
@@ -522,14 +488,12 @@ class AnalyticsService:
             output = io.StringIO()
             writer = csv.writer(output)
             
-            # Header
             header = ["Student Name", "Email"]
             for assessment in gradebook["assessments"]:
                 header.append(f"{assessment['title']} ({assessment['max_points']} pts)")
             header.extend(["Total Score", "Total Max", "Overall %"])
             writer.writerow(header)
             
-            # Data rows
             for student in gradebook["students"]:
                 row = [student["student_name"], student["email"]]
                 for assessment in gradebook["assessments"]:
@@ -551,20 +515,16 @@ class AnalyticsService:
             logger.error(f"Export grades error: {e}")
             return None
     
-    # === Dashboard Stats ===
-    
     async def get_teacher_dashboard_stats(
         self,
         instructor_id: str
     ) -> Dict[str, Any]:
         """Get quick stats for teacher dashboard."""
         try:
-            # Count courses
             course_count = await self.courses.count_documents({
                 "instructor_id": instructor_id
             })
             
-            # Get all courses
             courses = await self.courses.find({
                 "instructor_id": instructor_id
             }).to_list(length=100)
@@ -573,12 +533,10 @@ class AnalyticsService:
                 len(c.get("enrolled_students", [])) for c in courses
             )
             
-            # Count assessments
             assessment_count = await self.assessments.count_documents({
                 "instructor_id": instructor_id
             })
             
-            # Pending submissions (submitted but not graded)
             course_ids = [str(c["_id"]) for c in courses]
             assessment_list = await self.assessments.find({
                 "course_id": {"$in": course_ids}
@@ -612,12 +570,10 @@ class AnalyticsService:
     ) -> Dict[str, Any]:
         """Get quick stats for student dashboard."""
         try:
-            # Count enrollments
             enrolled_courses = await self.courses.count_documents({
                 "enrolled_students": student_id
             })
             
-            # Get submissions (include both graded and submitted with scores)
             submissions = await self.submissions.find({
                 "student_id": student_id,
                 "status": {"$in": ["graded", "submitted"]}
@@ -628,7 +584,6 @@ class AnalyticsService:
             else:
                 avg_score = 0
             
-            # Upcoming deadlines
             now = datetime.utcnow()
             upcoming = await self.assessments.count_documents({
                 "status": "published",
@@ -651,6 +606,4 @@ class AnalyticsService:
                 "upcoming_deadlines": 0
             }
 
-
-# Global instance
 analytics_service = AnalyticsService()

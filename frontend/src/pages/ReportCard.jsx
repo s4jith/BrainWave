@@ -15,7 +15,6 @@ import {
   Calendar,
   Trophy,
   ChevronRight,
-  Zap,
   Activity
 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -41,7 +40,6 @@ export default function ReportCard() {
         testService.getTestHistory(user.id, 50).catch(() => ({ history: [], analytics: {} }))
       ]);
 
-      // Group tests by subject
       const bySubject = {};
       historyData.history?.forEach(test => {
         const subject = test.subject || "General";
@@ -53,7 +51,6 @@ export default function ReportCard() {
         bySubject[subject].count++;
       });
 
-      // Calculate averages
       Object.keys(bySubject).forEach(subject => {
         bySubject[subject].average = bySubject[subject].totalScore / bySubject[subject].count;
         bySubject[subject].best = Math.max(...bySubject[subject].tests.map(t => t.score || 0));

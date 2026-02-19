@@ -3,18 +3,6 @@ import { RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
-/**
- * AvatarUsername Step (Step 3)
- * 
- * OPTIONAL step - customize DiceBear avatar and username.
- * If skipped, system assigns default avatar + username.
- * 
- * TODO: Backend Integration
- * - POST /api/onboarding/avatar
- * - Check username availability
- * - Store avatar configuration
- */
-
 const AVATAR_STYLES = [
   { id: 'avataaars', name: 'Avatars' },
   { id: 'bottts', name: 'Robots' },
@@ -38,7 +26,7 @@ function AvatarUsername({ data, onNext, onSkip }) {
   };
 
   const handleNext = () => {
-    // Username validation (optional)
+    
     if (username && username.length < 3) {
       setError('Username must be at least 3 characters');
       return;
@@ -48,15 +36,6 @@ function AvatarUsername({ data, onNext, onSkip }) {
       setError('Username can only contain letters, numbers, and underscores');
       return;
     }
-
-    /**
-     * TODO: Backend Integration
-     * - Check username availability
-     * await fetch('/api/onboarding/avatar', {
-     *   method: 'POST',
-     *   body: JSON.stringify({ avatarSeed, avatarStyle, username })
-     * });
-     */
 
     onNext({ seed: avatarSeed, style: avatarStyle, username });
   };

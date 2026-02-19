@@ -21,7 +21,6 @@ from app.models.course_models import (
 
 logger = logging.getLogger(__name__)
 
-
 class CourseService:
     """Service for managing courses."""
     
@@ -142,7 +141,6 @@ class CourseService:
         try:
             query = {}
             
-            # Apply filters
             if category:
                 query["category"] = category
             if difficulty:
@@ -154,17 +152,14 @@ class CourseService:
             if status:
                 query["status"] = status
             else:
-                # Default: show published courses only (unless instructor filtering)
                 if not instructor_id:
                     query["status"] = CourseStatus.PUBLISHED.value
             
             if enrolled_only and user_id:
                 query["enrolled_students"] = user_id
             
-            # Count total
             total = await self.collection.count_documents(query)
             
-            # Fetch page
             skip = (page - 1) * page_size
             cursor = self.collection.find(query).sort("created_at", -1).skip(skip).limit(page_size)
             
@@ -201,7 +196,6 @@ class CourseService:
             Updated course or None
         """
         try:
-            # Verify ownership
             existing = await self.collection.find_one({
                 "_id": ObjectId(course_id),
                 "instructor_id": instructor_id
@@ -210,7 +204,6 @@ class CourseService:
             if not existing:
                 return None
             
-            # Build update
             update_data = {"updated_at": datetime.utcnow()}
             
             if request.title is not None:
@@ -233,7 +226,6 @@ class CourseService:
                 {"$set": update_data}
             )
             
-            # Return updated
             updated = await self.collection.find_one({"_id": ObjectId(course_id)})
             return self._to_response(updated)
             
@@ -256,7 +248,6 @@ class CourseService:
     async def publish_course(self, course_id: str, instructor_id: str) -> Optional[CourseResponse]:
         """Publish a draft course."""
         try:
-            # Verify ownership and current status
             existing = await self.collection.find_one({
                 "_id": ObjectId(course_id),
                 "instructor_id": instructor_id,
@@ -279,8 +270,6 @@ class CourseService:
             logger.error(f"Failed to publish course {course_id}: {e}")
             return None
     
-    # === Module Management ===
-    
     async def add_module(
         self,
         course_id: str,
@@ -289,7 +278,6 @@ class CourseService:
     ) -> Optional[Module]:
         """Add a module to a course."""
         try:
-            # Verify ownership
             course = await self.collection.find_one({
                 "_id": ObjectId(course_id),
                 "instructor_id": instructor_id
@@ -298,7 +286,6 @@ class CourseService:
             if not course:
                 return None
             
-            # Generate module ID and order
             module_id = str(uuid.uuid4())
             order = request.order if request.order is not None else len(course.get("modules", []))
             
@@ -334,7 +321,6 @@ class CourseService:
     ) -> Optional[ContentItem]:
         """Add content item to a module."""
         try:
-            # Verify ownership
             course = await self.collection.find_one({
                 "_id": ObjectId(course_id),
                 "instructor_id": instructor_id
@@ -343,7 +329,6 @@ class CourseService:
             if not course:
                 return None
             
-            # Find module index
             module_idx = None
             for idx, mod in enumerate(course.get("modules", [])):
                 if mod.get("id") == module_id:
@@ -353,7 +338,6 @@ class CourseService:
             if module_idx is None:
                 return None
             
-            # Create content item
             content_id = str(uuid.uuid4())
             order = request.order if request.order is not None else len(course["modules"][module_idx].get("content_items", []))
             
@@ -383,12 +367,9 @@ class CourseService:
             logger.error(f"Failed to add content to module {module_id}: {e}")
             return None
     
-    # === Student Actions ===
-    
     async def enroll_student(self, course_id: str, student_id: str) -> EnrollmentResponse:
         """Enroll a student in a course."""
         try:
-            # Check if already enrolled
             course = await self.collection.find_one({
                 "_id": ObjectId(course_id),
                 "status": CourseStatus.PUBLISHED.value
@@ -400,7 +381,6 @@ class CourseService:
             if student_id in course.get("enrolled_students", []):
                 return EnrollmentResponse(success=True, message="Already enrolled", enrolled=True)
             
-            # Enroll
             await self.collection.update_one(
                 {"_id": ObjectId(course_id)},
                 {
@@ -449,14 +429,11 @@ class CourseService:
             if not course:
                 return False
             
-            # Check if student is enrolled
             if student_id not in course.get("enrolled_students", []):
                 return False
             
-            # Remove existing rating if any
             ratings = [r for r in course.get("ratings", []) if r.get("student_id") != student_id]
             
-            # Add new rating
             ratings.append({
                 "student_id": student_id,
                 "rating": rating,
@@ -464,7 +441,6 @@ class CourseService:
                 "created_at": datetime.utcnow()
             })
             
-            # Calculate average
             avg_rating = sum(r["rating"] for r in ratings) / len(ratings) if ratings else 0
             
             await self.collection.update_one(
@@ -477,8 +453,6 @@ class CourseService:
         except Exception as e:
             logger.error(f"Failed to rate course {course_id}: {e}")
             return False
-    
-    # === Helper Methods ===
     
     def _to_response(self, doc: dict, user_id: str = None) -> CourseResponse:
         """Convert MongoDB document to CourseResponse."""
@@ -523,6 +497,4 @@ class CourseService:
             modules=modules
         )
 
-
-# Global instance
 course_service = CourseService()

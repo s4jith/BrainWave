@@ -1,8 +1,3 @@
-/**
- * AdminReports - Analytics and reports page for admin
- * Uses AdminLayout with light/dark theme support
- * Fetches REAL data from /api/admin/analytics endpoint
- */
 
 import React, { useState, useEffect } from "react";
 import AdminLayout from "../components/AdminLayout";
@@ -81,14 +76,12 @@ export default function AdminReports() {
     const weakStudents = analytics?.weak_students || [];
     const recentActivities = analytics?.recent_activities || [];
 
-    // Get unique classes for filter dropdowns
     const uniqueClasses = [...new Set(recentActivities.map(a => a.class_level).filter(Boolean))].sort((a, b) => a - b);
-    // Use subjects from database instead of extracting from activities
+    
     const uniqueSubjects = dbSubjects.length > 0 
         ? dbSubjects 
         : [...new Set(recentActivities.map(a => a.subject).filter(Boolean))];
 
-    // Filter recent activities
     const filteredActivities = recentActivities.filter(activity => {
         const matchesClass = classFilter === "all" || activity.class_level === parseInt(classFilter);
         const matchesSubject = subjectFilter === "all" || activity.subject === subjectFilter;
@@ -97,7 +90,7 @@ export default function AdminReports() {
 
     return (
         <AdminLayout title="Reports & Analytics" icon={BarChart3}>
-            {/* Header with Date Range */}
+            {}
             <div className="flex justify-between items-center mb-6">
                 <p className="text-gray-500 dark:text-gray-400">
                     Platform performance and student analytics
@@ -193,7 +186,7 @@ export default function AdminReports() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Subject Breakdown */}
+                {}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <BookOpen className="w-5 h-5 text-orange-600" />
@@ -291,7 +284,6 @@ export default function AdminReports() {
     );
 }
 
-// Stat Card Component
 function StatCard({ icon: Icon, label, value, color }) {
     const colorClasses = {
         blue: "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",

@@ -56,7 +56,6 @@ export default function SupportTickets() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeFilter, setActiveFilter] = useState("all");
 
-  // New ticket form - no priority needed, backend defaults to medium
   const [newTicket, setNewTicket] = useState({
     title: "",
     description: "",
@@ -221,15 +220,14 @@ export default function SupportTickets() {
     );
   };
 
-  // Filter tickets for student view
   const filteredTickets = activeFilter === 'all'
     ? tickets
     : tickets.filter(ticket => ticket.status === activeFilter);
 
   return isAdmin ? (
-    // Admin Layout
+    
     <div className="min-h-screen bg-gray-50">
-      {/* Admin Header */}
+      {}
       <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
@@ -856,4 +854,3 @@ export default function SupportTickets() {
     </DashboardLayout>
   );
 }
-

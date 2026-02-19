@@ -37,26 +37,21 @@ export default function StudentTests() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("all"); // all, available, submitted, closed
+  const [activeTab, setActiveTab] = useState("all"); 
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const testsPerPage = 6;
 
-  // Upload state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  // View feedback modal
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
 
-  // Notifications
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Detail view
   const [viewingTest, setViewingTest] = useState(null);
 
   useEffect(() => {
@@ -171,7 +166,6 @@ export default function StudentTests() {
     setShowFeedbackModal(true);
   };
 
-  // Filter tests based on active tab
   const getFilteredTests = () => {
     switch (activeTab) {
       case "available":
@@ -192,7 +186,6 @@ export default function StudentTests() {
     currentPage * testsPerPage
   );
 
-  // Get test statistics
   const getTestStats = (test) => {
     const submission = submissions.find(s => s.test_id === test.id);
     return {
@@ -203,14 +196,13 @@ export default function StudentTests() {
     };
   };
 
-  // Detail View Component
   const TestDetailView = ({ test }) => {
     const submission = submissions.find(s => s.test_id === test.id);
     const stats = getTestStats(test);
 
     return (
       <div className="space-y-6">
-        {/* Back Button */}
+        {}
         <button
           onClick={() => setViewingTest(null)}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition"
@@ -219,7 +211,7 @@ export default function StudentTests() {
           <span className="text-sm font-medium">Back to Tests</span>
         </button>
 
-        {/* Test Header */}
+        {}
         <div className="bg-white rounded-2xl p-8 border border-gray-100">
           <div className="flex items-start justify-between mb-6">
             <div>
@@ -358,7 +350,6 @@ export default function StudentTests() {
     );
   };
 
-  // If viewing a specific test, show detail view
   if (viewingTest) {
     return (
       <DashboardLayout>
@@ -481,7 +472,7 @@ export default function StudentTests() {
           <>
             {/* Tests List - Like Image 1 */}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-              {/* Table Header */}
+              {}
               <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="col-span-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Test</div>
                 <div className="col-span-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-center">Subject</div>
@@ -490,7 +481,7 @@ export default function StudentTests() {
                 <div className="col-span-1"></div>
               </div>
 
-              {/* Test Rows */}
+              {}
               {paginatedTests.map(test => {
                 const stats = getTestStats(test);
                 const submission = submissions.find(s => s.test_id === test.id);
@@ -501,7 +492,7 @@ export default function StudentTests() {
                     className="grid grid-cols-12 gap-4 px-6 py-5 border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer"
                     onClick={() => setViewingTest(test)}
                   >
-                    {/* Test Info */}
+                    {}
                     <div className="col-span-5 flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${test.has_submitted
                         ? "bg-orange-100"
@@ -527,12 +518,12 @@ export default function StudentTests() {
                       <span className="text-sm text-gray-600">{test.subject || "General"}</span>
                     </div>
 
-                    {/* Due Date */}
+                    {}
                     <div className="col-span-2 flex items-center justify-center">
                       <span className="text-sm text-gray-600">{stats.dueDate}</span>
                     </div>
 
-                    {/* Status */}
+                    {}
                     <div className="col-span-2 flex items-center justify-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${test.has_submitted
                         ? "bg-orange-100 text-orange-700"
@@ -544,7 +535,7 @@ export default function StudentTests() {
                       </span>
                     </div>
 
-                    {/* Actions */}
+                    {}
                     <div className="col-span-1 flex items-center justify-end">
                       <button
                         onClick={(e) => { e.stopPropagation(); }}
@@ -558,7 +549,7 @@ export default function StudentTests() {
               })}
             </div>
 
-            {/* Pagination */}
+            {}
             {totalPages > 1 && (
               <div className="flex items-center justify-end gap-2">
                 <button

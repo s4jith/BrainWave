@@ -10,7 +10,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class SmartNotesService:
     """Generate and manage AI-powered chapter summaries."""
     
@@ -38,10 +37,8 @@ class SmartNotesService:
         try:
             logger.info(f"📝 Generating summary for {subject} Class {class_level}")
             
-            # Get namespace for subject
             namespace = subject.lower().replace(" ", "_")
             
-            # Query content from Pinecone
             query = chapter_title or f"main topics in Class {class_level} {subject}"
             embedding = self.gemini.generate_embedding(query)
             
@@ -52,7 +49,6 @@ class SmartNotesService:
                 include_metadata=True
             )
             
-            # Collect text chunks
             chunks = []
             for match in results.get('matches', []):
                 if match.get('score', 0) >= 0.25:
@@ -71,7 +67,6 @@ class SmartNotesService:
             
             combined_text = "\n\n".join(chunks[:12])
             
-            # Generate structured summary using Gemini
             prompt = f"""Based on this Class {class_level} {subject} textbook content, create comprehensive study notes.
 
 TEXTBOOK CONTENT:
@@ -100,7 +95,6 @@ JSON:"""
             
             response = self.gemini.generate_response(prompt)
             
-            # Parse JSON from response
             import json
             import re
             
@@ -195,6 +189,4 @@ JSON:"""
             logger.error(f" Get notes failed: {e}")
             return []
 
-
-# Singleton instance
 smart_notes_service = SmartNotesService()

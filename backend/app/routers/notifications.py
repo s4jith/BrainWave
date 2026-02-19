@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-
 def cleanup_old_notifications():
     """Auto-delete notifications that were read more than 7 days ago and not saved."""
     try:
@@ -33,14 +32,12 @@ def cleanup_old_notifications():
         if result.deleted_count > 0:
             logger.info(f"Auto-deleted {result.deleted_count} old read notifications")
         
-        # Also clean up old dismissed records (older than 2 days)
         two_days_ago = datetime.utcnow() - timedelta(days=2)
         db.dismissed_notifications.delete_many({
             "dismissed_at": {"$lt": two_days_ago}
         })
     except Exception as e:
         logger.error(f"Error cleaning up notifications: {e}")
-
 
 def is_dismissed(title: str, role: str, user_id: str = None):
     """Check if a notification with this title was dismissed today."""
@@ -54,7 +51,6 @@ def is_dismissed(title: str, role: str, user_id: str = None):
         query["user_id"] = user_id
     return db.dismissed_notifications.find_one(query) is not None
 
-
 def generate_admin_notifications():
     """Generate system notifications for admins based on platform activity."""
     try:
@@ -64,7 +60,6 @@ def generate_admin_notifications():
 
         notifications = []
 
-        # 1. Inactive Students (no login in 7+ days, excluding recently created accounts)
         inactive_students = db.users.count_documents({
             "role": "student",
             "is_active": True,
@@ -82,7 +77,6 @@ def generate_admin_notifications():
                 "category": "activity"
             })
 
-        # 2. Inactive Teachers (no login in 7+ days, excluding recently created accounts)
         inactive_teachers = db.users.count_documents({
             "role": "teacher",
             "is_active": True,
@@ -100,7 +94,6 @@ def generate_admin_notifications():
                 "category": "activity"
             })
 
-        # 3. Student Test Failures (score < 40% in last 7 days)
         test_sessions = db.get_collection("test_sessions")
         failed_tests = test_sessions.count_documents({
             "status": "completed",
@@ -115,7 +108,6 @@ def generate_admin_notifications():
                 "category": "performance"
             })
 
-        # 4. Pending Support Queries
         try:
             pending_tickets = db.support_tickets.count_documents({
                 "status": {"$in": ["open", "pending"]}
@@ -128,9 +120,8 @@ def generate_admin_notifications():
                     "category": "support"
                 })
         except Exception:
-            pass  # support_tickets collection may not exist
+            pass
 
-        # 5. Tests completed today
         tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
         if tests_today > 0:
             notifications.append({
@@ -145,14 +136,12 @@ def generate_admin_notifications():
         logger.error(f"Error generating admin notifications: {e}")
         return []
 
-
 def generate_teacher_notifications(teacher_user_id: str):
     """Generate notifications for a teacher scoped to their assigned groups."""
     try:
         now = datetime.utcnow()
         week_ago = now - timedelta(days=7)
 
-        # Get groups assigned to this teacher
         teacher_groups = list(db.groups.find({
             "$or": [
                 {"teacher_id": teacher_user_id},
@@ -163,7 +152,6 @@ def generate_teacher_notifications(teacher_user_id: str):
         if not teacher_groups:
             return []
 
-        # Collect all student IDs across the teacher's groups
         all_student_ids = []
         for g in teacher_groups:
             all_student_ids.extend(g.get("student_ids", []))
@@ -172,12 +160,10 @@ def generate_teacher_notifications(teacher_user_id: str):
         if not all_student_ids:
             return []
 
-        # Convert to ObjectIds for querying
         student_oids = [ObjectId(sid) for sid in all_student_ids if ObjectId.is_valid(sid)]
 
         notifications = []
 
-        # 1. Inactive students in teacher's groups
         inactive_students = db.users.count_documents({
             "_id": {"$in": student_oids},
             "is_active": True,
@@ -194,8 +180,6 @@ def generate_teacher_notifications(teacher_user_id: str):
                 "category": "activity"
             })
 
-        # 2. Student test failures in teacher's groups
-        # Get user_ids for these students
         student_user_ids = [s.get("user_id") for s in db.users.find({"_id": {"$in": student_oids}}, {"user_id": 1}) if s.get("user_id")]
         
         test_sessions = db.get_collection("test_sessions")
@@ -213,7 +197,6 @@ def generate_teacher_notifications(teacher_user_id: str):
                 "category": "performance"
             })
 
-        # 3. Tests completed by students in teacher's groups today
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         tests_today = test_sessions.count_documents({
             "user_id": {"$in": student_user_ids},
@@ -232,7 +215,6 @@ def generate_teacher_notifications(teacher_user_id: str):
         logger.error(f"Error generating teacher notifications: {e}")
         return []
 
-
 @router.get("")
 async def get_notifications(
     limit: int = 20,
@@ -240,12 +222,10 @@ async def get_notifications(
 ):
     """Get notifications for the current user (role-based)."""
     try:
-        # Run cleanup of old notifications
         cleanup_old_notifications()
 
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Build query based on role
         if current_user.role == UserRole.ADMIN:
             query = {
                 "$or": [
@@ -264,7 +244,6 @@ async def get_notifications(
         else:
             query = {"user_id": current_user.user_id}
 
-        # Fetch stored notifications
         stored_notifications = list(db.notifications.find(query).sort("created_at", -1).limit(limit))
 
         result = []
@@ -285,7 +264,6 @@ async def get_notifications(
                 "expires_in_days": 7 - (datetime.utcnow() - read_at).days if read_at and not n.get("saved") else None
             })
 
-        # Generate and store live notifications based on role
         if current_user.role == UserRole.ADMIN:
             live_notifications = generate_admin_notifications()
             role_key = "admin"
@@ -300,11 +278,9 @@ async def get_notifications(
             target_user_id = None
 
         for ln in live_notifications:
-            # Skip if dismissed today
             if is_dismissed(ln["title"], role_key, target_user_id):
                 continue
 
-            # Check if similar notification already exists today
             existing_query = {
                 "title": ln["title"],
                 "role": role_key,
@@ -342,7 +318,6 @@ async def get_notifications(
                     "expires_in_days": None
                 })
 
-        # Count unread
         unread_count = len([n for n in result if not n.get("read")])
 
         return {
@@ -355,7 +330,6 @@ async def get_notifications(
             "notifications": [],
             "unread_count": 0
         }
-
 
 @router.post("/{notification_id}/read")
 async def mark_notification_read(
@@ -376,7 +350,6 @@ async def mark_notification_read(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/{notification_id}/save")
 async def save_notification(
     notification_id: str,
@@ -395,7 +368,6 @@ async def save_notification(
         return {"success": True, "saved": result.modified_count > 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/{notification_id}/unsave")
 async def unsave_notification(
@@ -416,7 +388,6 @@ async def unsave_notification(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/{notification_id}")
 async def delete_notification(
     notification_id: str,
@@ -427,10 +398,8 @@ async def delete_notification(
         if not ObjectId.is_valid(notification_id):
             raise HTTPException(status_code=400, detail="Invalid notification ID")
 
-        # Get the notification before deleting to record its title
         notif = db.notifications.find_one({"_id": ObjectId(notification_id)})
         if notif:
-            # Record the dismissal so it won't be regenerated today
             role = notif.get("role", "admin")
             db.dismissed_notifications.insert_one({
                 "title": notif.get("title"),
@@ -445,7 +414,6 @@ async def delete_notification(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/read-all")
 async def mark_all_notifications_read(
     current_user: TokenData = Depends(get_current_user)
@@ -454,7 +422,6 @@ async def mark_all_notifications_read(
     try:
         now = datetime.utcnow()
 
-        # Build query based on role
         if current_user.role == UserRole.ADMIN:
             query = {
                 "$or": [

@@ -8,7 +8,7 @@ Handles teacher-specific operations:
 - Reports with real test session data
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Body
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
 
-# === Models ===
-
 class QuestionCreate(BaseModel):
     text: str
     subject: str
@@ -33,7 +31,7 @@ class QuestionCreate(BaseModel):
     type: str = "short_answer"
     difficulty: str = "medium"
     marks: int = 1
-    options: List[str] = []  # For MCQ
+    options: List[str] = []
     correct_answer: str = ""
 
 class QuestionUpdate(BaseModel):
@@ -47,29 +45,23 @@ class QuestionUpdate(BaseModel):
     options: Optional[List[str]] = None
     correct_answer: Optional[str] = None
 
-
 class ManualGradeItem(BaseModel):
     question_id: str
     score: float
     max_score: float = 10
     feedback: str = ""
 
-
 class ManualEvaluationRequest(BaseModel):
     session_id: str
     grades: List[ManualGradeItem]
-
-# === Endpoints ===
 
 @router.get("/groups")
 async def get_teacher_groups(current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))):
     """Get groups assigned to the current teacher."""
     try:
-        # Get the teacher's MongoDB _id as well, since groups may reference either
         teacher_doc = db.users.find_one({"user_id": current_user.user_id, "role": "teacher"})
         teacher_id_str = str(teacher_doc["_id"]) if teacher_doc else ""
         
-        # Match by both user_id and _id string (groups may store either)
         match_values = [current_user.user_id]
         if teacher_id_str:
             match_values.append(teacher_id_str)
@@ -83,13 +75,9 @@ async def get_teacher_groups(current_user: TokenData = Depends(require_role([Use
         
         result = []
         for g in groups:
-            # Fetch students for this group
             student_ids = g.get("student_ids", [])
             students = []
             if student_ids:
-                # Assuming student_ids are user_ids or ObjectIds. 
-                # Ideally they are _ids as strings or ObjectIds.
-                # Let's try flexible query
                 student_query = {"$or": [
                     {"user_id": {"$in": student_ids}},
                     {"_id": {"$in": [ObjectId(sid) for sid in student_ids if ObjectId.is_valid(sid)]}}
@@ -118,7 +106,6 @@ async def get_teacher_groups(current_user: TokenData = Depends(require_role([Use
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/questions")
 async def get_questions(
     subject: Optional[str] = None,
@@ -146,7 +133,6 @@ async def get_questions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/questions")
 async def create_question(
     question: QuestionCreate,
@@ -166,7 +152,6 @@ async def create_question(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/questions/{question_id}")
 async def update_question(
     question_id: str,
@@ -178,7 +163,6 @@ async def update_question(
         if not ObjectId.is_valid(question_id):
             raise HTTPException(status_code=400, detail="Invalid ID")
             
-        # Ensure ownership
         existing = db.questions.find_one({
             "_id": ObjectId(question_id), 
             "created_by": current_user.user_id
@@ -201,7 +185,6 @@ async def update_question(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/questions/{question_id}")
 async def delete_question(
@@ -231,17 +214,13 @@ async def delete_question(
 async def get_teacher_stats(current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))):
     """Get dashboard stats for teacher (supports both old tests and new assessments)."""
     try:
-        # Get teacher's MongoDB _id for dual-ID queries
         teacher_doc = db.users.find_one({"user_id": current_user.user_id})
         teacher_mongo_id = str(teacher_doc["_id"]) if teacher_doc else None
         
-        # My Questions - count from questions collection
         my_questions = db.questions.count_documents({"created_by": current_user.user_id})
         
-        # My Tests - count from BOTH old tests and new assessments
         old_tests = db.tests.count_documents({"created_by": current_user.user_id, "is_active": True})
         
-        # New assessments - query by instructor_id (could be user_id or MongoDB _id)
         new_assessments_query = {"instructor_id": current_user.user_id}
         if teacher_mongo_id:
             new_assessments_query = {
@@ -254,11 +233,9 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
         
         my_tests = old_tests + new_assessments
         
-        # Evaluated and Pending - check BOTH systems
         evaluated = 0
         pending = 0
         
-        # OLD SYSTEM: test_submissions
         old_test_ids = [str(t["_id"]) for t in db.tests.find({"created_by": current_user.user_id}, {"_id": 1})]
         if old_test_ids:
             evaluated += db.test_submissions.count_documents({
@@ -270,7 +247,6 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
                 "is_reviewed": False
             })
         
-        # NEW SYSTEM: submissions (for assessments)
         new_assessment_ids = []
         if teacher_mongo_id:
             new_assessment_ids = [
@@ -291,16 +267,13 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
             ]
         
         if new_assessment_ids:
-            # For new assessments, check if submissions have been graded
-            # A submission is "evaluated" if it has a score/feedback
-            # A submission is "pending" if submitted but not graded
             evaluated += db.submissions.count_documents({
                 "assessment_id": {"$in": new_assessment_ids},
-                "score": {"$ne": None}  # Has been scored
+                "score": {"$ne": None}
             })
             pending += db.submissions.count_documents({
                 "assessment_id": {"$in": new_assessment_ids},
-                "score": None  # Not yet scored
+                "score": None
             })
             
         return {
@@ -313,7 +286,6 @@ async def get_teacher_stats(current_user: TokenData = Depends(require_role([User
         logger.error(f"Get teacher stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/reports")
 async def get_teacher_reports(current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))):
     """
@@ -324,11 +296,9 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
     try:
         is_admin = current_user.role == UserRole.ADMIN
         
-        # Get teacher's MongoDB _id
         teacher_doc = db.users.find_one({"user_id": current_user.user_id})
         teacher_mongo_id = str(teacher_doc["_id"]) if teacher_doc else None
         
-        # --- 1. Get teacher's groups FIRST (for visibility rules) ---
         match_values = [current_user.user_id]
         if teacher_mongo_id:
             match_values.append(teacher_mongo_id)
@@ -341,27 +311,21 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         }))
         teacher_group_ids = [str(g["_id"]) for g in teacher_groups]
         
-        # --- 2. Get staff-created assessments based on role ---
         if is_admin:
-            # Admin sees ALL assessments
             my_assessments = list(db.assessments.find())
         else:
-            # Teacher sees: own assessments + assessments assigned to their groups
             admin_users = list(db.users.find({"role": "admin"}, {"user_id": 1, "_id": 1}))
             admin_ids = [a["user_id"] for a in admin_users] + [str(a["_id"]) for a in admin_users]
             
             or_conditions = [
-                # 1. Created by this teacher
                 {"instructor_id": current_user.user_id}
             ]
             if teacher_mongo_id:
                 or_conditions.append({"instructor_id": teacher_mongo_id})
             
-            # 2. Assessments assigned to teacher's groups
             if teacher_group_ids:
                 or_conditions.append({"group_ids": {"$in": teacher_group_ids}})
             
-            # 3. Admin assessments matching teacher's class/subject criteria
             for g in teacher_groups:
                 if g.get("class_level") and g.get("subject"):
                     or_conditions.append({
@@ -374,10 +338,8 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         
         my_assessment_ids = [str(a["_id"]) for a in my_assessments]
         
-        # Assessment submissions
         assessment_submissions = list(db.submissions.find({"assessment_id": {"$in": my_assessment_ids}})) if my_assessment_ids else []
         
-        # --- 3. Collect student IDs from groups ---
         group_student_ids = set()
         group_subjects = set()
         for g in teacher_groups:
@@ -386,7 +348,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
             if g.get("subject"):
                 group_subjects.add(g["subject"])
         
-        # Also get student MongoDB IDs
         student_mongo_ids = set()
         if group_student_ids:
             student_docs = list(db.users.find(
@@ -401,18 +362,13 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                 if s.get("user_id"):
                     group_student_ids.add(s["user_id"])
         
-        # --- 4. AI test sessions: ONLY for admin ---
         all_student_ids = list(group_student_ids | student_mongo_ids)
         test_sessions = []
         if is_admin:
-            # Admin sees all AI test sessions
             test_sessions = list(db.db.test_sessions.find({
                 "status": "completed"
             }).sort("completed_at", -1).limit(200))
-        # Teachers: NO AI test sessions (test_sessions stays empty)
         
-        # --- 4. Calculate stats ---
-        # For teacher: only staff tests. For admin: staff + AI
         if is_admin:
             total_assessments = len(my_assessments) + len(set(
                 (s.get("subject", ""), s.get("chapter_number", 0), s.get("test_type", ""))
@@ -421,7 +377,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         else:
             total_assessments = len(my_assessments)
         
-        # Unique students
         unique_students = set()
         for sub in assessment_submissions:
             if sub.get("student_id"):
@@ -431,7 +386,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                 if s.get("student_id"):
                     unique_students.add(s["student_id"])
         
-        # All scores
         all_scores = []
         for sub in assessment_submissions:
             if sub.get("score") is not None:
@@ -445,7 +399,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         passing = [s for s in all_scores if s >= 40]
         pass_rate = round((len(passing) / len(all_scores)) * 100, 1) if all_scores else 0
         
-        # Recent performance: admin sees AI sessions, teacher sees assessment submissions
         recent_performance = []
         if is_admin:
             for s in test_sessions[:10]:
@@ -455,7 +408,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                     "student": s.get("student_id", "")
                 })
         else:
-            # Teacher: show recent staff test submissions
             recent_subs = sorted(assessment_submissions, key=lambda x: x.get("submitted_at", ""), reverse=True)[:10]
             for sub in recent_subs:
                 assessment = next((a for a in my_assessments if str(a["_id"]) == sub.get("assessment_id")), None)
@@ -466,7 +418,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                     "student": sub.get("student_id", "")
                 })
         
-        # Score distribution
         excellent = len([s for s in all_scores if s >= 90])
         good = len([s for s in all_scores if 70 <= s < 90])
         average = len([s for s in all_scores if 50 <= s < 70])
@@ -479,10 +430,8 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
             {"name": "Needs Improvement (<50)", "value": needs_improvement}
         ]
         
-        # Detailed test reports
         test_reports = []
         
-        # Staff Assessment reports (both teacher and admin)
         for assessment in my_assessments[:20]:
             assessment_subs = [s for s in assessment_submissions if s.get("assessment_id") == str(assessment["_id"])]
             avg_score_test = sum(s.get("score", 0) for s in assessment_subs) / len(assessment_subs) if assessment_subs else 0
@@ -496,7 +445,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                 "status": "Completed" if assessment_subs else "No submissions"
             })
         
-        # AI test session reports: ONLY for admin
         if is_admin:
             session_groups = {}
             for s in test_sessions:
@@ -519,7 +467,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                     completed = sessions[0]["completed_at"]
                     latest_date = completed.strftime("%Y-%m-%d") if hasattr(completed, 'strftime') else str(completed)[:10]
                 
-                # Count pending evaluations
                 pending_count = sum(1 for s in sessions if s.get("evaluation_status") == "pending_manual_review")
                 status = "Completed"
                 if pending_count > 0:
@@ -536,7 +483,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
                     "pending_count": pending_count
                 })
         
-        # Sort by date
         test_reports.sort(key=lambda x: x.get("date", ""), reverse=True)
         
         return {
@@ -551,9 +497,6 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
     except Exception as e:
         logger.error(f"Get teacher reports error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== EVALUATION ENDPOINTS ====================
 
 def _get_teacher_student_ids(user_id: str) -> set:
     """Helper: Get all student IDs from teacher's groups."""
@@ -576,7 +519,6 @@ def _get_teacher_student_ids(user_id: str) -> set:
         for sid in g.get("student_ids", []):
             student_ids.add(sid)
     
-    # Also get MongoDB _ids
     if student_ids:
         student_docs = list(db.users.find(
             {"$or": [
@@ -592,7 +534,6 @@ def _get_teacher_student_ids(user_id: str) -> set:
     
     return student_ids
 
-
 @router.get("/pending-evaluations")
 async def get_pending_evaluations(
     current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))
@@ -603,12 +544,9 @@ async def get_pending_evaluations(
     Teachers should not evaluate AI tests.
     """
     try:
-        # AI test evaluation is ADMIN-ONLY
         if current_user.role != UserRole.ADMIN:
-            # Teachers: Return empty - they don't see/evaluate AI tests
             return {"pending_sessions": [], "total": 0, "message": "AI test evaluation is admin-only"}
         
-        # Admin sees all pending AI test evaluations
         query = {
             "status": "completed",
             "evaluation_status": "pending_manual_review"
@@ -618,7 +556,6 @@ async def get_pending_evaluations(
         
         result = []
         for s in sessions:
-            # Get student name
             student_name = s.get("student_id", "Unknown")
             student_doc = db.users.find_one({"$or": [
                 {"user_id": s.get("student_id")},
@@ -627,7 +564,6 @@ async def get_pending_evaluations(
             if student_doc:
                 student_name = student_doc.get("name", student_doc.get("user_id", "Unknown"))
             
-            # Count pending questions
             evals = s.get("evaluation_details", [])
             pending_qs = [e for e in evals if e.get("evaluation_status") == "pending"]
             auto_qs = [e for e in evals if e.get("evaluation_status") == "auto_evaluated"]
@@ -656,7 +592,6 @@ async def get_pending_evaluations(
         logger.error(f"Get pending evaluations error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/evaluation/{session_id}")
 async def get_evaluation_detail(
     session_id: str,
@@ -668,7 +603,6 @@ async def get_evaluation_detail(
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        # Get student info
         student_name = session.get("student_id", "Unknown")
         student_doc = db.users.find_one({"$or": [
             {"user_id": session.get("student_id")},
@@ -708,7 +642,6 @@ async def get_evaluation_detail(
         logger.error(f"Get evaluation detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/evaluate")
 async def submit_manual_evaluation(
     request: ManualEvaluationRequest,
@@ -722,7 +655,6 @@ async def submit_manual_evaluation(
         
         evals = session.get("evaluation_details", [])
         
-        # Apply manual grades
         grade_map = {g.question_id: g for g in request.grades}
         
         total_score = 0
@@ -750,11 +682,9 @@ async def submit_manual_evaluation(
             if e.get("is_correct"):
                 correct_count += 1
         
-        # Recalculate score
         percentage_score = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
         evaluation_status = "completed" if all_evaluated else "pending_manual_review"
         
-        # Update session
         db.db.test_sessions.update_one(
             {"session_id": request.session_id},
             {"$set": {
@@ -780,7 +710,6 @@ async def submit_manual_evaluation(
         logger.error(f"Submit manual evaluation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/completed-tests")
 async def get_completed_tests(
     current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))
@@ -791,12 +720,9 @@ async def get_completed_tests(
     Teachers see their staff test submissions through the assessments/submissions endpoints.
     """
     try:
-        # AI test viewing is ADMIN-ONLY
         if current_user.role != UserRole.ADMIN:
-            # Teachers: Return empty - they don't see AI tests
             return {"sessions": [], "total": 0, "message": "AI test viewing is admin-only"}
         
-        # Admin sees all completed AI test sessions
         query = {"status": "completed"}
         
         sessions = list(db.db.test_sessions.find(query).sort("completed_at", -1).limit(200))

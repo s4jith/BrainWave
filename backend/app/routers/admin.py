@@ -15,7 +15,6 @@ router = APIRouter(
     tags=["Admin"]
 )
 
-
 class QuotaStatusResponse(BaseModel):
     """Response schema for quota status."""
     total_keys: int = Field(..., description="Number of API keys configured")
@@ -25,7 +24,6 @@ class QuotaStatusResponse(BaseModel):
     usage_percentage: float = Field(..., description="Percentage of quota used")
     keys: List[Dict] = Field(..., description="Status of each API key")
     reset_info: Dict = Field(..., description="Quota reset information")
-
 
 @router.get("/quota-status", response_model=QuotaStatusResponse)
 async def get_quota_status():
@@ -48,7 +46,6 @@ async def get_quota_status():
         logger.error(f" Failed to get quota status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/quota-reset")
 async def force_reset_quota():
     """
@@ -69,7 +66,6 @@ async def force_reset_quota():
         logger.error(f" Failed to reset quotas: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/health")
 async def health_check():
     """
@@ -83,7 +79,6 @@ async def health_check():
     try:
         quota_status = gemini_key_manager.get_quota_status()
         
-        # Check if any keys are available
         has_available_keys = quota_status["total_remaining"] > 0
         
         return {

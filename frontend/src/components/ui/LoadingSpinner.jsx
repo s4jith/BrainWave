@@ -1,7 +1,3 @@
-/**
- * Modern Loading Spinner Component
- * Animated book with rotating ring - matches student theme
- */
 
 import { BookOpen, Loader2 } from "lucide-react";
 
@@ -9,9 +5,9 @@ export default function LoadingSpinner({ message = "Loading...", submessage = "P
     return (
         <div className="flex h-screen w-screen items-center justify-center bg-gray-50 dark:bg-gray-950 transition-colors">
             <div className="text-center">
-                {/* Animated Book Loading */}
+                {}
                 <div className="relative w-24 h-24 mx-auto mb-6">
-                    {/* Book base */}
+                    {}
                     <div className="absolute inset-0 flex items-center justify-center">
                         <BookOpen className="h-16 w-16 text-orange-500 dark:text-orange-400 animate-pulse" />
                     </div>
@@ -27,7 +23,6 @@ export default function LoadingSpinner({ message = "Loading...", submessage = "P
     );
 }
 
-// Compact version for use within components
 export function LoadingSpinnerCompact({ size = "default" }) {
     const sizeClasses = {
         small: "w-16 h-16",

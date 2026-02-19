@@ -85,7 +85,7 @@ export default function AdminSuggestions() {
   return (
     <AdminLayout title="Suggestions" icon={MessageSquare}>
     <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
+        {}
         <div className="bg-white rounded-2xl p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -106,7 +106,7 @@ export default function AdminSuggestions() {
             </button>
           </div>
 
-          {/* Stats */}
+          {}
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-sm text-gray-500 mb-1">Total Suggestions</p>
@@ -126,7 +126,7 @@ export default function AdminSuggestions() {
         {/* Filters and Search */}
         <div className="bg-white rounded-2xl p-6 border border-gray-100">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Search */}
+            {}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -151,7 +151,7 @@ export default function AdminSuggestions() {
           </div>
         </div>
 
-        {/* Suggestions List */}
+        {}
         <div className="space-y-4">
           {loading ? (
             <div className="bg-white rounded-2xl p-12 text-center">
@@ -166,7 +166,7 @@ export default function AdminSuggestions() {
           ) : (
             filteredSuggestions.map((suggestion) => (
               <div key={suggestion.id} className="bg-white rounded-2xl p-6 border border-gray-100">
-                {/* Header */}
+                {}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
@@ -204,12 +204,12 @@ export default function AdminSuggestions() {
                   </div>
                 </div>
 
-                {/* Content */}
+                {}
                 <div className="bg-gray-50 rounded-xl p-4 mb-4">
                   <p className="text-gray-700 leading-relaxed">{suggestion.content}</p>
                 </div>
 
-                {/* Admin Response */}
+                {}
                 {suggestion.admin_response && (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
                     <p className="text-sm font-medium text-green-800 mb-2">Your Response:</p>
@@ -247,7 +247,7 @@ export default function AdminSuggestions() {
                   </div>
                 )}
 
-                {/* Actions */}
+                {}
                 <div className="flex items-center gap-2">
                   {!suggestion.admin_response && (
                     <button

@@ -27,14 +27,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
-
-# === Pydantic Models ===
-
 class LoginRequest(BaseModel):
     user_id: str
     password: str
     role: Optional[str] = None
-
 
 class LoginResponse(BaseModel):
     success: bool
@@ -46,32 +42,27 @@ class LoginResponse(BaseModel):
     user: dict = None
     error: str = None
 
-
 class PasswordChangeRequest(BaseModel):
     user_id: str
     old_password: str
     new_password: str
-
 
 class CreateTeacherRequest(BaseModel):
     """Request to create a teacher account (admin only)."""
     name: str = Field(..., min_length=2, description="Teacher's full name")
     email: str = Field(..., description="Teacher's email")
     subjects: List[str] = Field(..., description="Subjects the teacher will teach")
+    mobile: str = Field(..., min_length=10, max_length=15, description="Teacher's mobile number")
+    age: int = Field(..., ge=18, le=100, description="Teacher's age")
     user_id: str = Field(None, description="Custom user ID (optional, auto-generated if not provided)")
-
-
-# === Helper Functions ===
 
 def hash_password(password: str) -> str:
     """Hash password using SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
     return hash_password(plain_password) == hashed_password
-
 
 def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> str:
     """
@@ -89,8 +80,8 @@ def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> s
     expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
     
     payload = {
-        "user_id": user_id,  # Human-readable ID (TCH...)
-        "mongo_id": mongo_id,   # MongoDB _id for internal use
+        "user_id": user_id,
+        "mongo_id": mongo_id,
         "email": email,
         "role": role,
         "exp": expire,
@@ -100,8 +91,6 @@ def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> s
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return token
 
-
-# Admin token endpoint for client-side admin login
 class AdminTokenRequest(BaseModel):
     email: str
     password: str
@@ -112,14 +101,12 @@ async def get_admin_token(request: AdminTokenRequest):
     Generate a JWT token for the hardcoded admin account.
     This is used by the frontend when admin logs in with the client-side credentials.
     """
-    # Validate against hardcoded admin credentials
     ADMIN_EMAIL = "admin1@gmail.com"
     ADMIN_PASSWORD = "admin1234"
     
     if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
-    # Generate token with admin role
     expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
     payload = {
         "user_id": "ADMIN_ROOT",
@@ -137,7 +124,6 @@ def generate_teacher_id() -> str:
     year = datetime.now().year
     prefix = f"TCH{year}"
     
-    # Get counter for teachers
     counter = db.student_counters.find_one_and_update(
         {"_id": "teacher_counter"},
         {"$inc": {"seq": 1}},
@@ -148,9 +134,6 @@ def generate_teacher_id() -> str:
     seq = counter.get("seq", 1)
     return f"{prefix}{seq:03d}"
 
-
-# === Authentication Endpoints ===
-
 @router.post("/login")
 async def login(request: LoginRequest):
     """
@@ -158,13 +141,11 @@ async def login(request: LoginRequest):
     Returns user data, session token, and JWT access token.
     """
     try:
-        # === Hardcoded Admin Login ===
         ADMIN_EMAIL = "admin1@gmail.com"
         ADMIN_PASSWORD = "admin1234"
         ADMIN_IDS = ["admin1", ADMIN_EMAIL, "ADMIN_ROOT"]
         
         if request.user_id in ADMIN_IDS and request.password == ADMIN_PASSWORD:
-            # Generate admin JWT token
             access_token = create_access_token(
                 user_id="ADMIN_ROOT",
                 email=ADMIN_EMAIL,
@@ -194,9 +175,6 @@ async def login(request: LoginRequest):
                 }
             }
         
-        # === Normal DB Login ===
-        # Pydantic validation handles missing fields for us if they were required
-        # Since role is optional, we build query dynamically
         query = {"user_id": request.user_id}
         if request.role:
             query["role"] = request.role
@@ -210,21 +188,18 @@ async def login(request: LoginRequest):
                 "error": f"{role_msg} found with this user ID"
             }
         
-        # Verify password
         if not verify_password(request.password, user.get("password", "")):
             return {
                 "success": False,
                 "error": "Invalid password"
             }
         
-        # Check if account is active
         if not user.get("is_active", True):
             return {
                 "success": False,
                 "error": "Account is deactivated. Please contact admin."
             }
         
-        # Check if this is first login (password is default pattern)
         is_first_login = False
         try:
             if user["role"] == "teacher":
@@ -243,13 +218,11 @@ async def login(request: LoginRequest):
             logger.warning(f"Error checking first login: {e}")
             is_first_login = False
         
-        # Update last login time
         db.users.update_one(
             {"_id": user["_id"]},
             {"$set": {"last_login": datetime.utcnow()}}
         )
         
-        # Generate session ID and JWT
         session_id = str(uuid.uuid4())
         access_token = create_access_token(
             user_id=user["user_id"],
@@ -258,11 +231,9 @@ async def login(request: LoginRequest):
             mongo_id=str(user["_id"])
         )
         
-        # Get user permissions
         role_enum = UserRole(user["role"])
         permissions = [p.value for p in get_role_permissions(role_enum)]
         
-        # Return user data
         return {
             "success": True,
             "first_login": is_first_login,
@@ -290,14 +261,12 @@ async def login(request: LoginRequest):
             "error": "Login failed. Please try again."
         }
 
-
 @router.post("/change-password")
 async def change_password(request: PasswordChangeRequest):
     """
     Change user password (for first-time login or password reset)
     """
     try:
-        # Find user
         user = db.users.find_one({"user_id": request.user_id})
         
         if not user:
@@ -306,21 +275,18 @@ async def change_password(request: PasswordChangeRequest):
                 "error": "User not found"
             }
         
-        # Verify old password
         if not verify_password(request.old_password, user.get("password", "")):
             return {
                 "success": False,
                 "error": "Current password is incorrect"
             }
         
-        # Validate new password
         if len(request.new_password) < 8:
             return {
                 "success": False,
                 "error": "New password must be at least 8 characters"
             }
         
-        # Hash and update password
         new_hashed = hash_password(request.new_password)
         
         db.users.update_one(
@@ -345,7 +311,6 @@ async def change_password(request: PasswordChangeRequest):
             "error": "Failed to change password"
         }
 
-
 @router.post("/complete-onboarding")
 async def complete_onboarding(data: dict = Body(...)):
     """
@@ -361,7 +326,6 @@ async def complete_onboarding(data: dict = Body(...)):
                 "error": "User ID is required"
             }
         
-        # Find user
         user = db.users.find_one({"user_id": user_id})
         
         if not user:
@@ -370,13 +334,11 @@ async def complete_onboarding(data: dict = Body(...)):
                 "error": "User not found"
             }
         
-        # Prepare update data
         update_data = {
             "isOnboarded": True,
             "onboarded_at": datetime.utcnow()
         }
         
-        # Save optional onboarding data if provided
         if data.get("profile"):
             profile = data["profile"]
             if profile.get("name"):
@@ -399,7 +361,6 @@ async def complete_onboarding(data: dict = Body(...)):
         if data.get("calendar"):
             update_data["exam_calendar"] = data["calendar"]
         
-        # Update user in database
         result = db.users.update_one(
             {"_id": user["_id"]},
             {"$set": update_data}
@@ -424,7 +385,6 @@ async def complete_onboarding(data: dict = Body(...)):
             "error": "Failed to complete onboarding"
         }
 
-
 @router.post("/signup")
 async def signup(user_data: dict = Body(...)):
     """
@@ -435,9 +395,6 @@ async def signup(user_data: dict = Body(...)):
         "success": False,
         "error": "Student registration is disabled. Please contact your admin to create an account."
     }
-
-
-# === Admin Endpoints ===
 
 @router.post("/admin/create-teacher")
 async def create_teacher(
@@ -452,23 +409,18 @@ async def create_teacher(
     - Teacher must change password on first login
     """
     try:
-        # Check if email already exists
         existing = db.users.find_one({"email": request.email})
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        # Generate or use provided teacher ID
         teacher_id = request.user_id if request.user_id else generate_teacher_id()
         
-        # Check if user_id already exists
         existing_id = db.users.find_one({"user_id": teacher_id})
         if existing_id:
             raise HTTPException(status_code=400, detail="User ID already exists")
         
-        # Create default password
         default_password = f"{teacher_id}@123"
         
-        # Create teacher document
         teacher_doc = {
             "user_id": teacher_id,
             "name": request.name,
@@ -476,6 +428,8 @@ async def create_teacher(
             "password": hash_password(default_password),
             "role": UserRole.TEACHER.value,
             "subjects": request.subjects,
+            "mobile": request.mobile,
+            "age": request.age,
             "is_active": True,
             "created_at": datetime.utcnow(),
             "created_by": current_user.user_id
@@ -483,7 +437,6 @@ async def create_teacher(
         
         result = db.users.insert_one(teacher_doc)
         
-        # Send credentials via email
         email_sent = send_credentials_email(request.email, teacher_id, default_password, request.name)
         
         logger.info(f"Teacher created: {teacher_id} by admin {current_user.email}")
@@ -507,7 +460,6 @@ async def create_teacher(
     except Exception as e:
         logger.error(f"Create teacher error: {e}")
         raise HTTPException(status_code=500, detail="Failed to create teacher account")
-
 
 @router.get("/admin/users")
 async def list_users(
@@ -535,7 +487,6 @@ async def list_users(
             "last_login": 1
         }))
         
-        # Convert ObjectId to string
         for user in users:
             user["id"] = str(user.pop("_id"))
         
@@ -548,7 +499,6 @@ async def list_users(
     except Exception as e:
         logger.error(f"List users error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch users")
-
 
 @router.patch("/admin/users/{user_id}/toggle-active")
 async def toggle_user_active(
@@ -564,7 +514,6 @@ async def toggle_user_active(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Toggle is_active
         new_status = not user.get("is_active", True)
         
         db.users.update_one(
@@ -586,7 +535,6 @@ async def toggle_user_active(
     except Exception as e:
         logger.error(f"Toggle user active error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user status")
-
 
 @router.get("/me")
 async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
@@ -620,9 +568,6 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user info")
 
-
-# === Forgot Password / OTP Flow ===
-
 class ForgotPasswordRequest(BaseModel):
     email: str
 
@@ -641,11 +586,9 @@ class ChangePasswordConfirmRequest(BaseModel):
     new_password: str
     confirm_password: str
 
-
 def generate_otp(length: int = 6) -> str:
     """Generate a numeric OTP."""
     return ''.join(random.choices(string.digits, k=length))
-
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
@@ -656,13 +599,11 @@ async def forgot_password(request: ForgotPasswordRequest):
     try:
         user = db.users.find_one({"email": request.email})
         if not user:
-            # Don't reveal whether email exists
             return {"success": True, "message": "If an account with that email exists, an OTP has been sent."}
         
         otp = generate_otp()
         otp_hash = hash_password(otp)
         
-        # Store OTP in password_resets collection (TTL: 10 min)
         db.password_resets.delete_many({"email": request.email})
         db.password_resets.insert_one({
             "email": request.email,
@@ -683,7 +624,6 @@ async def forgot_password(request: ForgotPasswordRequest):
         logger.error(f"Forgot password error: {e}")
         return {"success": False, "error": "Something went wrong. Please try again."}
 
-
 @router.post("/verify-otp")
 async def verify_otp(request: VerifyOTPRequest):
     """
@@ -696,17 +636,14 @@ async def verify_otp(request: VerifyOTPRequest):
         if not record:
             return {"success": False, "error": "No OTP request found. Please request a new OTP."}
         
-        # Check expiry
         if datetime.utcnow() > record["expires_at"]:
             db.password_resets.delete_one({"_id": record["_id"]})
             return {"success": False, "error": "OTP has expired. Please request a new one."}
         
-        # Check attempts
         if record.get("attempts", 0) >= 5:
             db.password_resets.delete_one({"_id": record["_id"]})
             return {"success": False, "error": "Too many failed attempts. Please request a new OTP."}
         
-        # Verify OTP
         if not verify_password(request.otp, record["otp_hash"]):
             db.password_resets.update_one(
                 {"_id": record["_id"]},
@@ -715,7 +652,6 @@ async def verify_otp(request: VerifyOTPRequest):
             remaining = 5 - record.get("attempts", 0) - 1
             return {"success": False, "error": f"Invalid OTP. {remaining} attempts remaining."}
         
-        # OTP is valid — generate a reset token
         reset_token = str(uuid.uuid4())
         reset_token_hash = hash_password(reset_token)
         
@@ -734,7 +670,6 @@ async def verify_otp(request: VerifyOTPRequest):
         logger.error(f"Verify OTP error: {e}")
         return {"success": False, "error": "Verification failed. Please try again."}
 
-
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
     """
@@ -746,20 +681,16 @@ async def reset_password(request: ResetPasswordRequest):
         if not record:
             return {"success": False, "error": "Invalid or expired reset request."}
         
-        # Check token expiry
         if datetime.utcnow() > record.get("token_expires_at", datetime.utcnow()):
             db.password_resets.delete_one({"_id": record["_id"]})
             return {"success": False, "error": "Reset token has expired. Please start over."}
         
-        # Verify reset token
         if not verify_password(request.reset_token, record.get("reset_token_hash", "")):
             return {"success": False, "error": "Invalid reset token."}
         
-        # Validate new password
         if len(request.new_password) < 8:
             return {"success": False, "error": "Password must be at least 8 characters."}
         
-        # Update password
         new_hashed = hash_password(request.new_password)
         result = db.users.update_one(
             {"email": request.email},
@@ -769,7 +700,6 @@ async def reset_password(request: ResetPasswordRequest):
         if result.modified_count == 0:
             return {"success": False, "error": "User not found."}
         
-        # Clean up
         db.password_resets.delete_many({"email": request.email})
         
         return {"success": True, "message": "Password reset successfully. You can now login with your new password."}
@@ -778,7 +708,6 @@ async def reset_password(request: ResetPasswordRequest):
         logger.error(f"Reset password error: {e}")
         return {"success": False, "error": "Password reset failed. Please try again."}
 
-
 @router.post("/change-password-secure")
 async def change_password_secure(request: ChangePasswordConfirmRequest):
     """
@@ -786,28 +715,22 @@ async def change_password_secure(request: ChangePasswordConfirmRequest):
     Used from dashboard settings pages.
     """
     try:
-        # Validate confirmation
         if request.new_password != request.confirm_password:
             return {"success": False, "error": "New password and confirmation do not match."}
         
-        # Validate length
         if len(request.new_password) < 8:
             return {"success": False, "error": "New password must be at least 8 characters."}
         
-        # Find user
         user = db.users.find_one({"user_id": request.user_id})
         if not user:
             return {"success": False, "error": "User not found."}
         
-        # Verify old password
         if not verify_password(request.old_password, user.get("password", "")):
             return {"success": False, "error": "Current password is incorrect."}
         
-        # Don't allow same password
         if request.old_password == request.new_password:
             return {"success": False, "error": "New password must be different from current password."}
         
-        # Update
         new_hashed = hash_password(request.new_password)
         db.users.update_one(
             {"_id": user["_id"]},

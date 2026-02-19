@@ -3,16 +3,6 @@ import { Button } from "../../components/ui/button";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-/**
- * Lesson Navigation Component
- *
- * Sidebar component displaying list of available lessons.
- *
- * TODO: Backend Integration
- * =========================
- * Add loading states, error handling, and search/filter functionality
- */
-
 export default function LessonNavigation({
   lessons,
   currentLesson,
@@ -20,7 +10,7 @@ export default function LessonNavigation({
 }) {
   return (
     <div className="flex flex-col h-full border-r bg-card">
-      {/* Header */}
+      {}
       <div className="px-4 py-4 border-b">
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
@@ -64,7 +54,7 @@ export default function LessonNavigation({
         </div>
       </ScrollArea>
 
-      {/* Footer */}
+      {}
       <div className="px-4 py-3 border-t bg-muted/30">
         <div className="text-xs text-muted-foreground text-center">
           {lessons.length} {lessons.length === 1 ? "Lesson" : "Lessons"}{" "}

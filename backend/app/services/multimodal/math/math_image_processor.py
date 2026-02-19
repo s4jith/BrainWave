@@ -22,7 +22,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 class CLIPProjector(nn.Module):
     """
     Projects CLIP 512-dim embeddings to 768-dim to match text embeddings.
@@ -39,7 +38,6 @@ class CLIPProjector(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.projection(x)
-
 
 class ImageProcessor:
     """
@@ -65,13 +63,11 @@ class ImageProcessor:
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f"🖼️  Initializing Image Processor on device: {self.device}")
         
-        # Load CLIP model and processor
         try:
             self.model = CLIPModel.from_pretrained(model_name).to(self.device)
             self.processor = CLIPProcessor.from_pretrained(model_name)
             self.model.eval()
             
-            # Initialize projection layer (512 → 768)
             self.projector = CLIPProjector(input_dim=512, output_dim=768).to(self.device)
             self.projector.eval()
             
@@ -98,21 +94,16 @@ class ImageProcessor:
             768-dimensional numpy array
         """
         try:
-            # Load and preprocess image
             image = Image.open(image_path).convert("RGB")
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
             
-            # Generate CLIP embedding (512-dim)
             with torch.no_grad():
                 image_features = self.model.get_image_features(**inputs)
                 
-                # Normalize
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
                 
-                # Project to 768-dim
                 projected_features = self.projector(image_features)
                 
-                # Normalize again
                 projected_features = projected_features / projected_features.norm(dim=-1, keepdim=True)
             
             embedding = projected_features.cpu().numpy().flatten()
@@ -144,13 +135,11 @@ class ImageProcessor:
         
         embeddings = []
         
-        # Process in batches for efficiency
         batch_size = 8
         for i in range(0, len(image_paths), batch_size):
             batch_paths = image_paths[i:i + batch_size]
             batch_captions = captions[i:i + batch_size] if captions else None
             
-            # Load images
             images = []
             for path in batch_paths:
                 try:
@@ -160,7 +149,6 @@ class ImageProcessor:
                     logger.warning(f"Failed to load image {path}: {e}")
                     images.append(None)
             
-            # Process valid images
             valid_images = [img for img in images if img is not None]
             if not valid_images:
                 continue
@@ -168,16 +156,12 @@ class ImageProcessor:
             inputs = self.processor(images=valid_images, return_tensors="pt").to(self.device)
             
             with torch.no_grad():
-                # Generate CLIP embeddings
                 image_features = self.model.get_image_features(**inputs)
                 
-                # Normalize
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
                 
-                # Project to 768-dim
                 projected_features = self.projector(image_features)
                 
-                # Normalize
                 projected_features = projected_features / projected_features.norm(dim=-1, keepdim=True)
             
             batch_embeddings = projected_features.cpu().numpy()
@@ -204,26 +188,21 @@ class ImageProcessor:
         Returns:
             768-dimensional combined embedding
         """
-        # Get image embedding
         image_emb = self.embed_image(image_path)
         
-        # Get text embedding from CLIP text encoder
         inputs = self.processor(text=[text], return_tensors="pt").to(self.device)
         
         with torch.no_grad():
             text_features = self.model.get_text_features(**inputs)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             
-            # Project text to 768-dim
             projected_text = self.projector(text_features)
             projected_text = projected_text / projected_text.norm(dim=-1, keepdim=True)
         
         text_emb = projected_text.cpu().numpy().flatten()
         
-        # Weighted combination
         combined_emb = alpha * image_emb + (1 - alpha) * text_emb
         
-        # Normalize
         combined_emb = combined_emb / np.linalg.norm(combined_emb)
         
         logger.debug(f"   Combined image+text embedding (alpha={alpha})")
@@ -250,11 +229,9 @@ class ImageProcessor:
         if enhance:
             from PIL import ImageEnhance
             
-            # Enhance contrast
             enhancer = ImageEnhance.Contrast(image)
             image = enhancer.enhance(1.2)
             
-            # Enhance sharpness
             enhancer = ImageEnhance.Sharpness(image)
             image = enhancer.enhance(1.1)
         
@@ -275,13 +252,10 @@ class ImageProcessor:
         Returns:
             Caption string
         """
-        # For now, use filename and surrounding text
-        # In future, could add image captioning model
         
         filename = Path(image_path).stem
         
         if surrounding_text:
-            # Look for common caption patterns
             caption_patterns = [
                 r'Figure \d+:?\s*([^\n]+)',
                 r'Diagram \d+:?\s*([^\n]+)',
@@ -306,17 +280,10 @@ class ImageProcessor:
         self.projector.load_state_dict(torch.load(path, map_location=self.device))
         logger.info(f"📂 Loaded projector weights from: {path}")
 
-
 if __name__ == "__main__":
-    # Test the processor
     logging.basicConfig(level=logging.INFO)
     
     processor = ImageProcessor()
-    
-    # Example usage (replace with actual image path)
-    # embedding = processor.embed_image("sample_diagram.png")
-    # print(f"Embedding shape: {embedding.shape}")
-    # print(f"Embedding norm: {np.linalg.norm(embedding)}")
     
     print("Image processor ready for use")
     print(f"   Model device: {processor.device}")

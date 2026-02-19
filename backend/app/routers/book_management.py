@@ -12,16 +12,13 @@ Student endpoints:
 - Get chapters/lessons for a subject
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import datetime
 import os
 import uuid
-import shutil
 import logging
-import asyncio
 from bson import ObjectId
 
 from app.db.mongo import db
@@ -32,13 +29,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/books", tags=["Book Management"])
 
-# Directory for storing uploaded PDFs
-# __file__ is in routers/, go up 1 level to app/, then into uploads/books
 BOOKS_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "books")
 os.makedirs(BOOKS_UPLOAD_DIR, exist_ok=True)
-
-
-# ==================== HELPER FUNCTIONS ====================
 
 async def process_book_embeddings(
     book_id: str,
@@ -63,17 +55,15 @@ async def process_book_embeddings(
         
         logger.info(f"🔄 Starting embedding generation for book: {book_id}")
         
-        # Initialize processors
         pdf_processor = AdvancedPDFProcessor(
             chunk_size=800,
             chunk_overlap=150,
-            dpi=200,  # Balance between quality and speed
+            dpi=200,
             use_gemini_vision=True
         )
         
         uploader = PineconeEmbeddingUploader()
         
-        # Process PDF
         logger.info("📄 Processing PDF...")
         result = pdf_processor.process_pdf(
             pdf_path=pdf_path,
@@ -89,7 +79,6 @@ async def process_book_embeddings(
                 "processed_pages": result.processed_pages
             }
         
-        # Create chunks
         logger.info("📦 Creating chunks...")
         chunks = pdf_processor.create_chunks(result.pages, book_metadata)
         
@@ -101,7 +90,6 @@ async def process_book_embeddings(
                 "total_chunks": 0
             }
         
-        # Upload to Pinecone
         logger.info(f"Uploading {len(chunks)} chunks to Pinecone...")
         upload_stats = uploader.upload_chunks(chunks, namespace)
         
@@ -126,9 +114,6 @@ async def process_book_embeddings(
             "error": str(e),
             "errors": [str(e)]
         }
-
-
-# ==================== MODELS ====================
 
 class BookCreate(BaseModel):
     title: str
@@ -155,9 +140,6 @@ class BookResponse(BaseModel):
     chapters: List[dict]
     created_at: str
     updated_at: str
-
-
-# ==================== ADMIN ENDPOINTS ====================
 
 @router.post("/upload")
 async def upload_book(
@@ -197,15 +179,12 @@ async def upload_book(
     """
     print(f"\n{'='*60}\n📤 UPLOAD REQUEST RECEIVED: {title}, {subject}, Class {class_level}\n{'='*60}\n")
     try:
-        # Validate PDF file
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Generate clean filename
-        clean_title = title.replace(' ', '_').replace('/', '_')[:50]  # Limit length
+        clean_title = title.replace(' ', '_').replace('/', '_')[:50]
         safe_filename = f"{clean_title}.pdf"
         
-        # Read PDF content
         content = await pdf_file.read()
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
@@ -213,7 +192,6 @@ async def upload_book(
         file_size = len(content)
         logger.info(f"📄 Received PDF: {safe_filename} ({file_size} bytes)")
         
-        # Upload to Cloudinary (Free Tier: 25GB storage) - PRIMARY STORAGE
         cloud_service = get_cloudinary_service()
         
         if not cloud_service.is_available():
@@ -235,13 +213,10 @@ async def upload_book(
         cloud_public_id = cloud_info.get('public_id')
         logger.info(f"PDF uploaded to Cloudinary: {cloud_url}")
         
-        # Create namespace for embeddings - ONE namespace per subject (all classes together)
         namespace = subject.lower().replace(' ', '_')
         
-        # Generate a unique book_id
         book_id = str(uuid.uuid4())
         
-        # Create book document - Cloudinary is the only storage
         book_doc = {
             "book_id": book_id,
             "title": title,
@@ -250,7 +225,7 @@ async def upload_book(
             "chapter_number": chapter_number,
             "description": description,
             "pdf_filename": safe_filename,
-            "pdf_url": cloud_url,  # Cloudinary URL is the primary URL
+            "pdf_url": cloud_url,
             "cloudinary_url": cloud_url,
             "cloudinary_public_id": cloud_public_id,
             "has_embeddings": False,
@@ -262,30 +237,25 @@ async def upload_book(
             "updated_at": datetime.utcnow()
         }
         
-        # Insert into MongoDB
         result = db.books.insert_one(book_doc)
         mongo_id = str(result.inserted_id)
         
         logger.info(f"Book record created: {title} (ID: {mongo_id}, book_id: {book_id})")
         
-        # Generate embeddings if requested
         embedding_result = None
         if generate_embeddings:
             try:
-                # Update status to processing
                 db.books.update_one(
                     {"_id": ObjectId(mongo_id)},
                     {"$set": {"processing_status": "processing"}}
                 )
                 
-                # Create temp file for embedding processing
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
                     temp_file.write(content)
                     temp_pdf_path = temp_file.name
                 
                 try:
-                    # Process PDF and generate embeddings
                     embedding_result = await process_book_embeddings(
                         book_id=book_id,
                         pdf_path=temp_pdf_path,
@@ -295,16 +265,14 @@ async def upload_book(
                             "subject": subject,
                             "class_level": class_level,
                             "chapter_number": chapter_number,
-                            "pdf_url": cloud_url  # Include PDF URL in metadata
+                            "pdf_url": cloud_url
                         },
                         namespace=namespace
                     )
                 finally:
-                    # Clean up temp file
                     if os.path.exists(temp_pdf_path):
                         os.remove(temp_pdf_path)
                 
-                # Update book with embedding info
                 db.books.update_one(
                     {"_id": ObjectId(mongo_id)},
                     {
@@ -355,7 +323,6 @@ async def upload_book(
         logger.error(f"Traceback:\n{error_trace}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/{book_id}/regenerate-embeddings")
 async def regenerate_embeddings(book_id: str):
     """
@@ -366,23 +333,19 @@ async def regenerate_embeddings(book_id: str):
         import tempfile
         import requests
         
-        # Get book from database
         book = db.books.find_one({"_id": ObjectId(book_id)})
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Get PDF URL from Cloudinary
         pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
         if not pdf_url or not pdf_url.startswith("http"):
             raise HTTPException(status_code=404, detail="PDF not found in cloud storage")
         
-        # Update status
         db.books.update_one(
             {"_id": ObjectId(book_id)},
             {"$set": {"processing_status": "processing", "updated_at": datetime.utcnow()}}
         )
         
-        # Download PDF from Cloudinary to temp file
         logger.info(f"⬇️ Downloading PDF from: {pdf_url}")
         response = requests.get(pdf_url, timeout=60)
         if response.status_code != 200:
@@ -393,7 +356,6 @@ async def regenerate_embeddings(book_id: str):
             temp_pdf_path = temp_file.name
         
         try:
-            # Process embeddings
             namespace = book.get("embedding_namespace", book['subject'].lower().replace(' ', '_'))
             
             result = await process_book_embeddings(
@@ -410,11 +372,9 @@ async def regenerate_embeddings(book_id: str):
                 namespace=namespace
             )
         finally:
-            # Clean up temp file
             if os.path.exists(temp_pdf_path):
                 os.remove(temp_pdf_path)
         
-        # Update book with results
         db.books.update_one(
             {"_id": ObjectId(book_id)},
             {
@@ -441,7 +401,6 @@ async def regenerate_embeddings(book_id: str):
     except Exception as e:
         logger.error(f" Regenerate embeddings failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/{book_id}/chapters")
 async def add_chapter(book_id: str, chapter: ChapterCreate):
@@ -472,7 +431,6 @@ async def add_chapter(book_id: str, chapter: ChapterCreate):
         logger.error(f" Add chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/admin/list")
 async def list_all_books():
     """List all books for admin view."""
@@ -485,7 +443,7 @@ async def list_all_books():
                 "id": str(book["_id"]),
                 "title": book.get("title", "Untitled"),
                 "subject": book.get("subject", "Unknown"),
-                "class_level": book.get("class_level", 6),  # Default to 6 if missing
+                "class_level": book.get("class_level", 6),
                 "description": book.get("description", ""),
                 "pdf_filename": book.get("pdf_filename", ""),
                 "pdf_url": book.get("pdf_url", ""),
@@ -502,19 +460,16 @@ async def list_all_books():
         logger.error(f" List books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/{book_id}")
 async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True)):
     """
     Delete a book from MongoDB, Cloudinary, and optionally from Pinecone.
     """
     try:
-        # Get book info first
         book = db.books.find_one({"_id": ObjectId(book_id)})
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Delete PDF from Cloudinary
         cloudinary_public_id = book.get("cloudinary_public_id")
         if cloudinary_public_id:
             try:
@@ -527,22 +482,16 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
             except Exception as cloud_error:
                 logger.warning(f" Cloudinary deletion failed: {cloud_error}")
         
-        # Delete embeddings from Pinecone if requested
         if delete_embeddings and book.get("has_embeddings"):
             try:
                 from pinecone import Pinecone
                 pc = Pinecone(api_key=settings.PINECONE_API_KEY)
                 index = pc.Index(host=settings.PINECONE_HOST)
                 
-                # Delete by metadata filter (book_id)
                 namespace = book.get("embedding_namespace", "default")
                 
-                # Delete all vectors with this book_id
-                # Note: Pinecone delete by filter requires specific setup
-                # For now, we'll log the namespace for manual cleanup
                 logger.info(f"Embeddings in namespace '{namespace}' should be deleted for book_id: {book_id}")
                 
-                # If using metadata filter delete (Pinecone serverless supports this):
                 try:
                     index.delete(
                         filter={"book_id": book_id},
@@ -555,7 +504,6 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
             except Exception as e:
                 logger.warning(f"Pinecone cleanup failed: {e}")
         
-        # Delete from MongoDB
         db.books.delete_one({"_id": ObjectId(book_id)})
         
         logger.info(f"Book deleted: {book['title']} (ID: {book_id})")
@@ -571,7 +519,6 @@ async def delete_book(book_id: str, delete_embeddings: bool = Query(default=True
         logger.error(f" Delete book failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/{book_id}/generate-embeddings")
 async def generate_embeddings(book_id: str):
     """
@@ -583,7 +530,6 @@ async def generate_embeddings(book_id: str):
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # For now, just return instructions
         return {
             "success": True,
             "message": "Embedding generation triggered",
@@ -634,9 +580,6 @@ async def update_embedding_status(
         logger.error(f" Update embedding status failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== STUDENT ENDPOINTS ====================
-
 @router.get("/student/subjects")
 async def get_available_subjects(
     class_level: int = Query(...),
@@ -647,15 +590,12 @@ async def get_available_subjects(
     Returns subjects with their total chapter count and real progress from MongoDB.
     """
     try:
-        # Aggregate books by subject to get chapter counts for this class level
         pipeline = [
             {"$match": {"class_level": class_level}},
-            # Deduplicate by title to avoid counting duplicate uploads
             {"$group": {
                 "_id": {"subject": "$subject", "title": "$title"},
                 "doc": {"$first": "$$ROOT"}
             }},
-            # Then group by subject
             {"$group": {
                 "_id": "$_id.subject",
                 "total_chapters": {"$sum": 1},
@@ -675,11 +615,9 @@ async def get_available_subjects(
         
         subjects_from_db = list(db.books.aggregate(pipeline))
         
-        # Get student progress from questions asked (if student_id provided)
         student_progress = {}
         if student_id:
             try:
-                # Count questions asked per subject from top_questions collection
                 questions_col = db.client["ncert_ai"]["top_questions"]
                 progress_pipeline = [
                     {"$match": {"user_id": student_id, "class_level": class_level}},
@@ -692,7 +630,6 @@ async def get_available_subjects(
                 for p in progress_data:
                     student_progress[p["_id"]] = p["questions_asked"]
                 
-                # Also count from test results
                 tests_col = db.client["ncert_ai"]["test_submissions"]
                 test_pipeline = [
                     {"$match": {"student_id": student_id}},
@@ -705,7 +642,7 @@ async def get_available_subjects(
                 for t in test_data:
                     subj = t["_id"]
                     if subj in student_progress:
-                        student_progress[subj] += t["tests_taken"] * 5  # Weight tests higher
+                        student_progress[subj] += t["tests_taken"] * 5
                     else:
                         student_progress[subj] = t["tests_taken"] * 5
                         
@@ -716,9 +653,8 @@ async def get_available_subjects(
         for s in subjects_from_db:
             subject_name = s["name"]
             total = s["total_chapters"]
-            # Calculate chapters completed based on questions asked (1 chapter = 5 questions)
             questions = student_progress.get(subject_name, 0)
-            chapters_done = min(questions // 5, total) if total > 0 else 0  # Every 5 questions = 1 chapter
+            chapters_done = min(questions // 5, total) if total > 0 else 0
             
             subject_info.append({
                 "name": subject_name,
@@ -727,7 +663,7 @@ async def get_available_subjects(
                 "chapters": s.get("chapters", []),
                 "has_ai_support": True,
                 "chapters_completed": chapters_done,
-                "questions_asked": questions  # Extra info for dashboard
+                "questions_asked": questions
             })
         
         logger.info(f"Found {len(subject_info)} subjects with {sum(s['total_chapters'] for s in subject_info)} total chapters for Class {class_level}")
@@ -739,7 +675,6 @@ async def get_available_subjects(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/student/books")
 async def get_books_for_student(
@@ -755,7 +690,6 @@ async def get_books_for_student(
         
         result = []
         for book in books:
-            # Create lesson-like structure for compatibility with BookToBot
             result.append({
                 "id": str(book["_id"]),
                 "title": book["title"],
@@ -772,7 +706,6 @@ async def get_books_for_student(
     except Exception as e:
         logger.error(f" Get student books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/flashcards")
 async def generate_flashcards(
@@ -815,7 +748,6 @@ async def generate_flashcards(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/notes/generate")
 async def generate_smart_notes(
     subject: str = Query(..., description="Subject name"),
@@ -844,7 +776,6 @@ async def generate_smart_notes(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/notes/save")
 async def save_smart_notes(
@@ -875,7 +806,6 @@ async def save_smart_notes(
         logger.error(f" Save notes failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/notes/{user_id}")
 async def get_user_notes(
     user_id: str,
@@ -898,7 +828,6 @@ async def get_user_notes(
         logger.error(f" Get notes failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/student/lessons")
 async def get_lessons_for_student(
     class_level: int = Query(...),
@@ -913,8 +842,6 @@ async def get_lessons_for_student(
         import random
         import time
         
-        # Normalize subject to namespace format
-        # Map subject names to Pinecone namespaces
         subject_namespace_map = {
             "Maths": "maths",
             "Mathematics": "maths",
@@ -926,7 +853,6 @@ async def get_lessons_for_student(
             "Hindi": "hindi"
         }
         
-        # Normalize subject name (Mathematics → Maths)
         subject_normalized = subject
         if subject.lower() in ["mathematics", "math"]:
             subject_normalized = "Maths"
@@ -934,30 +860,26 @@ async def get_lessons_for_student(
         namespace = subject_namespace_map.get(subject, subject_namespace_map.get(subject_normalized, subject.lower().replace(' ', '_')))
         logger.info(f"Getting lessons for {subject} (normalized: {subject_normalized}, namespace: {namespace}), Class {class_level}")
         
-        # Use random vector for querying (zero vector doesn't work well with cosine similarity)
         random_vec = [random.random() for _ in range(768)]
         
-        # Retry logic for Pinecone connection issues
         max_retries = 3
         query_response = None
         
         for attempt in range(max_retries):
             try:
-                # Create fresh connection on each retry
                 pc = Pinecone(api_key=settings.PINECONE_API_KEY)
                 index = pc.Index(
                     name=settings.PINECONE_MASTER_INDEX,
                     host=settings.PINECONE_MASTER_HOST
                 )
                 
-                # Query Pinecone for vectors - get a good sample
                 query_response = index.query(
                     namespace=namespace,
                     vector=random_vec,
                     top_k=10000,
                     include_metadata=True
                 )
-                break  # Success, exit retry loop
+                break
                 
             except Exception as conn_error:
                 if attempt < max_retries - 1:
@@ -969,16 +891,13 @@ async def get_lessons_for_student(
         matches = query_response.get("matches", []) if query_response else []
         logger.info(f" Pinecone query returned {len(matches)} matches for namespace='{namespace}', class={class_level}")
         
-        # Filter and group by chapter for this class level
         chapters_found = {}
         filtered_count = 0
         for match in matches:
             metadata = match.get("metadata", {})
             
-            # Check class level
             meta_class = metadata.get("class_level") or metadata.get("class")
             if meta_class is not None:
-                # Handle string class levels
                 if isinstance(meta_class, str):
                     try:
                         if "class" in meta_class.lower():
@@ -988,16 +907,13 @@ async def get_lessons_for_student(
                     except:
                         continue
                 if int(meta_class) != class_level:
-                    continue  # Skip if not matching class
+                    continue
             else:
-                # No class_level in metadata, skip
                 continue
             
             filtered_count += 1
             
-            # Extract chapter number (handle different field names)
             chapter_num = metadata.get("chapter_number") or metadata.get("chapter") or 1
-            # Handle string chapter numbers
             if isinstance(chapter_num, str):
                 try:
                     if "chapter" in chapter_num.lower():
@@ -1010,7 +926,6 @@ async def get_lessons_for_student(
             chapter_num = int(chapter_num)
             
             if chapter_num not in chapters_found:
-                # Get title from metadata
                 title = metadata.get("book_title") or metadata.get("title") or metadata.get("chapter_title") or f"Chapter {chapter_num}"
                 
                 chapters_found[chapter_num] = {
@@ -1024,20 +939,17 @@ async def get_lessons_for_student(
         
         logger.info(f"📊 After filtering: {filtered_count}/{len(matches)} matches passed, {len(chapters_found)} unique chapters found")
         
-        # Also check MongoDB for PDF URLs
         mongo_books = list(db.books.find({
             "class_level": class_level,
             "subject": {"$regex": f"^(maths|mathematics)$" if subject_normalized == "Maths" else f"^{subject_normalized}$", "$options": "i"}
         }).sort("chapter_number", 1))
         
-        # Build lessons list
         lessons = []
         lesson_number = 1
         
         for chapter_num in sorted(chapters_found.keys()):
             chapter_data = chapters_found[chapter_num]
             
-            # Try to get PDF URL from MongoDB
             pdf_url = chapter_data.get("pdf_url", "")
             book_record = None
             
@@ -1076,9 +988,6 @@ async def get_lessons_for_student(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== PDF SERVING ====================
-
 @router.get("/pdf/{file_path:path}")
 async def serve_pdf(file_path: str):
     """
@@ -1094,13 +1003,10 @@ async def serve_pdf(file_path: str):
     from starlette.responses import FileResponse as StarletteFileResponse
     
     try:
-        # Decode URL-encoded path (for Hindi/Unicode filenames)
         decoded_path = unquote(file_path)
         
-        # Build full file path
         full_path = os.path.join(BOOKS_UPLOAD_DIR, decoded_path)
         
-        # Security check: ensure path is within BOOKS_UPLOAD_DIR
         real_books_dir = os.path.realpath(BOOKS_UPLOAD_DIR)
         real_file_path = os.path.realpath(full_path)
         
@@ -1111,20 +1017,15 @@ async def serve_pdf(file_path: str):
             logger.error(f"PDF not found: {full_path}")
             raise HTTPException(status_code=404, detail=f"PDF not found: {decoded_path}")
         
-        # Get filename for download
         filename = os.path.basename(decoded_path)
         file_size = os.path.getsize(full_path)
         
         logger.info(f"📄 Serving PDF: {decoded_path} ({file_size} bytes)")
         
-        # Create RFC 5987 encoded filename for Unicode support
-        # Format: filename*=UTF-8''encoded_filename
         encoded_filename = quote(filename, safe='')
         
-        # Build Content-Disposition with both ASCII fallback and UTF-8 version
         content_disposition = f"inline; filename=\"document.pdf\"; filename*=UTF-8''{encoded_filename}"
         
-        # Use Starlette's FileResponse for streaming (better for large files)
         response = StarletteFileResponse(
             full_path,
             media_type="application/pdf",
@@ -1145,7 +1046,6 @@ async def serve_pdf(file_path: str):
         logger.error(f" Serve PDF failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/pdf-page/{file_path:path}")
 async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
     """
@@ -1162,19 +1062,16 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
     Returns:
         PNG image of the rendered page
     """
-    import fitz  # PyMuPDF
+    import fitz
     from fastapi.responses import Response
     from urllib.parse import unquote
     import io
     
     try:
-        # Decode URL-encoded path (for Hindi/Unicode filenames)
         decoded_path = unquote(file_path)
         
-        # Build full file path
         full_path = os.path.join(BOOKS_UPLOAD_DIR, decoded_path)
         
-        # Security check: ensure path is within BOOKS_UPLOAD_DIR
         real_books_dir = os.path.realpath(BOOKS_UPLOAD_DIR)
         real_file_path = os.path.realpath(full_path)
         
@@ -1185,10 +1082,8 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
             logger.error(f"PDF not found for rendering: {full_path}")
             raise HTTPException(status_code=404, detail=f"PDF not found: {decoded_path}")
         
-        # Open PDF with PyMuPDF
         doc = fitz.open(full_path)
         
-        # Validate page number
         if page < 1 or page > len(doc):
             doc.close()
             raise HTTPException(
@@ -1196,18 +1091,13 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
                 detail=f"Invalid page number. PDF has {len(doc)} pages."
             )
         
-        # Get the page (0-indexed in fitz)
         pdf_page = doc[page - 1]
         
-        # Render page as image with the specified scale
-        # Higher scale = better quality but larger file
         mat = fitz.Matrix(scale, scale)
         pix = pdf_page.get_pixmap(matrix=mat, alpha=False)
         
-        # Convert to PNG bytes
         img_bytes = pix.tobytes("png")
         
-        # Save page count before closing
         num_pages = len(doc)
         doc.close()
         
@@ -1217,7 +1107,7 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
             content=img_bytes,
             media_type="image/png",
             headers={
-                "Cache-Control": "public, max-age=3600",  # Cache for 1 hour
+                "Cache-Control": "public, max-age=3600",
                 "Access-Control-Allow-Origin": "*",
             }
         )
@@ -1227,7 +1117,6 @@ async def render_pdf_page(file_path: str, page: int = 1, scale: float = 1.5):
     except Exception as e:
         logger.error(f" Render PDF page failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/pdf-info/{file_path:path}")
 async def get_pdf_info(file_path: str):
@@ -1244,13 +1133,10 @@ async def get_pdf_info(file_path: str):
     from urllib.parse import unquote
     
     try:
-        # Decode URL-encoded path
         decoded_path = unquote(file_path)
         
-        # Build full file path
         full_path = os.path.join(BOOKS_UPLOAD_DIR, decoded_path)
         
-        # Security check
         real_books_dir = os.path.realpath(BOOKS_UPLOAD_DIR)
         real_file_path = os.path.realpath(full_path)
         
@@ -1260,7 +1146,6 @@ async def get_pdf_info(file_path: str):
         if not os.path.exists(full_path):
             raise HTTPException(status_code=404, detail=f"PDF not found: {decoded_path}")
         
-        # Open PDF and get info
         doc = fitz.open(full_path)
         
         info = {
@@ -1280,9 +1165,6 @@ async def get_pdf_info(file_path: str):
         logger.error(f" Get PDF info failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== CLOUDINARY PDF RENDERING ====================
-
 @router.get("/render/{book_id}/info")
 async def get_book_pdf_info(book_id: str):
     """
@@ -1293,22 +1175,18 @@ async def get_book_pdf_info(book_id: str):
     from app.services.pdf_cache import get_cached_pdf
     
     try:
-        # Get book from database
         book = db.books.find_one({"_id": ObjectId(book_id)})
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Get PDF URL
         pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
         if not pdf_url:
             raise HTTPException(status_code=404, detail="PDF URL not found")
         
-        # Get cached PDF path (downloads if needed)
         pdf_path = get_cached_pdf(pdf_url)
         if not pdf_path:
             raise HTTPException(status_code=500, detail="Failed to download PDF")
         
-        # Open and get info
         doc = fitz.open(pdf_path)
         info = {
             "numPages": len(doc),
@@ -1327,7 +1205,6 @@ async def get_book_pdf_info(book_id: str):
         logger.error(f" Get book PDF info failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/render/{book_id}/page/{page_number}")
 async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.5):
     """
@@ -1339,25 +1216,20 @@ async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.
     from app.services.pdf_cache import get_cached_pdf
     
     try:
-        # Get book from database
         book = db.books.find_one({"_id": ObjectId(book_id)})
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
         
-        # Get PDF URL
         pdf_url = book.get("cloudinary_url") or book.get("pdf_url")
         if not pdf_url:
             raise HTTPException(status_code=404, detail="PDF URL not found")
         
-        # Get cached PDF path (downloads if needed)
         pdf_path = get_cached_pdf(pdf_url)
         if not pdf_path:
             raise HTTPException(status_code=500, detail="Failed to download PDF")
         
-        # Open PDF
         doc = fitz.open(pdf_path)
         
-        # Validate page number
         if page_number < 1 or page_number > len(doc):
             doc.close()
             raise HTTPException(
@@ -1365,7 +1237,6 @@ async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.
                 detail=f"Invalid page number. PDF has {len(doc)} pages."
             )
         
-        # Render page
         pdf_page = doc[page_number - 1]
         mat = fitz.Matrix(scale, scale)
         pix = pdf_page.get_pixmap(matrix=mat, alpha=False)
@@ -1392,9 +1263,6 @@ async def render_book_pdf_page(book_id: str, page_number: int, scale: float = 1.
         logger.error(f" Render book PDF page failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== SYNC EXISTING DATA ====================
-
 @router.post("/admin/sync-existing")
 async def sync_existing_books():
     """
@@ -1402,7 +1270,6 @@ async def sync_existing_books():
     This preserves the current math books that are already in Pinecone.
     """
     try:
-        # Check if already synced
         existing_count = db.books.count_documents({})
         if existing_count > 0:
             return {
@@ -1411,7 +1278,6 @@ async def sync_existing_books():
                 "synced": 0
             }
         
-        # Define the existing math lessons (from lessons.js)
         math_lessons = [
             {"number": 1, "title": "Patterns in Mathematics", "description": "Exploring patterns in numbers, shapes, and their relationships.", "pdfUrl": "/fegp101.pdf"},
             {"number": 2, "title": "Lines and Angles", "description": "Understanding different types of lines, angles, and their properties.", "pdfUrl": "/fegp102.pdf"},
@@ -1425,16 +1291,15 @@ async def sync_existing_books():
             {"number": 10, "title": "The Other Side of Zero", "description": "Introduction to negative numbers and integers.", "pdfUrl": "/fegp110.pdf"},
         ]
         
-        # Create a single book entry for Math Class 6
         math_book = {
             "title": "Mathematics - Class 6",
             "subject": "Mathematics",
             "class_level": 6,
             "description": "NCERT Mathematics textbook for Class 6",
-            "pdf_filename": "fegp101.pdf",  # First chapter
-            "pdf_url": "/fegp101.pdf",  # Points to public folder
-            "has_embeddings": True,  # Already in Pinecone
-            "embedding_count": 2193,  # From README
+            "pdf_filename": "fegp101.pdf",
+            "pdf_url": "/fegp101.pdf",
+            "has_embeddings": True,
+            "embedding_count": 2193,
             "embedding_namespace": "maths",
             "chapters": [
                 {
@@ -1451,7 +1316,6 @@ async def sync_existing_books():
         
         db.books.insert_one(math_book)
         
-        # Also add individual entries for each chapter (for backward compatibility)
         for lesson in math_lessons:
             chapter_book = {
                 "title": lesson["title"],
@@ -1461,7 +1325,7 @@ async def sync_existing_books():
                 "pdf_filename": lesson["pdfUrl"].replace("/", ""),
                 "pdf_url": lesson["pdfUrl"],
                 "has_embeddings": True,
-                "embedding_count": 0,  # Individual count unknown
+                "embedding_count": 0,
                 "embedding_namespace": "maths",
                 "chapter_number": lesson["number"],
                 "is_chapter": True,
@@ -1483,9 +1347,6 @@ async def sync_existing_books():
         logger.error(f" Sync existing books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== PINECONE STATS ====================
-
 @router.get("/admin/pinecone-stats")
 async def get_pinecone_stats():
     """Get Pinecone index statistics."""
@@ -1496,24 +1357,20 @@ async def get_pinecone_stats():
         
         stats = index.describe_index_stats()
         
-        # Convert namespaces to serializable format
         namespaces_dict = {}
         raw_namespaces = stats.get("namespaces", {})
         
         if isinstance(raw_namespaces, dict):
             for ns_name, ns_data in raw_namespaces.items():
                 if hasattr(ns_data, 'vector_count'):
-                    # Pinecone SDK object
                     namespaces_dict[ns_name] = {
                         "vector_count": ns_data.vector_count
                     }
                 elif isinstance(ns_data, dict):
-                    # Already a dict
                     namespaces_dict[ns_name] = {
                         "vector_count": ns_data.get("vector_count", 0)
                     }
                 else:
-                    # Try to convert to dict
                     try:
                         namespaces_dict[ns_name] = {"vector_count": int(ns_data)}
                     except:
@@ -1542,7 +1399,6 @@ async def get_pinecone_stats():
             }
         }
 
-
 @router.post("/admin/fix-missing-fields")
 async def fix_missing_fields():
     """
@@ -1550,7 +1406,6 @@ async def fix_missing_fields():
     This is a migration endpoint to handle legacy data.
     """
     try:
-        # Find all books
         all_books = list(db.books.find())
         fixed_count = 0
         
@@ -1558,32 +1413,26 @@ async def fix_missing_fields():
             needs_update = False
             update_data = {}
             
-            # Check for missing class_level
             if "class_level" not in book:
-                update_data["class_level"] = 6  # Default to class 6
+                update_data["class_level"] = 6
                 needs_update = True
             
-            # Check for missing title
             if "title" not in book or not book.get("title"):
                 update_data["title"] = f"Untitled Book ({book['_id']})"
                 needs_update = True
             
-            # Check for missing subject
             if "subject" not in book or not book.get("subject"):
                 update_data["subject"] = "Unknown"
                 needs_update = True
             
-            # Check for missing pdf_filename
             if "pdf_filename" not in book or not book.get("pdf_filename"):
                 update_data["pdf_filename"] = ""
                 needs_update = True
             
-            # Check for missing pdf_url
             if "pdf_url" not in book or not book.get("pdf_url"):
                 update_data["pdf_url"] = ""
                 needs_update = True
             
-            # Update if needed
             if needs_update:
                 db.books.update_one(
                     {"_id": book["_id"]},
@@ -1603,7 +1452,6 @@ async def fix_missing_fields():
         logger.error(f" Fix missing fields failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/admin/hierarchical-structure")
 async def get_hierarchical_structure():
     """
@@ -1621,40 +1469,31 @@ async def get_hierarchical_structure():
             host=settings.PINECONE_MASTER_HOST
         )
         
-        # Get namespaces (subjects)
         stats = index.describe_index_stats()
         namespaces = stats.get("namespaces", {})
         
-        # Structure to build
         structure = {}
         
-        # For each namespace (subject), query to get metadata
         for namespace_name, namespace_info in namespaces.items():
             if namespace_info.get("vector_count", 0) == 0:
                 continue
             
-            # Query some vectors to get metadata (limit to 1000 to sample)
-            # We'll use a dummy vector to query by
             query_response = index.query(
                 namespace=namespace_name,
-                vector=[0.0] * 768,  # Dummy vector
-                top_k=1000,  # Get up to 1000 samples
+                vector=[0.0] * 768,
+                top_k=1000,
                 include_metadata=True
             )
             
-            # Extract unique class/chapter combinations
             classes = {}
             for match in query_response.get("matches", []):
                 metadata = match.get("metadata", {})
                 
-                # Support both old format (class, chapter) and new format (class_level, chapter_number)
                 class_level = metadata.get("class_level") or metadata.get("class")
                 chapter_number = metadata.get("chapter_number") or metadata.get("chapter")
                 
-                # Try to extract class number from string like "Class 6" or just "6"
                 if class_level:
                     if isinstance(class_level, str):
-                        # Extract number from strings like "Class 6" or "6"
                         import re
                         match_num = re.search(r'(\d+)', str(class_level))
                         if match_num:
@@ -1672,7 +1511,6 @@ async def get_hierarchical_structure():
                         }
                     
                     if chapter_number:
-                        # Extract number from chapter (could be "Chapter 1" or just "1")
                         if isinstance(chapter_number, str):
                             import re
                             match_ch = re.search(r'(\d+)', str(chapter_number))
@@ -1683,11 +1521,9 @@ async def get_hierarchical_structure():
                     
                     classes[class_key]["vector_count"] += 1
             
-            # Convert sets to sorted lists
             for class_key in classes:
                 classes[class_key]["chapters"] = sorted(list(classes[class_key]["chapters"]))
             
-            # Add to structure
             if classes:
                 structure[namespace_name] = {
                     "total_vectors": namespace_info.get("vector_count", 0),
@@ -1706,9 +1542,6 @@ async def get_hierarchical_structure():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== HIERARCHICAL DELETE ENDPOINTS ====================
-
 @router.delete("/admin/delete-subject/{subject}")
 async def delete_subject(subject: str, confirmation: str = Query(...)):
     """
@@ -1720,7 +1553,6 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
     - All book records in MongoDB for this subject
     """
     try:
-        # Verify confirmation matches subject
         if confirmation.lower() != subject.lower():
             raise HTTPException(
                 status_code=400, 
@@ -1737,7 +1569,6 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         
         namespace = subject.lower().replace(' ', '_')
         
-        # Get stats before deletion
         stats_before = index.describe_index_stats()
         namespace_info = stats_before.get("namespaces", {}).get(namespace, {})
         vectors_to_delete = namespace_info.get("vector_count", 0)
@@ -1745,14 +1576,11 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         if vectors_to_delete == 0:
             raise HTTPException(status_code=404, detail=f"No vectors found in namespace '{namespace}'")
         
-        # Delete entire namespace in Pinecone
         logger.info(f"🗑️ Deleting namespace '{namespace}' with {vectors_to_delete} vectors...")
         index.delete(delete_all=True, namespace=namespace)
         
-        # Get all books for this subject to delete from Google Drive
         books_to_delete = list(db.books.find({"subject": {"$regex": f"^{subject}$", "$options": "i"}}))
         
-        # Delete PDFs from Google Drive
         drive_service = get_drive_service()
         drive_deleted_count = 0
         if drive_service.is_available():
@@ -1768,7 +1596,6 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         if drive_deleted_count > 0:
             logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
-        # Delete all books from MongoDB for this subject
         mongo_result = db.books.delete_many({"subject": {"$regex": f"^{subject}$", "$options": "i"}})
         books_deleted = mongo_result.deleted_count
         
@@ -1792,7 +1619,6 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/admin/delete-class/{subject}/{class_level}")
 async def delete_class(subject: str, class_level: int, confirmation: str = Query(...)):
@@ -1822,11 +1648,8 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
         
         namespace = subject.lower().replace(' ', '_')
         
-        # Query to find all vector IDs with this class_level
-        # We need to query in batches to get all vectors
         all_vector_ids = []
         
-        # Query with metadata filter - get up to 10000 vectors
         query_response = index.query(
             namespace=namespace,
             vector=[0.0] * 768,
@@ -1854,7 +1677,6 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
                 detail=f"No vectors found for Class {class_level} in {subject}"
             )
         
-        # Delete vectors in batches of 1000
         logger.info(f"🗑️ Deleting {vectors_to_delete} vectors for {subject} Class {class_level}...")
         
         for i in range(0, len(all_vector_ids), 1000):
@@ -1862,13 +1684,11 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
             index.delete(ids=batch, namespace=namespace)
             logger.info(f"  ✓ Deleted batch of {len(batch)} vectors")
         
-        # Get all books for this subject and class to delete from Google Drive
         books_to_delete = list(db.books.find({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
             "class_level": class_level
         }))
         
-        # Delete PDFs from Google Drive
         drive_service = get_drive_service()
         drive_deleted_count = 0
         if drive_service.is_available():
@@ -1884,7 +1704,6 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
         if drive_deleted_count > 0:
             logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
-        # Delete books from MongoDB for this subject and class
         mongo_result = db.books.delete_many({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
             "class_level": class_level
@@ -1911,7 +1730,6 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/admin/delete-chapter/{subject}/{class_level}/{chapter_number}")
 async def delete_chapter(subject: str, class_level: int, chapter_number: int, confirmation: str = Query(...)):
@@ -1941,10 +1759,8 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         
         namespace = subject.lower().replace(' ', '_')
         
-        # Query to find all vector IDs with this chapter
         all_vector_ids = []
         
-        # Query with metadata filter
         query_response = index.query(
             namespace=namespace,
             vector=[0.0] * 768,
@@ -1981,21 +1797,18 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
                 detail=f"No vectors found for {subject} Class {class_level} Chapter {chapter_number}"
             )
         
-        # Delete vectors
         logger.info(f"🗑️ Deleting {vectors_to_delete} vectors for {subject} Class {class_level} Chapter {chapter_number}...")
         
         for i in range(0, len(all_vector_ids), 1000):
             batch = all_vector_ids[i:i+1000]
             index.delete(ids=batch, namespace=namespace)
         
-        # Get all books for this chapter to delete from Google Drive
         books_to_delete = list(db.books.find({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
             "class_level": class_level,
             "chapter_number": chapter_number
         }))
         
-        # Delete PDFs from Google Drive
         drive_service = get_drive_service()
         drive_deleted_count = 0
         if drive_service.is_available():
@@ -2011,7 +1824,6 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         if drive_deleted_count > 0:
             logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
-        # Delete book record from MongoDB
         mongo_result = db.books.delete_many({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
             "class_level": class_level,
@@ -2019,7 +1831,6 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
         })
         books_deleted = mongo_result.deleted_count
         
-        # Delete cached summaries for this chapter
         from app.services.summary_cache_service import summary_cache_service
         cache_result = await summary_cache_service.delete_chapter_summaries(
             subject=subject,

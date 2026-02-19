@@ -9,7 +9,7 @@ const API_BASE = "http://localhost:8000";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setUser, login } = useUserStore();
+  const { login } = useUserStore();
 
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +31,6 @@ export default function Login() {
     setIsLoading(true);
     setError("");
 
-    // Unified login - backend handles admin AND regular users
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
@@ -41,7 +40,7 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        // Handle first login password change
+        
         if (data.first_login) {
           setTempUserId(data.user_id);
           setShowPasswordChange(true);
@@ -51,7 +50,6 @@ export default function Login() {
 
         const userRole = data.user.role || "student";
 
-        // Login with role from backend
         login({
           id: data.user.id,
           user_id: data.user.user_id,
@@ -64,13 +62,12 @@ export default function Login() {
           permissions: data.user.permissions || []
         }, data.access_token);
 
-        // Route based on role
         if (userRole === "admin") {
           navigate("/admin-dashboard");
         } else if (userRole === "teacher") {
           navigate("/teacher-dashboard");
         } else {
-          // Student
+          
           if (data.user.is_onboarded) {
             navigate("/dashboard");
           } else {
@@ -207,4 +204,3 @@ export default function Login() {
     </div>
   );
 }
-

@@ -24,47 +24,37 @@ class QuestionBankService:
         search: Optional[str] = None,
         type: Optional[str] = None,
         difficulty: Optional[str] = None,
-        status: Optional[str] = "approved", # Default to approved
-        created_by: Optional[str] = None,  # For teacher-specific view
+        status: Optional[str] = "approved",
+        created_by: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-        group_filters: Optional[list] = None,  # List of {subject, class_level} dicts
-        user_id: Optional[str] = None,  # Current user ID for filtering
-        user_role: Optional[str] = None  # Current user role
+        group_filters: Optional[list] = None,
+        user_id: Optional[str] = None,
+        user_role: Optional[str] = None
     ) -> Dict:
         """Get questions with filters."""
         query = {}
         if class_level:
             query["class_level"] = class_level
         if subject:
-            # Case-insensitive subject match
             query["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
         if type:
             query["type"] = type
         if difficulty:
             query["difficulty"] = difficulty
             
-        # Approval Status Filter
         if status:
              query["status"] = status
         
-        # IMPORTANT: Pending questions should only be visible to:
-        # 1. The creator/trigger (admin or teacher who created/triggered it)
-        # 2. Admins (who can approve)
         if status == "pending" and user_role != "admin":
-            # Non-admin users can only see their own pending questions
-            # For AI-generated questions, check triggered_by; for manual, check created_by
             if user_id:
                 query["$or"] = [
                     {"created_by": user_id},
                     {"triggered_by": user_id}
                 ]
             else:
-                # If no user_id provided, return empty for pending
-                query["_id"] = {"$exists": False}  # Force no results
+                query["_id"] = {"$exists": False}
         
-        # Group-based filtering for teachers
-        # Only show questions matching teacher's assigned group subjects/classes
         if group_filters is not None:
             group_or = []
             for gf in group_filters:
@@ -73,20 +63,11 @@ class QuestionBankService:
                     "class_level": gf["class_level"]
                 })
             if group_or:
-                # If user also specified subject/class filters, combine with group restriction
                 if "$or" not in query:
                     query["$and"] = [{"$or": group_or}]
                 else:
                     query["$and"] = [{"$or": group_or}]
              
-        # Teacher can only see questions for their subjects OR created by them
-        # But per requirements: "Staff can create questions for subjects which they are allocated but admin can... 
-        # then the questions created either by staff or admin should be in one db like staff creates chemistry that shows in admin"
-        # Implication: Admin sees all. Staff sees all questions for their *assigned subjects*, regardless of who created them.
-        
-        # If created_by is passed, it might be for "My Questions" filter. 
-        # But for general bank access, we probably filter by subject.
-        
         if search:
             search_or = [
                 {"text": {"$regex": search, "$options": "i"}},
@@ -115,13 +96,13 @@ class QuestionBankService:
                 "marks": q.get("marks"),
                 "options": q.get("options", []),
                 "correct_answer": q.get("correct_answer"),
-                "status": q.get("status", "approved"), # Default for old data
+                "status": q.get("status", "approved"),
                 "created_by": q.get("created_by"),
                 "created_role": q.get("created_role"),
                 "triggered_by": q.get("triggered_by"),
                 "created_at": q.get("created_at"),
                 "is_ai_generated": q.get("is_ai_generated", False),
-                "expires_at": q.get("expires_at")  # For auto-delete countdown
+                "expires_at": q.get("expires_at")
             })
             
         return {
@@ -138,13 +119,10 @@ class QuestionBankService:
         question_data["created_at"] = datetime.utcnow().isoformat()
         question_data["updated_at"] = datetime.utcnow().isoformat()
         
-        # Ensure default fields
         if "options" not in question_data:
             question_data["options"] = []
             
         result = self.collection.insert_one(question_data)
-        
-        # Invalidate related caches if any (omitted for now)
         
         return str(result.inserted_id)
 
@@ -153,8 +131,6 @@ class QuestionBankService:
         if not ObjectId.is_valid(question_id):
             return False, "Invalid ID"
             
-        # Check permissions logic if needed. For now, assuming granular access control is in router.
-        
         update_data["updated_at"] = datetime.utcnow().isoformat()
         result = self.collection.update_one(
             {"_id": ObjectId(question_id)},
@@ -197,7 +173,6 @@ class QuestionBankService:
         }
         """
         try:
-            # 1. Get Context
             context = rag_service.retrieve_chapter_context(
                 class_level=class_level,
                 subject=subject,
@@ -207,7 +182,6 @@ class QuestionBankService:
             if not context:
                 return {"success": False, "error": "No context found for this chapter. Please upload textbook content first."}
 
-            # 2. Generate
             generated_questions = gemini_service.generate_varied_questions(
                 context=context,
                 config=config,
@@ -216,14 +190,13 @@ class QuestionBankService:
                 chapter=chapter
             )
             
-            # 3. Save to DB
             saved_ids = []
             now = datetime.utcnow()
-            expires_at = now + timedelta(days=7)  # Auto-delete after 7 days
+            expires_at = now + timedelta(days=7)
             
             for q in generated_questions:
                 q_doc = {
-                    "text": q.get("text") or q.get("question"), # Handle potential variation in AI output keys
+                    "text": q.get("text") or q.get("question"),
                     "subject": subject,
                     "class_level": class_level,
                     "chapter": chapter,
@@ -238,11 +211,10 @@ class QuestionBankService:
                     "triggered_by_role": user_role,
                     "created_at": now.isoformat(),
                     "is_ai_generated": True,
-                    "status": "pending", # AI Questions are Pending Approval by default
-                    "expires_at": expires_at  # Auto-delete after 7 days if still pending
+                    "status": "pending",
+                    "expires_at": expires_at
                 }
                 
-                # Sanitize: ensure no nulls for required fields
                 if not q_doc["text"]: continue
                 
                 res = self.collection.insert_one(q_doc)
@@ -267,7 +239,6 @@ class QuestionBankService:
         try:
             now = datetime.utcnow()
             
-            # Delete pending questions where expires_at is in the past
             result = self.collection.delete_many({
                 "status": "pending",
                 "expires_at": {"$lt": now}

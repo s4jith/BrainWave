@@ -2,12 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Construction } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
-/**
- * TeacherPlaceholder Page
- * 
- * Placeholder page for teacher role - "Yet to be designed"
- */
-
 function TeacherPlaceholder() {
   const navigate = useNavigate();
 

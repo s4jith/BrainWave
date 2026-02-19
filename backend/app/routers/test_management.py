@@ -10,7 +10,7 @@ Test Management Router
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from bson import ObjectId
 import os
@@ -24,16 +24,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tests", tags=["Test Management"])
 
-# Directory for storing uploaded test PDFs
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "tests")
 SUBMISSION_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "submissions")
 
-# Ensure directories exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(SUBMISSION_DIR, exist_ok=True)
-
-
-# ==================== PYDANTIC MODELS ====================
 
 class TestCreate(BaseModel):
     """Model for creating a test."""
@@ -44,8 +39,7 @@ class TestCreate(BaseModel):
     is_timed: bool = Field(default=False)
     start_datetime: Optional[datetime] = None
     end_datetime: Optional[datetime] = None
-    duration_minutes: Optional[int] = None  # For timed tests during attempt
-
+    duration_minutes: Optional[int] = None
 
 class TestUpdate(BaseModel):
     """Model for updating a test."""
@@ -56,7 +50,6 @@ class TestUpdate(BaseModel):
     end_datetime: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     is_active: Optional[bool] = None
-
 
 class TestResponse(BaseModel):
     """Model for test response."""
@@ -75,27 +68,21 @@ class TestResponse(BaseModel):
     created_by: str
     created_at: str
     submission_count: int = 0
-    status: str  # upcoming, active, closed
-
+    status: str
 
 class SubmissionCreate(BaseModel):
     """Model for test submission."""
     test_id: str
     student_id: str
 
-
 class CommentCreate(BaseModel):
     """Model for adding comment to submission."""
     comment: str = Field(..., min_length=1)
-
-
-# ==================== HELPER FUNCTIONS ====================
 
 def serialize_test(test: dict) -> dict:
     """Convert MongoDB document to response dict."""
     now = datetime.utcnow()
     
-    # Determine test status
     status = "active"
     if test.get("is_timed"):
         start = test.get("start_datetime")
@@ -127,7 +114,6 @@ def serialize_test(test: dict) -> dict:
         "status": status
     }
 
-
 def serialize_submission(submission: dict) -> dict:
     """Convert MongoDB submission document to response dict."""
     return {
@@ -144,9 +130,6 @@ def serialize_submission(submission: dict) -> dict:
         "comment_at": submission.get("comment_at").isoformat() if submission.get("comment_at") else None,
         "is_reviewed": submission.get("is_reviewed", False)
     }
-
-
-# ==================== TEST CRUD ENDPOINTS ====================
 
 @router.post("/create")
 async def create_test(
@@ -166,19 +149,15 @@ async def create_test(
     Notifies all students of the specified class.
     """
     try:
-        # Validate PDF file
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Generate unique filename
         unique_filename = f"{uuid.uuid4()}_{pdf_file.filename}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
         
-        # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(pdf_file.file, buffer)
         
-        # Parse dates if provided
         start_dt = None
         end_dt = None
         if start_datetime and start_datetime != "null" and start_datetime != "":
@@ -193,7 +172,6 @@ async def create_test(
             except:
                 end_dt = datetime.strptime(end_datetime[:19], "%Y-%m-%dT%H:%M:%S")
         
-        # Create test document
         test_doc = {
             "title": title,
             "description": description,
@@ -210,11 +188,9 @@ async def create_test(
             "submission_count": 0
         }
         
-        # Insert into database
         result = db.tests.insert_one(test_doc)
         test_doc["_id"] = result.inserted_id
         
-        # Create notifications for all students in this class
         students = list(db.users.find({
             "role": "student",
             "class_level": class_level,
@@ -253,7 +229,6 @@ async def create_test(
         logger.error(f"Error creating test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/admin")
 async def get_admin_tests(
     class_level: Optional[int] = None,
@@ -277,7 +252,6 @@ async def get_admin_tests(
         
         result = [serialize_test(t) for t in tests]
         
-        # Filter by status if provided
         if status:
             result = [t for t in result if t["status"] == status]
         
@@ -286,7 +260,6 @@ async def get_admin_tests(
     except Exception as e:
         logger.error(f"Error fetching admin tests: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/student/{student_id}")
 async def get_student_tests(
@@ -298,7 +271,6 @@ async def get_student_tests(
     Also includes submission status for each test.
     """
     try:
-        # Get student's class level
         query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
         student = db.users.find_one(query)
         
@@ -307,13 +279,11 @@ async def get_student_tests(
         
         class_level = student.get("class_level", 10)
         
-        # Get tests for this class
         tests = list(db.tests.find({
             "class_level": class_level,
             "is_active": True
         }).sort("created_at", -1))
         
-        # Get student's submissions
         submissions = list(db.test_submissions.find({
             "student_id": str(student["_id"])
         }))
@@ -324,7 +294,6 @@ async def get_student_tests(
             test_data = serialize_test(test)
             test_id = str(test["_id"])
             
-            # Add submission info
             if test_id in submitted_test_ids:
                 sub = submitted_test_ids[test_id]
                 test_data["has_submitted"] = True
@@ -339,7 +308,6 @@ async def get_student_tests(
             
             result.append(test_data)
         
-        # Filter by status if provided
         if status:
             result = [t for t in result if t["status"] == status]
         
@@ -350,7 +318,6 @@ async def get_student_tests(
     except Exception as e:
         logger.error(f"Error fetching student tests: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/{test_id}")
 async def get_test(test_id: str):
@@ -369,7 +336,6 @@ async def get_test(test_id: str):
     except Exception as e:
         logger.error(f"Error fetching test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.put("/{test_id}")
 async def update_test(test_id: str, test: TestUpdate):
@@ -413,7 +379,6 @@ async def update_test(test_id: str, test: TestUpdate):
         logger.error(f"Error updating test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/{test_id}")
 async def delete_test(test_id: str):
     """Delete a test, its PDF file, and all related submissions."""
@@ -423,26 +388,21 @@ async def delete_test(test_id: str):
         if not test:
             raise HTTPException(status_code=404, detail="Test not found")
         
-        # Delete test PDF file
         pdf_path = os.path.join(UPLOAD_DIR, test.get("pdf_filename", ""))
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
         
-        # Delete all submissions for this test and their PDF files
         submissions = list(db.test_submissions.find({"test_id": test_id}))
         for submission in submissions:
             sub_pdf_path = os.path.join(SUBMISSION_DIR, submission.get("pdf_filename", ""))
             if os.path.exists(sub_pdf_path):
                 os.remove(sub_pdf_path)
         
-        # Delete all submission documents
         deleted_subs = db.test_submissions.delete_many({"test_id": test_id})
         logger.info(f"Deleted {deleted_subs.deleted_count} submissions for test {test_id}")
         
-        # Delete test document
         db.tests.delete_one({"_id": ObjectId(test_id)})
         
-        # Delete related notifications
         db.notifications.delete_many({"test_id": test_id})
         
         logger.info(f"Deleted test: {test_id}")
@@ -458,9 +418,6 @@ async def delete_test(test_id: str):
         logger.error(f"Error deleting test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== PDF SERVING ENDPOINTS ====================
-
 from fastapi.responses import FileResponse
 
 @router.get("/pdf/{filename}")
@@ -471,7 +428,6 @@ async def get_test_pdf(filename: str):
         raise HTTPException(status_code=404, detail="PDF not found")
     return FileResponse(file_path, media_type="application/pdf", filename=filename)
 
-
 @router.get("/submission-pdf/{filename}")
 async def get_submission_pdf(filename: str):
     """Serve submission PDF file."""
@@ -479,9 +435,6 @@ async def get_submission_pdf(filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="PDF not found")
     return FileResponse(file_path, media_type="application/pdf", filename=filename)
-
-
-# ==================== SUBMISSION ENDPOINTS ====================
 
 @router.post("/submit")
 async def submit_test(
@@ -494,26 +447,21 @@ async def submit_test(
     """
     try:
         logger.info(f"📝 Submit test: test_id={test_id}, student_id={student_id}, file={pdf_file.filename}")
-        # Validate PDF
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Validate test_id format
         if not ObjectId.is_valid(test_id):
             raise HTTPException(status_code=400, detail="Invalid test ID format")
         
-        # Verify test exists
         test = db.tests.find_one({"_id": ObjectId(test_id)})
         if not test:
             raise HTTPException(status_code=404, detail="Test not found")
         
-        # Verify student exists
         query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
         student = db.users.find_one(query)
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         
-        # Check if already submitted
         existing = db.test_submissions.find_one({
             "test_id": test_id,
             "student_id": str(student["_id"])
@@ -521,21 +469,18 @@ async def submit_test(
         if existing:
             raise HTTPException(status_code=400, detail="You have already submitted this test")
         
-        # Check if test is still open
         if test.get("is_timed"):
             now = datetime.utcnow()
             end_dt = test.get("end_datetime")
             if end_dt and end_dt < now:
                 raise HTTPException(status_code=400, detail="Test submission period has ended")
         
-        # Save submission PDF
         unique_filename = f"{test_id}_{student['user_id']}_{uuid.uuid4()}.pdf"
         file_path = os.path.join(SUBMISSION_DIR, unique_filename)
         
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(pdf_file.file, buffer)
         
-        # Create submission document
         submission_doc = {
             "test_id": test_id,
             "test_title": test.get("title", ""),
@@ -552,13 +497,11 @@ async def submit_test(
         result = db.test_submissions.insert_one(submission_doc)
         submission_doc["_id"] = result.inserted_id
         
-        # Update test submission count
         db.tests.update_one(
             {"_id": ObjectId(test_id)},
             {"$inc": {"submission_count": 1}}
         )
         
-        # Create notification for admin
         db.notifications.insert_one({
             "user_id": "admin",
             "type": "test_submission",
@@ -584,7 +527,6 @@ async def submit_test(
         logger.error(f"Error submitting test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/submissions/{test_id}")
 async def get_test_submissions(test_id: str):
     """
@@ -597,7 +539,6 @@ async def get_test_submissions(test_id: str):
     except Exception as e:
         logger.error(f"Error fetching submissions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/my-submissions/{student_id}")
 async def get_student_submissions(student_id: str):
@@ -623,9 +564,6 @@ async def get_student_submissions(student_id: str):
         logger.error(f"Error fetching student submissions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== FEEDBACK/COMMENT ENDPOINTS ====================
-
 @router.post("/submissions/{submission_id}/comment")
 async def add_comment(submission_id: str, comment_data: CommentCreate):
     """
@@ -638,7 +576,6 @@ async def add_comment(submission_id: str, comment_data: CommentCreate):
         if not submission:
             raise HTTPException(status_code=404, detail="Submission not found")
         
-        # Update submission with comment
         db.test_submissions.update_one(
             {"_id": ObjectId(submission_id)},
             {
@@ -650,7 +587,6 @@ async def add_comment(submission_id: str, comment_data: CommentCreate):
             }
         )
         
-        # Create notification for student
         db.notifications.insert_one({
             "user_id": submission.get("student_id"),
             "type": "test_feedback",
@@ -676,7 +612,6 @@ async def add_comment(submission_id: str, comment_data: CommentCreate):
         logger.error(f"Error adding comment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/submission/{submission_id}")
 async def get_submission(submission_id: str):
     """Get a specific submission."""
@@ -693,9 +628,6 @@ async def get_submission(submission_id: str):
     except Exception as e:
         logger.error(f"Error fetching submission: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== NOTIFICATION ENDPOINTS ====================
 
 @router.get("/notifications/{user_id}")
 async def get_user_notifications(
@@ -726,7 +658,6 @@ async def get_user_notifications(
         logger.error(f"Error fetching notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str):
     """Mark a notification as read."""
@@ -747,7 +678,6 @@ async def mark_notification_read(notification_id: str):
         logger.error(f"Error marking notification read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/notifications/{user_id}/read-all")
 async def mark_all_notifications_read(user_id: str):
     """Mark all notifications as read for a user."""
@@ -763,9 +693,6 @@ async def mark_all_notifications_read(user_id: str):
         logger.error(f"Error marking all notifications read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== STATS ENDPOINTS ====================
-
 @router.get("/stats/overview")
 async def get_test_stats():
     """Get overall test statistics for admin dashboard."""
@@ -776,14 +703,12 @@ async def get_test_stats():
         reviewed_submissions = db.test_submissions.count_documents({"is_reviewed": True})
         pending_review = total_submissions - reviewed_submissions
         
-        # Tests by class
         pipeline = [
             {"$group": {"_id": "$class_level", "count": {"$sum": 1}}},
             {"$sort": {"_id": 1}}
         ]
         tests_by_class = list(db.tests.aggregate(pipeline))
         
-        # Tests by subject
         pipeline = [
             {"$group": {"_id": "$subject", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}

@@ -1,7 +1,3 @@
-/**
- * AssessmentBuilder - Create and edit assessments
- * Multi-step form for creating quizzes/exams with various question types
- */
 
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -18,9 +14,7 @@ import {
     ToggleLeft,
     Upload,
     Link2,
-    Clock,
-    Settings,
-    Eye
+    Settings
 } from "lucide-react";
 import useAssessmentStore from "../stores/assessmentStore";
 
@@ -178,7 +172,7 @@ export default function AssessmentBuilder() {
         if (question.id.startsWith("temp-")) {
             await addQuestion(assessmentId, questionData);
         }
-        // For existing questions, we'd call updateQuestion
+        
     };
 
     const handleDeleteQuestion = async (questionId) => {
@@ -206,7 +200,7 @@ export default function AssessmentBuilder() {
 
     return (
         <div className="min-h-screen bg-gray-900 text-white">
-            {/* Header */}
+            {}
             <header className="bg-gray-800/50 border-b border-gray-700 px-6 py-4 sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -237,7 +231,7 @@ export default function AssessmentBuilder() {
             </header>
 
             <main className="max-w-4xl mx-auto px-6 py-8">
-                {/* Step Indicator */}
+                {}
                 <div className="flex items-center gap-4 mb-8">
                     <StepIndicator number={1} active={step === 1} completed={step > 1} label="Details" />
                     <div className="flex-1 h-px bg-gray-700" />
@@ -495,7 +489,6 @@ function QuestionEditor({ question, index, expanded, onToggle, onChange, onSave,
     };
 
     const handleCorrectOptionChange = (optionId) => {
-        // For single-answer MCQ, only one can be correct
         const newOptions = question.options.map(opt => ({
             ...opt,
             is_correct: opt.id === optionId

@@ -16,7 +16,6 @@ try:
 except ImportError:
     HAS_LANGDETECT = False
 
-# Supported Indian languages
 SUPPORTED_LANGUAGES = {
     "en": "English",
     "hi": "Hindi",
@@ -35,20 +34,18 @@ SUPPORTED_LANGUAGES = {
     "ne": "Nepali"
 }
 
-# Unicode ranges for Indian scripts (fallback detection)
 SCRIPT_RANGES = {
-    "hi": (0x0900, 0x097F),  # Devanagari
-    "ta": (0x0B80, 0x0BFF),  # Tamil
-    "ur": (0x0600, 0x06FF),  # Arabic (Urdu)
-    "bn": (0x0980, 0x09FF),  # Bengali/Assamese
-    "kn": (0x0C80, 0x0CFF),  # Kannada
-    "te": (0x0C00, 0x0C7F),  # Telugu
-    "ml": (0x0D00, 0x0D7F),  # Malayalam
-    "gu": (0x0A80, 0x0AFF),  # Gujarati
-    "pa": (0x0A00, 0x0A7F),  # Gurmukhi (Punjabi)
-    "or": (0x0B00, 0x0B7F),  # Odia
+    "hi": (0x0900, 0x097F),
+    "ta": (0x0B80, 0x0BFF),
+    "ur": (0x0600, 0x06FF),
+    "bn": (0x0980, 0x09FF),
+    "kn": (0x0C80, 0x0CFF),
+    "te": (0x0C00, 0x0C7F),
+    "ml": (0x0D00, 0x0D7F),
+    "gu": (0x0A80, 0x0AFF),
+    "pa": (0x0A00, 0x0A7F),
+    "or": (0x0B00, 0x0B7F),
 }
-
 
 def _detect_by_script(text: str) -> str:
     """Detect language based on Unicode script ranges."""
@@ -68,7 +65,6 @@ def _detect_by_script(text: str) -> str:
                 return lang
 
     return "en"
-
 
 def detect_language(text: str) -> str:
     """
@@ -93,7 +89,6 @@ def detect_language(text: str) -> str:
             pass
 
     return _detect_by_script(text)
-
 
 def detect_language_with_confidence(text: str) -> Tuple[str, float]:
     """
@@ -125,11 +120,9 @@ def detect_language_with_confidence(text: str) -> Tuple[str, float]:
     lang = _detect_by_script(text)
     return lang, 0.7 if lang != "en" else 0.8
 
-
 def get_language_name(code: str) -> str:
     """Get full language name from code."""
     return SUPPORTED_LANGUAGES.get(code, "Unknown")
-
 
 def is_indic_language(code: str) -> bool:
     """Check if language code is an Indian language."""

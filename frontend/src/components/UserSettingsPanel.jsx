@@ -1,8 +1,3 @@
-/**
- * User Settings Panel
- * Allows users to set their preferred subject
- * Class level is fixed from user profile (students only study their own class)
- */
 
 import React, { useState, useEffect } from "react";
 import { Settings, BookOpen, Loader2, CheckCircle } from "lucide-react";
@@ -35,7 +30,6 @@ export default function UserSettingsPanel({ open, onClose }) {
     12: "Full academic language with exam focus (Board exam preparation)",
   };
 
-  // Fetch available subjects for student's class level
   useEffect(() => {
     if (open) {
       fetchAvailableSubjects();
@@ -95,7 +89,7 @@ export default function UserSettingsPanel({ open, onClose }) {
             </p>
           </div>
 
-          {/* Subject Selection - Real data from Pinecone */}
+          {}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -133,7 +127,7 @@ export default function UserSettingsPanel({ open, onClose }) {
             )}
           </div>
 
-          {/* Current Settings Summary */}
+          {}
           <div className="mt-6 p-4 rounded-lg border bg-card">
             <p className="text-sm font-medium mb-3">Current Settings</p>
             <div className="space-y-2 text-sm">

@@ -11,22 +11,13 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
-  ArrowRight,
   ChevronRight,
   Play,
   ClipboardList,
-  Calendar,
-  User
+  Calendar
 } from "lucide-react";
 import TopicSelector from "../components/test/TopicSelector";
 import { testService } from "../services/api";
-
-/**
- * TestCenter Page
- * 
- * Minimal, clean design with white/light theme.
- * Two types of tests: AI Tests and Staff Tests
- */
 
 export default function TestCenter() {
   const navigate = useNavigate();
@@ -47,7 +38,7 @@ export default function TestCenter() {
     try {
       const [staffData, analyticsData] = await Promise.all([
         testService.getStaffTests(user.preferredSubject, null, user.id),
-        // Use getTestAnalytics without subject filter to show ALL tests
+        
         testService.getTestAnalytics(user.id, user.classLevel || 10, null)
       ]);
       setStaffTests(Array.isArray(staffData) ? staffData : []);
@@ -67,7 +58,7 @@ export default function TestCenter() {
         testConfig: {
           student_id: user.id,
           class_level: user.classLevel || 10,
-          test_type: 'ai_with_analytics',  // NEW: Enable topic-level analytics
+          test_type: 'ai_with_analytics',  
           ...config
         }
       }
@@ -79,7 +70,6 @@ export default function TestCenter() {
     { id: "staff", label: "Staff Tests", icon: FileText },
   ];
 
-  // Quick stats
   const stats = [
     { label: "Tests Taken", value: analytics?.total_tests_taken || "0", icon: CheckCircle2 },
     { label: "Avg. Score", value: `${analytics?.overall_average || 0}%`, icon: TrendingUp },
@@ -89,7 +79,7 @@ export default function TestCenter() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
+        {}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Test Center</h1>

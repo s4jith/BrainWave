@@ -26,7 +26,7 @@ export default function StaffTests() {
       setTests(data);
     } catch (err) {
       setError(err.message);
-      setTests([]); // No mock data
+      setTests([]); 
     } finally {
       setLoading(false);
     }

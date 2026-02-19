@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/gradebook", tags=["gradebook"])
 
-
-# === Student Grades ===
-
 @router.get("/my-grades")
 async def get_my_grades(
     course_id: str = None,
@@ -37,7 +34,6 @@ async def get_my_grades(
         logger.error(f"Get my grades error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get grades")
 
-
 @router.get("/student/{student_id}")
 async def get_student_grades(
     student_id: str,
@@ -53,9 +49,6 @@ async def get_student_grades(
     except Exception as e:
         logger.error(f"Get student grades error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get grades")
-
-
-# === Course Analytics ===
 
 @router.get("/course/{course_id}/analytics")
 async def get_course_analytics(
@@ -80,7 +73,6 @@ async def get_course_analytics(
         logger.error(f"Get course analytics error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get analytics")
 
-
 @router.get("/assessment/{assessment_id}/analytics")
 async def get_assessment_analytics(
     assessment_id: str,
@@ -104,9 +96,6 @@ async def get_assessment_analytics(
         logger.error(f"Get assessment analytics error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get analytics")
 
-
-# === Class Gradebook ===
-
 @router.get("/course/{course_id}")
 async def get_class_gradebook(
     course_id: str,
@@ -129,9 +118,6 @@ async def get_class_gradebook(
     except Exception as e:
         logger.error(f"Get class gradebook error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get gradebook")
-
-
-# === Export ===
 
 @router.get("/course/{course_id}/export")
 async def export_grades(
@@ -162,9 +148,6 @@ async def export_grades(
         logger.error(f"Export grades error: {e}")
         raise HTTPException(status_code=500, detail="Failed to export grades")
 
-
-# === Dashboard Stats ===
-
 @router.get("/stats/teacher")
 async def get_teacher_stats(
     current_user: TokenData = Depends(get_current_user)
@@ -180,7 +163,6 @@ async def get_teacher_stats(
     except Exception as e:
         logger.error(f"Get teacher stats error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get stats")
-
 
 @router.get("/stats/student")
 async def get_student_stats(

@@ -5,14 +5,12 @@ Chat Router - RAG-based chat endpoints with multi-index support.
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Literal, List, Optional
-from app.models.schemas import ChatRequest, ChatResponse, ErrorResponse
+from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag_service import rag_service
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
 from app.services.top_question_service import top_question_service
 import logging
-import numpy as np
-import cv2
 from PIL import Image
 import io
 
@@ -22,7 +20,6 @@ router = APIRouter(
     prefix="/chat",
     tags=["Chat / RAG"]
 )
-
 
 @router.post("/", response_model=ChatResponse)
 async def chat(request: ChatRequest):
@@ -42,19 +39,16 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"Chat request: Class {request.class_level}, {request.subject}, Ch. {request.chapter}, Mode: {request.mode}")
         
-        # Query RAG system with progressive learning
         answer, source_chunks = rag_service.query_with_rag_progressive(
             query_text=request.highlight_text,
             class_level=request.class_level,
             subject=request.subject,
             chapter=request.chapter,
-            mode="quick"  # Use quick mode (current + previous class)
+            mode="quick"
         )
         
-        # Track question-answer pair if user info provided (for top questions feature)
         if request.user_id and request.session_id:
             try:
-                # Determine mode for tracking (map chat modes to quick/deep)
                 tracking_mode = "deep" if request.mode in ["elaborate", "story", "example"] else "quick"
                 
                 top_question_service.save_question_answer(
@@ -69,7 +63,6 @@ async def chat(request: ChatRequest):
                 )
                 logger.info(f"Question tracked for user {request.user_id}")
             except Exception as track_error:
-                # Don't fail the request if tracking fails
                 logger.warning(f" Failed to track question: {track_error}")
         
         return ChatResponse(
@@ -82,100 +75,6 @@ async def chat(request: ChatRequest):
         logger.error(f" Chat endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== STICK FLOW ENDPOINT ====================
-
-class StickFlowRequest(BaseModel):
-    """Request schema for Stick Flow visual diagram generation."""
-    highlight_text: str = Field(..., description="Text to create flow diagram for")
-    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
-    subject: str = Field(..., description="Subject name")
-    chapter: int = Field(..., ge=1, description="Chapter number")
-
-
-class StickFlowResponse(BaseModel):
-    """Response schema for Stick Flow."""
-    imageUrl: str = Field(..., description="Generated flow diagram image URL")
-    description: str = Field(None, description="Optional description of the flow")
-
-
-@router.post("/stick-flow", response_model=StickFlowResponse)
-async def generate_stick_flow(request: StickFlowRequest):
-    """
-    Generate visual flow diagram using Gemini image generation.
-    
-    Creates a step-by-step flow diagram of the concept using ONLY textbook content.
-    The image will be a clean, attractive visual representation focusing solely on
-    the content without extraneous elements.
-    """
-    try:
-        logger.info(f"Stick Flow request: Class {request.class_level}, {request.subject}, Ch. {request.chapter}")
-        
-        # Get context from RAG
-        context = rag_service.retrieve_chapter_context(
-            class_level=request.class_level,
-            subject=request.subject,
-            chapter=request.chapter,
-            max_chunks=15
-        )
-        
-        # Build flow diagram generation prompt with strict constraints
-        flow_prompt = f"""Create a visual flow diagram for Class {request.class_level} students.
-
-**TEXTBOOK CONTENT:**
-{context[:2000]}
-
-**CONCEPT TO VISUALIZE:**
-{request.highlight_text}
-
-**STRICT REQUIREMENTS:**
-1. Create a clear, step-by-step flow diagram
-2. Use ONLY information from the textbook content above
-3. Make it visually attractive with:
-   - Clear boxes/shapes for each step
-   - Arrows showing flow/sequence
-   - Simple icons or symbols where appropriate
-   - Color coding for different types of steps
-4. Keep text minimal - use keywords and short phrases
-5. Focus ONLY on the concept - no decorative elements, backgrounds, or unrelated content
-6. Make it suitable for Class {request.class_level} students
-7. Layout should be vertical or horizontal flowchart style
-
-**OUTPUT:**
-A clean, professional flow diagram that a student can use for quick revision.
-"""
-        
-        # Generate image using Gemini (using text-to-image capability)
-        # For now, we'll generate a text description and return a placeholder
-        # In production, you'd integrate with an actual image generation service
-        
-        description_prompt = f"""Based on this textbook content:
-
-{context[:1500]}
-
-Create a brief description (2-3 sentences) of how to visualize "{request.highlight_text}" as a flow diagram.
-Focus on the steps and connections."""
-
-        description = gemini_service.generate_response(description_prompt)
-        
-        # TODO: Integrate actual image generation
-        # For now, return a placeholder
-        image_url = f"https://via.placeholder.com/800x600/6366f1/ffffff?text=Flow+Diagram:+{request.highlight_text[:30]}"
-        
-        logger.info(f"Stick Flow generated successfully")
-        
-        return StickFlowResponse(
-            imageUrl=image_url,
-            description=description
-        )
-    
-    except Exception as e:
-        logger.error(f" Stick Flow error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== STUDENT CHATBOT ENDPOINT ====================
-
 class StudentChatRequest(BaseModel):
     """Request schema for student chatbot with Quick/DeepDive modes."""
     question: str = Field(..., description="Student's question")
@@ -183,7 +82,6 @@ class StudentChatRequest(BaseModel):
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode: quick (exam-style) or deepdive (comprehensive)")
-
 
 @router.post("/student", response_model=ChatResponse)
 async def student_chatbot(request: StudentChatRequest):
@@ -212,9 +110,7 @@ async def student_chatbot(request: StudentChatRequest):
         logger.info(f"🎓 Student chat ({request.mode.upper()}): Class {request.class_level}, {request.subject}")
         logger.info(f"   Question: {request.question[:100]}...")
         
-        # Convert to new enhanced system
         if request.mode == "quick":
-            # BASIC MODE: Current + recent lower classes (textbook only)
             answer, source_chunks_list = await enhanced_rag_service.answer_question_basic(
                 question=request.question,
                 subject=request.subject,
@@ -222,10 +118,8 @@ async def student_chatbot(request: StudentChatRequest):
                 chapter=request.chapter
             )
             
-            # Convert chunk format for compatibility
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
             
-            # If not enough content and low scores, return brief message (already handled in enhanced_rag_service)
             if not source_chunks or len(source_chunks) < 2:
                 return ChatResponse(
                     answer="No relevant content found for this topic.",
@@ -233,8 +127,7 @@ async def student_chatbot(request: StudentChatRequest):
                     source_chunks=[]
                 )
         
-        else:  # deepdive mode
-            # DEEP DIVE MODE: ALL prerequisite classes + web content
+        else:
             answer, source_chunks_list = await enhanced_rag_service.answer_question_deepdive(
                 question=request.question,
                 subject=request.subject,
@@ -242,7 +135,6 @@ async def student_chatbot(request: StudentChatRequest):
                 chapter=request.chapter
             )
             
-            # Convert chunk format
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
         
         logger.info(f"Answer generated: {len(answer)} chars, {len(source_chunks)} sources")
@@ -259,9 +151,6 @@ async def student_chatbot(request: StudentChatRequest):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== STREAMING CHAT ENDPOINT ====================
-
 from fastapi.responses import StreamingResponse
 import asyncio
 
@@ -272,7 +161,6 @@ class StreamingChatRequest(BaseModel):
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode")
-
 
 @router.post("/student/stream")
 async def student_chatbot_stream(request: StreamingChatRequest):
@@ -311,11 +199,8 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             logger.info(f"Streaming chat: Class {request.class_level}, {request.subject}")
             logger.info(f"   Question: {request.question[:100]}...")
             
-            # Step 1: Retrieve context (this part is not streamed)
-            # Generate embedding once
             query_embedding = enhanced_rag_service.generate_embedding(request.question)
             
-            # Query textbook content
             textbook_chunks, class_dist = enhanced_rag_service.query_multi_class(
                 query_text=request.question,
                 subject=request.subject,
@@ -326,7 +211,6 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 query_embedding=query_embedding
             )
             
-            # Query LLM cache for potential cache hit
             llm_chunks = enhanced_rag_service.query_llm_content(
                 query_text=request.question,
                 subject=request.subject,
@@ -334,24 +218,20 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 query_embedding=query_embedding
             )
             
-            # Check for cache hit (threshold: 0.80 — same Gemini embeddings now used for store & query)
             if llm_chunks and llm_chunks[0]['score'] >= 0.80:
                 cached_answer = llm_chunks[0]['text']
                 logger.info(f"🎯 CACHE HIT (streaming): similarity {llm_chunks[0]['score']:.3f}")
                 
-                # Stream cached answer in chunks for consistent UX
                 chunk_size = 50
                 for i in range(0, len(cached_answer), chunk_size):
                     chunk = cached_answer[i:i+chunk_size]
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
-                    await asyncio.sleep(0.02)  # Small delay for smooth streaming
+                    await asyncio.sleep(0.02)
                 
-                # Send completion signal
                 source_texts = [c.get('text', '')[:200] for c in textbook_chunks[:3]]
                 yield f"data: {json.dumps({'done': True, 'sources': source_texts, 'cached': True})}\n\n"
                 return
             
-            # Step 2: Build context for Gemini (top 3 chunks for speed)
             context_parts = []
             for chunk in textbook_chunks[:3]:
                 class_level = chunk.get('class', request.class_level)
@@ -359,11 +239,9 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             
             combined_context = "\n\n".join(context_parts)
             
-            # FALLBACK: If no textbook content but question is valid for subject, generate direct answer
             if not combined_context:
                 logger.info(f"🔄 No textbook content found - generating direct answer for valid {request.subject} question")
                 
-                # Generate direct answer (subject validation already passed)
                 direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
 
 STUDENT QUESTION: {request.question}
@@ -373,14 +251,12 @@ Provide a clear, educational answer appropriate for Class {request.class_level} 
 - Give 1-2 examples
 - Keep it concise but informative (200-400 words)"""
 
-                # Stream the direct answer
                 for chunk in gemini_service.generate_response_streaming(direct_prompt):
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
                 
                 yield f"data: {json.dumps({'done': True, 'sources': [], 'fallback': True})}\n\n"
                 return
             
-            # Step 3: Build prompt
             prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
 
 STUDENT QUESTION: {request.question}
@@ -401,12 +277,9 @@ RULES:
 
 Generate your answer:"""
             
-            # Step 4: Stream response from Gemini
             logger.info("📡 Starting Gemini streaming...")
             full_response = ""
             
-            # Run synchronous Gemini streaming in thread to avoid blocking event loop
-            # This ensures each chunk is yielded to the client immediately
             import queue
             import threading
             
@@ -424,7 +297,6 @@ Generate your answer:"""
             thread.start()
             
             while True:
-                # Poll the queue with a small timeout to keep the async loop responsive
                 while chunk_queue.empty():
                     await asyncio.sleep(0.01)
                 
@@ -440,11 +312,9 @@ Generate your answer:"""
                     return            
             logger.info(f"Streaming complete: {len(full_response)} chars")
             
-            # Step 5: Send completion signal with sources
             source_texts = [c.get('text', '')[:200] for c in textbook_chunks[:3]]
             yield f"data: {json.dumps({'done': True, 'sources': source_texts, 'total_length': len(full_response)})}\n\n"
             
-            # Step 6: Store answer for future cache hits (async, don't block)
             try:
                 if enhanced_rag_service.llm_storage._should_store_answer(full_response):
                     topic = enhanced_rag_service.llm_storage._extract_topic(request.question)
@@ -471,12 +341,9 @@ Generate your answer:"""
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
+            "X-Accel-Buffering": "no"
         }
     )
-
-
-# ==================== IMAGE-BASED CHAT ENDPOINT ====================
 
 class ImageChatResponse(BaseModel):
     """Response schema for image-based chat."""
@@ -485,11 +352,8 @@ class ImageChatResponse(BaseModel):
     source_chunks: List[str] = Field(default=[], description="Source text chunks used")
     image_analysis: dict = Field(..., description="Image analysis metadata")
 
-
-# Constants for image validation
 MAX_IMAGE_SIZE_MB = 5
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
-
 
 @router.post("/image", response_model=ImageChatResponse)
 async def image_chat(
@@ -520,17 +384,14 @@ async def image_chat(
     try:
         logger.info(f"🖼️ Image chat request: Class {class_level}, {subject}, Ch. {chapter}, Mode: {mode}, Query: {user_query}")
         
-        # 1. Validate image file
         if image.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid image type: {image.content_type}. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}"
             )
         
-        # Read image content
         image_bytes = await image.read()
         
-        # Check file size
         if len(image_bytes) > MAX_IMAGE_SIZE_MB * 1024 * 1024:
             raise HTTPException(
                 status_code=400,
@@ -542,7 +403,6 @@ async def image_chat(
         
         logger.info(f"   Image: {image.filename}, {len(image_bytes) / 1024:.1f}KB, {image.content_type}")
         
-        # 2. Convert to PIL image
         try:
             pil_image = Image.open(io.BytesIO(image_bytes))
             pil_image = pil_image.convert("RGB")
@@ -551,7 +411,6 @@ async def image_chat(
             logger.error(f"Failed to parse image: {e}")
             raise HTTPException(status_code=400, detail=f"Failed to parse image: {str(e)}")
         
-        # 3. Extract text using Gemini Vision
         import base64
         image_b64 = base64.b64encode(image_bytes).decode('utf-8')
         vision_prompt = """Extract the main educational text from this image.
@@ -577,11 +436,7 @@ async def image_chat(
         
         logger.info(f"   OCR extracted: {len(ocr_text)} chars")
         
-        # 4. Generate query from OCR text AND user input
-        
-        # If we have user query, we can proceed even with little OCR text
         if (not ocr_text or len(ocr_text) < 10) and not user_query:
-            # Not enough text AND no user query - provide guidance
             return ImageChatResponse(
                 answer="I couldn't extract enough text from this image. Please try:\n"
                        "1. Take a clearer photo with better lighting\n"
@@ -593,7 +448,6 @@ async def image_chat(
                 image_analysis=image_analysis
             )
         
-        # Construct the final query
         query_parts = []
         if user_query:
             query_parts.append(f"User Question: {user_query}")
@@ -610,13 +464,11 @@ async def image_chat(
         
         query = "\n\n".join(query_parts)
         
-        # If we only have user query (OCR failed), treat it as a normal question but with image context awareness
         if not ocr_text and user_query:
             query = f"User Question about uploaded image: {user_query}\n(Note: OCR could not extract text from the image)"
 
         logger.info(f"   Generated query: {query[:100]}...")
         
-        # 5. Run RAG pipeline
         if mode == "quick":
             answer, source_chunks_list = await enhanced_rag_service.answer_question_basic(
                 question=query,
@@ -624,7 +476,7 @@ async def image_chat(
                 student_class=class_level,
                 chapter=chapter
             )
-        else:  # deepdive
+        else:
             answer, source_chunks_list = await enhanced_rag_service.answer_question_deepdive(
                 question=query,
                 subject=subject,
@@ -632,7 +484,6 @@ async def image_chat(
                 chapter=chapter
             )
         
-        # Convert chunk format for response
         source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
         
         logger.info(f"Image chat complete: {len(answer)} chars, {len(source_chunks)} sources")
@@ -652,9 +503,6 @@ async def image_chat(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== CHAT HISTORY / SESSIONS ====================
-
 from datetime import datetime
 from app.db.mongo import mongodb
 
@@ -668,7 +516,7 @@ class SaveSessionRequest(BaseModel):
     subject: str
     class_level: int
     messages: List[ChatMessage]
-    title: Optional[str] = None  # Auto-generated if not provided
+    title: Optional[str] = None
 
 class ChatSession(BaseModel):
     id: str
@@ -680,7 +528,6 @@ class ChatSession(BaseModel):
     created_at: str
     updated_at: str
 
-
 @router.post("/sessions", summary="Save chat session")
 async def save_chat_session(request: SaveSessionRequest):
     """
@@ -690,7 +537,6 @@ async def save_chat_session(request: SaveSessionRequest):
         db = mongodb.db
         sessions_col = db["chat_sessions"]
         
-        # Generate title from first user message if not provided
         title = request.title
         if not title and request.messages:
             first_msg = next((m for m in request.messages if m.role == "user"), None)
@@ -700,7 +546,6 @@ async def save_chat_session(request: SaveSessionRequest):
         
         now = datetime.now().isoformat()
         
-        # Create session document
         session_doc = {
             "user_id": request.user_id,
             "subject": request.subject,
@@ -727,7 +572,6 @@ async def save_chat_session(request: SaveSessionRequest):
         logger.error(f" Save session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/sessions/{user_id}", summary="Get user's chat sessions")
 async def get_user_sessions(
     user_id: str,
@@ -741,19 +585,16 @@ async def get_user_sessions(
         db = mongodb.db
         sessions_col = db["chat_sessions"]
         
-        # Build filter
         filter_query = {"user_id": user_id}
         if subject:
             filter_query["subject"] = subject
         
-        # Fetch sessions (most recent first)
         sessions = list(
             sessions_col.find(filter_query)
             .sort("updated_at", -1)
             .limit(limit)
         )
         
-        # Format response
         result = []
         for s in sessions:
             result.append({
@@ -774,7 +615,6 @@ async def get_user_sessions(
         logger.error(f" Get sessions error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/sessions/{user_id}/{session_id}", summary="Load chat session")
 async def load_chat_session(user_id: str, session_id: str):
     """
@@ -785,7 +625,6 @@ async def load_chat_session(user_id: str, session_id: str):
         db = mongodb.db
         sessions_col = db["chat_sessions"]
         
-        # Find session
         session = sessions_col.find_one({
             "_id": ObjectId(session_id),
             "user_id": user_id
@@ -812,7 +651,6 @@ async def load_chat_session(user_id: str, session_id: str):
     except Exception as e:
         logger.error(f" Load session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/sessions/{user_id}/{session_id}", summary="Delete chat session")
 async def delete_chat_session(user_id: str, session_id: str):

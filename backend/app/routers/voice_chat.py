@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Voice Chat"])
 
-
 @router.post("/voice")
 @measure_latency("voice_chat")
 async def voice_chat(
@@ -54,16 +53,10 @@ async def voice_chat(
         logger.info(f"🎤 Voice chat request: Class {student_class} {subject}")
         logger.info(f"   Audio: {audio.filename}, {audio.content_type}")
         
-        # Read audio file
         audio_content = await audio.read()
         audio_size_kb = len(audio_content) / 1024
         logger.info(f"   Audio size: {audio_size_kb:.2f} KB")
         
-        # Speech-to-text conversion
-        # Note: In production, integrate with:
-        # - Google Speech-to-Text API
-        # - Azure Speech Services
-        # - Browser Web Speech API (client-side)
         transcription = await _transcribe_audio(audio_content, audio.content_type)
         
         if not transcription or len(transcription.strip()) < 3:
@@ -76,16 +69,14 @@ async def voice_chat(
         
         logger.info(f"   Transcription: {transcription[:100]}...")
         
-        # Process through existing RAG pipeline
         answer, sources = orchestrator_service.answer_question(
             question=transcription,
             subject=subject,
             student_class=student_class,
             chapter=chapter,
-            mode="quick"  # Voice typically expects quick responses
+            mode="quick"
         )
         
-        # Log voice interaction
         await _log_voice_interaction(
             student_id=student_id,
             transcription=transcription,
@@ -106,7 +97,6 @@ async def voice_chat(
         logger.error(f" Voice chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 async def _transcribe_audio(audio_content: bytes, content_type: str) -> str:
     """
     Transcribe audio to text.
@@ -115,21 +105,13 @@ async def _transcribe_audio(audio_content: bytes, content_type: str) -> str:
     - Integrate with cloud STT services (Google, Azure)
     - Or rely on browser Web Speech API (client-side)
     """
-    # Placeholder: Return instruction for demo
-    # In production, integrate actual STT here
     
-    # Check file size - if too small, likely not valid audio
     if len(audio_content) < 1000:
         return ""
     
-    # For demo purposes, return a sample response indicating voice was received
-    # In production, this would call actual STT service
     logger.info("   Note: Using placeholder STT. Integrate real STT for production.")
     
-    # Return placeholder indicating voice support is ready
-    # Frontend should use Web Speech API for actual transcription
     return "[Voice input received - integrate STT service or use browser Web Speech API for transcription]"
-
 
 async def _log_voice_interaction(
     student_id: Optional[str],
@@ -156,7 +138,6 @@ async def _log_voice_interaction(
             db.voice_interactions.insert_one(log_entry)
     except Exception as e:
         logger.debug(f"Voice logging failed: {e}")
-
 
 @router.get("/voice/status")
 async def voice_status():

@@ -26,17 +26,6 @@ import HistoryPanel from "../annotations/HistoryPanel";
 import HighlightOverlay from "../annotations/HighlightOverlay";
 import NoteTaker from "./NoteTaker";
 
-/**
- * PDF Viewer Component with "Doubt" Screenshot Feature
- *
- * Simple flow:
- * 1. Student reads book
- * 2. Has doubt → clicks "Doubt?" button
- * 3. Draws box around confusing area
- * 4. Picks Define/Stick Flow/Elaborate
- * 5. AI retrieves from Pinecone and answers
- */
-
 export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -50,7 +39,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
-  // Doubt selection states
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState(null);
   const [selectionEnd, setSelectionEnd] = useState(null);
@@ -58,12 +46,10 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [showActionPopup, setShowActionPopup] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Notes panel toggle state
   const [showNotes, setShowNotes] = useState(false);
 
-  // Admin chapter summary modal
   const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [summaryData, setSummaryData] = useState(null); // { chapterName, summary, has_summary }
+  const [summaryData, setSummaryData] = useState(null); 
   const [summaryLoading, setSummaryLoading] = useState(false);
 
   const imageRef = useRef(null);
@@ -75,30 +61,26 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const activePanel = useAnnotationStore((state) => state.activePanel);
   const setActivePanel = useAnnotationStore((state) => state.setActivePanel);
 
-  // Get book ID from currentLesson
   const bookId = currentLesson?.book_id;
 
-  // Check if pdfUrl is a Cloudinary URL (starts with http)
   const isCloudinaryUrl = pdfUrl?.startsWith('http');
 
-  // Extract file path from local pdfUrl (legacy support)
   const getFilePath = useCallback(() => {
     if (!pdfUrl || isCloudinaryUrl) return null;
     const match = pdfUrl.match(/\/api\/books\/pdf\/(.+)$/);
     return match ? match[1] : null;
   }, [pdfUrl, isCloudinaryUrl]);
 
-  // Get PDF info (page count) on load
   useEffect(() => {
     const fetchPdfInfo = async () => {
       try {
         let response;
 
         if (bookId) {
-          // Use new book ID-based endpoint for Cloudinary PDFs
+          
           response = await fetch(`${API_BASE}/api/books/render/${bookId}/info`);
         } else {
-          // Legacy: use file path-based endpoint
+          
           const filePath = getFilePath();
           if (!filePath) return;
           response = await fetch(`${API_BASE}/api/books/pdf-info/${filePath}`);
@@ -123,7 +105,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     }
   }, [pdfUrl, bookId, getFilePath, API_BASE]);
 
-  // Load page image when page number or scale changes
   useEffect(() => {
     const loadPage = async () => {
       if (!numPages) return;
@@ -133,10 +114,10 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
       let url;
       if (bookId) {
-        // Use new book ID-based endpoint for Cloudinary PDFs
+        
         url = `${API_BASE}/api/books/render/${bookId}/page/${pageNumber}?scale=${backendScale}`;
       } else {
-        // Legacy: use file path-based endpoint
+        
         const filePath = getFilePath();
         if (!filePath) return;
         url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}`;
@@ -148,7 +129,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     loadPage();
   }, [pageNumber, scale, numPages, bookId, getFilePath, API_BASE]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
@@ -211,7 +191,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const zoomIn = () => setScale((prev) => Math.min(prev + 0.2, 3));
   const zoomOut = () => setScale((prev) => Math.max(prev - 0.2, 0.5));
 
-  // Start selection mode
   const startSelectionMode = () => {
     setIsSelecting(true);
     setSelectionStart(null);
@@ -220,7 +199,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setShowActionPopup(false);
   };
 
-  // Cancel selection
   const cancelSelection = () => {
     setIsSelecting(false);
     setSelectionStart(null);
@@ -229,7 +207,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setShowActionPopup(false);
   };
 
-  // Handle mouse down for selection
   const handleMouseDown = (e) => {
     if (!isSelecting) return;
 
@@ -243,7 +220,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setSelectionEnd({ x, y });
   };
 
-  // Handle mouse move for selection
   const handleMouseMove = (e) => {
     if (!isSelecting || !selectionStart) return;
 
@@ -256,11 +232,9 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setSelectionEnd({ x, y });
   };
 
-  // Handle mouse up for selection
   const handleMouseUp = () => {
     if (!isSelecting || !selectionStart || !selectionEnd) return;
 
-    // Calculate selection area
     const minX = Math.min(selectionStart.x, selectionEnd.x);
     const minY = Math.min(selectionStart.y, selectionEnd.y);
     const maxX = Math.max(selectionStart.x, selectionEnd.x);
@@ -269,7 +243,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     const width = maxX - minX;
     const height = maxY - minY;
 
-    // Only process if selection is meaningful (at least 20x20 pixels)
     if (width > 20 && height > 20) {
       setSelectedArea({ x: minX, y: minY, width, height });
       setShowActionPopup(true);
@@ -277,7 +250,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     }
   };
 
-  // Get selection rectangle style
   const getSelectionStyle = () => {
     if (!selectionStart || !selectionEnd) return {};
 
@@ -294,9 +266,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     };
   };
 
-
-
-  // Fetch admin-written chapter summary from curriculum API
   const fetchAdminChapterSummary = async () => {
     if (!currentLesson) return;
     setSummaryLoading(true);
@@ -320,31 +289,26 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     }
   };
 
-  // Handle action selection (Define, Stick Flow, Elaborate)
   const handleAction = async (action) => {
     if (!selectedArea || !imageRef.current) return;
 
     setIsProcessing(true);
 
     try {
-      // Create canvas to capture the selected area
+      
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
-      // Get the displayed image dimensions
       const img = imageRef.current;
       const displayedWidth = img.clientWidth;
       const displayedHeight = img.clientHeight;
 
-      // Calculate the ratio between natural and displayed size
       const ratioX = img.naturalWidth / displayedWidth;
       const ratioY = img.naturalHeight / displayedHeight;
 
-      // Set canvas size to the selected area (in natural image coordinates)
       canvas.width = selectedArea.width * ratioX;
       canvas.height = selectedArea.height * ratioY;
 
-      // Draw the selected portion
       ctx.drawImage(
         img,
         selectedArea.x * ratioX,
@@ -357,10 +321,8 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         canvas.height
       );
 
-      // Convert to base64
       const imageData = canvas.toDataURL("image/png");
 
-      // Set the selected text with image data and action
       setSelectedText({
         text: `[Screenshot from page ${pageNumber}]`,
         imageData: imageData,
@@ -370,7 +332,6 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         position: { x: 0, y: 0 },
       });
 
-      // Open AI panel
       setActivePanel("ai");
       setShowActionPopup(false);
       setSelectedArea(null);
@@ -399,7 +360,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Panels */}
+      {}
       <AIPanel
         open={activePanel === "ai"}
         onClose={handleClosePanel}
@@ -421,7 +382,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         currentLesson={currentLesson}
       />
 
-      {/* PDF Controls */}
+      {}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
         <div className="flex items-center gap-2">
           <Button

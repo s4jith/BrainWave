@@ -17,7 +17,6 @@ import os
 import logging
 from typing import Optional, Dict
 
-# Ensure dotenv is loaded
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -27,7 +26,6 @@ import cloudinary.api
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
 
 class CloudinaryService:
     """Service for managing PDF uploads to Cloudinary."""
@@ -41,7 +39,6 @@ class CloudinaryService:
     def _initialize(self):
         """Configure Cloudinary with credentials."""
         try:
-            # Try to get credentials from environment
             cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
             api_key = os.getenv('CLOUDINARY_API_KEY')
             api_secret = os.getenv('CLOUDINARY_API_SECRET')
@@ -107,7 +104,6 @@ class CloudinaryService:
             return None
         
         try:
-            # Build folder path: ncert-books/class_11/physics/chapter_1
             if folder:
                 upload_folder = folder
             elif class_level and subject and chapter_number:
@@ -115,40 +111,34 @@ class CloudinaryService:
             else:
                 upload_folder = "ncert-books"
             
-            # Determine public_id (filename without extension)
             if filename:
                 public_id = os.path.splitext(filename)[0]
             else:
                 public_id = f"chapter_{chapter_number}"
             
-            # Full public_id with folder
             full_public_id = f"{upload_folder}/{public_id}"
             
-            # Upload to Cloudinary
             if file_path and os.path.exists(file_path):
                 result = cloudinary.uploader.upload(
                     file_path,
-                    resource_type="raw",  # Upload PDFs as raw files
+                    resource_type="raw",
                     public_id=full_public_id,
                     overwrite=True,
-                    type="upload"  # Use 'upload' type for public access
+                    type="upload"
                 )
             elif file_content:
-                # Upload from bytes
                 import io
                 result = cloudinary.uploader.upload(
                     io.BytesIO(file_content),
-                    resource_type="raw",  # Upload PDFs as raw files
+                    resource_type="raw",
                     public_id=full_public_id,
                     overwrite=True,
-                    type="upload"  # Use 'upload' type for public access
+                    type="upload"
                 )
             else:
                 logger.error(" No file path or content provided")
                 return None
             
-            # Use the actual secure_url returned by Cloudinary
-            # Note: Cloudinary returns the correct versioned URL
             secure_url = result.get('secure_url')
             public_id_result = result.get('public_id')
             
@@ -203,8 +193,6 @@ class CloudinaryService:
             logger.error(f" Failed to get Cloudinary URL: {e}")
             return None
 
-
-# Global instance
 _cloudinary_service = None
 
 def get_cloudinary_service() -> CloudinaryService:

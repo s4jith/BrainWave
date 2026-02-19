@@ -11,7 +11,6 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
-
 class SummaryCacheService:
     """Service to cache and retrieve summaries from MongoDB."""
     
@@ -34,7 +33,7 @@ class SummaryCacheService:
     
     async def get_cached_summary(
         self,
-        summary_type: str,  # "page" or "chapter"
+        summary_type: str,
         subject: str,
         class_level: int,
         chapter: int,
@@ -52,14 +51,12 @@ class SummaryCacheService:
                 summary_type, subject, class_level, chapter, page_number
             )
             
-            # Find cached summary
             cached = await collection.find_one({"cache_key": cache_key})
             
             if cached:
                 logger.info(f"Cache HIT: {summary_type} summary for {subject} Class {class_level}, Ch {chapter}" + 
                            (f", Page {page_number}" if page_number else ""))
                 
-                # Update access count and last accessed
                 await collection.update_one(
                     {"_id": cached["_id"]},
                     {
@@ -84,7 +81,7 @@ class SummaryCacheService:
     
     async def save_summary(
         self,
-        summary_type: str,  # "page" or "chapter"
+        summary_type: str,
         subject: str,
         class_level: int,
         chapter: int,
@@ -118,7 +115,6 @@ class SummaryCacheService:
                 "access_count": 1
             }
             
-            # Upsert (update if exists, insert if not)
             await collection.update_one(
                 {"cache_key": cache_key},
                 {"$set": document},
@@ -171,7 +167,6 @@ class SummaryCacheService:
         try:
             collection = await self.get_collection()
             
-            # Delete all summaries matching this chapter (both page and chapter type)
             result = await collection.delete_many({
                 "subject": {"$regex": f"^{subject}$", "$options": "i"},
                 "class_level": class_level,
@@ -201,6 +196,4 @@ class SummaryCacheService:
                 "summaries_deleted": 0
             }
 
-
-# Global instance
 summary_cache_service = SummaryCacheService()

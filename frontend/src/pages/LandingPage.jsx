@@ -18,7 +18,6 @@ import {
     Shield
 } from 'lucide-react';
 
-// Testimonial data
 const testimonials = [
     {
         quote: "Brainwave transformed how I study. The AI-powered book assistant helps me understand complex concepts in seconds!",
@@ -52,7 +51,6 @@ const testimonials = [
     },
 ];
 
-// Features data with cartoon images
 const features = [
     {
         title: "Book to Bot",
@@ -80,7 +78,6 @@ const features = [
     },
 ];
 
-// FAQ data
 const faqs = [
     {
         icon: BookOpen,
@@ -109,7 +106,6 @@ const faqs = [
     },
 ];
 
-// Navbar
 const Navbar = () => {
     const navigate = useNavigate();
     return (
@@ -139,7 +135,6 @@ const Navbar = () => {
     );
 };
 
-// Features Panel - Image cards with hover effect
 const FeaturesPanel = ({ navigate }) => {
     const [stopScroll, setStopScroll] = useState(false);
 
@@ -205,7 +200,6 @@ const FeaturesPanel = ({ navigate }) => {
     );
 };
 
-// Testimonials Panel
 const TestimonialsPanel = () => {
     const [activeIndex, setActiveIndex] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
@@ -284,7 +278,6 @@ const TestimonialsPanel = () => {
     );
 };
 
-// FAQ Panel
 const FAQPanel = () => {
     const [activeIndex, setActiveIndex] = useState(0);
 
@@ -350,7 +343,6 @@ const FAQPanel = () => {
     );
 };
 
-// CTA Panel
 const CTAPanel = ({ navigate }) => (
     <div className="w-full h-full flex-shrink-0 bg-neutral-900 flex items-center justify-center text-center p-8">
         <div>
@@ -371,7 +363,6 @@ const CTAPanel = ({ navigate }) => (
     </div>
 );
 
-// Progress Indicator
 const ScrollProgress = ({ progress, panels }) => (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-lg rounded-full border border-neutral-200 shadow-lg">
         {panels.map((name, i) => {
@@ -390,7 +381,6 @@ const ScrollProgress = ({ progress, panels }) => (
     </div>
 );
 
-// Footer
 const Footer = () => {
     return (
         <footer className="bg-neutral-950 text-white py-6 px-6">
@@ -403,7 +393,6 @@ const Footer = () => {
 
 const panelNames = ['Features', 'Reviews', 'FAQ', 'Start'];
 
-// Main Landing Page
 export default function LandingPage() {
     const navigate = useNavigate();
     const containerRef = useRef(null);
@@ -415,16 +404,13 @@ export default function LandingPage() {
         return () => unsubscribe();
     }, [scrollYProgress]);
 
-    // Title animation - fades out and moves up
     const titleOpacity = useTransform(scrollYProgress, [0, 0.1], [1, 0]);
     const titleY = useTransform(scrollYProgress, [0, 0.15], [0, -150]);
 
-    // Screen animation - stays at 85-90% of viewport, just tilts
     const screenRotateX = useTransform(scrollYProgress, [0, 0.15], [15, 0]);
     const screenScale = useTransform(scrollYProgress, [0, 0.15], [0.9, 1]);
     const screenY = useTransform(scrollYProgress, [0, 0.15], [60, 0]);
 
-    // Horizontal scroll inside screen
     const innerX = useTransform(scrollYProgress, [0.2, 1], ['0%', '-300%']);
 
     return (

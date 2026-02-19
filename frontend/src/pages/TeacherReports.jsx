@@ -1,7 +1,3 @@
-/**
- * TeacherReports - Analytics for teacher's tests
- * Uses AdminLayout
- */
 
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
@@ -104,7 +100,7 @@ export default function TeacherReports() {
                     </div>
                 </div>
 
-                {/* Score Distribution */}
+                {}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Score Distribution</h2>
                     <div className="h-80 flex items-center justify-center">

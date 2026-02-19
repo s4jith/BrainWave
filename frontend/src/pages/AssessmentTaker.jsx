@@ -1,7 +1,3 @@
-/**
- * AssessmentTaker - Student view for taking assessments
- * Includes timer, question navigation, and answer submission
- */
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -37,12 +33,10 @@ export default function AssessmentTaker() {
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState(null);
 
-    // Start assessment on mount
     useEffect(() => {
         startAssessment(assessmentId);
     }, [assessmentId]);
 
-    // Timer tick
     useEffect(() => {
         if (!timerActive) return;
 
@@ -53,7 +47,6 @@ export default function AssessmentTaker() {
         return () => clearInterval(interval);
     }, [timerActive, tickTimer]);
 
-    // Auto-submit when time runs out
     useEffect(() => {
         if (timerActive && timeRemaining === 0) {
             handleSubmit();
@@ -99,7 +92,6 @@ export default function AssessmentTaker() {
     const handleSubmit = useCallback(async () => {
         setSubmitting(true);
 
-        // Format answers for API
         const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => {
             const question = questions.find(q => q.id === questionId);
 
@@ -137,7 +129,6 @@ export default function AssessmentTaker() {
         setShowConfirmSubmit(false);
     }, [answers, questions, assessmentId, submitAnswers]);
 
-    // Result view
     if (result) {
         return (
             <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -178,7 +169,6 @@ export default function AssessmentTaker() {
         );
     }
 
-    // Loading state
     if (loading && !currentAssessment) {
         return (
             <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -190,7 +180,6 @@ export default function AssessmentTaker() {
         );
     }
 
-    // Error state
     if (error) {
         return (
             <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">

@@ -13,18 +13,15 @@ from app.services.pdf_processor import AdvancedPDFProcessor, PineconeEmbeddingUp
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class IngestionConfig:
     """Configuration for Ingestion Service."""
     component_name: str = "IngestionService"
     
-    # Processing settings
     chunk_size: int = 800
     chunk_overlap: int = 150
     dpi: int = 300
     use_gemini_vision: bool = True
-
 
 class IngestionService:
     """
@@ -41,7 +38,6 @@ class IngestionService:
     def __init__(self, config: Optional[IngestionConfig] = None):
         self.config = config or IngestionConfig()
         
-        # Initialize PDF processor
         self.pdf_processor = AdvancedPDFProcessor(
             chunk_size=self.config.chunk_size,
             chunk_overlap=self.config.chunk_overlap,
@@ -49,7 +45,6 @@ class IngestionService:
             use_gemini_vision=self.config.use_gemini_vision
         )
         
-        # Embedding uploader for Pinecone
         self.embedding_uploader = PineconeEmbeddingUploader()
         
         logger.info(f"{self.config.component_name} initialized")
@@ -75,7 +70,6 @@ class IngestionService:
         logger.info(f"📥 [IngestionService] Starting PDF ingestion: {pdf_path}")
         logger.info(f"   Metadata: {book_metadata}")
         
-        # Step 1: Process PDF (extract text, OCR, images)
         result = self.pdf_processor.process_pdf(
             pdf_path=pdf_path,
             book_metadata=book_metadata,
@@ -86,13 +80,11 @@ class IngestionService:
             logger.error(f" [IngestionService] PDF processing failed: {result.errors}")
             return result
         
-        # Step 2: Create chunks
         chunks = self.pdf_processor.create_chunks(result.pages, book_metadata)
         result.total_chunks = len(chunks)
         
         logger.info(f"📦 [IngestionService] Created {len(chunks)} chunks from {result.processed_pages} pages")
         
-        # Step 3: Generate embeddings and upload to Pinecone
         namespace = book_metadata.get("subject", "general").lower().replace(" ", "_")
         
         upload_result = self.embedding_uploader.upload_chunks(
@@ -114,7 +106,4 @@ class IngestionService:
             "vector_db": "Pinecone"
         }
 
-
-# Singleton instance
 ingestion_service = IngestionService()
-

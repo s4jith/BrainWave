@@ -15,12 +15,6 @@ import { chatService } from "../../services/api";
 import ReactMarkdown from "react-markdown";
 import { exportChatAsDoc } from "../../utils/chatExport";
 
-/**
- * AI Panel Component - Backend Connected
- * Uses chatService.processAnnotation() for RAG-based AI responses
- * Now supports image-based doubts from screenshot selection
- */
-
 const AI_ACTIONS = [
   {
     id: "define",
@@ -69,14 +63,11 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [error, setError] = useState(null);
 
-  // Use lesson's subject if available, otherwise use user's preferred subject
   const effectiveSubject = currentLesson?.subject || user.preferredSubject || "Mathematics";
 
-  // Check if this is a screenshot-based doubt (has imageData)
   const isScreenshotDoubt = selectedText?.imageData;
   const preSelectedAction = selectedText?.action;
 
-  // Auto-trigger action if coming from Doubt screenshot with pre-selected action
   useEffect(() => {
     if (open && preSelectedAction && !selectedAction && !isProcessing) {
       const actionMap = {
@@ -85,7 +76,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         elaborate: "elaborate",
         summarize_page: "summarize_page",
         summarize_chapter: "summarize_chapter",
-        custom: null, // Custom queries go through normal flow
+        custom: null, 
       };
 
       const mappedAction = actionMap[preSelectedAction];
@@ -98,7 +89,6 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     }
   }, [open, preSelectedAction]);
 
-  // Reset state when panel closes
   useEffect(() => {
     if (!open) {
       setSelectedAction(null);
@@ -124,24 +114,20 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         hasImageData: !!selectedText?.imageData,
       });
 
-      // Prepare the query - if we have image data, we'll send it for OCR
       let queryText = selectedText?.text || "";
 
-      // If this is a screenshot doubt, add context
       if (selectedText?.imageData) {
         queryText = `[Screenshot from page ${selectedText.pageNumber || pageNumber}] Please ${action.id === 'define' ? 'define and explain' : action.id === 'stick_flow' ? 'create a step-by-step breakdown of' : action.id === 'summarize_page' ? 'summarize' : action.id === 'summarize_chapter' ? 'provide a comprehensive summary of' : 'elaborate on'} the content in this selected area from the textbook.`;
       }
 
-      // Use unified annotation endpoint for all actions
-      // The backend will use Pinecone to retrieve relevant content
       const result = await chatService.processAnnotation(
         queryText,
         action.id,
         user.classLevel,
         effectiveSubject,
         currentLesson?.number || 1,
-        selectedText?.imageData, // Pass image data if available
-        selectedText?.pageNumber || pageNumber // Pass page number for page-specific actions
+        selectedText?.imageData, 
+        selectedText?.pageNumber || pageNumber 
       );
 
       console.log("Backend response received:", result);
@@ -181,7 +167,6 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     onClose();
   };
 
-  // Download AI response as document
   const handleDownload = () => {
     if (!response && !imageUrl) return;
 
@@ -224,7 +209,7 @@ Action: ${actionLabel}`,
         </SheetHeader>
 
         <div className="space-y-6 flex-1 overflow-y-auto pr-2">
-          {/* Selected Content Preview */}
+          {}
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2">
               {isScreenshotDoubt ? "Selected Area" : "Selected Text"}
@@ -252,7 +237,7 @@ Action: ${actionLabel}`,
             )}
           </div>
 
-          {/* AI Actions - Show only if no action selected yet */}
+          {}
           {!selectedAction && (
             <div className="space-y-3">
               <p className="text-sm font-medium">What would you like to do?</p>
@@ -281,7 +266,7 @@ Action: ${actionLabel}`,
             </div>
           )}
 
-          {/* AI Response */}
+          {}
           {selectedAction && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">

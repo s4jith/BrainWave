@@ -16,7 +16,6 @@ router = APIRouter(
     tags=["MCQ Generation"]
 )
 
-
 @router.post("/generate", response_model=MCQGenerationResponse)
 async def generate_mcqs(request: MCQGenerationRequest):
     """
@@ -33,7 +32,6 @@ async def generate_mcqs(request: MCQGenerationRequest):
     try:
         logger.info(f"MCQ generation request: Class {request.class_level}, {request.subject}, Ch. {request.chapter}, {request.num_questions} questions, local_model={request.use_local_model}")
         
-        # Generate MCQs
         mcqs, used_pipeline, inference_time_ms = mcq_service.generate_mcqs(
             class_level=request.class_level,
             subject=request.subject,
@@ -61,7 +59,3 @@ async def generate_mcqs(request: MCQGenerationRequest):
     except Exception as e:
         logger.error(f" MCQ generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-

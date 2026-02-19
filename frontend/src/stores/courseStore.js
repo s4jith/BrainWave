@@ -1,7 +1,3 @@
-/**
- * Course Store - Manages course data for LMS
- * Zustand store for courses, modules, and enrollment
- */
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
@@ -9,20 +5,10 @@ import useUserStore from "./userStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * Course Store
- * 
- * Features:
- * - Course listing and filtering
- * - Course details with modules
- * - Enrollment management
- * - Teacher course creation
- */
-
 const useCourseStore = create(
     devtools(
         (set, get) => ({
-            // State
+            
             courses: [],
             myCourses: [],
             currentCourse: null,
@@ -35,11 +21,6 @@ const useCourseStore = create(
                 pageSize: 20
             },
 
-            // Actions
-
-            /**
-             * Fetch courses with optional filters
-             */
             fetchCourses: async (filters = {}) => {
                 set({ loading: true, error: null });
                 try {
@@ -80,9 +61,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Fetch user's courses (created or enrolled)
-             */
             fetchMyCourses: async () => {
                 set({ loading: true, error: null });
                 try {
@@ -105,9 +83,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Get single course details
-             */
             fetchCourseDetails: async (courseId) => {
                 set({ loading: true, error: null });
                 try {
@@ -130,9 +105,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Create a new course (teachers only)
-             */
             createCourse: async (courseData) => {
                 set({ loading: true, error: null });
                 try {
@@ -154,7 +126,6 @@ const useCourseStore = create(
 
                     const course = await res.json();
 
-                    // Add to local state
                     set(state => ({
                         myCourses: [course, ...state.myCourses],
                         loading: false
@@ -168,9 +139,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Update a course
-             */
             updateCourse: async (courseId, updateData) => {
                 set({ loading: true, error: null });
                 try {
@@ -189,7 +157,6 @@ const useCourseStore = create(
 
                     const course = await res.json();
 
-                    // Update local state
                     set(state => ({
                         myCourses: state.myCourses.map(c => c.id === courseId ? course : c),
                         currentCourse: state.currentCourse?.id === courseId ? course : state.currentCourse,
@@ -204,9 +171,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Publish a draft course
-             */
             publishCourse: async (courseId) => {
                 set({ loading: true, error: null });
                 try {
@@ -221,7 +185,6 @@ const useCourseStore = create(
 
                     const course = await res.json();
 
-                    // Update local state
                     set(state => ({
                         myCourses: state.myCourses.map(c => c.id === courseId ? course : c),
                         currentCourse: state.currentCourse?.id === courseId ? course : state.currentCourse,
@@ -236,9 +199,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Add a module to a course
-             */
             addModule: async (courseId, moduleData) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -256,7 +216,6 @@ const useCourseStore = create(
 
                     const module = await res.json();
 
-                    // Refresh course details
                     await get().fetchCourseDetails(courseId);
 
                     return module;
@@ -267,9 +226,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Add content to a module
-             */
             addContent: async (courseId, moduleId, contentData) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -287,7 +243,6 @@ const useCourseStore = create(
 
                     const content = await res.json();
 
-                    // Refresh course details
                     await get().fetchCourseDetails(courseId);
 
                     return content;
@@ -298,9 +253,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Enroll in a course
-             */
             enrollInCourse: async (courseId) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -315,14 +267,13 @@ const useCourseStore = create(
                     const result = await res.json();
 
                     if (result.success) {
-                        // Update course in list
+                        
                         set(state => ({
                             courses: state.courses.map(c =>
                                 c.id === courseId ? { ...c, is_enrolled: true } : c
                             )
                         }));
 
-                        // Refresh my courses
                         await get().fetchMyCourses();
                     }
 
@@ -333,9 +284,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Unenroll from a course
-             */
             unenrollFromCourse: async (courseId) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -365,9 +313,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Rate a course
-             */
             rateCourse: async (courseId, rating, review = null) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -390,9 +335,6 @@ const useCourseStore = create(
                 }
             },
 
-            /**
-             * Fetch categories
-             */
             fetchCategories: async () => {
                 try {
                     const res = await fetch(`${API_URL}/api/courses/categories/list`);
@@ -409,10 +351,8 @@ const useCourseStore = create(
                 }
             },
 
-            // Clear current course
             clearCurrentCourse: () => set({ currentCourse: null }),
 
-            // Clear error
             clearError: () => set({ error: null })
         }),
         { name: "course-store" }

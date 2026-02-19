@@ -13,11 +13,9 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-# The only embedding model currently available in Gemini API
 EMBEDDING_MODEL = "models/gemini-embedding-001"
-EMBEDDING_DIMENSION = 768  # Match Pinecone index dimension
+EMBEDDING_DIMENSION = 768
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-
 
 def generate_embedding(
     text: str,
@@ -55,7 +53,6 @@ def generate_embedding(
         raise Exception(f"Embedding API error ({response.status_code}): {error_msg}")
     
     return response.json()["embedding"]["values"]
-
 
 def generate_embeddings_batch(
     texts: List[str],

@@ -1,8 +1,3 @@
-/**
- * CreateTest - Page to create new tests/assessments
- * Uses AdminLayout with light/dark theme support
- * Matches reference design with tabs, date range, and student assignment
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -29,10 +24,9 @@ export default function CreateTest() {
   const [success, setSuccess] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Form data
   const [formData, setFormData] = useState({
     title: "",
-    class_level: 10,  // Default class
+    class_level: 10,  
     subject: "",
     startDate: "",
     endDate: "",
@@ -42,25 +36,23 @@ export default function CreateTest() {
     num_attempts: 1,
     show_results: false,
     description: "",
-    evaluation_type: "manual" // "ai" or "manual"
+    evaluation_type: "manual" 
   });
 
-  // Groups and Students
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
-  const [mainFormCurriculumSubjects, setMainFormCurriculumSubjects] = useState([]); // Curriculum subjects for main form
+  const [mainFormCurriculumSubjects, setMainFormCurriculumSubjects] = useState([]); 
   const [loadingMainFormCurriculum, setLoadingMainFormCurriculum] = useState(true);
 
-  // Generate combined options from user's groups or curriculum subjects
   const combinedOptions = React.useMemo(() => {
-    // If groups exist (teacher with assigned groups), use them
+    
     if (groups && groups.length > 0) {
       return groups.map(group => ({
-        value: group.name,  // Use group name as value
-        label: group.name,  // Display group name
+        value: group.name,  
+        label: group.name,  
         class: group.class_level,
         subject: group.subject
       })).sort((a, b) => {
@@ -69,7 +61,6 @@ export default function CreateTest() {
       });
     }
     
-    // Otherwise use curriculum subjects from database
     return mainFormCurriculumSubjects.map(subj => ({
       value: `${subj.class_level}-${subj.subject_name}`,
       label: `Class ${subj.class_level} - ${subj.subject_name}`,
@@ -81,14 +72,12 @@ export default function CreateTest() {
     });
   }, [groups, mainFormCurriculumSubjects]);
 
-  // Helper to find group name from class and subject
   const getGroupNameValue = React.useCallback((classLevel, subject) => {
     if (!classLevel || !subject) return '';
     const matchingOption = combinedOptions.find(opt => opt.class === classLevel && opt.subject === subject);
     return matchingOption ? matchingOption.value : '';
   }, [combinedOptions]);
 
-  // Filter groups by class and subject
   const filteredGroups = React.useMemo(() => {
     if (!formData.class_level) return groups;
     
@@ -99,11 +88,10 @@ export default function CreateTest() {
     });
   }, [groups, formData.class_level, formData.subject]);
 
-  // Get unique students from filtered groups
   const groupStudents = React.useMemo(() => {
     const studentMap = new Map();
     filteredGroups.forEach(group => {
-      // Add students from the students array if available
+      
       if (group.students && Array.isArray(group.students)) {
         group.students.forEach(student => {
           if (student.id && !studentMap.has(student.id)) {
@@ -115,20 +103,16 @@ export default function CreateTest() {
     return Array.from(studentMap.values());
   }, [filteredGroups]);
 
-  // Combine group students with individually fetched students
   const displayedStudents = React.useMemo(() => {
     const studentMap = new Map();
     
-    // Add group students first
     groupStudents.forEach(s => studentMap.set(s.id, s));
     
-    // Add fetched students (they might overlap, which is fine)
     students.forEach(s => studentMap.set(s.id, s));
     
     return Array.from(studentMap.values());
   }, [groupStudents, students]);
 
-  // Questions (for tab 2)
   const [questions, setQuestions] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showBankSelector, setShowBankSelector] = useState(false);
@@ -137,21 +121,20 @@ export default function CreateTest() {
     class_level: 10,
     subject: "",
     marks: 1,
-    type: "mcq", // mcq, mcq_multi, fillup, subjective
+    type: "mcq", 
     text: "",
     options: ["", "", "", ""],
-    correct_answer: 0,       // single MCQ: index of correct option
-    correct_answers: [],     // multi-select MCQ: array of correct option indices
-    fillup_answers: "",      // fill-up: comma-separated accepted answers
-    answer_text: ""          // subjective (2/5 mark): model answer text
+    correct_answer: 0,       
+    correct_answers: [],     
+    fillup_answers: "",      
+    answer_text: ""          
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
-  const [testSubjects, setTestSubjects] = useState([]);  // For Test Details tab
+  const [testSubjects, setTestSubjects] = useState([]);  
 
-  // Curriculum data for question modal
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
-  const [questionCurrSubject, setQuestionCurrSubject] = useState(null); // full subject detail
+  const [questionCurrSubject, setQuestionCurrSubject] = useState(null); 
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
   const [loadingCurrDetail, setLoadingCurrDetail] = useState(false);
 
@@ -162,7 +145,7 @@ export default function CreateTest() {
     if (isEditMode) {
       fetchTestDetails();
     } else {
-      // In create mode, fetch subjects for the default class
+      
       fetchTestSubjectsForClass(formData.class_level, false);
     }
   }, [testId]);
@@ -199,7 +182,6 @@ export default function CreateTest() {
     }
   };
 
-  // Fetch curriculum subject details when question modal subject/class changes
   useEffect(() => {
     if (!showQuestionModal || !questionForm.subject || !questionForm.class_level) {
       setQuestionCurrSubject(null);
@@ -226,19 +208,17 @@ export default function CreateTest() {
     fetchDetail();
   }, [showQuestionModal, questionForm.subject, questionForm.class_level]);
 
-  // Derived: chapters and topics for question modal
   const questionChapters = questionCurrSubject?.chapters?.filter(ch => ch.is_active !== false) || [];
   const questionSelectedChapter = questionChapters.find(ch => ch.chapter_number === questionForm.chapter);
   const questionTopics = questionSelectedChapter?.topics?.filter(t => t.is_active !== false) || [];
 
-  // Unique curriculum subject names and class levels
   const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
   const currClassLevels = [...new Set(
     curriculumSubjects
       .filter(s => s.subject_name === questionForm.subject)
       .map(s => s.class_level)
   )].sort((a, b) => a - b);
-  // All available class levels from curriculum (not subject-specific)
+  
   const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
   const fetchTestDetails = async () => {
@@ -252,7 +232,6 @@ export default function CreateTest() {
 
       const data = await response.json();
 
-      // Parse dates
       let startDate = "", startTime = "09:00", endDate = "", endTime = "12:00";
       if (data.start_datetime) {
         const start = new Date(data.start_datetime);
@@ -280,20 +259,18 @@ export default function CreateTest() {
         evaluation_type: data.evaluation_type || "manual"
       });
 
-      // Transform backend questions to frontend format (options as strings, correct_answer as index)
       const formattedQuestions = (data.questions || []).map(q => {
-        // Handle options: extract text from objects
+        
         const optionsText = Array.isArray(q.options)
           ? q.options.map(opt => (typeof opt === 'object' ? (opt.text || "") : opt))
           : [];
 
-        // Handle correct answer: find index of correct option
         let correctIndex = 0;
         let correctIndices = [];
         if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'object') {
           const foundIndex = q.options.findIndex(opt => opt.is_correct);
           if (foundIndex !== -1) correctIndex = foundIndex;
-          // Multi-select: find all correct indices
+          
           correctIndices = q.options.map((opt, idx) => opt.is_correct ? idx : -1).filter(i => i >= 0);
         } else if (q.correct_answer !== undefined) {
           correctIndex = parseInt(q.correct_answer) || 0;
@@ -313,12 +290,10 @@ export default function CreateTest() {
 
       setQuestions(formattedQuestions);
       setSelectedStudents(data.student_ids || []);
-      setSelectedGroups(data.group_ids || []); // Restore selected groups
+      setSelectedGroups(data.group_ids || []); 
 
-      // Fetch subjects for this class to ensure subject dropdown is populated correctly
       fetchTestSubjectsForClass(data.class_level || 10, false);
 
-      // Always fetch students for this class in edit mode
       fetchStudentsForClass(data.class_level || 10, false);
 
     } catch (err) {
@@ -329,9 +304,6 @@ export default function CreateTest() {
     }
   };
 
-  // Removed useEffect for formData.class_level to avoid race condition with fetchTestDetails
-
-  // Fetch subjects when class changes in question modal
   useEffect(() => {
     if (showQuestionModal && questionForm.class_level) {
       fetchSubjectsForClass(questionForm.class_level);
@@ -360,7 +332,6 @@ export default function CreateTest() {
     }
   };
 
-  // Fetch subjects for Test Details tab based on class
   const fetchTestSubjectsForClass = async (classLevel, resetSubject = true) => {
     try {
       const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
@@ -398,7 +369,6 @@ export default function CreateTest() {
         setGroups(data.groups || []);
       }
 
-      // Fetch students for default class (10) only if not edit mode (edit mode fetches its own class)
       if (!isEditMode) {
         await fetchStudentsForClass(formData.class_level);
       }
@@ -409,9 +379,8 @@ export default function CreateTest() {
     }
   };
 
-  // Fetch students filtered by class
   const fetchStudentsForClass = async (classLevel, clearSelection = true) => {
-    if (!classLevel) return; // Prevent API call if class_level is undefined/null
+    if (!classLevel) return; 
     try {
       const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
       if (studentsRes.ok) {
@@ -426,8 +395,6 @@ export default function CreateTest() {
     }
   };
 
-
-
   const handleGroupToggle = (groupId) => {
     const group = groups.find(g => g.id === groupId);
     console.log('Group toggled:', group);
@@ -436,14 +403,14 @@ export default function CreateTest() {
     
     if (selectedGroups.includes(groupId)) {
       setSelectedGroups(prev => prev.filter(id => id !== groupId));
-      // Remove students from this group - try both student_ids and students array
+      
       const studentIdsToRemove = group?.student_ids || group?.students?.map(s => s.id) || [];
       if (studentIdsToRemove.length > 0) {
         setSelectedStudents(prev => prev.filter(id => !studentIdsToRemove.includes(id)));
       }
     } else {
       setSelectedGroups(prev => [...prev, groupId]);
-      // Add students from this group - try both student_ids and students array
+      
       const studentIdsToAdd = group?.student_ids || group?.students?.map(s => s.id) || [];
       console.log('Adding student IDs:', studentIdsToAdd);
       if (studentIdsToAdd.length > 0) {
@@ -465,7 +432,7 @@ export default function CreateTest() {
   const selectAllGroups = () => {
     const allGroupIds = filteredGroups.map(g => g.id);
     setSelectedGroups(allGroupIds);
-    // Add all students from all filtered groups
+    
     const allStudentIds = filteredGroups.flatMap(g => g.student_ids || []);
     setSelectedStudents([...new Set(allStudentIds)]);
   };
@@ -485,7 +452,7 @@ export default function CreateTest() {
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      // In production, this would save to backend
+      
       await new Promise(r => setTimeout(r, 500));
       setSuccess("Draft saved successfully!");
       setTimeout(() => setSuccess(null), 3000);
@@ -514,7 +481,7 @@ export default function CreateTest() {
     setError(null);
 
     try {
-      // Combine date and time
+      
       const startDateTime = formData.startDate && formData.startTime
         ? `${formData.startDate}T${formData.startTime}:00`
         : null;
@@ -533,7 +500,7 @@ export default function CreateTest() {
         start_datetime: startDateTime,
         end_datetime: endDateTime,
         student_ids: selectedStudents,
-        group_ids: selectedGroups, // Include selected group IDs
+        group_ids: selectedGroups, 
         questions: questions,
         created_by: user?.user_id || "admin",
         evaluation_type: formData.evaluation_type
@@ -569,9 +536,8 @@ export default function CreateTest() {
     }
   };
 
-  // Question Modal Functions
   const openAddQuestion = () => {
-    // Auto-populate subject and class from test details
+    
     setQuestionForm({
       class_level: formData.class_level || 10,
       subject: formData.subject || "",
@@ -591,7 +557,6 @@ export default function CreateTest() {
     setShowQuestionModal(true);
   };
 
-  // Check if test details are complete before allowing questions
   const isTestDetailsComplete = formData.title?.trim() && formData.subject && formData.class_level && formData.startDate;
 
   const handleSaveQuestion = () => {
@@ -603,7 +568,7 @@ export default function CreateTest() {
       setError("Please fill all MCQ options");
       return;
     }
-    // Validate answer fields when AI evaluation is enabled
+    
     if (formData.evaluation_type === "ai") {
       if (questionForm.type === "mcq" && (!questionForm.correct_answers || questionForm.correct_answers.length === 0)) {
         setError("Please select at least one correct answer for MCQ");
@@ -645,8 +610,7 @@ export default function CreateTest() {
   };
 
   const handleMarksChange = (marks) => {
-    // For 1 mark: allow mcq or fillup
-    // For 2+ marks: force subjective
+    
     const type = marks === 1 ? (questionForm.type === 'fillup' ? 'fillup' : 'mcq') : 'subjective';
     setQuestionForm(prev => ({ ...prev, marks, type }));
   };
@@ -666,7 +630,7 @@ export default function CreateTest() {
 
   return (
     <AdminLayout title={isEditMode ? "Update Test" : "Create Test"} icon={ClipboardList}>
-      {/* Header Actions */}
+      {}
       <div className="flex justify-end gap-3 mb-6">
         <button
           onClick={() => navigate(-1)}
@@ -690,7 +654,7 @@ export default function CreateTest() {
         </button>
       </div>
 
-      {/* Success/Error Messages */}
+      {}
       {success && (
         <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -704,7 +668,7 @@ export default function CreateTest() {
         </div>
       )}
 
-      {/* Tabs */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
         <div className="flex border-b border-gray-200 dark:border-gray-700">
           <button
@@ -730,10 +694,10 @@ export default function CreateTest() {
         </div>
       </div>
 
-      {/* Test Details Tab */}
+      {}
       {activeTab === "details" && (
         <div className="space-y-6">
-          {/* Basic Information */}
+          {}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h2>
 
@@ -766,24 +730,22 @@ export default function CreateTest() {
                       return;
                     }
                     
-                    // Find the matching option from combinedOptions
                     const matchedOption = combinedOptions.find(opt => opt.value === value);
                     
                     if (matchedOption) {
-                      // Use the class and subject from the matched option directly
-                      // This ensures consistency between the select value and formData
+                      
                       setFormData({ ...formData, class_level: matchedOption.class, subject: matchedOption.subject });
-                      fetchTestSubjectsForClass(matchedOption.class, false); // Don't reset subject - we just set it above
+                      fetchTestSubjectsForClass(matchedOption.class, false); 
                       fetchStudentsForClass(matchedOption.class, true);
                     } else {
-                      // Fallback to parsing if no match found
+                      
                       let parsed = parseGroupName(value);
                       if (!parsed.class) {
                         parsed = parseCombinedValue(value);
                       }
                       if (parsed.class && parsed.subject) {
                         setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
-                        fetchTestSubjectsForClass(parsed.class, false); // Don't reset subject - we just set it above
+                        fetchTestSubjectsForClass(parsed.class, false); 
                         fetchStudentsForClass(parsed.class, true);
                       }
                     }
@@ -801,7 +763,7 @@ export default function CreateTest() {
                 </select>
               </div>
 
-              {/* Test Period */}
+              {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Test Period <span className="text-red-500">*</span>
@@ -826,7 +788,7 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {/* Duration */}
+              {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Duration (minutes) <span className="text-red-500">*</span>
@@ -1395,4 +1357,3 @@ export default function CreateTest() {
     </AdminLayout>
   );
 }
-

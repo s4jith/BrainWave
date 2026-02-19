@@ -13,7 +13,6 @@ from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-
 class MCQService:
     """
     Service for generating and managing MCQs using Gemini.
@@ -29,8 +28,7 @@ class MCQService:
         subject: str,
         chapter: int,
         num_questions: int = 5,
-        page_range: tuple[int, int] = None,
-        use_local_model: bool = False
+        page_range: tuple[int, int] = None
     ) -> Tuple[List[MCQ], str, Optional[float]]:
         """
         Generate MCQs using RAG context and Gemini.
@@ -41,13 +39,11 @@ class MCQService:
             chapter: Chapter number
             num_questions: Number of MCQs to generate
             page_range: Optional (start_page, end_page)
-            use_local_model: Deprecated, ignored
         
         Returns:
             Tuple of (List of MCQ objects, pipeline_used, inference_time_ms)
         """
         try:
-            # Step 1: Retrieve chapter context from Pinecone
             logger.info(f"Retrieving context for Class {class_level}, {subject}, Chapter {chapter}")
             context = self.rag.retrieve_chapter_context(
                 class_level=class_level,
@@ -55,7 +51,6 @@ class MCQService:
                 chapter=chapter
             )
             
-            # Step 2: Generate with Gemini
             return self._generate_with_gemini(
                 context=context,
                 num_questions=num_questions,
@@ -91,13 +86,9 @@ class MCQService:
         
         inference_time_ms = (time.perf_counter() - start_time) * 1000
         
-        # Convert to Pydantic models
         mcqs = [MCQ(**mcq) for mcq in mcq_dicts]
         
         logger.info(f"Generated {len(mcqs)} MCQs with Gemini in {inference_time_ms:.1f}ms")
         return mcqs, "gemini", inference_time_ms
 
-
-# Global MCQ service instance
 mcq_service = MCQService()
-

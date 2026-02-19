@@ -1,7 +1,3 @@
-/**
- * AdminLayout - Reusable layout component for all admin pages
- * Provides consistent sidebar navigation, header, and light/dark/system theme switcher
- */
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -31,12 +27,10 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     const currentPath = location.pathname;
 
-    // Initialize theme on mount
     useEffect(() => {
         initTheme();
     }, []);
 
-    // Close menus when clicking outside
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
@@ -159,7 +153,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         switch (theme) {
             case 'dark': return Moon;
             case 'light': return Sun;
-            default: return Sun; // Default to Sun (Light) icon for System instead of Monitor
+            default: return Sun; 
         }
     };
 
@@ -167,9 +161,9 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     return (
         <div className="h-screen bg-gray-50 dark:bg-black flex transition-colors duration-200 overflow-hidden">
-            {/* Left Sidebar */}
+            {}
             <aside className="w-64 h-screen bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-200">
-                {/* Logo */}
+                {}
                 <div className="h-16 flex items-center px-4 border-b border-gray-100 dark:border-zinc-800">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-xl flex items-center justify-center">
@@ -186,7 +180,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
                     {navItems.map((item) => {
                         const ItemIcon = item.icon;
-                        // Enhanced active check for sub-routes
+                        
                         const isActive = currentPath === item.path ||
                             (item.path === "/test-management" && (currentPath === "/create-test" || currentPath.startsWith("/test/edit/")));
 
@@ -208,8 +202,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
                 {/* Bottom Section */}
 
-
-                {/* User Profile */}
+                {}
                 <div className="p-3 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-3 px-3 py-2">
                         <div className="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 text-sm font-medium">
@@ -230,9 +223,9 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 </div>
             </aside>
 
-            {/* Main Content */}
+            {}
             <div className="flex-1 flex flex-col h-screen overflow-hidden">
-                {/* Top Header */}
+                {}
                 <header className="h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-6 flex-shrink-0 transition-colors duration-200">
                     <div className="flex items-center gap-3">
                         {Icon && <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />}
@@ -240,7 +233,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Theme Switcher */}
+                        {}
                         <div className="relative" ref={themeMenuRef}>
                             <button
                                 onClick={() => setShowThemeMenu(!showThemeMenu)}
@@ -362,7 +355,6 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                                 </div>
                             )}
                         </div>
-
 
                     </div>
                 </header>

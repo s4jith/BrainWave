@@ -24,23 +24,16 @@ import {
 import { Button } from "../ui/button";
 import { testService } from "../../services/api";
 
-/**
- * TopicSelector Component
- * 
- * Implements topic-based test selection:
- * Subject → Chapter → Difficulty → Start Test
- */
 export default function TopicSelector({
   studentId,
   classLevel = 10,
   onSelectTopic,
   onCancel
 }) {
-  const [step, setStep] = useState(1); // 1=Subject, 2=Chapter, 3=Difficulty
+  const [step, setStep] = useState(1); 
   const [loading, setLoading] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
 
-  // Selection state
   const [subjects, setSubjects] = useState([]);
   const [chapters, setChapters] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
@@ -49,7 +42,6 @@ export default function TopicSelector({
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
 
-  // QB Test Config
   const [testConfig, setTestConfig] = useState({
     mcq: 5,
     fillup: 5,
@@ -59,14 +51,9 @@ export default function TopicSelector({
     timeLimit: 40
   });
 
-  // Calculate totals
   const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.short || 0) + (testConfig.long || 0);
   const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.short || 0) * 2 + (testConfig.long || 0) * 5;
 
-  // Fixed test format - no user config needed
-  // 15 questions (5 MCQ + 5 Fill-up + 5 Two-mark) = 20 marks, 40 minutes
-
-  // Load subjects on mount
   useEffect(() => {
     fetchSubjects();
   }, [classLevel]);
@@ -81,13 +68,13 @@ export default function TopicSelector({
       if (Array.isArray(data) && data.length > 0) {
         setSubjects(data);
       } else {
-        // No subjects available - show empty state (no fallback)
+        
         console.log("No subjects found for class", classLevel);
         setSubjects([]);
       }
     } catch (error) {
       console.error("Failed to fetch subjects:", error);
-      // On error, show empty - no fallback
+      
       setSubjects([]);
     } finally {
       setLoading(false);
@@ -104,7 +91,7 @@ export default function TopicSelector({
       console.log("QB Chapters received:", chapterData);
 
       setChapters(Array.isArray(chapterData) ? chapterData : []);
-      // Recommendations not yet supported for QB
+      
       setRecommendations([]);
       setStep(2);
     } catch (error) {
@@ -117,14 +104,13 @@ export default function TopicSelector({
 
   const handleSelectChapter = (chapter) => {
     setSelectedChapter(chapter);
-    // Go to difficulty selection step
+    
     setStep(3);
   };
 
   const handleSelectDifficulty = (difficulty) => {
     setSelectedDifficulty(difficulty);
 
-    // Set defaults based on availability (clamp to max available)
     if (selectedChapter) {
       const diffSuffix = difficulty ? `_${difficulty}` : '';
       const maxMcq = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
@@ -141,7 +127,6 @@ export default function TopicSelector({
       }));
     }
 
-    // Go to config step
     setStep(4);
   };
 
@@ -154,7 +139,6 @@ export default function TopicSelector({
       chapter_name: selectedChapter.chapter_name,
       difficulty: selectedDifficulty,
 
-      // Config
       mcq_count: testConfig.mcq,
       fillup_count: testConfig.fillup,
       short_answer_count: testConfig.short,
@@ -168,7 +152,7 @@ export default function TopicSelector({
   };
 
   const handleConfigChange = (type, value) => {
-    // Validate against available
+    
     let max = 0;
     if (selectedChapter) {
       const diffSuffix = selectedDifficulty ? `_${selectedDifficulty}` : '';
@@ -178,7 +162,6 @@ export default function TopicSelector({
       if (type === 'long') max = selectedChapter[`long_answer${diffSuffix}`] || selectedChapter.long_answer_count || 0;
     }
 
-    // Allow up to 50 or available (whichever is lower, logic handled by user input usually but let's clamp)
     const newValue = Math.max(0, Math.min(value, max));
 
     setTestConfig(prev => ({
@@ -188,7 +171,7 @@ export default function TopicSelector({
   };
 
   const handleRecommendationClick = (rec) => {
-    // For recommendations, also use fixed format
+    
     setSelectedSubject({ subject: rec.subject || selectedSubject?.subject });
     setSelectedChapter({
       chapter_number: rec.chapter,
@@ -207,7 +190,7 @@ export default function TopicSelector({
       setChapters([]);
     } else if (step === 4) {
       setStep(3);
-      // setSelectedDifficulty(null); // Keep selection
+      
     }
   };
 
@@ -229,7 +212,7 @@ export default function TopicSelector({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
+        {}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -309,7 +292,7 @@ export default function TopicSelector({
               {/* Step 2: Chapter Selection */}
               {step === 2 && (
                 <div className="space-y-6">
-                  {/* Recommendations */}
+                  {}
                   {recommendations.length > 0 && (
                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
                       <div className="flex items-center gap-2 mb-3">
@@ -338,7 +321,7 @@ export default function TopicSelector({
                     </div>
                   )}
 
-                  {/* Chapter List */}
+                  {}
                   <div className="space-y-2">
                     {chapters.map((chapter) => (
                       <button
@@ -369,7 +352,7 @@ export default function TopicSelector({
               {/* Step 3: Difficulty Selection */}
               {step === 3 && selectedChapter && (
                 <div className="space-y-6">
-                  {/* Chapter Info */}
+                  {}
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 font-bold text-lg">
@@ -382,7 +365,7 @@ export default function TopicSelector({
                     </div>
                   </div>
 
-                  {/* Difficulty Options */}
+                  {}
                   <div className="space-y-3">
                     <h4 className="font-medium text-gray-700 mb-4">Choose your difficulty level:</h4>
 
@@ -409,7 +392,7 @@ export default function TopicSelector({
                       </div>
                     </button>
 
-                    {/* Medium */}
+                    {}
                     <button
                       onClick={() => handleSelectDifficulty("medium")}
                       className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "medium"
@@ -432,7 +415,7 @@ export default function TopicSelector({
                       </div>
                     </button>
 
-                    {/* Hard */}
+                    {}
                     <button
                       onClick={() => handleSelectDifficulty("hard")}
                       className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "hard"
@@ -469,7 +452,7 @@ export default function TopicSelector({
               {/* Step 4: Question Config (NEW) */}
               {step === 4 && selectedChapter && (
                 <div className="space-y-6">
-                  {/* Summary Header */}
+                  {}
                   <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100">
                     <div>
                       <h3 className="font-semibold text-gray-800">{selectedChapter.chapter_name}</h3>
@@ -488,9 +471,9 @@ export default function TopicSelector({
                     </div>
                   </div>
 
-                  {/* Config Grid */}
+                  {}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* MCQ Config */}
+                    {}
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
@@ -627,7 +610,7 @@ export default function TopicSelector({
                     </div>
                   </div>
 
-                  {/* Timer Settings */}
+                  {}
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">

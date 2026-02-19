@@ -19,7 +19,6 @@ router = APIRouter(
     tags=["Annotation"]
 )
 
-
 def detect_text_language(text: str) -> str:
     """Detect language of the selected text and return language instruction."""
     try:
@@ -48,7 +47,6 @@ def detect_text_language(text: str) -> str:
     except:
         return ""
 
-
 class AnnotationRequest(BaseModel):
     """Request schema for annotation AI actions."""
     selected_text: str = Field(..., description="Text selected by user for annotation")
@@ -59,14 +57,11 @@ class AnnotationRequest(BaseModel):
     image_data: str | None = Field(None, description="Optional base64 image data for screenshot doubts")
     page_number: int | None = Field(None, ge=1, description="Current page number for page summarization")
 
-
-
 class AnnotationResponse(BaseModel):
     """Response schema for annotation."""
     answer: str = Field(..., description="AI-generated response")
     action_type: str = Field(..., description="Type of action performed")
     source_count: int = Field(..., description="Number of sources used")
-
 
 @router.post("/", response_model=AnnotationResponse)
 async def process_annotation(request: AnnotationRequest):
@@ -93,7 +88,6 @@ async def process_annotation(request: AnnotationRequest):
     try:
         from app.services.cache_service import cache_service
         
-        # 1. CHECK CACHE FIRST (Deterministic Exact Match)
         cached_response = await cache_service.get_annotation_cache(
             action=request.action,
             subject=request.subject,
@@ -106,13 +100,9 @@ async def process_annotation(request: AnnotationRequest):
             logger.info(f"[FAST] CACHE HIT: Serving stored {request.action} response (0 cost)")
             return AnnotationResponse(**cached_response)
 
-        # Determine the text to process
         query_text = request.selected_text
         
-        # Map subject to language hint for OCR
-        # Physics, Chemistry, Biology, Math, etc. use English textbooks
         subject_to_lang = {
-            # Indian languages
             "hindi": "hi",
             "urdu": "ur",
             "tamil": "ta",
@@ -123,7 +113,6 @@ async def process_annotation(request: AnnotationRequest):
             "kn": "kn",
             "ml": "ml",
             "pa": "pa",
-            # English subjects (explicitly set to avoid auto-detect issues)
             "english": "en",
             "physics": "en",
             "chemistry": "en",
@@ -138,17 +127,15 @@ async def process_annotation(request: AnnotationRequest):
             "economics": "en",
             "science": "en",
         }
-        language_hint = subject_to_lang.get(request.subject.lower(), "en")  # Default to English
+        language_hint = subject_to_lang.get(request.subject.lower(), "en")
         
         if request.image_data:
             logger.info(f"[IMAGE] Screenshot doubt - using Gemini Vision OCR directly...")
             
             try:
-                # Use Gemini Vision directly (skip local OCR for speed)
                 import base64
                 import asyncio
                 
-                # Prepare image bytes
                 if request.image_data.startswith('data:'):
                     b64_data = request.image_data.split(',', 1)[1]
                 else:
@@ -162,7 +149,6 @@ async def process_annotation(request: AnnotationRequest):
                 Do not describe the UI, just give the content text.
                 Output ONLY the extracted text."""
                 
-                # Call Gemini Vision
                 extracted_text_vision = await asyncio.to_thread(
                     gemini_service.generate_response_with_image,
                     prompt=vision_prompt,
@@ -183,22 +169,14 @@ async def process_annotation(request: AnnotationRequest):
         logger.info(f"[NOTE] Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
         logger.info(f"   Class {request.class_level}, {request.subject}")
         
-        # Detect input language for multilingual response
         lang_instruction = detect_text_language(query_text)
         if lang_instruction:
             logger.info(f"   [LANG] Detected non-English input, will respond in same language")
         
-        # EDGE CASE: Check class availability
-        # Currently we have comprehensive data for Classes 5-10
-        # Classes 11-12 have limited content
         if request.class_level > 10:
             logger.warning(f"[WARNING] Class {request.class_level} requested (limited content available)")
-            # Don't block the request - let the RAG system try to find content
-            # If not found, it will fall back to general knowledge
         
-        # Get relevant context from textbook using RAG
         if request.action == "define":
-            # Quick mode: Current + 2 previous classes WITH lower LLM reuse threshold
             answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
                 question=f"Define: {query_text}",
                 subject=request.subject,
@@ -206,12 +184,10 @@ async def process_annotation(request: AnnotationRequest):
                 chapter=request.chapter
             )
             
-            # Determine the response language based on subject
             subject_lower = request.subject.lower()
             is_hindi_subject = subject_lower == "hindi"
             is_urdu_subject = subject_lower == "urdu"
             
-            # Create language instruction based on subject
             if is_hindi_subject:
                 language_instruction = """
 [CRITICAL]: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
@@ -234,8 +210,7 @@ async def process_annotation(request: AnnotationRequest):
 - [Point 1 in Urdu]
 - [Point 2 in Urdu]"""
             else:
-                # Default: English for Physics, Chemistry, Biology, Mathematics, etc.
-                language_instruction = ""  # No special instruction, respond in English
+                language_instruction = ""
                 format_example = """**Definition:** [Clear explanation in English]
 
 **Key Points:**
@@ -243,11 +218,8 @@ async def process_annotation(request: AnnotationRequest):
 - [Point 2]
 - [Point 3]"""
             
-            # OPTIMIZATION: Use RAG answer directly if it has content (skip redundant Gemini call)
-            # RAG already generated answer via Gemini (either with sources or fallback)
             if answer and len(answer.strip()) > 20:
                 logger.info(f"   ⚡ Using RAG answer directly (already formatted by RAG service)")
-                # Only re-generate for Hindi/Urdu which need special script formatting
                 if is_hindi_subject or is_urdu_subject:
                     context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]]) if source_chunks else ""
                     
@@ -268,7 +240,6 @@ async def process_annotation(request: AnnotationRequest):
                     
                     answer = gemini_service.generate_response(prompt)
             else:
-                # RAG returned no answer - generate from scratch
                 logger.warning(f"    RAG returned no answer, generating from scratch")
                 context = "\n\n".join([chunk.get('text', '')[:500] for chunk in source_chunks[:3]]) if source_chunks else ""
                 
@@ -290,7 +261,6 @@ async def process_annotation(request: AnnotationRequest):
                 answer = gemini_service.generate_response(prompt)
         
         elif request.action == "elaborate":
-            # Deep dive mode: Comprehensive explanation
             answer, source_chunks = await enhanced_rag_service.answer_question_deepdive(
                 question=f"Explain in detail: {query_text}",
                 subject=request.subject,
@@ -298,12 +268,10 @@ async def process_annotation(request: AnnotationRequest):
                 chapter=request.chapter
             )
             
-            # Determine the response language based on subject
             subject_lower = request.subject.lower()
             is_hindi_subject = subject_lower == "hindi"
             is_urdu_subject = subject_lower == "urdu"
             
-            # Create language instruction based on subject
             if is_hindi_subject:
                 language_instruction = """
 [CRITICAL]: You MUST respond ONLY in Hindi using DEVANAGARI script (देवनागरी लिपि)
@@ -320,13 +288,11 @@ async def process_annotation(request: AnnotationRequest):
 **تفصیل:** [Explanation in Urdu]
 **مثال:** [Examples in Urdu]"""
             else:
-                # Default: English for Physics, Chemistry, Biology, Mathematics, etc.
                 language_instruction = ""
                 format_example = """**Introduction:** [What is it?]
 **Explanation:** [Detailed breakdown]
 **Examples:** [If applicable]"""
             
-            # Generate detailed explanation
             if source_chunks:
                 context = "\n\n".join([chunk.get('text', '')[:800] for chunk in source_chunks[:5]])
                 
@@ -350,7 +316,6 @@ async def process_annotation(request: AnnotationRequest):
                 
                 answer = gemini_service.generate_response(prompt)
             else:
-                # No content found - provide helpful response
                 prompt = f"""You are a tutor for Class {request.class_level} {request.subject}.
 {language_instruction}
 The student wants to understand: "{query_text}"
@@ -364,7 +329,6 @@ Provide a helpful explanation even though specific textbook content wasn't found
                 answer = gemini_service.generate_response(prompt)
         
         elif request.action == "stick_flow":
-            # Generate text-based flow diagram WITH lower LLM reuse threshold
             answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
                 question=f"Explain the flow/process of: {query_text}",
                 subject=request.subject,
@@ -421,10 +385,8 @@ Try asking about:
 Current search: "{request.selected_text}" in Class {request.class_level} {request.subject}"""
         
         elif request.action == "summarize_page":
-            # Summarize the current page content
             logger.info(f"[SUMMARIZE_PAGE] Summarizing page {request.page_number or 'unknown'}")
             
-            # CHECK CACHE FIRST - avoid unnecessary API calls
             cached_summary = await summary_cache_service.get_cached_summary(
                 summary_type="page",
                 subject=request.subject,
@@ -437,12 +399,10 @@ Current search: "{request.selected_text}" in Class {request.class_level} {reques
                 logger.info(f"[CACHE HIT] Returning cached page summary for page {request.page_number}")
                 answer = cached_summary["summary"]
                 source_chunks = []
-            # If we have image data, use Gemini Vision to understand and summarize the page
             elif request.image_data:
                 import base64
                 import asyncio
                 
-                # Prepare image bytes
                 if request.image_data.startswith('data:'):
                     b64_data = request.image_data.split(',', 1)[1]
                 else:
@@ -450,7 +410,6 @@ Current search: "{request.selected_text}" in Class {request.class_level} {reques
                     
                 image_bytes = base64.b64decode(b64_data)
                 
-                # Determine language instruction
                 subject_lower = request.subject.lower()
                 if subject_lower == "hindi":
                     lang_prompt = "\n\nIMPORTANT: Provide the summary in Hindi using Devanagari script."
@@ -479,7 +438,6 @@ Format your response as:
 **Important Details:**
 - [Any formulas, definitions, or critical facts]{lang_prompt}"""
                 
-                # Call Gemini Vision - single API call
                 answer = await asyncio.to_thread(
                     gemini_service.generate_response_with_image,
                     prompt=vision_prompt,
@@ -489,7 +447,6 @@ Format your response as:
                 if not answer or len(answer.strip()) < 10:
                     answer = "Unable to generate page summary. Please try again or select specific text for a focused explanation."
                 else:
-                    # SAVE TO CACHE for future requests
                     await summary_cache_service.save_summary(
                         summary_type="page",
                         subject=request.subject,
@@ -502,10 +459,8 @@ Format your response as:
                 
                 source_chunks = []
             else:
-                # No image provided - use efficient RAG (answer_annotation_basic instead of deepdive)
                 logger.info(f"   No image data, using efficient RAG for page summary (page {request.page_number})")
                 
-                # Use simpler answer_annotation_basic - 1-2 API calls instead of 5
                 answer, source_chunks = enhanced_rag_service.answer_annotation_basic(
                     question=f"Summarize the main topics and key points covered on page {request.page_number} of chapter {request.chapter}.",
                     subject=request.subject,
@@ -514,7 +469,6 @@ Format your response as:
                 )
                 
                 if answer and len(answer.strip()) > 20:
-                    # Reformat to standard summary format with minimal Gemini call
                     subject_lower = request.subject.lower()
                     if subject_lower == "hindi":
                         lang_prompt = "\n\nIMPORTANT: Write in Hindi using Devanagari script."
@@ -536,7 +490,6 @@ Format as:
                     
                     answer = gemini_service.generate_response(format_prompt)
                     
-                    # SAVE TO CACHE
                     await summary_cache_service.save_summary(
                         summary_type="page",
                         subject=request.subject,
@@ -551,20 +504,18 @@ Format as:
                     source_chunks = []
         
         elif request.action == "summarize_chapter":
-            # Summarize the entire chapter
             logger.info(f"[SUMMARIZE_CHAPTER] Summarizing chapter {request.chapter or 'unknown'}")
             
             if not request.chapter:
                 answer = "Chapter number is required for chapter summarization."
                 source_chunks = []
             else:
-                # CHECK CACHE FIRST - avoid unnecessary API calls
                 cached_summary = await summary_cache_service.get_cached_summary(
                     summary_type="chapter",
                     subject=request.subject,
                     class_level=request.class_level,
                     chapter=request.chapter,
-                    page_number=None  # Chapter summary has no page number
+                    page_number=None
                 )
                 
                 if cached_summary:
@@ -572,8 +523,6 @@ Format as:
                     answer = cached_summary["summary"]
                     source_chunks = []
                 else:
-                    # Use DEEPDIVE for chapter summaries - need comprehensive content
-                    # Chapter summaries are cached, so the extra API calls only happen once
                     logger.info(f"[CHAPTER SUMMARY] Using deepdive RAG for comprehensive chapter content")
                     rag_answer, source_chunks = await enhanced_rag_service.answer_question_deepdive(
                         question=f"Explain all the main topics, concepts, definitions, formulas, and examples covered in chapter {request.chapter}. Include everything important from the chapter.",
@@ -583,7 +532,6 @@ Format as:
                     )
                     
                     if rag_answer and len(rag_answer.strip()) > 50:
-                        # Format into comprehensive chapter summary
                         subject_lower = request.subject.lower()
                         if subject_lower == "hindi":
                             lang_prompt = "\n\nIMPORTANT: Write the entire summary in Hindi using Devanagari script."
@@ -609,44 +557,34 @@ This is Chapter {request.chapter}. The student needs a thorough summary to under
 
 **Required Format:**
 
-## Chapter Overview
 [Write 4-6 sentences explaining what this chapter is about, its importance in the curriculum, prerequisites if any, and what students will learn by the end]
 
-## Major Topics Covered
-
-### 1. [First Major Topic]
 - Comprehensive explanation of the topic (5-7 sentences minimum)
 - All key points and subtopics under this topic
 - Examples or illustrations mentioned in the textbook
 - How this connects to other concepts in the chapter or subject
 - Common mistakes students make with this topic
 
-### 2. [Second Major Topic]
 - Comprehensive explanation (5-7 sentences minimum)
 - Key points and subtopics
 - Practical applications or examples
 - Step-by-step methods if applicable
 
-### 3. [Third Major Topic]
 [Continue this pattern for ALL major topics in the chapter - do not skip any!]
 
-## Key Concepts & Definitions
 - **[Term 1]**: [Complete definition with detailed explanation and example]
 - **[Term 2]**: [Complete definition with detailed explanation and example]
 - **[Term 3]**: [Complete definition with detailed explanation and example]
 [Include ALL important terms from the chapter - aim for at least 5-10 terms]
 
-## Important Formulas/Facts/Rules
 - **[Formula/Fact 1]**: [The formula or fact] - [When to use it] - [Example of application]
 - **[Formula/Fact 2]**: [The formula or fact] - [When to use it] - [Example of application]
 [Include all formulas, theorems, rules, or critical facts from the chapter]
 
-## Worked Examples from the Chapter
 - **Example 1**: [Describe what the example demonstrates and the key learning]
 - **Example 2**: [Describe what the example demonstrates and the key learning]
 [Mention key examples discussed in the chapter with their purpose]
 
-## Summary & Key Takeaways
 1. [Most important concept from the chapter with brief explanation]
 2. [Second key takeaway with brief explanation]
 3. [Third key takeaway with brief explanation]
@@ -654,7 +592,6 @@ This is Chapter {request.chapter}. The student needs a thorough summary to under
 5. [Fifth key takeaway with brief explanation]
 6. [Additional takeaways if the chapter is content-heavy]
 
-## Quick Revision Points (For Last-Minute Review)
 - [Point 1 - one line summary]
 - [Point 2 - one line summary]
 - [Point 3 - one line summary]
@@ -664,14 +601,11 @@ This is Chapter {request.chapter}. The student needs a thorough summary to under
 - [Point 7 - one line summary]
 - [Point 8 - one line summary]
 
-## Common Questions & Tips
 - What type of questions are commonly asked from this chapter?
 - Key tips for scoring well in exams{lang_prompt}"""
                         
-                        # Use HIGH token limit for detailed chapter summary (4000 tokens ~ 3000 words)
                         answer = gemini_service.generate_response(prompt, max_output_tokens=4000)
                         
-                        # SAVE TO CACHE
                         await summary_cache_service.save_summary(
                             summary_type="chapter",
                             subject=request.subject,
@@ -701,8 +635,6 @@ Please verify the chapter number and try again."""
             "source_count": len(source_chunks)
         }
 
-        # Save to cache asynchronously (fire and forget pattern not fully safe here without background tasks, 
-        # so we await to ensure it saves)
         await cache_service.set_annotation_cache(
             action=request.action,
             subject=request.subject,
@@ -720,7 +652,6 @@ Please verify the chapter number and try again."""
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/quick-define")
 async def quick_define(
     text: str = Query(..., description="Text to define"),
@@ -734,7 +665,6 @@ async def quick_define(
     Perfect for quick lookups while reading.
     """
     try:
-        # Use basic RAG with minimal chunks
         answer, source_chunks = await enhanced_rag_service.answer_question_basic(
             question=f"What is {text}?",
             subject=subject,
@@ -743,7 +673,6 @@ async def quick_define(
         )
         
         if source_chunks:
-            # Quick definition extraction
             context = source_chunks[0].get('text', '')[:300]
             
             prompt = f"""Give a one-sentence definition of "{text}" based on this textbook excerpt:

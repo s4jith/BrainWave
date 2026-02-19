@@ -8,19 +8,14 @@ import { Button } from "../components/ui/button";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * CurriculumManagement - Admin page to manage chapter summaries
- * Allows admin to write rich-text summaries for each chapter
- * These summaries are shown to students in BookToBot instead of AI-generated ones
- */
 export default function CurriculumManagement() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedSubject, setExpandedSubject] = useState(null);
-    const [editingChapter, setEditingChapter] = useState(null); // { subjectId, chapterId, chapterName, summary }
+    const [editingChapter, setEditingChapter] = useState(null); 
     const [saving, setSaving] = useState(false);
-    const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error'
+    const [saveStatus, setSaveStatus] = useState(null); 
     const editorRef = useRef(null);
 
     useEffect(() => {
@@ -75,7 +70,6 @@ export default function CurriculumManagement() {
         setSaveStatus(null);
     };
 
-    // Initialize editor content when modal opens
     useEffect(() => {
         if (editingChapter && editorRef.current) {
             editorRef.current.innerHTML = editingChapter.summary || "";
@@ -104,7 +98,7 @@ export default function CurriculumManagement() {
             );
             if (!res.ok) throw new Error("Failed to save summary");
             setSaveStatus("success");
-            // Update local state
+            
             if (expandedSubject) {
                 const updatedChapters = expandedSubject.chapters.map(ch =>
                     ch.chapter_id === editingChapter.chapterId
@@ -140,7 +134,7 @@ export default function CurriculumManagement() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-            {/* Header */}
+            {}
             <div className="bg-white dark:bg-gray-900 border-b px-6 py-4 flex items-center gap-4 shadow-sm">
                 <Button variant="ghost" size="sm" onClick={() => navigate("/admin-dashboard")} className="gap-2">
                     <ArrowLeft className="h-4 w-4" />

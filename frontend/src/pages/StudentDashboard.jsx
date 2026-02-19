@@ -1,7 +1,3 @@
-/**
- * StudentDashboard - Main dashboard for students
- * Shows enrolled courses, recent grades, and upcoming deadlines
- */
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -158,7 +154,7 @@ export default function StudentDashboard() {
 
     return (
         <div className="min-h-screen text-gray-900 dark:text-white">
-            {/* Header */}
+            {}
             <header className="bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                 <div className="max-w-7xl mx-auto">
                     <h1 className="text-2xl font-bold">Welcome back, {user.name || "Student"}!</h1>
@@ -169,7 +165,7 @@ export default function StudentDashboard() {
             </header>
 
             <main className="max-w-7xl mx-auto px-6 py-8">
-                {/* Stats Grid */}
+                {}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <StatCard
                         icon={CheckCircle}

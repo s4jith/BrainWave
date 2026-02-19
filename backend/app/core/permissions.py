@@ -16,9 +16,7 @@ from app.models.rbac_models import UserRole, Permission, has_permission, has_any
 
 logger = logging.getLogger(__name__)
 
-# Security scheme for JWT Bearer tokens
 security = HTTPBearer(auto_error=False)
-
 
 def decode_token(token: str) -> TokenData:
     """
@@ -59,7 +57,6 @@ def decode_token(token: str) -> TokenData:
             detail=f"Invalid token: {str(e)}"
         )
 
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> TokenData:
@@ -88,23 +85,6 @@ async def get_current_user(
         logger.error(f"Token decode FAILED: {type(e).__name__}: {str(e)}")
         raise
 
-
-async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> Optional[TokenData]:
-    """
-    Dependency to get current user if authenticated, None otherwise.
-    Useful for routes that work differently for authenticated users.
-    """
-    if not credentials:
-        return None
-    
-    try:
-        return decode_token(credentials.credentials)
-    except HTTPException:
-        return None
-
-
 def require_role(allowed_roles: List[UserRole]):
     """
     Dependency factory to require specific roles.
@@ -126,7 +106,6 @@ def require_role(allowed_roles: List[UserRole]):
         return user
     
     return role_checker
-
 
 def require_permission(permission: Permission):
     """
@@ -150,42 +129,6 @@ def require_permission(permission: Permission):
     
     return permission_checker
 
-
-def require_any_permission(permissions: List[Permission]):
-    """
-    Dependency factory to require any of the specified permissions.
-    
-    Usage:
-        @router.get("/analytics")
-        async def get_analytics(
-            user: TokenData = Depends(require_any_permission([
-                Permission.VIEW_PLATFORM_ANALYTICS,
-                Permission.VIEW_CLASS_ANALYTICS
-            ]))
-        ):
-            return {"data": "analytics"}
-    """
-    async def permission_checker(
-        user: TokenData = Depends(get_current_user)
-    ) -> TokenData:
-        if not has_any_permission(user.role, permissions):
-            logger.warning(f"Permission denied: {user.email} lacks any of {[p.value for p in permissions]}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: One of {[p.value for p in permissions]} required"
-            )
-        return user
-    
-    return permission_checker
-
-
-# Convenience dependencies for common role checks
-require_admin = require_role([UserRole.ADMIN])
-require_teacher = require_role([UserRole.TEACHER, UserRole.ADMIN])
-require_student = require_role([UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN])
-
-
-# Helper function to check resource ownership (for teachers managing their own courses)
 def check_resource_ownership(
     user: TokenData,
     resource_owner_id: str,
@@ -205,7 +148,6 @@ def check_resource_ownership(
     if allow_admin and user.role == UserRole.ADMIN:
         return True
     return user.user_id == resource_owner_id
-
 
 def ensure_ownership(resource_owner_id: str, user: TokenData, resource_name: str = "resource"):
     """

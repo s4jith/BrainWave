@@ -5,7 +5,7 @@ Allows students to send suggestions/feedback to admin
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from app.db.mongo import mongodb, db
 from bson import ObjectId
@@ -18,7 +18,6 @@ router = APIRouter(
     tags=["Suggestions"]
 )
 
-
 class CreateSuggestionRequest(BaseModel):
     """Request to create a suggestion"""
     student_id: str
@@ -28,7 +27,6 @@ class CreateSuggestionRequest(BaseModel):
     subject: Optional[str] = None
     content: str
     email: Optional[str] = None
-
 
 class SuggestionResponse(BaseModel):
     """Suggestion response"""
@@ -42,7 +40,6 @@ class SuggestionResponse(BaseModel):
     admin_response: Optional[str] = None
     created_at: str
     reviewed_at: Optional[str] = None
-
 
 @router.post("", response_model=dict)
 async def create_suggestion(request: CreateSuggestionRequest):
@@ -66,7 +63,6 @@ async def create_suggestion(request: CreateSuggestionRequest):
         
         logger.info(f"Suggestion created: {result.inserted_id} from {request.student_name}")
         
-        # Resolve login user_id from MongoDB ObjectId for notifications
         student_login_id = request.student_id
         try:
             user_doc = db.users.find_one({"_id": ObjectId(request.student_id)})
@@ -75,7 +71,6 @@ async def create_suggestion(request: CreateSuggestionRequest):
         except Exception:
             pass
         
-        # Notify admin about new suggestion
         try:
             db.notifications.insert_one({
                 "type": "suggestion",
@@ -92,7 +87,6 @@ async def create_suggestion(request: CreateSuggestionRequest):
         except Exception as ne:
             logger.error(f"Failed to create admin notification for suggestion: {ne}")
         
-        # Notify student that suggestion was received
         try:
             db.notifications.insert_one({
                 "user_id": student_login_id,
@@ -116,7 +110,6 @@ async def create_suggestion(request: CreateSuggestionRequest):
     except Exception as e:
         logger.error(f"Error creating suggestion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/student/{student_id}")
 async def get_student_suggestions(student_id: str):
@@ -150,7 +143,6 @@ async def get_student_suggestions(student_id: str):
     except Exception as e:
         logger.error(f"Error fetching student suggestions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/all")
 async def get_all_suggestions(
@@ -195,7 +187,6 @@ async def get_all_suggestions(
         logger.error(f"Error fetching all suggestions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/{suggestion_id}/respond")
 async def respond_to_suggestion(
     suggestion_id: str,
@@ -218,11 +209,9 @@ async def respond_to_suggestion(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Suggestion not found")
         
-        # Notify the student about admin's response
         try:
             suggestion = await mongodb.db.suggestions.find_one({"_id": ObjectId(suggestion_id)})
             if suggestion:
-                # Resolve login user_id from MongoDB ObjectId
                 student_login_id = suggestion.get("student_id")
                 try:
                     user_doc = db.users.find_one({"_id": ObjectId(student_login_id)})
@@ -256,7 +245,6 @@ async def respond_to_suggestion(
     except Exception as e:
         logger.error(f"Error responding to suggestion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/{suggestion_id}")
 async def delete_suggestion(suggestion_id: str):

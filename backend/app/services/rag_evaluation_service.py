@@ -16,7 +16,6 @@ from app.services.topic_question_bank_service import topic_question_bank_service
 
 logger = logging.getLogger(__name__)
 
-# Subject name normalization to fix typos
 SUBJECT_CORRECTIONS = {
     "mathematicss": "Maths",
     "mathematic": "Maths",
@@ -36,22 +35,17 @@ SUBJECT_CORRECTIONS = {
     "biology": "Biology",
 }
 
-
 def normalize_subject(subject: str) -> str:
     """Normalize subject name to fix typos and ensure correct namespace lookup."""
     if not subject:
         return subject
     lower = subject.lower().strip()
-    # Check for known corrections
     if lower in SUBJECT_CORRECTIONS:
         return SUBJECT_CORRECTIONS[lower]
-    # Also check if lowercase version is in corrections
     for key, value in SUBJECT_CORRECTIONS.items():
         if key in lower:
             return value
-    # Default: capitalize properly
     return subject.strip().title()
-
 
 class RAGEvaluationService:
     """
@@ -66,7 +60,6 @@ class RAGEvaluationService:
     async def evaluate_test_session(
         self,
         session_data: Optional[Dict] = None,
-        # Legacy/Support args
         session_id: str = None,
         student_id: str = None,
         class_level: int = 10,
@@ -81,13 +74,12 @@ class RAGEvaluationService:
         Evaluate a complete test session.
         Can accept either a full 'session_data' dict (from test.py) or individual args (from assessment_service.py).
         """
-        # 1. Unpack session_data if provided
         if session_data:
             session_id = session_data.get("session_id")
             student_id = session_data.get("student_id")
             class_level = session_data.get("class_level", 10)
             subject = session_data.get("subject", "")
-            chapter_number = session_data.get("chapter", 1) # Note: 'chapter' vs 'chapter_number'
+            chapter_number = session_data.get("chapter", 1)
             topic_id = session_data.get("topic_id", "")
             topic_name = session_data.get("topic_name", "")
             questions = session_data.get("questions_served", [])
@@ -95,65 +87,52 @@ class RAGEvaluationService:
         
         logger.info(f"📊 Evaluating test session {session_id} for student {student_id}")
         
-        # Normalize subject name to fix typos like "Mathematicss"
         subject = normalize_subject(subject)
         logger.info(f"Subject normalized to: {subject}")
         
-        # 📚 ENRICHMENT: Fetch correct answers from DB for QB tests (if missing)
-        # QB questions don't have 'answer', 'expected_answer', 'correct_option' in questions_served
         questions_to_enrich = []
         for q in questions:
-            # check if vital answer keys are missing
             if not any(k in q for k in ["expected_answer", "correct_option", "answer"]) and q.get("question_id"):
                  questions_to_enrich.append(q["question_id"])
         
         if questions_to_enrich:
              logger.info(f"Fetching details for {len(questions_to_enrich)} QB questions from DB")
              try:
-                 # Fetch native question objects
                  db_questions = await mongodb.db.questions.find(
                      {"_id": {"$in": [ObjectId(qid) for qid in questions_to_enrich]}}
                  ).to_list(length=len(questions_to_enrich))
                  
                  db_map = {str(doc["_id"]): doc for doc in db_questions}
                  
-                 # Enrich existing question objects in-place
                  for q in questions:
                      qid = q.get("question_id")
                      if qid in db_map:
                          db_q = db_map[qid]
-                         # Inject answer data
                          q["expected_answer"] = db_q.get("correct_answer") or db_q.get("answer")
-                         q["correct_option"] = db_q.get("correct_option") # For MCQ
+                         q["correct_option"] = db_q.get("correct_option")
                          q["keywords"] = db_q.get("keywords", [])
-                         q["answer"] = db_q.get("answer") # Legacy field support
+                         q["answer"] = db_q.get("answer")
                          
-                         # Handle MCQ Options if missing text/is_correct
                          if db_q.get("options") and not q.get("options"):
                              q["options"] = db_q.get("options")
                          
-                         # Ensure question text if missing
                          if not q.get("question") and not q.get("question_text"):
                              q["question"] = db_q.get("question") or db_q.get("text")
 
              except Exception as e:
                  logger.error(f"Error enriching QB questions: {e}")
 
-        # Build Q&A pairs
         qa_pairs = self._build_qa_pairs(questions, answers)
         
         if not qa_pairs:
             return self._empty_result(session_id)
         
-        # Split into objective (MCQ/fillup) and subjective (short_answer/long_answer/two_mark)
         objective_pairs = []
         subjective_pairs = []
         for qa in qa_pairs:
             q_type = (qa.get("question_type") or "").lower()
             if q_type in ("mcq", "fillup", "fill_up", "fill-up", "fill_in_the_blank"):
-                # Ensure we have correct_option for MCQs
                 if "mcq" in q_type and not qa.get("correct_option"):
-                     # Try to find it in options if structure differs
                      for opt in qa.get("options", {}).values(): 
                          pass
 
@@ -163,15 +142,12 @@ class RAGEvaluationService:
         
         logger.info(f"Auto-evaluating {len(objective_pairs)} objective Qs, {len(subjective_pairs)} subjective Qs pending staff review")
         
-        # Auto-evaluate objective questions (no Gemini)
         auto_evaluations = self._auto_evaluate_objective(objective_pairs)
         
-        # Evaluate subjective questions using Gemini 2.5 Flash
         subjective_evaluations = []
         if subjective_pairs:
             logger.info(f"Sending {len(subjective_pairs)} subjective questions to Gemini for evaluation")
             
-            # Get context for RAG
             context = await self._get_topic_context(
                 class_level=class_level,
                 subject=subject,
@@ -180,7 +156,6 @@ class RAGEvaluationService:
                 topic_name=topic_name
             )
             
-            # Batch evaluate
             subjective_evaluations = await self._batch_evaluate_all_answers(
                 qa_pairs=subjective_pairs,
                 context=context,
@@ -189,39 +164,31 @@ class RAGEvaluationService:
                 topic_name=topic_name
             )
         
-        # Combine evaluations (order by question_number)
         all_evaluations = auto_evaluations + subjective_evaluations
         
-        # Sort by question number to maintain order
         all_evaluations.sort(key=lambda x: x.get("question_number", 0))
         
-        # Determine overall evaluation status
         evaluation_status = "completed"
         
-        # Calculate scores
         total_score = 0
         correct_count = 0
         max_possible = 0
         
         for e in all_evaluations:
-            # Ensure safe numeric conversion
             score = float(e.get("score", 0))
             max_score = float(e.get("max_score", 1))
             
             total_score += score
             max_possible += max_score
             
-            # Mark as correct if > 60% marks obtained
             if max_score > 0 and (score / max_score) >= 0.6:
                 correct_count += 1
                 e["is_correct"] = True
             else:
                 e["is_correct"] = False
         
-        # Calculate percentage
         percentage = min(round((total_score / max_possible) * 100, 1) if max_possible > 0 else 0, 100)
         
-        # Generate detailed feedback
         overall_feedback = {
             "summary": f"You scored {total_score}/{max_possible} ({percentage}%). {correct_count}/{len(all_evaluations)} answers were correct/satisfactory.",
             "strengths": [],
@@ -230,7 +197,6 @@ class RAGEvaluationService:
             "encouragement": "Keep practicing!" if percentage < 70 else "Great job!"
         }
         
-        # Collect strengths and improvements from individual evaluations
         for e in all_evaluations:
             fb = e.get("feedback", "")
             if e.get("is_correct"):
@@ -240,18 +206,14 @@ class RAGEvaluationService:
                 if len(overall_feedback["improvements"]) < 3:
                     overall_feedback["improvements"].append(f"Q{e.get('question_number', '?')}: {fb}")
         
-        # Add specific topic feedback from wrong answers
         wrong_topics = list(set(e.get("topic", "") for e in all_evaluations if not e.get("is_correct") and e.get("topic")))
         if wrong_topics:
             overall_feedback["improvements"] = [f"Review '{t}'" for t in wrong_topics[:5]]
         
-        # Identify weak areas
         weak_areas = self._identify_weak_areas(all_evaluations)
         
-        # Calculate topic analytics
         topic_analytics = self._calculate_topic_analytics(questions, all_evaluations)
         
-        # Update student performance
         try:
             await topic_question_bank_service.update_student_performance(
                 student_id=student_id,
@@ -267,7 +229,6 @@ class RAGEvaluationService:
         except Exception as e:
             logger.warning(f"Could not update student performance: {e}")
         
-        # Save session results with evaluation_status
         await self._save_session_results(
             session_id=session_id,
             student_id=student_id,
@@ -318,11 +279,9 @@ class RAGEvaluationService:
             marks = qa.get("marks", 1)
             
             if q_type == "mcq":
-                # MCQ: Compare student answer against correct option(s)
                 correct_option = (qa.get("correct_option") or "").strip()
                 expected = (qa.get("expected_answer") or "").strip()
                 
-                # Support multiple correct answers (pipe-separated)
                 correct_answers = []
                 if correct_option:
                     correct_answers = [a.strip().lower() for a in correct_option.split("|") if a.strip()]
@@ -332,11 +291,9 @@ class RAGEvaluationService:
                 student_lower = student_answer.lower()
                 is_correct = student_lower in correct_answers if correct_answers else False
                 
-                # Also check if student selected the option letter (A/B/C/D)
                 if not is_correct and qa.get("options"):
                     options = qa["options"]
                     if isinstance(options, dict):
-                        # options = {"A": "val1", "B": "val2", ...}
                         for key, value in options.items():
                             if value.strip().lower() in correct_answers:
                                 if student_lower == key.lower() or student_lower == value.strip().lower():
@@ -345,7 +302,7 @@ class RAGEvaluationService:
                     elif isinstance(options, list):
                         for i, opt in enumerate(options):
                             if opt.strip().lower() in correct_answers:
-                                letter = chr(65 + i)  # A, B, C, D
+                                letter = chr(65 + i)
                                 if student_lower == letter.lower() or student_lower == opt.strip().lower():
                                     is_correct = True
                                     break
@@ -364,11 +321,9 @@ class RAGEvaluationService:
                 })
             
             elif q_type in ("fillup", "fill_up", "fill-up", "fill_in_the_blank"):
-                # Fill-up: Case-insensitive comparison against acceptable answers
                 expected = (qa.get("expected_answer") or "").strip()
                 correct_option = (qa.get("correct_option") or "").strip()
                 
-                # Build list of acceptable answers (pipe-separated)
                 acceptable_answers = []
                 answer_source = correct_option or expected
                 if answer_source:
@@ -376,10 +331,8 @@ class RAGEvaluationService:
                 
                 student_lower = student_answer.lower().strip()
                 
-                # Check exact match (case-insensitive, trimmed)
                 is_correct = student_lower in acceptable_answers if acceptable_answers else False
                 
-                # Also check with minor variations (remove extra spaces, periods, etc.)
                 if not is_correct and student_lower:
                     cleaned_student = re.sub(r'[.\s]+$', '', student_lower).strip()
                     for acc in acceptable_answers:
@@ -446,7 +399,7 @@ class RAGEvaluationService:
             
             if context:
                 logger.info(f"Retrieved context for {topic_name} (Class {class_level} {subject} Ch.{chapter_number})")
-                return context[:15000]  # Limit context size
+                return context[:15000]
             else:
                 logger.warning(f"No context found for {topic_name}")
                 return ""
@@ -468,7 +421,6 @@ class RAGEvaluationService:
         This is the key optimization - instead of N calls, we make just 1.
         """
         
-        # Build the batch prompt with all Q&A pairs
         questions_section = ""
         for i, qa in enumerate(qa_pairs):
             answer_text = qa["answer"].strip() if qa["answer"] else "(No answer provided)"
@@ -476,7 +428,6 @@ class RAGEvaluationService:
             keywords = ", ".join(qa.get("keywords", [])) if qa.get("keywords") else "Not specified"
             q_type = qa.get("question_type", "")
             
-            # Add question type specific info
             type_info = ""
             if q_type == "mcq":
                 correct_opt = qa.get("correct_option", "")
@@ -497,7 +448,6 @@ class RAGEvaluationService:
 
 """
         
-        # Context section
         context_section = ""
         if context and len(context.strip()) > 100:
             context_section = f"""
@@ -538,21 +488,17 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         try:
             response = gemini_service.generate_response(prompt)
             
-            # Parse JSON array
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
                 results = json.loads(json_match.group())
                 
-                # Map results back to evaluations
                 evaluations = []
                 for i, qa in enumerate(qa_pairs):
-                    # Find matching result
                     result = next((r for r in results if r.get("q") == i + 1), None)
                     
                     question_marks = float(qa.get("marks", 2))
                     
                     if result:
-                        # Scale score from 10 to question marks
                         gemini_score = float(result.get("score", 0))
                         scaled_score = (gemini_score / 10.0) * question_marks
                         scaled_score = round(scaled_score, 1)
@@ -571,7 +517,6 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
                             "evaluation_status": "completed"
                         })
                     else:
-                        # Fallback for missing result
                         evaluations.append(self._fallback_evaluation(qa))
                 
                 return evaluations
@@ -581,7 +526,6 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
             
         except Exception as e:
             logger.error(f"Batch evaluation error: {e}")
-            # Return fallback evaluations based on expected answers
             return [self._fallback_evaluation(qa) for qa in qa_pairs]
     
     def _fallback_evaluation(self, qa: Dict) -> Dict:
@@ -590,13 +534,11 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
         expected = qa.get("expected_answer", "").lower()
         keywords = qa.get("keywords", [])
         
-        # Simple keyword matching fallback
         score = 0
         is_correct = False
         
         if answer:
             answer_lower = answer.lower()
-            # Check keyword matches
             matches = sum(1 for kw in keywords if kw.lower() in answer_lower)
             if matches >= len(keywords) * 0.7:
                 score = 7
@@ -631,11 +573,9 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
     ) -> Dict:
         """Generate specific, topic-aware feedback using Gemini for targeted recommendations."""
         
-        # Analyze correct/incorrect with topic details
         correct_qs = [e for e in evaluations if e.get("is_correct")]
         incorrect_qs = [e for e in evaluations if not e.get("is_correct")]
         
-        # Extract specific topics from incorrect questions
         weak_topic_details = []
         for e in incorrect_qs:
             q_text = e.get("question_text", "")[:150]
@@ -649,17 +589,14 @@ Be fair and encouraging. Output ONLY the JSON array, nothing else."""
                     "feedback": feedback
                 })
         
-        # Extract topics from correct questions 
         strong_topic_details = []
         for e in correct_qs:
             topic = e.get("topic", "")
             if topic and topic not in [s.get("topic") for s in strong_topic_details]:
                 strong_topic_details.append({"topic": topic, "score": e.get("score", 0)})
         
-        # Build chapter reference
         chapter_ref = f"{subject} Chapter {chapter_number}" if subject and chapter_number else topic_name
         
-        # Use Gemini to generate specific, targeted feedback
         try:
             weak_details_str = ""
             if weak_topic_details:
@@ -700,15 +637,12 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
 
             response = gemini_service.generate_response(feedback_prompt, max_output_tokens=2000)
             
-            # Parse JSON response
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
-                # Clean common JSON issues
                 json_str = json_match.group()
                 json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
                 feedback_data = json.loads(json_str)
                 
-                # Add encouragement based on score
                 if percentage_score >= 80:
                     encouragement = "🌟 Amazing work! Keep up the excellent performance!"
                 elif percentage_score >= 60:
@@ -729,18 +663,15 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
         except Exception as e:
             logger.warning(f"Gemini feedback generation failed, using fallback: {e}")
         
-        # Fallback: Use topic names from wrong questions for specific feedback
         weak_topic_names = list(set(d.get("topic", "") for d in weak_topic_details if d.get("topic")))
         strong_topic_names = list(set(d.get("topic", "") for d in strong_topic_details if d.get("topic")))
         
-        # Build specific improvements from actual wrong topics
         specific_improvements = []
         for topic in weak_topic_names[:4]:
             specific_improvements.append(f"Review and practice '{topic}' from {chapter_ref}")
         if not specific_improvements:
             specific_improvements = [f"Review all concepts in {chapter_ref}"]
         
-        # Build specific strengths from correct topics
         specific_strengths = []
         for topic in strong_topic_names[:3]:
             specific_strengths.append(f"Good understanding of '{topic}'")
@@ -787,12 +718,10 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
         """
         topic_performance = {}
         
-        # Match questions with evaluations and group by topic
         for i, q in enumerate(questions):
             topic_id = q.get("topic_id")
             topic_name = q.get("topic_name") or q.get("topic", "General")
             
-            # If no topic info, use chapter-level
             if not topic_id or not topic_name:
                 topic_id = "chapter_general"
                 topic_name = topic_name or "General Concepts"
@@ -800,7 +729,6 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
             if not topic_id:
                 topic_id = topic_name.lower().replace(" ", "_")
             
-            # Initialize topic if not seen
             if topic_id not in topic_performance:
                 topic_performance[topic_id] = {
                     "topic_id": topic_id,
@@ -812,12 +740,10 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
                     "questions": []
                 }
             
-            # Find matching evaluation
             eval_item = None
             if i < len(evaluations):
                 eval_item = evaluations[i]
             else:
-                # Try to match by question_id
                 question_id = q.get("question_id")
                 if question_id:
                     eval_item = next((e for e in evaluations if e.get("question_id") == question_id), None)
@@ -833,7 +759,6 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
                     "score": eval_item.get("score", 0)
                 })
         
-        # Calculate percentages and categorize
         topics_list = []
         strong_topics = []
         weak_topics = []
@@ -855,13 +780,11 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
             
             topics_list.append(topic_summary)
             
-            # Categorize topics
             if percentage >= 70:
                 strong_topics.append({"name": data["topic_name"], "score": percentage})
             elif percentage < 50:
                 weak_topics.append({"name": data["topic_name"], "score": percentage})
         
-        # Sort topics by score
         topics_list.sort(key=lambda x: x["score_percentage"], reverse=True)
         strong_topics.sort(key=lambda x: x["score"], reverse=True)
         weak_topics.sort(key=lambda x: x["score"])
@@ -879,19 +802,16 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
         
         for e in evaluations:
             if not e.get("is_correct") and e.get("score", 10) < 5:
-                # Use actual topic name if available
                 topic = e.get("topic", "")
                 if topic and topic not in weak_areas:
                     weak_areas.append(topic)
                 else:
-                    # Fallback: extract key concept from question text
                     q = e.get("question_text", "").strip()
                     if q and len(q) > 10:
-                        # Take the first meaningful portion as area description
                         short_q = q[:80] + "..." if len(q) > 80 else q
                         weak_areas.append(short_q)
         
-        return list(dict.fromkeys(weak_areas))[:5]  # Deduplicate, keep order
+        return list(dict.fromkeys(weak_areas))[:5]
     
     async def _save_session_results(
         self,
@@ -928,7 +848,6 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
                 "completed_at": datetime.utcnow()
             }
             
-            # Add topic analytics if provided
             if topic_analytics:
                 update_data["topic_analytics"] = topic_analytics
             
@@ -955,6 +874,4 @@ Be encouraging but SPECIFIC. Output ONLY the JSON object."""
             "completed_at": datetime.utcnow().isoformat()
         }
 
-
-# Global instance
 rag_evaluation_service = RAGEvaluationService()

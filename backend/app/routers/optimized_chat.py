@@ -22,7 +22,6 @@ router = APIRouter(
     tags=["Optimized Chat"]
 )
 
-
 class OptimizedChatRequest(BaseModel):
     """Request schema for optimized chat."""
     question: str = Field(..., description="Student's question (any language)")
@@ -30,10 +29,8 @@ class OptimizedChatRequest(BaseModel):
     subject: str = Field(..., description="Subject name")
     mode: str = Field("quick", description="Mode: quick, deepdive, annotation, define")
     chapter: Optional[int] = Field(None, description="Optional chapter number")
-    # Optional fields for top questions tracking
     user_id: Optional[str] = Field(None, description="User ID for tracking (optional)")
     session_id: Optional[str] = Field(None, description="Session ID for tracking (optional)")
-
 
 class OptimizedChatResponse(BaseModel):
     """Response schema for optimized chat."""
@@ -43,7 +40,6 @@ class OptimizedChatResponse(BaseModel):
     cached: bool = Field(..., description="Whether response was cached")
     gemini_calls: int = Field(..., description="Gemini API calls used (target: ≤2)")
     chunks_used: int = Field(0, description="Number of context chunks used")
-
 
 class APIStatsResponse(BaseModel):
     """Response schema for API statistics."""
@@ -55,7 +51,6 @@ class APIStatsResponse(BaseModel):
     calls_last_hour: int
     avg_calls_per_query: float
     optimization_savings: str
-
 
 @router.post("/chat/optimized", response_model=OptimizedChatResponse)
 async def optimized_chat(request: OptimizedChatRequest):
@@ -85,7 +80,6 @@ async def optimized_chat(request: OptimizedChatRequest):
             chapter=request.chapter
         )
         
-        # Check if blocked due to subject mismatch
         if result.get("blocked"):
              raise HTTPException(
                  status_code=400,
@@ -96,10 +90,8 @@ async def optimized_chat(request: OptimizedChatRequest):
                  }
              )
         
-        # Track question-answer pair if user info provided (for top questions feature)
         if request.user_id and request.session_id:
             try:
-                # Map mode to quick/deep
                 tracking_mode = "deep" if request.mode in ["deepdive", "elaborate"] else "quick"
                 
                 top_question_service.save_question_answer(
@@ -114,7 +106,6 @@ async def optimized_chat(request: OptimizedChatRequest):
                 )
                 logger.info(f"Question tracked for user {request.user_id}")
             except Exception as track_error:
-                # Don't fail the request if tracking fails
                 logger.warning(f" Failed to track question: {track_error}")
         
         return OptimizedChatResponse(
@@ -131,7 +122,6 @@ async def optimized_chat(request: OptimizedChatRequest):
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/admin/api-stats", response_model=APIStatsResponse)
 async def get_api_stats():
@@ -153,12 +143,10 @@ async def get_api_stats():
         queries = stats.get("queries_processed", 0)
         total_calls = api_stats.get("total_calls", 0)
         
-        # Calculate average calls per query
         avg_calls = total_calls / queries if queries > 0 else 0
         
-        # Calculate savings (before was ~5 calls/query, now ~2)
         if queries > 0:
-            expected_calls = queries * 5  # Old system
+            expected_calls = queries * 5
             actual_calls = total_calls
             savings = ((expected_calls - actual_calls) / expected_calls) * 100 if expected_calls > 0 else 0
             savings_str = f"{savings:.1f}% reduction (5→{avg_calls:.1f} calls/query)"
@@ -179,7 +167,6 @@ async def get_api_stats():
     except Exception as e:
         logger.error(f"API stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/admin/reset-api-stats")
 async def reset_api_stats():

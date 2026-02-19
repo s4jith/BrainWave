@@ -9,11 +9,9 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState(preSelectedIds);
 
-    // Dynamic curriculum data
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
-    // Filters
     const [filters, setFilters] = useState({
         subject: "",
         class_level: "",
@@ -29,7 +27,6 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
         pages: 1
     });
 
-    // Fetch curriculum subjects on mount
     useEffect(() => {
         const fetchCurriculum = async () => {
             setLoadingCurriculum(true);
@@ -48,7 +45,6 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
         fetchCurriculum();
     }, []);
 
-    // Derive unique subject names and class levels from curriculum
     const subjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
     const classLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
@@ -92,18 +88,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
     };
 
     const handleAddSelected = () => {
-        // Find full question objects for selected IDs
-        // Note: This only finds from CURRENT PAGE. 
-        // Ideally we should keep track of selected objects, or fetch them if needed.
-        // For simplicity, we'll assume the user selects from visible list, 
-        // OR we might need to store the objects in selectedIds state (id -> obj map).
-
-        // Better approach: When toggling, store the whole object if adding.
-        // But preSelectedIds only has IDs.
-        // Let's filter from 'questions' array for now. 
-        // Limitation: Cross-page selection might lose data if we only search 'questions'.
-        // Fix: We will assume we only add what's currently available or previously selected.
-
+        
         const selectedObjects = questions.filter(q => selectedIds.includes(q.id));
         onSelect(selectedObjects);
         onClose();

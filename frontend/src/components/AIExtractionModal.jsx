@@ -1,7 +1,3 @@
-/**
- * AIExtractionModal - Upload PDF/image and extract curriculum using Gemini AI
- * Allows admins to upload table of contents and auto-generate subject structure
- */
 
 import { useState } from "react";
 import { X, Upload, FileText, Sparkles, Loader2, AlertCircle, CheckCircle } from "lucide-react";
@@ -52,14 +48,13 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
   };
 
   const validateAndSetFile = (file) => {
-    // Validate file type
+    
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       setError("Invalid file type. Please upload PDF, JPEG, PNG, or WebP files.");
       return;
     }
 
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError("File size too large. Maximum 10MB allowed.");
       return;
@@ -103,7 +98,6 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
         const result = await response.json();
         setExtractionResult(result);
         
-        // Show success message
         setTimeout(() => {
           if (onSuccess) {
             onSuccess();
@@ -137,7 +131,7 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+        {}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
@@ -161,10 +155,10 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
           </button>
         </div>
 
-        {/* Content */}
+        {}
         <div className="p-6">
           {extractionResult ? (
-            // Success state
+            
             <div className="text-center py-8">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
@@ -189,7 +183,6 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
               </button>
             </div>
           ) : (
-            // Form
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Subject Details */}
               <div className="space-y-4">

@@ -12,7 +12,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-
 class LLMStorageService:
     """
     Service for storing and retrieving LLM-generated answers.
@@ -59,26 +58,20 @@ class LLMStorageService:
             True if stored successfully, False otherwise
         """
         try:
-            # Check if answer should be stored (includes textbook verification)
             if not self._should_store_answer(answer, textbook_chunks):
                 logger.debug(f"Answer not stored - quality check failed")
                 return False
             
-            # Extract topic if not provided
             if not topic:
                 topic = self._extract_topic(question)
             
-            # Generate embedding from question using Gemini (same model as query)
             question_embedding = self._generate_embedding(question)
             
-            # Create unique ID
             question_hash = hashlib.md5(question.lower().strip().encode()).hexdigest()[:16]
             vector_id = f"llm_{subject.lower()}_{class_level}_{topic.lower()}_{question_hash}"
             
-            # Generate source fingerprint for verification
             source_fingerprint = self._generate_source_fingerprint(textbook_chunks) if textbook_chunks else None
             
-            # Store in Pinecone LLM DB with enhanced metadata
             success = pinecone_llm_db.store_llm_response(
                 vector_id=vector_id,
                 question=question,
@@ -114,7 +107,6 @@ class LLMStorageService:
         if not textbook_chunks:
             return None
         
-        # Combine first 5 chunks for fingerprint
         combined_text = " ".join([
             c.get('text', '')[:200] for c in textbook_chunks[:5]
         ])
@@ -139,7 +131,6 @@ class LLMStorageService:
         if not answer or len(answer) < 100:
             return False
         
-        # Check for obvious error/failure markers
         failure_markers = [
             "i cannot",
             "i'm unable to",
@@ -154,7 +145,6 @@ class LLMStorageService:
             if marker in answer_lower:
                 return False
         
-        # Store all reasonable answers (textbook-based or fallback)
         return True
     
     def _verify_textbook_grounding(self, answer: str, textbook_chunks: list) -> float:
@@ -171,26 +161,21 @@ class LLMStorageService:
         if not textbook_chunks:
             return 0.0
         
-        # Combine textbook content
         textbook_text = " ".join([
             c.get('text', '') for c in textbook_chunks
         ]).lower()
         
-        # Extract key terms from textbook
         textbook_words = set(re.findall(r'\b\w{4,}\b', textbook_text))
         
-        # Extract key terms from answer
         answer_lower = answer.lower()
         answer_words = set(re.findall(r'\b\w{4,}\b', answer_lower))
         
         if not answer_words:
             return 0.0
         
-        # Calculate word overlap
         overlap = answer_words & textbook_words
         grounding_score = len(overlap) / len(answer_words)
         
-        # Bonus: Check for key concept matches
         key_concepts = [
             'definition', 'formula', 'theorem', 'law', 'principle',
             'equation', 'method', 'process', 'example'
@@ -199,7 +184,6 @@ class LLMStorageService:
         concept_matches = sum(1 for concept in key_concepts 
                             if concept in textbook_text and concept in answer_lower)
         
-        # Add concept bonus (up to 0.2)
         concept_bonus = min(concept_matches * 0.05, 0.2)
         
         return min(grounding_score + concept_bonus, 1.0)
@@ -216,7 +200,6 @@ class LLMStorageService:
         """
         question_lower = question.lower()
         
-        # Common math topics
         math_topics = {
             'algebra': ['algebra', 'equation', 'variable', 'expression'],
             'geometry': ['geometry', 'triangle', 'circle', 'angle', 'area', 'perimeter'],
@@ -229,13 +212,11 @@ class LLMStorageService:
             'ratio': ['ratio', 'proportion', 'percentage']
         }
         
-        # Check for topic keywords
         for topic, keywords in math_topics.items():
             for keyword in keywords:
                 if keyword in question_lower:
                     return topic
         
-        # Extract first significant word as topic
         words = re.findall(r'\b\w+\b', question_lower)
         significant_words = [w for w in words if len(w) > 4 and w not in ['what', 'where', 'when', 'which', 'explain', 'define', 'calculate']]
         
@@ -264,24 +245,20 @@ class LLMStorageService:
             List of matching stored answers with scores
         """
         try:
-            # Generate query embedding using Gemini (same model as store)
             query_embedding = self._generate_embedding(question)
             
-            # Query Pinecone LLM DB
             results = pinecone_llm_db.query(
                 vector=query_embedding,
                 subject=subject,
                 top_k=top_k
             )
             
-            # Filter by score and format results
             matching_answers = []
             for match in results.get('matches', []):
                 score = match.get('score', 0)
                 if score >= min_score:
                     metadata = match.get('metadata', {})
                     
-                    # Increment usage count
                     pinecone_llm_db.increment_usage(match['id'], subject)
                     
                     matching_answers.append({
@@ -335,6 +312,4 @@ class LLMStorageService:
             logger.error(f"Failed to get storage stats: {e}")
             return {"error": str(e)}
 
-
-# Global instance
 llm_storage_service = LLMStorageService()

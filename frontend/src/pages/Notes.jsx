@@ -17,13 +17,6 @@ import {
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import useNotesStore from '../stores/notesStore';
 
-/**
- * Notes Page
- * 
- * Displays all user notes with search, filter, add, edit, and delete functionality.
- * Notes are stored locally via notesStore (with TODO for backend integration).
- */
-
 export default function Notes() {
     const navigate = useNavigate();
     const { notes, addNote, updateNote, deleteNote, searchNotes } = useNotesStore();
@@ -34,14 +27,12 @@ export default function Notes() {
     const [editingNote, setEditingNote] = useState(null);
     const [newNote, setNewNote] = useState({ title: '', content: '' });
 
-    // Filter and search notes
     const filteredNotes = searchQuery
         ? searchNotes(searchQuery)
         : filterSource === 'all'
             ? notes
             : notes.filter(n => n.source === filterSource);
 
-    // Get source icon
     const getSourceIcon = (source) => {
         switch (source) {
             case 'Book to Bot':
@@ -53,7 +44,6 @@ export default function Notes() {
         }
     };
 
-    // Get source color
     const getSourceColor = (source) => {
         switch (source) {
             case 'Book to Bot':
@@ -65,7 +55,6 @@ export default function Notes() {
         }
     };
 
-    // Handle add note
     const handleAddNote = () => {
         if (newNote.title.trim() || newNote.content.trim()) {
             addNote({
@@ -78,7 +67,6 @@ export default function Notes() {
         }
     };
 
-    // Handle update note
     const handleUpdateNote = () => {
         if (editingNote) {
             updateNote(editingNote.id, {
@@ -92,7 +80,7 @@ export default function Notes() {
     return (
         <DashboardLayout>
             <div className="max-w-6xl mx-auto">
-                {/* Header */}
+                {}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
                         <button
@@ -115,7 +103,7 @@ export default function Notes() {
                     </button>
                 </div>
 
-                {/* Search and Filter */}
+                {}
                 <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 relative">
                         <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -160,7 +148,7 @@ export default function Notes() {
                                 key={note.id}
                                 className="bg-white rounded-2xl p-5 border border-gray-100 hover:shadow-lg group"
                             >
-                                {/* Note Header */}
+                                {}
                                 <div className="flex items-start justify-between mb-3">
                                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSourceColor(note.source)}`}>
                                         {getSourceIcon(note.source)}
@@ -186,7 +174,7 @@ export default function Notes() {
                                 <h3 className="font-semibold text-gray-800 mb-2 line-clamp-1">{note.title}</h3>
                                 <p className="text-sm text-gray-600 line-clamp-3 mb-4">{note.content}</p>
 
-                                {/* Note Footer */}
+                                {}
                                 <div className="flex items-center gap-2 text-xs text-gray-400">
                                     <Calendar className="w-3 h-3" />
                                     {new Date(note.createdAt).toLocaleDateString()}
@@ -199,7 +187,7 @@ export default function Notes() {
                     </div>
                 )}
 
-                {/* Add Note Modal */}
+                {}
                 {showAddNote && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl w-full max-w-lg p-6">
@@ -242,7 +230,7 @@ export default function Notes() {
                     </div>
                 )}
 
-                {/* Edit Note Modal */}
+                {}
                 {editingNote && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl w-full max-w-lg p-6">

@@ -20,7 +20,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class ImageProcessor:
     """
     Process mathematical diagram images into 768-dim embeddings.
@@ -55,9 +54,7 @@ class ImageProcessor:
                 self._clip_model.to(self.device)
                 self._clip_model.eval()
                 
-                # Create projection layer: 512 → 768 dimensions
                 self._projection = torch.nn.Linear(512, 768).to(self.device)
-                # Initialize with Xavier uniform for stable gradients
                 torch.nn.init.xavier_uniform_(self._projection.weight)
                 self._projection.eval()
                 
@@ -81,40 +78,31 @@ class ImageProcessor:
         Returns:
             768-dimensional numpy array (normalized)
         """
-        # Lazy load CLIP
         if self._clip_model is None:
             self._load_clip()
         
         try:
-            # Load and preprocess image
             image = Image.open(image_path).convert('RGB')
             
-            # Process with CLIP
             inputs = self._clip_processor(images=image, return_tensors="pt")
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # Generate CLIP embedding (512-dim)
             with torch.no_grad():
                 outputs = self._clip_model.get_image_features(**inputs)
-                clip_embedding = outputs[0]  # Shape: (512,)
+                clip_embedding = outputs[0]
                 
-                # Project to 768 dimensions
-                projected = self._projection(clip_embedding)  # Shape: (768,)
+                projected = self._projection(clip_embedding)
                 
-                # Normalize
                 embedding = torch.nn.functional.normalize(projected, p=2, dim=0)
             
-            # Convert to numpy
             return embedding.cpu().numpy()
         
         except FileNotFoundError:
             logger.error(f" Image not found: {image_path}")
-            # Return zero vector as fallback
             return np.zeros(768, dtype=np.float32)
         
         except Exception as e:
             logger.error(f" Failed to embed image {image_path}: {e}")
-            # Return zero vector as fallback
             return np.zeros(768, dtype=np.float32)
     
     def embed_images_batch(
@@ -132,7 +120,6 @@ class ImageProcessor:
         Returns:
             List of 768-dim numpy arrays
         """
-        # Lazy load CLIP
         if self._clip_model is None:
             self._load_clip()
         
@@ -142,7 +129,6 @@ class ImageProcessor:
             batch_paths = image_paths[i:i + batch_size]
             
             try:
-                # Load batch of images
                 images = []
                 valid_indices = []
                 
@@ -153,27 +139,21 @@ class ImageProcessor:
                         valid_indices.append(idx)
                     except Exception as e:
                         logger.warning(f" Failed to load image {path}: {e}")
-                        # Add zero vector for failed images
                         embeddings.append(np.zeros(768, dtype=np.float32))
                 
                 if not images:
                     continue
                 
-                # Process batch
                 inputs = self._clip_processor(images=images, return_tensors="pt", padding=True)
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 
-                # Generate embeddings
                 with torch.no_grad():
                     outputs = self._clip_model.get_image_features(**inputs)
                     
-                    # Project to 768-dim
                     projected = self._projection(outputs)
                     
-                    # Normalize
                     normalized = torch.nn.functional.normalize(projected, p=2, dim=1)
                 
-                # Convert to numpy and insert at correct positions
                 batch_embeddings = normalized.cpu().numpy()
                 
                 for idx, embedding in zip(valid_indices, batch_embeddings):
@@ -181,7 +161,6 @@ class ImageProcessor:
             
             except Exception as e:
                 logger.error(f" Batch embedding failed: {e}")
-                # Add zero vectors for entire batch
                 for _ in batch_paths:
                     embeddings.append(np.zeros(768, dtype=np.float32))
         
@@ -206,10 +185,8 @@ class ImageProcessor:
         Returns:
             Combined 768-dim embedding (normalized)
         """
-        # Weighted combination
         combined = (text_weight * text_embedding + image_weight * image_embedding)
         
-        # Re-normalize
         norm = np.linalg.norm(combined)
         if norm > 0:
             combined = combined / norm
@@ -237,10 +214,7 @@ class ImageProcessor:
             'dimension': embeddings[0].shape[0] if embeddings else 0
         }
 
-
-# Singleton instance for lazy loading
 _image_processor_instance = None
-
 
 def get_image_processor(device: str = "cpu") -> ImageProcessor:
     """

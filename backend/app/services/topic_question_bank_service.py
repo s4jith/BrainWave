@@ -22,7 +22,6 @@ from app.models.topic_questions import (
 
 logger = logging.getLogger(__name__)
 
-
 class TopicQuestionBankService:
     """
     Service for managing topic-based question bank.
@@ -35,20 +34,16 @@ class TopicQuestionBankService:
     5. Track student performance by topic
     """
     
-    # Collection names
     QUESTION_BANK = "topic_question_bank"
     STUDENT_TOPIC_PERFORMANCE = "student_topic_performance"
     STUDENT_SUBJECT_PROGRESS = "student_subject_progress"
     TEST_SESSIONS = "test_sessions"
     
-    # Question generation config
-    QUESTIONS_PER_TOPIC = 15  # Generate 15 questions per topic
+    QUESTIONS_PER_TOPIC = 15
     DIFFICULTY_DISTRIBUTION = {"easy": 5, "medium": 6, "hard": 4}
     
     def __init__(self):
         self.gemini = gemini_service
-    
-    # ==================== TOPIC EXTRACTION ====================
     
     async def extract_topics_from_content(
         self,
@@ -102,7 +97,6 @@ Output ONLY the JSON array, no other text."""
         try:
             response = await self.gemini.generate_text(prompt)
             
-            # Parse JSON from response
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
                 topics = json.loads(json_match.group())
@@ -139,8 +133,6 @@ Output ONLY the JSON array, no other text."""
             }
         ]
     
-    # ==================== QUESTION GENERATION ====================
-    
     async def generate_questions_for_topic(
         self,
         topic_name: str,
@@ -163,7 +155,6 @@ Output ONLY the JSON array, no other text."""
         
         questions = []
         
-        # Generate questions by difficulty
         for difficulty, count in self.DIFFICULTY_DISTRIBUTION.items():
             batch = await self._generate_question_batch(
                 topic_name=topic_name,
@@ -274,8 +265,6 @@ Output ONLY the JSON array."""
             logger.error(f"Question generation error for {difficulty}: {e}")
             return []
     
-    # ==================== STORAGE OPERATIONS ====================
-    
     async def save_chapter_question_bank(
         self,
         class_level: int,
@@ -289,7 +278,6 @@ Output ONLY the JSON array."""
         
         collection = mongodb.db[self.QUESTION_BANK]
         
-        # Check if already exists
         existing = await collection.find_one({
             "class_level": class_level,
             "subject": subject,
@@ -313,7 +301,6 @@ Output ONLY the JSON array."""
         }
         
         if existing:
-            # Update existing
             await collection.update_one(
                 {"_id": existing["_id"]},
                 {"$set": bank_doc}
@@ -321,7 +308,6 @@ Output ONLY the JSON array."""
             logger.info(f"Updated question bank for {subject} Ch.{chapter_number}")
             return str(existing["_id"])
         else:
-            # Insert new
             result = await collection.insert_one(bank_doc)
             logger.info(f"Created question bank for {subject} Ch.{chapter_number}")
             return str(result.inserted_id)
@@ -344,17 +330,14 @@ Output ONLY the JSON array."""
         
         return result
     
-    # ==================== SUBJECT/CHAPTER/TOPIC RETRIEVAL ====================
-    
     async def get_available_subjects(self, class_level: int) -> List[Dict]:
         """
         Get all subjects available for a class level.
         Checks MongoDB books collection, question bank, AND Pinecone namespaces.
         """
         logger.info(f" get_available_subjects called for class_level={class_level}")
-        subjects_map = {}  # Use dict to merge and count chapters
+        subjects_map = {}
         
-        # Method 1: Check books collection (Primary source - actual textbook content)
         books_collection = mongodb.db["books"]
         books_pipeline = [
             {"$match": {"class_level": class_level}},
@@ -384,7 +367,6 @@ Output ONLY the JSON array."""
         if books_results:
             logger.info(f"Found {len(books_results)} subjects in books for class {class_level}")
         
-        # Method 2: Check question bank (has pre-generated questions)
         collection = mongodb.db[self.QUESTION_BANK]
         pipeline = [
             {"$match": {"class_level": class_level, "is_active": True}},
@@ -406,7 +388,6 @@ Output ONLY the JSON array."""
             subject = r.get("subject", "").title()
             if subject:
                 if subject in subjects_map:
-                    # Update questions count
                     subjects_map[subject]["total_questions"] = r.get("total_questions", 0)
                 else:
                     subjects_map[subject] = {
@@ -415,19 +396,16 @@ Output ONLY the JSON array."""
                         "total_questions": r.get("total_questions", 0)
                     }
         
-        # If we have subjects, return them
         if subjects_map:
             results = list(subjects_map.values())
             logger.info(f"Found {len(results)} total subjects for class {class_level}")
             return results
         
-        # Fallback: Check Pinecone namespace_db for embedded content
         logger.info(f"No subjects found for class {class_level}, checking Pinecone namespaces...")
         
         try:
             from app.db.mongo import namespace_db
             
-            # Get stats from Pinecone to see which namespaces have data
             if namespace_db.index:
                 stats = namespace_db.index.describe_index_stats()
                 namespaces = stats.get('namespaces', {})
@@ -436,27 +414,22 @@ Output ONLY the JSON array."""
                 for ns_name, ns_stats in namespaces.items():
                     vector_count = ns_stats.get('vector_count', 0)
                     if vector_count > 0:
-                        # Parse namespace format: class_X_subject (e.g., class_10_science)
                         parts = ns_name.split('_')
                         
-                        # Check if namespace follows class_X_subject format
                         if len(parts) >= 3 and parts[0] == 'class':
                             try:
                                 ns_class = int(parts[1])
-                                # Only include subjects for the requested class level
                                 if ns_class == class_level:
                                     subject_name = '_'.join(parts[2:]).replace('-', ' ').title()
-                                    # Check if already added
                                     if not any(s['subject'].lower() == subject_name.lower() for s in subjects):
                                         subjects.append({
                                             "subject": subject_name,
-                                            "total_chapters": max(1, vector_count // 50),  # Estimate chapters
-                                            "total_questions": 0  # No pre-generated questions yet
+                                            "total_chapters": max(1, vector_count // 50),
+                                            "total_questions": 0
                                         })
                             except ValueError:
                                 continue
                         else:
-                            # Old format namespace - can't filter by class, skip it
                             logger.debug(f"Skipping namespace {ns_name} - doesn't match class format")
                 
                 if subjects:
@@ -466,7 +439,6 @@ Output ONLY the JSON array."""
         except Exception as e:
             logger.error(f"Error checking Pinecone namespaces: {e}")
         
-        # Final fallback: return empty (frontend will show static fallback)
         logger.warning(f"No subjects found for class {class_level}")
         return []
     
@@ -487,7 +459,6 @@ Output ONLY the JSON array."""
             {"chapter_number": 1, "chapter_name": 1, "total_topics": 1, "total_questions": 1, "topics.topic_id": 1, "topics.topic_name": 1}
         ).sort("chapter_number", 1).to_list(100)
         
-        # If student_id is provided, fetch performance data
         student_scores = {}
         if student_id:
             perf_collection = mongodb.db[self.STUDENT_TOPIC_PERFORMANCE]
@@ -497,7 +468,6 @@ Output ONLY the JSON array."""
                 "subject": subject
             }).to_list(1000)
             
-            # Aggregate scores by chapter
             for p in performances:
                 ch_num = p.get("chapter_number")
                 if ch_num:
@@ -508,7 +478,6 @@ Output ONLY the JSON array."""
 
         result = []
         for ch in chapters:
-            # Calculate average score for chapter
             avg_score = None
             if student_id and ch["chapter_number"] in student_scores:
                 stats = student_scores[ch["chapter_number"]]
@@ -530,12 +499,10 @@ Output ONLY the JSON array."""
         if result:
             return result
         
-        # Fallback 1: Check books collection (same source as get_available_subjects)
         logger.info(f"No chapters in question bank for {subject} class {class_level}, checking books collection...")
         
         try:
             books_collection = mongodb.db["books"]
-            # Match by class_level and subject (case-insensitive)
             books = await books_collection.find(
                 {"class_level": class_level, "subject": {"$regex": f"^{subject}$", "$options": "i"}},
                 {"chapter_number": 1, "title": 1, "subject": 1}
@@ -564,7 +531,6 @@ Output ONLY the JSON array."""
         except Exception as e:
             logger.error(f"Error fetching chapters from books collection: {e}")
         
-        # Fallback 2: Get chapter info from Pinecone metadata
         logger.info(f"No chapters in books for {subject} class {class_level}, checking Pinecone...")
         
         try:
@@ -580,7 +546,6 @@ Output ONLY the JSON array."""
                     from app.services.llm_storage_service import llm_storage_service
                     sample_embedding = llm_storage_service._generate_embedding(f"{subject} class {class_level} chapter")
                     
-                    # Try with class_level filter first
                     results = namespace_db.index.query(
                         vector=sample_embedding,
                         namespace=namespace,
@@ -589,7 +554,6 @@ Output ONLY the JSON array."""
                         include_metadata=True
                     )
                     
-                    # If no results with filter, try without
                     if not results.get('matches'):
                         results = namespace_db.index.query(
                             vector=sample_embedding,
@@ -598,15 +562,12 @@ Output ONLY the JSON array."""
                             include_metadata=True
                         )
                     
-                    # Extract unique chapters from metadata
                     chapter_info = {}
                     for match in results.get('matches', []):
                         metadata = match.get('metadata', {})
-                        # Use correct metadata fields: chapter_number (not chapter)
                         chapter_num = metadata.get('chapter_number')
                         book_title = metadata.get('book_title', '')
                         
-                        # Construct chapter name from book title or fallback
                         chapter_name = book_title if book_title else f'Chapter {chapter_num}'
                         
                         if chapter_num is not None:
@@ -620,7 +581,6 @@ Output ONLY the JSON array."""
                                     "topics": []
                                 }
                     
-                    # Convert to sorted list
                     result = list(chapter_info.values())
                     result.sort(key=lambda x: x["chapter_number"])
                     
@@ -660,7 +620,6 @@ Output ONLY the JSON array."""
         topics = []
         student_performance = {}
         
-        # Get student performance if student_id provided
         if student_id:
             perf_collection = mongodb.db[self.STUDENT_TOPIC_PERFORMANCE]
             perfs = await perf_collection.find({
@@ -681,7 +640,6 @@ Output ONLY the JSON array."""
             topic_id = t["topic_id"]
             perf = student_performance.get(topic_id, {})
             
-            # Determine if weak topic (score < 60%)
             avg_score = perf.get("average_score", None)
             is_weak = avg_score is not None and avg_score < 60
             is_recommended = is_weak or perf.get("tests_taken", 0) == 0
@@ -693,7 +651,6 @@ Output ONLY the JSON array."""
                 "page_range": t.get("page_range", ""),
                 "total_questions": t.get("total_questions", len(t.get("questions", []))),
                 "difficulty_distribution": t.get("difficulty_distribution", {}),
-                # Student-specific data
                 "student_score": avg_score,
                 "tests_taken": perf.get("tests_taken", 0),
                 "trend": perf.get("improvement_trend", "stable"),
@@ -701,12 +658,9 @@ Output ONLY the JSON array."""
                 "is_recommended": is_recommended
             })
         
-        # Sort: recommended topics first, then by name
         topics.sort(key=lambda x: (not x["is_recommended"], x["topic_name"]))
         
         return topics
-    
-    # ==================== TEST QUESTION SERVING ====================
     
     async def get_questions_for_test(
         self,
@@ -736,7 +690,6 @@ Output ONLY the JSON array."""
             logger.warning(f"No question bank found for {subject} Ch.{chapter_number}")
             return [], ""
         
-        # Find the topic
         topic = None
         for t in chapter.get("topics", []):
             if t["topic_id"] == topic_id:
@@ -754,24 +707,20 @@ Output ONLY the JSON array."""
             logger.warning(f"No questions found for topic {topic_name}")
             return [], topic_name
         
-        # Filter by difficulty if specified
         if difficulty != "mixed":
             filtered = [q for q in all_questions if q.get("difficulty") == difficulty]
             if len(filtered) >= num_questions:
                 all_questions = filtered
         
-        # Select questions (random sampling)
         import random
         if len(all_questions) <= num_questions:
             selected = all_questions
         else:
-            # Stratified sampling by difficulty
             if difficulty == "mixed":
                 easy = [q for q in all_questions if q.get("difficulty") == "easy"]
                 medium = [q for q in all_questions if q.get("difficulty") == "medium"]
                 hard = [q for q in all_questions if q.get("difficulty") == "hard"]
                 
-                # Distribution: 40% easy, 40% medium, 20% hard
                 n_easy = max(1, int(num_questions * 0.4))
                 n_medium = max(1, int(num_questions * 0.4))
                 n_hard = num_questions - n_easy - n_medium
@@ -781,7 +730,6 @@ Output ONLY the JSON array."""
                 selected.extend(random.sample(medium, min(n_medium, len(medium))))
                 selected.extend(random.sample(hard, min(n_hard, len(hard))))
                 
-                # Fill remaining from any pool
                 remaining = num_questions - len(selected)
                 if remaining > 0:
                     unused = [q for q in all_questions if q not in selected]
@@ -789,10 +737,8 @@ Output ONLY the JSON array."""
             else:
                 selected = random.sample(all_questions, num_questions)
         
-        # Shuffle selected questions
         random.shuffle(selected)
         
-        # Format for response
         formatted = []
         for i, q in enumerate(selected):
             formatted.append({
@@ -807,8 +753,6 @@ Output ONLY the JSON array."""
         
         logger.info(f"Serving {len(formatted)} questions for topic: {topic_name}")
         return formatted, topic_name
-    
-    # ==================== STUDENT PERFORMANCE TRACKING ====================
     
     async def update_student_performance(
         self,
@@ -825,7 +769,6 @@ Output ONLY the JSON array."""
         """Update student's performance on a topic after test completion."""
         collection = mongodb.db[self.STUDENT_TOPIC_PERFORMANCE]
         
-        # Find existing record
         existing = await collection.find_one({
             "student_id": student_id,
             "topic_id": topic_id
@@ -834,24 +777,19 @@ Output ONLY the JSON array."""
         now = datetime.utcnow()
         
         if existing:
-            # Calculate new averages
             tests_taken = existing.get("tests_taken", 0) + 1
             total_questions = existing.get("total_questions_attempted", 0) + questions_attempted
             total_correct = existing.get("correct_answers", 0) + correct_count
             
-            # Update average score
             old_avg = existing.get("average_score", 0)
             new_avg = (old_avg * (tests_taken - 1) + score) / tests_taken
             
-            # Update best score
             best = max(existing.get("best_score", 0), score)
             
-            # Add to score history
             history = existing.get("score_history", [])
             history.append({"score": score, "date": now.isoformat()})
-            history = history[-10:]  # Keep last 10
+            history = history[-10:]
             
-            # Determine trend
             if len(history) >= 3:
                 recent = sum(h["score"] for h in history[-3:]) / 3
                 older = sum(h["score"] for h in history[:3]) / min(3, len(history))
@@ -879,7 +817,6 @@ Output ONLY the JSON array."""
                 }}
             )
         else:
-            # Create new record
             await collection.insert_one({
                 "student_id": student_id,
                 "class_level": class_level,
@@ -899,7 +836,6 @@ Output ONLY the JSON array."""
                 "last_attempted": now
             })
         
-        # Update subject progress
         await self._update_subject_progress(student_id, class_level, subject)
     
     async def _update_subject_progress(
@@ -912,7 +848,6 @@ Output ONLY the JSON array."""
         perf_collection = mongodb.db[self.STUDENT_TOPIC_PERFORMANCE]
         prog_collection = mongodb.db[self.STUDENT_SUBJECT_PROGRESS]
         
-        # Get all topic performances for this subject
         performances = await perf_collection.find({
             "student_id": student_id,
             "class_level": class_level,
@@ -922,14 +857,12 @@ Output ONLY the JSON array."""
         if not performances:
             return
         
-        # Calculate stats
         chapters = set(p["chapter_number"] for p in performances)
         total_topics = len(performances)
         strong = sum(1 for p in performances if p.get("average_score", 0) >= 80)
         moderate = sum(1 for p in performances if 60 <= p.get("average_score", 0) < 80)
         weak = sum(1 for p in performances if p.get("average_score", 0) < 60)
         
-        # Get weak topics
         weak_topics = [
             {
                 "topic_id": p["topic_id"],
@@ -941,11 +874,9 @@ Output ONLY the JSON array."""
         ]
         weak_topics.sort(key=lambda x: x["score"])
         
-        # Calculate overall average
         overall_avg = sum(p.get("average_score", 0) for p in performances) / len(performances)
         total_tests = sum(p.get("tests_taken", 0) for p in performances)
         
-        # Mastered chapters (avg > 80%)
         chapter_scores = {}
         for p in performances:
             ch = p["chapter_number"]
@@ -955,7 +886,6 @@ Output ONLY the JSON array."""
         
         mastered = [ch for ch, scores in chapter_scores.items() if sum(scores)/len(scores) >= 80]
         
-        # Upsert subject progress
         await prog_collection.update_one(
             {"student_id": student_id, "class_level": class_level, "subject": subject},
             {"$set": {
@@ -965,7 +895,7 @@ Output ONLY the JSON array."""
                 "topics_strong": strong,
                 "topics_moderate": moderate,
                 "topics_weak": weak,
-                "weak_topics": weak_topics[:10],  # Top 10 weakest
+                "weak_topics": weak_topics[:10],
                 "overall_average": round(overall_avg, 1),
                 "total_tests_taken": total_tests,
                 "last_updated": datetime.utcnow()
@@ -992,7 +922,6 @@ Output ONLY the JSON array."""
         if progress and progress.get("weak_topics"):
             return progress["weak_topics"][:limit]
         
-        # If no weak topics, recommend unstarted topics
         return await self._get_unstarted_topics(student_id, class_level, subject, limit)
     
     async def _get_unstarted_topics(
@@ -1006,14 +935,12 @@ Output ONLY the JSON array."""
         bank_collection = mongodb.db[self.QUESTION_BANK]
         perf_collection = mongodb.db[self.STUDENT_TOPIC_PERFORMANCE]
         
-        # Get all topics for subject
         banks = await bank_collection.find({
             "class_level": class_level,
             "subject": subject,
             "is_active": True
         }).to_list(100)
         
-        # Get student's attempted topics
         attempted = await perf_collection.find({
             "student_id": student_id,
             "class_level": class_level,
@@ -1022,7 +949,6 @@ Output ONLY the JSON array."""
         
         attempted_ids = {a["topic_id"] for a in attempted}
         
-        # Find unstarted
         unstarted = []
         for bank in banks:
             for topic in bank.get("topics", []):
@@ -1036,8 +962,6 @@ Output ONLY the JSON array."""
                     })
         
         return unstarted[:limit]
-    
-    # ==================== ON-DEMAND QUESTION GENERATION ====================
     
     GENERATED_QUESTIONS_COLLECTION = "generated_questions"
     
@@ -1072,7 +996,6 @@ Output ONLY the JSON array."""
         """
         collection = mongodb.db[self.GENERATED_QUESTIONS_COLLECTION]
         
-        # Step 1: Check cache
         cache_key = {
             "class_level": class_level,
             "subject": subject,
@@ -1084,13 +1007,11 @@ Output ONLY the JSON array."""
         if existing and existing.get("questions"):
             logger.info(f"Cache hit: Found {len(existing['questions'])} questions for {subject} Ch.{chapter_number}")
             
-            # Update last_used timestamp
             await collection.update_one(
                 {"_id": existing["_id"]},
                 {"$set": {"last_used": datetime.utcnow()}}
             )
             
-            # Return requested number of questions
             cached_questions = existing["questions"]
             if len(cached_questions) > num_questions:
                 import random
@@ -1105,7 +1026,6 @@ Output ONLY the JSON array."""
                 "chapter_name": existing.get("chapter_name", f"Chapter {chapter_number}")
             }
         
-        # Step 2: Retrieve content from Pinecone
         logger.info(f"Generating questions for {subject} Ch.{chapter_number}...")
         
         try:
@@ -1122,15 +1042,12 @@ Output ONLY the JSON array."""
             chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
             content_text = content.get("text", "")
             
-            # Step 3: Generate questions with difficulty distribution
-            # Distribution: 40% easy, 40% medium, 20% hard
             difficulty_counts = {
                 "easy": max(1, int(num_questions * 0.4)),
                 "medium": max(1, int(num_questions * 0.4)),
                 "hard": max(1, int(num_questions * 0.2))
             }
             
-            # Generate all questions in one batch (Optimized: 1 API call instead of 3)
             all_questions = await self._generate_questions_batch_optimized(
                 content_text=content_text,
                 class_level=class_level,
@@ -1141,7 +1058,6 @@ Output ONLY the JSON array."""
                 include_variations=include_variations
             )
             
-            # Calculate actual distribution
             difficulty_distribution = {"easy": 0, "medium": 0, "hard": 0}
             for q in all_questions:
                 diff = q.get("difficulty", "medium")
@@ -1157,7 +1073,6 @@ Output ONLY the JSON array."""
                     "error": "Question generation failed"
                 }
             
-            # Step 4: Store in MongoDB for future use
             question_doc = {
                 **cache_key,
                 "chapter_name": chapter_name,
@@ -1208,7 +1123,6 @@ Output ONLY the JSON array."""
             from app.db.mongo import namespace_db
             from app.services.llm_storage_service import llm_storage_service
             
-            # Ensure namespace DB is connected
             if not namespace_db.index:
                 logger.info("Namespace DB not connected, attempting to connect...")
                 namespace_db.connect()
@@ -1220,15 +1134,13 @@ Output ONLY the JSON array."""
             namespace = namespace_db.get_namespace(subject)
             logger.info(f"Using namespace '{namespace}' for subject '{subject}'")
             
-            # Create embedding for chapter query
             query_text = f"{subject} class {class_level} chapter {chapter_number}"
             query_embedding = llm_storage_service._generate_embedding(query_text)
             
-            # Query Pinecone with chapter and class filter
             results = namespace_db.index.query(
                 vector=query_embedding,
                 namespace=namespace,
-                top_k=50,  # Get enough chunks to cover the chapter
+                top_k=50,
                 filter={
                     "chapter_number": chapter_number,
                     "class_level": class_level
@@ -1239,7 +1151,6 @@ Output ONLY the JSON array."""
             logger.info(f"Query for {subject} class {class_level} ch.{chapter_number}: {len(results.get('matches', []))} matches")
             
             if not results.get('matches'):
-                # Try with just chapter filter
                 logger.info(f"No matches with class filter, trying chapter-only filter...")
                 results = namespace_db.index.query(
                     vector=query_embedding,
@@ -1251,7 +1162,6 @@ Output ONLY the JSON array."""
                 logger.info(f"Chapter-only query: {len(results.get('matches', []))} matches")
             
             if not results.get('matches'):
-                # Try without any filter (semantic search only)
                 logger.info(f"No matches with chapter filter, trying semantic search...")
                 results = namespace_db.index.query(
                     vector=query_embedding,
@@ -1265,7 +1175,6 @@ Output ONLY the JSON array."""
                 logger.warning(f"No content found in namespace '{namespace}' for any filter")
                 return None
             
-            # Combine text from all chunks
             chapter_name = ""
             all_text = []
             
@@ -1404,7 +1313,6 @@ Output ONLY the JSON object."""
                 
                 validated_questions = []
                 
-                # Process each difficulty level
                 for difficulty, questions in all_questions_data.items():
                     if difficulty not in ['easy', 'medium', 'hard']:
                         continue
@@ -1425,7 +1333,6 @@ Output ONLY the JSON object."""
                             "variations": []
                         }
                         
-                        # Add validated variations
                         if include_variations and q.get("variations"):
                             for var in q["variations"]:
                                 if var.get("validated", True):
@@ -1472,7 +1379,6 @@ Output ONLY the JSON object."""
         if not chapters:
             return []
         
-        # Collect all questions
         all_questions = []
         for chapter in chapters:
             for q in chapter.get("questions", []):
@@ -1480,18 +1386,14 @@ Output ONLY the JSON object."""
                 q["chapter_name"] = chapter.get("chapter_name", "")
                 all_questions.append(q)
         
-        # Filter by difficulty if specified
         if difficulty != "mixed":
             all_questions = [q for q in all_questions if q.get("difficulty") == difficulty]
         
-        # Randomize and select
         import random
         random.shuffle(all_questions)
         
-        # Include some variations if available
         final_questions = []
         for q in all_questions[:num_questions]:
-            # Randomly pick base question or a variation
             if q.get("variations") and random.random() > 0.5:
                 variation = random.choice(q["variations"])
                 q_copy = q.copy()
@@ -1538,30 +1440,25 @@ Output ONLY the JSON object."""
             "message": "Questions not yet generated for this content"
         }
     
-    # ==================== FIXED-FORMAT CHAPTER TEST METHODS ====================
-    
     CHAPTER_TEST_COLLECTION = "chapter_test_questions"
     
-    # Test format: 15 questions (5 MCQ + 5 Fill-up + 5 two-mark) = 20 marks, 40 minutes
-    # Difficulty-based: Student selects Easy/Medium/Hard, gets questions of that difficulty only
-    # 10 variants per difficulty level to avoid repeat questions
     CHAPTER_TEST_FORMAT = {
         "mcq": {
-            "pool_per_variant": 5,  # 5 MCQs per variant
+            "pool_per_variant": 5,
             "marks": 1
         },
         "fillup": {
-            "pool_per_variant": 5,  # 5 Fill-ups per variant
+            "pool_per_variant": 5,
             "marks": 1
         },
         "two_mark": {
-            "pool_per_variant": 5,  # 5 two-mark per variant
+            "pool_per_variant": 5,
             "marks": 2
         },
         "total_questions": 15,
         "total_marks": 20,
         "time_limit_minutes": 40,
-        "variants_per_difficulty": 10,  # 10 variants for each difficulty level
+        "variants_per_difficulty": 10,
         "difficulties": ["easy", "medium", "hard"]
     }
     
@@ -1582,7 +1479,6 @@ Output ONLY the JSON object."""
         
         if existing:
             variants = existing.get("variants", [])
-            # Need at least 1 variant with proper question counts
             if len(variants) >= 1:
                 v = variants[0]
                 has_mcq = len(v.get("mcq_pool", [])) >= 5
@@ -1596,12 +1492,11 @@ Output ONLY the JSON object."""
                         "generated_at": existing.get("generated_at")
                     }
             
-            # Legacy format check (old one_mark_pool/two_mark_pool)
             if len(existing.get("one_mark_pool", [])) >= 10 and len(existing.get("two_mark_pool", [])) >= 5:
                 return {
                     "exists": True,
                     "chapter_name": existing.get("chapter_name", ""),
-                    "num_variants": 0,  # Legacy format
+                    "num_variants": 0,
                     "generated_at": existing.get("generated_at")
                 }
         
@@ -1629,11 +1524,9 @@ Output ONLY the JSON object."""
         
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
-        # Step 1: Get chapter content from Pinecone or books
         content = await self._retrieve_chapter_content(class_level, subject, chapter_number)
         
         if not content:
-            # Try getting content from books collection
             books_collection = mongodb.db["books"]
             book = await books_collection.find_one({
                 "class_level": class_level,
@@ -1654,7 +1547,6 @@ Output ONLY the JSON object."""
         chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
         content_text = content.get("text", "")
         
-        # Step 2: Generate variants for each difficulty level
         difficulty_variants = await self._generate_all_variants(
             content_text=content_text,
             class_level=class_level,
@@ -1663,12 +1555,10 @@ Output ONLY the JSON object."""
             chapter_number=chapter_number
         )
         
-        # Check if we got any variants
         total_variants = sum(len(v) for v in difficulty_variants.values())
         if total_variants == 0:
             return {"status": "error", "error": "Failed to generate questions. Please try again."}
         
-        # Calculate question stats for logging
         question_stats = {"easy": {}, "medium": {}, "hard": {}}
         for diff in ["easy", "medium", "hard"]:
             variants = difficulty_variants.get(diff, [])
@@ -1683,19 +1573,18 @@ Output ONLY the JSON object."""
                 "total": mcq_total + fillup_total + two_mark_total
             }
         
-        # Step 3: Store in MongoDB with difficulty-based structure
         pool_doc = {
             "class_level": class_level,
             "subject": subject,
             "chapter_number": chapter_number,
             "chapter_name": chapter_name,
-            "variants_by_difficulty": difficulty_variants,  # {easy: [...], medium: [...], hard: [...]}
+            "variants_by_difficulty": difficulty_variants,
             "variants_count": {
                 "easy": len(difficulty_variants.get("easy", [])),
                 "medium": len(difficulty_variants.get("medium", [])),
                 "hard": len(difficulty_variants.get("hard", []))
             },
-            "question_stats": question_stats,  # Detailed stats per difficulty
+            "question_stats": question_stats,
             "format": {
                 "mcq_count": 5,
                 "fillup_count": 5,
@@ -1709,7 +1598,6 @@ Output ONLY the JSON object."""
             "usage_count": 0
         }
         
-        # Upsert
         await collection.update_one(
             {
                 "class_level": class_level,
@@ -1755,8 +1643,6 @@ Output ONLY the JSON object."""
         
         all_difficulty_variants = {"easy": [], "medium": [], "hard": []}
         
-        # Use Gemini 3 Pro Preview for test generation (5M batch tokens)
-        # This allows generating more variants reliably without truncation
         PRO_MODEL = "models/gemini-3-pro-preview"
         
         for difficulty in ["easy", "medium", "hard"]:
@@ -1766,7 +1652,6 @@ Output ONLY the JSON object."""
                 "hard": "Hard (analysis, higher-order thinking, complex)"
             }[difficulty]
             
-            # Generate 2 variants per batch using Pro model (5 batches = 10 variants per difficulty)
             for batch_num in range(5):
                 
                 prompt = f"""Generate 2 test variants for Class {class_level} {subject} - {chapter_name}.
@@ -1797,11 +1682,10 @@ OUTPUT JSON ONLY (no markdown):
                     logger.info(f"Generating {difficulty} variants batch {batch_num + 1}/5 for {subject} Ch.{chapter_number} (using Gemini 3 Pro)...")
                     response = self.gemini.generate_response(
                         prompt, 
-                        max_output_tokens=16384,  # Pro model supports large outputs
+                        max_output_tokens=16384,
                         model_name=PRO_MODEL
                     )
                     
-                    # Clean and parse JSON response
                     data = self._extract_json_from_response(response, f"{difficulty}_batch{batch_num + 1}")
                     
                     if not data:
@@ -1814,18 +1698,15 @@ OUTPUT JSON ONLY (no markdown):
                         logger.error(f"No {difficulty} variants found in batch {batch_num + 1}/5")
                         continue
                     
-                    # Process variants from this batch (2 variants per batch)
                     mcq_count_batch = 0
                     fillup_count_batch = 0
                     two_mark_count_batch = 0
                     
                     for v_idx, variant in enumerate(raw_variants):
-                        # Calculate global variant index: batch_num * 2 + v_idx
                         global_v_idx = batch_num * 2 + v_idx
                         timestamp = datetime.utcnow().timestamp()
                         prefix = f"{subject.lower().replace(' ', '_')}_ch{chapter_number}"
                         
-                        # Process MCQs
                         mcq_pool = []
                         for i, q in enumerate(variant.get("mcq", [])):
                             if not q.get("question_text") or not q.get("expected_answer"):
@@ -1843,7 +1724,6 @@ OUTPUT JSON ONLY (no markdown):
                                 "marks": 1
                             })
                         
-                        # Process Fill-ups
                         fillup_pool = []
                         for i, q in enumerate(variant.get("fillup", [])):
                             if not q.get("question_text") or not q.get("expected_answer"):
@@ -1859,7 +1739,6 @@ OUTPUT JSON ONLY (no markdown):
                                 "marks": 1
                             })
                         
-                        # Process Two-mark questions
                         two_mark_pool = []
                         for i, q in enumerate(variant.get("two_mark", [])):
                             if not q.get("question_text") or not q.get("expected_answer"):
@@ -1898,7 +1777,6 @@ OUTPUT JSON ONLY (no markdown):
                     logger.error(f"Error generating {difficulty} batch {batch_num + 1}/5: {e}")
                     continue
             
-            # Log summary for this difficulty
             total_variants = len(all_difficulty_variants[difficulty])
             if total_variants > 0:
                 mcq_total = sum(len(v.get("mcq_pool", [])) for v in all_difficulty_variants[difficulty])
@@ -1910,7 +1788,6 @@ OUTPUT JSON ONLY (no markdown):
             else:
                 logger.warning(f"⚠️ {difficulty.upper()}: 0 variants generated!")
         
-        # Final summary log
         total_variants = sum(len(v) for v in all_difficulty_variants.values())
         logger.info(f"📊 Question Generation Summary for {subject} Ch.{chapter_number}:")
         for diff in ["easy", "medium", "hard"]:
@@ -1931,16 +1808,13 @@ OUTPUT JSON ONLY (no markdown):
             logger.error(f"Empty response received for {difficulty} variants")
             return None
         
-        # Log first 1000 chars for debugging
         logger.debug(f"{difficulty.upper()} response preview (first 1000 chars): {response[:1000]}")
         
-        # Strategy 1: Try direct JSON parse (cleanest response)
         try:
             return json.loads(response.strip())
         except json.JSONDecodeError:
             pass
         
-        # Strategy 2: Remove markdown code blocks
         cleaned = response.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
@@ -1955,7 +1829,6 @@ OUTPUT JSON ONLY (no markdown):
         except json.JSONDecodeError:
             pass
         
-        # Strategy 3: Find JSON object with balanced braces
         try:
             start_idx = response.find('{')
             if start_idx == -1:
@@ -1975,14 +1848,12 @@ OUTPUT JSON ONLY (no markdown):
             
             if end_idx > start_idx:
                 json_str = response[start_idx:end_idx]
-                # Log the extracted JSON for debugging
                 logger.debug(f"Extracted JSON length: {len(json_str)} chars")
                 return json.loads(json_str)
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Strategy 3 failed: {e}")
             pass
         
-        # Strategy 4: Regex extraction (last resort)
         try:
             json_match = re.search(r'\{[\s\S]*"variants"[\s\S]*\}', response)
             if json_match:
@@ -1991,9 +1862,7 @@ OUTPUT JSON ONLY (no markdown):
             logger.error(f"Strategy 4 failed: {e}")
             pass
         
-        # Strategy 5: Try to salvage truncated JSON by extracting complete variants
         try:
-            # Find the start of the JSON
             start_idx = cleaned.find('{"variants":')
             if start_idx == -1:
                 start_idx = cleaned.find('{')
@@ -2001,20 +1870,16 @@ OUTPUT JSON ONLY (no markdown):
             if start_idx != -1:
                 json_part = cleaned[start_idx:]
                 
-                # Try to find complete variant objects and build valid JSON
-                # Look for complete variants (ends with }] pattern for each variant)
                 variant_pattern = r'\{\s*"variant_id"\s*:\s*\d+[^}]*(?:\{[^}]*\}[^}]*)*\}'
                 variants = re.findall(variant_pattern, json_part, re.DOTALL)
                 
                 if variants:
-                    # Reconstruct valid JSON with found variants
                     reconstructed = '{"variants": [' + ','.join(variants) + ']}'
                     try:
                         return json.loads(reconstructed)
                     except json.JSONDecodeError:
                         pass
                 
-                # Simpler approach: just close open brackets
                 open_brackets = json_part.count('[') - json_part.count(']')
                 open_braces = json_part.count('{') - json_part.count('}')
                 
@@ -2029,7 +1894,6 @@ OUTPUT JSON ONLY (no markdown):
             logger.error(f"Strategy 5 (salvage) failed: {e}")
             pass
         
-        # Log the problematic response for manual inspection
         logger.error(f"All JSON extraction strategies failed for {difficulty} response")
         logger.error(f"Response length: {len(response)} chars")
         logger.error(f"Response starts with: {response[:200]}")
@@ -2069,7 +1933,6 @@ OUTPUT JSON ONLY (no markdown):
         answer = question.get("expected_answer", "")
         if not answer:
             return False
-        # Answer should be at least 10 characters for meaningful content
         return len(str(answer).strip()) >= 10
     
     async def select_chapter_test_questions(
@@ -2096,7 +1959,6 @@ OUTPUT JSON ONLY (no markdown):
         """
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
-        # Validate difficulty parameter
         if difficulty not in ["easy", "medium", "hard"]:
             difficulty = "medium"
         
@@ -2109,17 +1971,14 @@ OUTPUT JSON ONLY (no markdown):
         if not pool:
             return {"status": "error", "error": "Question pool not found"}
         
-        # Check for new difficulty-based format
         variants_by_difficulty = pool.get("variants_by_difficulty", {})
         
         if variants_by_difficulty and difficulty in variants_by_difficulty:
-            # NEW FORMAT: difficulty-based variant selection
             difficulty_variants = variants_by_difficulty[difficulty]
             
             if not difficulty_variants:
                 return {"status": "error", "error": f"No {difficulty} variants available"}
             
-            # Determine which variant to use based on student's attempt count
             variant_index = 0
             if student_id:
                 attempt_count = await mongodb.db.test_sessions.count_documents({
@@ -2139,7 +1998,6 @@ OUTPUT JSON ONLY (no markdown):
             
             logger.info(f"🎯 Using {difficulty.upper()} variant {variant_index + 1}/{len(difficulty_variants)} for student {student_id}")
             
-            # Build ordered question list: MCQs first, then fill-ups, then 2-mark
             formatted_questions = []
             q_num = 1
             
@@ -2191,7 +2049,6 @@ OUTPUT JSON ONLY (no markdown):
                 })
                 q_num += 1
         elif pool.get("variants"):
-            # BACKWARD COMPAT: Old format with mixed-difficulty variants
             variants = pool.get("variants", [])
             variant_index = 0
             if student_id:
@@ -2260,7 +2117,6 @@ OUTPUT JSON ONLY (no markdown):
                 })
                 q_num += 1
         else:
-            # LEGACY FORMAT: one_mark_pool / two_mark_pool (backward compatibility)
             import random
             one_mark_pool = pool.get("one_mark_pool", [])
             two_mark_pool_legacy = pool.get("two_mark_pool", [])
@@ -2288,7 +2144,6 @@ OUTPUT JSON ONLY (no markdown):
                     "solution_steps": q.get("solution_steps", "")
                 })
         
-        # Update last_used timestamp and usage_count
         await collection.update_one(
             {"_id": pool["_id"]},
             {
@@ -2318,8 +2173,6 @@ OUTPUT JSON ONLY (no markdown):
             "two_mark_count": two_mark_count
         }
     
-    # ==================== TOPIC-TAGGED QUESTION GENERATION ====================
-    
     async def generate_questions_with_topic_tagging(
         self,
         class_level: int,
@@ -2341,7 +2194,6 @@ OUTPUT JSON ONLY (no markdown):
         logger.info(f"Generating topic-tagged questions for {subject} Ch.{chapter_number}")
         
         try:
-            # Step 1: Retrieve content
             content = await self._retrieve_chapter_content(class_level, subject, chapter_number)
             
             if not content:
@@ -2354,14 +2206,12 @@ OUTPUT JSON ONLY (no markdown):
             chapter_name = content.get("chapter_name", f"Chapter {chapter_number}")
             content_text = content.get("text", "")
             
-            # Step 2: Fetch previously asked questions to avoid repetition on retake
             previous_questions = await self._get_previous_questions(
                 student_id=student_id,
                 subject=subject,
                 chapter_number=chapter_number
             ) if student_id else []
             
-            # Step 3: Generate questions with topic tagging
             questions_with_topics = await self._generate_topic_tagged_questions(
                 content_text=content_text,
                 class_level=class_level,
@@ -2379,7 +2229,6 @@ OUTPUT JSON ONLY (no markdown):
                     "error": "Failed to generate questions"
                 }
             
-            # Extract unique topics
             unique_topics = {}
             for q in questions_with_topics:
                 topic_id = q.get("topic_id")
@@ -2456,7 +2305,6 @@ OUTPUT JSON ONLY (no markdown):
         Each type has difficulty distribution: 2 easy, 2 medium, 1 hard.
         """
         
-        # Build section to avoid repeating previous questions
         avoid_section = ""
         if previous_questions:
             prev_list = "\n".join([f"- {q}" for q in previous_questions[:30]])
@@ -2541,7 +2389,6 @@ Output ONLY the JSON object, no other text."""
         try:
             response = self.gemini.generate_response(prompt, max_output_tokens=8000)
             
-            # Strip markdown code fences if present (```json ... ```)
             cleaned = response.strip()
             if cleaned.startswith("```"):
                 first_newline = cleaned.find('\n')
@@ -2550,7 +2397,6 @@ Output ONLY the JSON object, no other text."""
                 if cleaned.rstrip().endswith("```"):
                     cleaned = cleaned.rstrip()[:-3].rstrip()
             
-            # Parse JSON - find the outermost { ... } block
             start_idx = cleaned.find('{')
             end_idx = cleaned.rfind('}')
             if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
@@ -2559,7 +2405,6 @@ Output ONLY the JSON object, no other text."""
                 return []
             json_str = cleaned[start_idx:end_idx + 1]
             
-            # Clean common JSON issues from LLM output
             json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
             json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_str)
             
@@ -2581,7 +2426,6 @@ Output ONLY the JSON object, no other text."""
             topics = data.get("topics", [])
             logger.info(f"Gemini identified {len(topics)} topics: {[t['topic_name'] for t in topics]}")
             
-            # Process MCQ questions
             formatted_questions = []
             mcq_questions = data.get("mcq", [])
             for i, q in enumerate(mcq_questions[:5]):
@@ -2602,7 +2446,6 @@ Output ONLY the JSON object, no other text."""
                     "chapter_name": chapter_name
                 })
             
-            # Process Fill-up questions
             fillup_questions = data.get("fillup", [])
             for i, q in enumerate(fillup_questions[:5]):
                 formatted_questions.append({
@@ -2620,7 +2463,6 @@ Output ONLY the JSON object, no other text."""
                     "chapter_name": chapter_name
                 })
             
-            # Process Two-mark questions
             two_mark_questions = data.get("two_mark", [])
             for i, q in enumerate(two_mark_questions[:5]):
                 formatted_questions.append({
@@ -2646,7 +2488,4 @@ Output ONLY the JSON object, no other text."""
             logger.error(f"Error in topic-tagged question generation: {e}")
             return []
 
-
-# Global instance
 topic_question_bank_service = TopicQuestionBankService()
-

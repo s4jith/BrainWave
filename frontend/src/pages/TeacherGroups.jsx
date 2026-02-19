@@ -1,7 +1,3 @@
-/**
- * TeacherGroups - View assigned student groups
- * Uses AdminLayout
- */
 
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
@@ -24,7 +20,7 @@ export default function TeacherGroups() {
     const fetchTeacherGroups = async () => {
         try {
             setLoading(true);
-            // innovative: we will use a specific endpoint for teacher's groups
+            
             const response = await fetch(`${API_URL}/api/teacher/groups`, {
                 headers: getAuthHeader()
             });
@@ -33,7 +29,7 @@ export default function TeacherGroups() {
                 const data = await response.json();
                 setGroups(data.groups || []);
             } else {
-                // Fallback for development/demo until backend is ready
+                
                 console.warn("Using mock group data");
                 setGroups([]);
             }
@@ -62,7 +58,7 @@ export default function TeacherGroups() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Group List */}
+                {}
                 <div className="lg:col-span-1 space-y-3">
                     <h2 className="text-base font-semibold text-gray-900 dark:text-white">Your Groups</h2>
                     {loading ? (

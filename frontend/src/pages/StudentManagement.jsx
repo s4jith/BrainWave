@@ -1,7 +1,3 @@
-/**
- * StudentManagement - Admin page to manage students
- * Uses AdminLayout with light/dark theme support
- */
 
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
@@ -38,7 +34,6 @@ export default function StudentManagement() {
     fetchStudents();
   }, [filterActive, filterClass]);
 
-  // Auto-refresh on window focus
   useEffect(() => {
     const handleFocus = () => {
       fetchStudents();
@@ -69,7 +64,6 @@ export default function StudentManagement() {
   const handleAddStudent = async (e) => {
     e.preventDefault();
     
-    // Create optimistic student with temporary ID
     const tempId = `temp_${Date.now()}`;
     const optimisticStudent = {
       id: tempId,
@@ -80,7 +74,6 @@ export default function StudentManagement() {
       created_at: new Date().toISOString()
     };
     
-    // Add optimistically
     setStudents([optimisticStudent, ...students]);
     setShowAddModal(false);
     
@@ -97,7 +90,6 @@ export default function StudentManagement() {
       }
       const newStudent = await response.json();
       
-      // Replace temp student with real one
       setStudents(prev => prev.map(s => s.id === tempId ? newStudent : s));
       
       if (newStudent.generated_credentials) {
@@ -106,7 +98,7 @@ export default function StudentManagement() {
       }
       resetForm();
     } catch (err) {
-      // Remove optimistic student on error
+      
       setStudents(prev => prev.filter(s => s.id !== tempId));
       setShowAddModal(true);
       alert("Error: " + err.message);
@@ -140,7 +132,6 @@ export default function StudentManagement() {
   const handleDeleteStudent = async (studentId) => {
     if (!confirm("Are you sure you want to delete this student?")) return;
     
-    // Optimistic update
     const deletedStudent = students.find(s => s.id === studentId);
     const updatedStudents = students.filter(s => s.id !== studentId);
     setStudents(updatedStudents);
@@ -153,7 +144,7 @@ export default function StudentManagement() {
         throw new Error("Failed to delete student");
       }
     } catch (err) {
-      // Revert on failure
+      
       alert("Error: " + err.message);
       setStudents([...updatedStudents, deletedStudent]);
     }
@@ -237,7 +228,7 @@ export default function StudentManagement() {
         </div>
       )}
 
-      {/* Search and Actions */}
+      {}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />

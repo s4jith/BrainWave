@@ -2,13 +2,6 @@ import React from "react";
 import useAnnotationStore from "../../stores/annotationStore";
 import { Sparkles, StickyNote, Bookmark } from "lucide-react";
 
-/**
- * Highlight Overlay Component
- * 
- * Displays annotation markers as bookmark ribbons on the right edge of the PDF page.
- * AI annotations appear as violet ribbons, Notes as emerald ribbons.
- */
-
 export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
   const getAnnotationsByPage = useAnnotationStore(
     (state) => state.getAnnotationsByPage
@@ -25,10 +18,9 @@ export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
     setActivePanel("history");
   };
 
-  // Calculate vertical spacing for bookmarks
   const getBookmarkPosition = (index, total) => {
-    const baseTop = 60; // Starting position from top
-    const spacing = 80; // Space between bookmarks
+    const baseTop = 60; 
+    const spacing = 80; 
     return baseTop + index * spacing;
   };
 
@@ -36,13 +28,12 @@ export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
-      {/* Bookmark Ribbons on Right Edge */}
+      {}
       {annotations.map((annotation, index) => {
         const isNote = annotation.type === "note";
         const ribbonType = isNote ? "note" : "ai";
         const Icon = isNote ? StickyNote : Sparkles;
 
-        // Get heading text
         const headingText = isNote
           ? (annotation.heading || "Note")
           : (annotation.action?.charAt(0).toUpperCase() + annotation.action?.slice(1) || "AI");
@@ -57,7 +48,7 @@ export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
             onClick={() => handleBookmarkClick(annotation)}
             title={`${headingText}: ${annotation.text?.substring(0, 50)}...`}
           >
-            {/* Icon and Heading */}
+            {}
             <div className="flex items-center gap-2">
               <Icon className="h-3.5 w-3.5" />
               <span className="text-xs font-semibold max-w-[80px] truncate">
@@ -65,7 +56,7 @@ export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
               </span>
             </div>
 
-            {/* Preview Text */}
+            {}
             <div className="text-[10px] opacity-80 mt-0.5 max-w-[100px] truncate">
               {annotation.text?.substring(0, 25)}...
             </div>
@@ -73,7 +64,7 @@ export default function HighlightOverlay({ pageNumber, scale, currentLesson }) {
         );
       })}
 
-      {/* Badge Counter for Multiple Annotations */}
+      {}
       {annotations.length > 3 && (
         <div
           className="absolute right-0 bottom-4 pointer-events-auto cursor-pointer"

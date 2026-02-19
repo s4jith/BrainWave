@@ -18,11 +18,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/student", tags=["Student Profile"])
 
-
 class StudentLevel(BaseModel):
     """Student proficiency level model."""
     level: Literal["beginner", "intermediate", "advanced"]
-
 
 class StudentLevelResponse(BaseModel):
     """Response with student level and mapped mode."""
@@ -31,14 +29,11 @@ class StudentLevelResponse(BaseModel):
     explanation_mode: str
     updated_at: Optional[str] = None
 
-
-# Level to mode mapping for adaptive explanations
 LEVEL_TO_MODE = {
     "beginner": "simple",
     "intermediate": "quick",
     "advanced": "deepdive"
 }
-
 
 @router.get("/level/{student_id}")
 async def get_student_level(student_id: str) -> StudentLevelResponse:
@@ -61,14 +56,12 @@ async def get_student_level(student_id: str) -> StudentLevelResponse:
         db = get_database()
         
         if db is None:
-            # Default to intermediate if DB unavailable
             return StudentLevelResponse(
                 student_id=student_id,
                 level="intermediate",
                 explanation_mode="quick"
             )
         
-        # Look up student level
         student = db.students.find_one({"_id": student_id})
         
         if student and "level" in student:
@@ -83,7 +76,6 @@ async def get_student_level(student_id: str) -> StudentLevelResponse:
                 updated_at=str(updated_at) if updated_at else None
             )
         
-        # Default for new students
         return StudentLevelResponse(
             student_id=student_id,
             level="intermediate",
@@ -97,7 +89,6 @@ async def get_student_level(student_id: str) -> StudentLevelResponse:
             level="intermediate",
             explanation_mode="quick"
         )
-
 
 @router.put("/level/{student_id}")
 async def update_student_level(student_id: str, level_data: StudentLevel) -> StudentLevelResponse:
@@ -122,7 +113,6 @@ async def update_student_level(student_id: str, level_data: StudentLevel) -> Stu
         mode = LEVEL_TO_MODE.get(level, "quick")
         
         if db is not None:
-            # Update student level in database
             db.students.update_one(
                 {"_id": student_id},
                 {
@@ -146,7 +136,6 @@ async def update_student_level(student_id: str, level_data: StudentLevel) -> Stu
     except Exception as e:
         logger.error(f"Failed to update student level: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/level/mode-mapping")
 async def get_mode_mapping():

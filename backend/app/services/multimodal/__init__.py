@@ -15,9 +15,6 @@ Architecture:
     Text+Images  Formulas   768-dim vectors
 """
 
-# Note: Import from math/ subdirectory directly if needed
-# These base classes are placeholders, actual implementations in math/ and physics/
-
 try:
     from .pdf_processor import PDFProcessor
 except ImportError:

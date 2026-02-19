@@ -1,7 +1,3 @@
-/**
- * TestManagement - Admin page to manage tests and submissions
- * Uses AdminLayout with light/dark theme support
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,18 +26,15 @@ export default function TestManagement() {
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
-  // Submission detail modal
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [submissionDetail, setSubmissionDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // Teacher's groups and subjects
   const [teacherGroups, setTeacherGroups] = useState([]);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [teacherClassLevels, setTeacherClassLevels] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
 
-  // Curriculum data (for admin fallback)
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
@@ -54,14 +47,12 @@ export default function TestManagement() {
     fetchTests();
   }, [filterClass, filterSubject, filterStatus]);
 
-  // Recalculate stats when teacher groups change
   useEffect(() => {
     if (tests.length > 0 && teacherGroups.length > 0) {
       calculateStats(tests);
     }
   }, [teacherGroups]);
 
-  // Auto-refresh on window focus
   useEffect(() => {
     const handleFocus = () => {
       fetchTests();
@@ -81,7 +72,6 @@ export default function TestManagement() {
         const groups = data.groups || [];
         setTeacherGroups(groups);
         
-        // Extract unique subjects and class levels from groups
         const subjects = [...new Set(groups.map(g => g.subject).filter(Boolean))];
         setTeacherSubjects(subjects.sort());
         const classes = [...new Set(groups.map(g => g.class_level).filter(Boolean))];
@@ -111,7 +101,6 @@ export default function TestManagement() {
     }
   };
 
-  // Derive dynamic filter options: use teacher groups if available, otherwise curriculum
   const filterClassLevels = teacherClassLevels.length > 0 
     ? teacherClassLevels 
     : [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
@@ -122,7 +111,7 @@ export default function TestManagement() {
   const fetchTests = async () => {
     try {
       setLoading(true);
-      let url = `${API_URL}/api/assessments?`; // Changed from /api/tests/admin
+      let url = `${API_URL}/api/assessments?`; 
       if (filterClass) url += `class_level=${filterClass}&`;
       if (filterSubject) url += `subject=${filterSubject}&`;
       if (filterStatus) url += `status=${filterStatus}&`;
@@ -161,7 +150,6 @@ export default function TestManagement() {
       total_submissions += test.submission_count || 0;
     });
 
-    // Count total students from teacher's groups
     const totalStudents = teacherGroups.reduce((sum, group) => sum + (group.student_count || 0), 0);
 
     setStats({
@@ -175,7 +163,7 @@ export default function TestManagement() {
   const fetchSubmissions = async (testId) => {
     try {
       setLoadingSubmissions(true);
-      // Using new assessment submissions endpoint
+      
       const response = await fetch(`${API_URL}/api/assessments/${testId}/submissions`, {
         headers: getAuthHeader()
       });
@@ -198,7 +186,6 @@ export default function TestManagement() {
   const handleDeleteTest = async (testId) => {
     if (!confirm("Delete this test and all submissions?")) return;
     
-    // Optimistic update: Remove immediately from UI
     const deletedTest = tests.find(t => t.id === testId);
     const updatedTests = tests.filter(t => t.id !== testId);
     setTests(updatedTests);
@@ -214,11 +201,11 @@ export default function TestManagement() {
         headers: getAuthHeader()
       });
       if (!response.ok) {
-        // Revert on failure
+        
         throw new Error("Failed to delete test");
       }
     } catch (err) {
-      // Revert optimistic update
+      
       alert("Error: " + err.message);
       const revertedTests = [...updatedTests, deletedTest].sort((a, b) => 
         new Date(b.created_at) - new Date(a.created_at)

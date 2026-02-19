@@ -33,10 +33,6 @@ class CacheService:
         if self._collection is None:
             if mongodb.db is not None:
                 self._collection = mongodb.get_collection(self.collection_name)
-                # Create TTL index for automatic expiration (default 30 days)
-                # We can override this per document, but this is a safety net
-                # Note: We can't easily create indexes in async motor initialization without await
-                # Use a separate script or ensure indexes are created at startup if critical
             else:
                 logger.warning("MongoDB not connected yet, caching disabled")
         return self._collection
@@ -52,7 +48,6 @@ class CacheService:
         Returns:
             String key: "prefix_md5hash"
         """
-        # Sort keys to ensure deterministic JSON string
         json_str = json.dumps(data, sort_keys=True, default=str)
         hash_str = hashlib.md5(json_str.encode()).hexdigest()
         return f"{prefix}_{hash_str}"
@@ -78,13 +73,10 @@ class CacheService:
             if not doc:
                 return None
             
-            # Check expiration
             if "expires_at" in doc and doc["expires_at"] < datetime.utcnow():
-                # Lazy delete
                 await self.collection.delete_one({"_id": key})
                 return None
                 
-            # Update last accessed time (async fire-and-forget ideally, but await here for safety)
             await self.collection.update_one(
                 {"_id": key},
                 {"$set": {"last_accessed": datetime.utcnow()}}
@@ -119,14 +111,13 @@ class CacheService:
             doc = {
                 "_id": key,
                 "prefix": prefix,
-                "input_hash_data": input_data, # Store input for debugging/auditing
+                "input_hash_data": input_data,
                 "response": response,
                 "created_at": datetime.utcnow(),
                 "last_accessed": datetime.utcnow(),
                 "expires_at": expires_at
             }
             
-            # Upsert (insert or replace)
             await self.collection.replace_one({"_id": key}, doc, upsert=True)
             logger.debug(f"Cached saved: {key}")
             return True
@@ -138,19 +129,14 @@ class CacheService:
     async def get_annotation_cache(self, action: str, subject: str, class_level: int, selected_text: str, image_data: str = None) -> Optional[Dict]:
         """Specific helper for annotation caching logic."""
         
-        # Hashing factors
         data = {
             "action": action,
             "subject": subject.lower(),
             "class_level": class_level,
-            "text_snippet": selected_text.strip()[:500], # First 500 chars usually enough to ID a snippet
-             # If image exists, include its hash. 
-             # Computing hash of potentially large base64 string
+            "text_snippet": selected_text.strip()[:500],
         }
         
         if image_data:
-            # MD5 the image data effectively
-            # Remove header if present
             if image_data.startswith('data:'):
                 try:
                     vals = image_data.split(',', 1)
@@ -187,5 +173,4 @@ class CacheService:
              
         await self.set("annotation", data, response_data)
 
-# Global instance
 cache_service = CacheService()

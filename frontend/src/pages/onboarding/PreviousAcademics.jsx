@@ -5,29 +5,15 @@ import { Input } from '../../components/ui/input';
 import classesData from '../../data/classes.json';
 import subjectsData from '../../data/subjects.json';
 
-/**
- * PreviousAcademics Step (Step 2)
- * 
- * OPTIONAL step - collects previous year subjects and marks.
- * Helps establish academic baseline for personalized learning.
- * 
- * TODO: Backend Integration
- * - POST /api/onboarding/academics
- * - Validate marks are within range
- * - Could integrate with DigiLocker for actual marks
- */
-
 function PreviousAcademics({ data, classLevel, onNext, onSkip }) {
   const [subjects, setSubjects] = useState(data.subjects || []);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSubject, setNewSubject] = useState({ name: '', marks: '' });
 
-  // Get available subjects for this class
   const availableSubjects = subjectsData.subjects.filter(
     s => s.availableFor.includes(classLevel)
   );
 
-  // Get subjects not yet added
   const unaddedSubjects = availableSubjects.filter(
     s => !subjects.find(added => added.name === s.name)
   );
@@ -55,13 +41,7 @@ function PreviousAcademics({ data, classLevel, onNext, onSkip }) {
   };
 
   const handleNext = () => {
-    /**
-     * TODO: Backend Integration
-     * await fetch('/api/onboarding/academics', {
-     *   method: 'POST',
-     *   body: JSON.stringify({ subjects })
-     * });
-     */
+    
     onNext({ subjects });
   };
 

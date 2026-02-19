@@ -23,13 +23,6 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import classesData from '../data/classes.json';
 
-/**
- * Settings Page
- * 
- * Comprehensive settings page with horizontal tab navigation.
- * Allows editing all profile data set during onboarding plus privacy settings.
- */
-
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'academics', label: 'Academics', icon: GraduationCap },
@@ -70,33 +63,27 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile');
   const [saveMessage, setSaveMessage] = useState('');
 
-  // Profile state
   const [profileData, setProfileData] = useState({
     name: user.name || '',
     classLevel: user.classLevel || 6,
     username: user.username || '',
   });
 
-  // Academics state
   const [subjects, setSubjects] = useState(academics.subjects || []);
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [newSubject, setNewSubject] = useState({ name: '', marks: '' });
 
-  // Avatar state
   const [avatarSeed, setAvatarSeed] = useState(user.avatarSeed || Date.now().toString());
   const [avatarStyle, setAvatarStyle] = useState(user.avatarStyle || 'avataaars');
 
-  // Calendar state
   const [exams, setExams] = useState(calendar.exams || []);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddExam, setShowAddExam] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [newExam, setNewExam] = useState({ subject: '', date: '' });
 
-  // Privacy state
   const [privacy, setPrivacy] = useState(privacySettings);
 
-  // Security / Change Password state
   const [oldPassword, setOldPassword] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
@@ -106,13 +93,11 @@ export default function Settings() {
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
 
-  // Show save message temporarily
   const showSaveMessage = (message) => {
     setSaveMessage(message);
     setTimeout(() => setSaveMessage(''), 2000);
   };
 
-  // Avatar helpers
   const getAvatarUrl = (style, seed) => {
     return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}`;
   };
@@ -121,7 +106,6 @@ export default function Settings() {
     setAvatarSeed(Date.now().toString());
   };
 
-  // Calendar helpers
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
 
@@ -150,7 +134,6 @@ export default function Settings() {
     setShowAddExam(true);
   };
 
-  // Save handlers
   const saveProfile = () => {
     updateProfile({
       name: profileData.name,
@@ -215,7 +198,6 @@ export default function Settings() {
     showSaveMessage('Privacy setting updated!');
   };
 
-  // Change password handler
   const handleChangePassword = async () => {
     setPwdError('');
     setPwdSuccess('');
@@ -242,14 +224,12 @@ export default function Settings() {
     setPwdLoading(false);
   };
 
-  // Generate calendar grid
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
   const calendarDays = [];
   for (let i = 0; i < firstDay; i++) calendarDays.push(null);
   for (let day = 1; day <= daysInMonth; day++) calendarDays.push(day);
 
-  // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
@@ -399,7 +379,7 @@ export default function Settings() {
       case 'avatar':
         return (
           <div className="space-y-6">
-            {/* Avatar Preview */}
+            {}
             <div className="flex justify-center">
               <div className="relative">
                 <img
@@ -454,15 +434,9 @@ export default function Settings() {
       case 'calendar':
         return (
           <div className="space-y-6">
-            {/* 
-             * TODO: Backend Integration
-             * - GET /api/calendar/events - Fetch user's calendar events
-             * - POST /api/calendar/events - Create new event
-             * - DELETE /api/calendar/events/:id - Delete event
-             * - PUT /api/calendar/events/:id - Update event
-             */}
+            {}
 
-            {/* Header with Add Event Button */}
+            {}
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 Manage your exam dates and reminders
@@ -480,9 +454,9 @@ export default function Settings() {
               </Button>
             </div>
 
-            {/* Calendar Grid */}
+            {}
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-              {/* Month Navigation */}
+              {}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h3 className="text-xl font-semibold text-gray-800">
                   {MONTHS[currentMonth]} {currentYear}
@@ -516,7 +490,7 @@ export default function Settings() {
                 ))}
               </div>
 
-              {/* Calendar Grid with Events */}
+              {}
               <div className="grid grid-cols-7">
                 {calendarDays.map((day, index) => {
                   const isLastInRow = (index + 1) % 7 === 0;
@@ -544,7 +518,7 @@ export default function Settings() {
                       className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
                         } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                     >
-                      {/* Date Number */}
+                      {}
                       <div className="flex items-start justify-between mb-1">
                         <span
                           className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${isToday
@@ -556,10 +530,10 @@ export default function Settings() {
                         </span>
                       </div>
 
-                      {/* Events on this date */}
+                      {}
                       <div className="space-y-1">
                         {dayExams.slice(0, 3).map((exam, examIndex) => {
-                          // Assign colors based on exam type or cycle through colors
+                          
                           const colors = [
                             { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-l-emerald-500' },
                             { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-l-pink-500' },
@@ -591,15 +565,11 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Add Event Modal/Form */}
+            {}
             {showAddExam && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                  {/* 
-                   * TODO: Backend Integration
-                   * - Validate event data
-                   * - POST /api/calendar/events with event details
-                   */}
+                  {}
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-lg font-semibold text-gray-800">Add Event</h4>
                     <button
@@ -672,8 +642,6 @@ export default function Settings() {
                         className={`flex items-center justify-between p-4 ${color.bg} border-l-4 ${color.border} rounded-lg`}
                       >
                         {/* 
-                         * TODO: Backend Integration
-                         * - DELETE /api/calendar/events/:id
                          */}
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full ${color.icon}`} />
@@ -860,7 +828,7 @@ export default function Settings() {
       {/* Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex gap-8">
-          {/* Sidebar Tabs */}
+          {}
           <div className="w-56 flex-shrink-0">
             <nav className="space-y-1 sticky top-8">
               {TABS.map((tab) => {
@@ -884,7 +852,7 @@ export default function Settings() {
             </nav>
           </div>
 
-          {/* Tab Content */}
+          {}
           <div className="flex-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">

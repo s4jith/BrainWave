@@ -24,7 +24,6 @@ from app.models.assessment_models import (
 
 logger = logging.getLogger(__name__)
 
-
 class AssessmentService:
     """Service for managing assessments and submissions."""
     
@@ -48,8 +47,6 @@ class AssessmentService:
                 self._submissions = mongodb.get_collection(self.submissions_collection)
         return self._submissions
     
-    # === Assessment CRUD ===
-    
     async def create_assessment(
         self,
         request: AssessmentCreateRequest,
@@ -57,7 +54,6 @@ class AssessmentService:
     ) -> AssessmentResponse:
         """Create a new assessment."""
         try:
-            # Always publish when teacher creates via the form (they clicked "Publish")
             questions_list = request.questions or []
             status = AssessmentStatus.PUBLISHED.value
             
@@ -91,13 +87,10 @@ class AssessmentService:
             result = await self.assessments.insert_one(doc)
             doc["id"] = str(result.inserted_id)
             
-            
             logger.info(f"Assessment created: {doc['title']} with status: {status}")
             
-            # Send notifications
             await self._notify_users(doc)
             
-            # Save new questions (not from bank) to question_bank collection
             await self._save_new_questions_to_bank(
                 questions_list, 
                 request.subject, 
@@ -117,12 +110,10 @@ class AssessmentService:
             notifications = []
             created_at = datetime.utcnow()
             title = assessment["title"]
-            assessment_id = str(assessment.get("_id", assessment.get("id"))) # Handle both
+            assessment_id = str(assessment.get("_id", assessment.get("id")))
             
-            # 1. Notify directly assigned students
             student_ids = set(assessment.get("student_ids", []))
             
-            # 2. Also notify students from assigned groups
             group_ids = assessment.get("group_ids", [])
             if group_ids:
                 groups = await mongodb.db.groups.find({
@@ -145,27 +136,22 @@ class AssessmentService:
                     "is_read": False
                 })
             
-            # 3. Notify Teachers of assigned groups
             teacher_ids_set = set()
             
             if group_ids:
-                # Reuse groups already fetched above, or fetch if not yet loaded
                 if not groups:
                     groups = await mongodb.db.groups.find({
                         "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
                     }).to_list(length=100)
                 
                 for group in groups:
-                    # Handle both teacher_id (legacy) and teacher_ids (new)
                     if group.get("teacher_id"):
                         teacher_ids_set.add(group.get("teacher_id"))
                     if group.get("teacher_ids"):
                         for tid in group.get("teacher_ids"):
                             teacher_ids_set.add(tid)
                 
-                # Notify each teacher
                 for tid in teacher_ids_set:
-                    # Get teacher user_id for notification
                     teacher_user = await mongodb.db.users.find_one({
                         "$or": [{"user_id": tid}, {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "dummy"}]
                     })
@@ -181,12 +167,10 @@ class AssessmentService:
                             "is_read": False
                         })
                 
-            # 3. Determine Creator Role to notify others
             creator_id = assessment.get("created_by", assessment.get("instructor_id"))
             creator = await mongodb.db.users.find_one({"user_id": creator_id})
-            creator_role = creator.get("role") if creator else "admin" # Default to admin if not found
+            creator_role = creator.get("role") if creator else "admin"
             
-            # If created by Teacher -> Notify Admins
             if creator_role == "teacher":
                 admins = mongodb.db.users.find({"role": "admin"})
                 async for admin in admins:
@@ -206,7 +190,6 @@ class AssessmentService:
                 
         except Exception as e:
             logger.error(f"Failed to send notifications: {e}")
-            # Don't fail the assessment creation just because of notifications
     
     async def _save_new_questions_to_bank(
         self, 
@@ -221,11 +204,9 @@ class AssessmentService:
             now = datetime.utcnow().isoformat()
             
             for q in questions_list:
-                # Skip questions that came from the question bank
                 if q.get("is_bank_question"):
                     continue
                 
-                # Create question document for the questions collection
                 question_doc = {
                     "text": q.get("text", q.get("question_text", "")),
                     "subject": subject,
@@ -237,7 +218,7 @@ class AssessmentService:
                     "marks": q.get("marks", q.get("points", 1)),
                     "options": q.get("options", []),
                     "correct_answer": q.get("correct_answer", ""),
-                    "status": "approved",  # Auto-approve when created during test
+                    "status": "approved",
                     "created_by": instructor_id,
                     "created_role": "teacher",
                     "is_ai_generated": False,
@@ -245,7 +226,6 @@ class AssessmentService:
                     "updated_at": now
                 }
                 
-                # Handle different answer types
                 if q.get("correct_answers"):
                     question_doc["correct_answers"] = q.get("correct_answers")
                 if q.get("fillup_answers"):
@@ -255,7 +235,6 @@ class AssessmentService:
                 
                 new_questions.append(question_doc)
             
-            # Insert new questions to the questions collection (used by question bank)
             if new_questions:
                 from app.db.mongo import db as sync_db
                 sync_db.questions.insert_many(new_questions)
@@ -263,7 +242,6 @@ class AssessmentService:
                 
         except Exception as e:
             logger.error(f"Failed to save questions to bank: {e}")
-            # Don't fail assessment creation if this fails
 
     async def get_assessment(
         self,
@@ -294,19 +272,13 @@ class AssessmentService:
             if course_id:
                 query["course_id"] = course_id
             
-            # If explicit instructor_id is provided, use it (Admins filtering by specific teacher, or old behavior)
             if instructor_id:
                 query["instructor_id"] = instructor_id
             
-            # Teacher View Logic: Own tests + Tests assigned to their groups  + Admin tests for their subjects/classes
             elif teacher_id:
-                # 0. Get teacher's MongoDB _id (groups might store _id instead of user_id)
                 teacher_user = await mongodb.db.users.find_one({"user_id": teacher_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # 1. Fetch teacher's groups to find relevant (class, subject) pairs
-                # Match teacher_id in teacher_ids array or teacher_id field
-                # Support BOTH user_id and MongoDB _id for backward compatibility
                 group_query = {
                     "$or": [
                         {"teacher_ids": teacher_id},
@@ -314,7 +286,6 @@ class AssessmentService:
                     ]
                 }
                 
-                # Also search by MongoDB _id if different from user_id
                 if teacher_mongo_id and teacher_mongo_id != teacher_id:
                     group_query["$or"].extend([
                         {"teacher_ids": teacher_mongo_id},
@@ -332,20 +303,12 @@ class AssessmentService:
                 for g in groups:
                     logger.info(f"   - Group: {g.get('name')} (class={g.get('class_level')}, subject={g.get('subject')})")
                 
-                # Build simple OR query:
-                # 1. Tests created by this teacher
-                # 2. Tests assigned to any of teacher's groups (even if created by admin)
-                # 3. Tests created by admin matching teacher's subject/class (as fallback)
-                
                 or_queries = [{"instructor_id": teacher_id}]
                 
-                # Tests assigned to teacher's groups (this covers admin-created tests assigned to groups)
                 if teacher_group_ids:
                     or_queries.append({"group_ids": {"$in": teacher_group_ids}})
                     logger.info(f"   - Added group filter: {teacher_group_ids}")
                 
-                # For additional coverage: admin tests matching teacher's subject/class pairs
-                # This catches admin tests that match the curriculum but weren't explicitly assigned to groups
                 criteria = []
                 for g in groups:
                     if g.get("class_level") and g.get("subject"):
@@ -355,12 +318,10 @@ class AssessmentService:
                         })
                 
                 if criteria:
-                    # Get admin user IDs
                     admins = await mongodb.db.users.find({"role": "admin"}, {"user_id": 1}).to_list(length=100)
                     admin_ids = [a["user_id"] for a in admins]
                     
                     if admin_ids:
-                        # Add condition: admin tests matching teacher's class/subject
                         or_queries.append({
                             "$and": [
                                 {"instructor_id": {"$in": admin_ids}},
@@ -373,14 +334,11 @@ class AssessmentService:
                 logger.info(f"   - Final OR conditions: {len(or_queries)}")
                 logger.info(f"   - Full query: {query}")
 
-            # Student View Logic: Show tests assigned to the student (via student_ids or group_ids)
             if student_id and not instructor_id and not teacher_id:
-                # Get student's groups
                 student_user = await mongodb.db.users.find_one({"user_id": student_id})
                 student_class = student_user.get("class_level") if student_user else None
                 student_mongo_id = str(student_user["_id"]) if student_user else None
                 
-                # Find groups the student belongs to (check both user_id and mongo _id)
                 student_id_variants = [student_id]
                 if student_mongo_id and student_mongo_id != student_id:
                     student_id_variants.append(student_mongo_id)
@@ -398,20 +356,15 @@ class AssessmentService:
                 for g in student_groups:
                     logger.info(f"     Group: {g.get('name')} (id: {str(g['_id'])})")
                 
-                # Build student query: tests where student is directly assigned OR in assigned groups OR matches class level
                 student_or = []
                 
-                # Tests directly assigned to this student (by user_id or mongo_id)
                 for sid in student_id_variants:
                     student_or.append({"student_ids": sid})
                 
-                # Tests assigned to student's groups
                 if student_group_ids:
                     student_or.append({"group_ids": {"$in": student_group_ids}})
                 
-                # Tests matching student's class level with no specific assignments
                 if student_class:
-                    # Convert class_level to int for consistent matching
                     class_int = int(student_class) if student_class else None
                     if class_int:
                         student_or.append({
@@ -419,7 +372,6 @@ class AssessmentService:
                             "student_ids": {"$size": 0},
                             "group_ids": {"$size": 0}
                         })
-                        # Also handle missing fields
                         student_or.append({
                             "class_level": class_int,
                             "student_ids": {"$exists": False}
@@ -429,7 +381,6 @@ class AssessmentService:
                 logger.info(f"   - Student OR conditions: {len(student_or)}")
                 logger.info(f"   - Full query: {query}")
                 
-                # If no OR conditions, return empty (student has no relevant groups/assignments)
                 if not student_or:
                     logger.warning(f"   - No matching conditions for student {student_id}, returning empty")
                     return AssessmentListResponse(assessments=[], total=0)
@@ -437,7 +388,6 @@ class AssessmentService:
             if status:
                 query["status"] = status
             else:
-                # Default: published only for students
                 if student_id and not instructor_id and not teacher_id:
                     query["status"] = AssessmentStatus.PUBLISHED.value
             
@@ -451,13 +401,11 @@ class AssessmentService:
                     logger.info(f"   - Assessment: {doc.get('title')} | group_ids: {doc.get('group_ids', [])} | instructor: {doc.get('instructor_id')}")
                 if student_id:
                     logger.info(f"   - Match: {doc.get('title')} | student_ids: {doc.get('student_ids', [])[:3]} | group_ids: {doc.get('group_ids', [])} | status: {doc.get('status')}")
-                # Count submissions for this assessment
                 assessment_id = str(doc["_id"])
                 submission_count = await self.submissions.count_documents({"assessment_id": assessment_id})
                 
                 response = self._to_response(doc, submission_count)
                 
-                # Add student-specific data
                 if student_id:
                     submissions = await self.submissions.find({
                         "assessment_id": assessment_id,
@@ -488,25 +436,20 @@ class AssessmentService:
     ) -> Optional[AssessmentResponse]:
         """Update an assessment. Teachers can edit if assigned to the test's groups, regardless of status."""
         try:
-            # Check if user is the original instructor OR a teacher assigned to one of the groups
             existing = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
             
             if not existing:
                 return None
             
-            # Check permissions
             is_instructor = existing.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = existing.get("group_ids", [])
                 if group_ids:
-                    # Build teacher match query with both user_id and mongo_id
                     teacher_match = [
                         {"teacher_ids": instructor_id},
                         {"teacher_id": instructor_id}
@@ -548,11 +491,9 @@ class AssessmentService:
                 update_data["status"] = request.status.value
             
             if request.questions is not None:
-                # Transform and update questions
                 questions = [self._transform_question(q) for q in request.questions]
                 update_data["questions"] = questions
                 update_data["total_points"] = sum(q.get("points", 1) for q in questions)
-                # Auto-publish if adding questions to a draft
                 if existing.get("status") == AssessmentStatus.DRAFT.value and len(questions) > 0:
                     update_data["status"] = AssessmentStatus.PUBLISHED.value
                     logger.info(f"Auto-publishing assessment {assessment_id} after adding questions")
@@ -587,12 +528,10 @@ class AssessmentService:
             if not assessment:
                 return None
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
                     teacher_groups = await mongodb.db.groups.find({
@@ -607,7 +546,6 @@ class AssessmentService:
             if not is_instructor and not is_assigned_teacher:
                 return None
             
-            # Only proceed if status is draft
             if assessment.get("status") != AssessmentStatus.DRAFT.value:
                 return None
             
@@ -641,21 +579,17 @@ class AssessmentService:
             if not assessment:
                 return False
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 logger.info(f"Delete permission check: test_id={assessment_id}, user={instructor_id}, mongo_id={teacher_mongo_id}, group_ids={group_ids}")
                 
                 if group_ids:
-                    # Build teacher match query with both user_id and mongo_id
                     teacher_match = [
                         {"teacher_ids": instructor_id},
                         {"teacher_id": instructor_id}
@@ -679,17 +613,14 @@ class AssessmentService:
             
             logger.info(f"User {instructor_id} ALLOWED to delete assessment {assessment_id} (instructor={is_instructor}, assigned={is_assigned_teacher})")
             
-            # Delete all submissions for this assessment
             deleted_submissions = await self.submissions.delete_many({"assessment_id": assessment_id})
             logger.info(f"Deleted {deleted_submissions.deleted_count} submissions for assessment {assessment_id}")
             
-            # Delete the assessment
             result = await self.assessments.delete_one({"_id": ObjectId(assessment_id)})
             
             if result.deleted_count == 0:
                 return False
             
-            # Delete related notifications
             await mongodb.db.notifications.delete_many({"assessment_id": assessment_id})
             
             logger.info(f"Deleted assessment: {assessment_id} by user {instructor_id}")
@@ -698,8 +629,6 @@ class AssessmentService:
         except Exception as e:
             logger.error(f"Delete assessment error: {e}")
             return False
-    
-    # === Question Management ===
     
     async def add_question(
         self,
@@ -714,16 +643,13 @@ class AssessmentService:
             if not assessment:
                 return None
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
                     teacher_match = [
@@ -763,7 +689,6 @@ class AssessmentService:
                 "difficulty": request.difficulty
             }
             
-            # Update total points
             current_total = assessment.get("total_points", 0)
             
             await self.assessments.update_one(
@@ -797,16 +722,13 @@ class AssessmentService:
             if not assessment:
                 return False
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
                     teacher_match = [
@@ -841,7 +763,6 @@ class AssessmentService:
             if question_idx is None:
                 return False
             
-            # Update question
             questions[question_idx].update({
                 "type": request.type.value,
                 "question_text": request.question_text,
@@ -855,7 +776,6 @@ class AssessmentService:
                 "difficulty": request.difficulty
             })
             
-            # Update total points
             new_total = assessment.get("total_points", 0) - old_points + request.points
             
             await self.assessments.update_one(
@@ -886,16 +806,13 @@ class AssessmentService:
             if not assessment:
                 return False
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
                     teacher_match = [
@@ -936,9 +853,8 @@ class AssessmentService:
                     new_questions.append(q)
             
             if len(questions) == len(new_questions):
-                return False  # Question not found
+                return False
             
-            # Reorder
             for idx, q in enumerate(new_questions):
                 q["order"] = idx
             
@@ -959,8 +875,6 @@ class AssessmentService:
             logger.error(f"Delete question error: {e}")
             return False
     
-    # === Student Submissions ===
-    
     async def get_student_view(
         self,
         assessment_id: str,
@@ -976,12 +890,10 @@ class AssessmentService:
             if not assessment:
                 return None
             
-            # Check if available
             now = datetime.utcnow()
             if assessment.get("available_from") and now < assessment["available_from"]:
                 return None
             
-            # Check attempt limit
             submissions = await self.submissions.count_documents({
                 "assessment_id": assessment_id,
                 "student_id": student_id,
@@ -992,7 +904,6 @@ class AssessmentService:
             if submissions >= settings.get("attempt_limit", 1):
                 return None
             
-            # Strip correct answers from questions
             questions = []
             for q in assessment.get("questions", []):
                 stripped = {
@@ -1003,7 +914,6 @@ class AssessmentService:
                     "order": q.get("order")
                 }
                 
-                # Include options but not which is correct
                 if q.get("options"):
                     stripped["options"] = [
                         {"id": opt["id"], "text": opt["text"]}
@@ -1011,7 +921,6 @@ class AssessmentService:
                     ]
                 
                 if q.get("matching_pairs"):
-                    # Only include left side
                     stripped["matching_left"] = list(q["matching_pairs"].keys())
                     stripped["matching_right"] = list(q["matching_pairs"].values())
                 
@@ -1040,7 +949,6 @@ class AssessmentService:
     ) -> Optional[SubmissionResponse]:
         """Start a new assessment attempt."""
         try:
-            # Check for existing in-progress attempt
             existing = await self.submissions.find_one({
                 "assessment_id": assessment_id,
                 "student_id": student_id,
@@ -1050,12 +958,10 @@ class AssessmentService:
             if existing:
                 return self._submission_to_response(existing)
             
-            # Get assessment for max score
             assessment = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
             if not assessment:
                 return None
             
-            # Count previous attempts
             attempt_count = await self.submissions.count_documents({
                 "assessment_id": assessment_id,
                 "student_id": student_id
@@ -1108,7 +1014,6 @@ class AssessmentService:
             if not submission:
                 return None
             
-            # Get assessment for grading
             assessment = await self.assessments.find_one({
                 "_id": ObjectId(submission["assessment_id"])
             })
@@ -1116,7 +1021,6 @@ class AssessmentService:
             if not assessment:
                 return None
             
-            # Auto-grade
             auto_score = 0
             needs_manual = False
             questions_map = {q["id"]: q for q in assessment.get("questions", [])}
@@ -1130,7 +1034,6 @@ class AssessmentService:
                 points = question.get("points", 0)
                 
                 if q_type == QuestionType.MCQ.value:
-                    # Single correct answer MCQ
                     correct_ids = [
                         opt["id"] for opt in question.get("options", [])
                         if opt.get("is_correct")
@@ -1139,7 +1042,6 @@ class AssessmentService:
                         auto_score += points
                 
                 elif q_type == QuestionType.MCQ_MULTI.value:
-                    # Multiple correct answers
                     correct_ids = set(
                         opt["id"] for opt in question.get("options", [])
                         if opt.get("is_correct")
@@ -1173,24 +1075,19 @@ class AssessmentService:
                     if correct_count == len(correct_pairs):
                         auto_score += points
                     else:
-                        # Partial credit
                         auto_score += int(points * correct_count / max(len(correct_pairs), 1))
             
-            # Calculate totals
             max_score = assessment.get("total_points", 0)
             total_score = auto_score
             percentage = (total_score / max_score * 100) if max_score > 0 else 0
             passing = assessment.get("settings", {}).get("passing_score_percent", 60)
             passed = percentage >= passing
             
-            # Determine status
             status = SubmissionStatus.GRADED.value if not needs_manual else SubmissionStatus.SUBMITTED.value
             
-            # Calculate time spent
             started = submission.get("started_at", datetime.utcnow())
             time_spent = int((datetime.utcnow() - started).total_seconds())
             
-            # Build update data
             update_data = {
                 "answers": [a.model_dump() for a in request.answers],
                 "auto_score": auto_score,
@@ -1203,13 +1100,11 @@ class AssessmentService:
                 "time_spent_seconds": time_spent
             }
             
-            # ── AI Evaluation for staff tests with evaluation_type="ai" ──
             evaluation_type = assessment.get("evaluation_type", "manual")
             if evaluation_type == "ai":
                 try:
                     from app.services.rag_evaluation_service import rag_evaluation_service
                     
-                    # Build questions and answers for RAG evaluation
                     questions_for_eval = []
                     answers_for_eval = []
                     
@@ -1219,7 +1114,6 @@ class AssessmentService:
                             continue
                         
                         q_type = question.get("type", "")
-                        # Build expected answer from question data
                         expected = ""
                         if question.get("answer_text"):
                             expected = question["answer_text"]
@@ -1228,16 +1122,13 @@ class AssessmentService:
                         elif question.get("correct_answer_text"):
                             expected = question["correct_answer_text"]
                         elif q_type in ["mcq", QuestionType.MCQ.value]:
-                            # Get correct option text
                             for opt in question.get("options", []):
                                 if opt.get("is_correct"):
                                     expected = opt.get("text", opt.get("option_text", ""))
                                     break
                         
-                        # Determine student answer text
                         student_answer = answer.answer_text or ""
                         if not student_answer and answer.selected_option_ids:
-                            # Map selected option IDs to text
                             for opt in question.get("options", []):
                                 if opt.get("id") in answer.selected_option_ids:
                                     student_answer = opt.get("text", opt.get("option_text", ""))
@@ -1276,7 +1167,6 @@ class AssessmentService:
                             answers=answers_for_eval
                         )
                         
-                        # Override scores with AI evaluation
                         ai_score_pct = eval_result.get("score", 0)
                         ai_total = round(ai_score_pct * max_score / 100, 1) if max_score > 0 else 0
                         
@@ -1294,7 +1184,6 @@ class AssessmentService:
                 
                 except Exception as ai_err:
                     logger.error(f"AI evaluation failed for submission {submission_id}: {ai_err}")
-                    # Fall back to auto-grade, don't block submission
             
             if not needs_manual or evaluation_type == "ai":
                 update_data["graded_at"] = datetime.utcnow()
@@ -1323,22 +1212,18 @@ class AssessmentService:
             if not submission:
                 return None
             
-            # Verify instructor owns the assessment or is assigned to its groups
             assessment = await self.assessments.find_one({"_id": ObjectId(submission["assessment_id"])})
             
             if not assessment:
                 return None
             
-            # Check permissions
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
             if not is_instructor:
-                # Get teacher's MongoDB _id for group matching
                 teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                 teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                 
-                # Check if this teacher is assigned to any of the test's groups
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
                     teacher_match = [
@@ -1360,7 +1245,6 @@ class AssessmentService:
             if not is_instructor and not is_assigned_teacher:
                 return None
             
-            # Calculate manual score
             manual_score = sum(request.question_grades.values())
             auto_score = submission.get("auto_score", 0)
             total_score = auto_score + manual_score
@@ -1405,22 +1289,18 @@ class AssessmentService:
             if assessment_id:
                 query["assessment_id"] = assessment_id
                 
-                # Verify instructor access - allow if instructor or assigned teacher
                 if instructor_id:
                     assessment = await self.assessments.find_one({"_id": ObjectId(assessment_id)})
                     if not assessment:
                         return SubmissionListResponse(submissions=[], total=0)
                     
-                    # Check permissions
                     is_instructor = assessment.get("instructor_id") == instructor_id
                     is_assigned_teacher = False
                     
                     if not is_instructor:
-                        # Get teacher's MongoDB _id for group matching
                         teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
                         teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
                         
-                        # Check if this teacher is assigned to any of the test's groups
                         group_ids = assessment.get("group_ids", [])
                         if group_ids:
                             teacher_match = [
@@ -1458,8 +1338,6 @@ class AssessmentService:
             logger.error(f"Get submissions error: {e}")
             return SubmissionListResponse(submissions=[], total=0)
     
-    # === Helper Methods ===
-    
     def _to_response(self, doc: dict, submission_count: int = 0) -> AssessmentResponse:
         from app.models.assessment_models import AssessmentSettings
         
@@ -1492,11 +1370,9 @@ class AssessmentService:
         questions = []
         for q in doc.get("questions", []):
             try:
-                # Try validation
                 questions.append(Question(**q))
             except Exception:
                 try:
-                    # Try transformation for compatibility
                     transformed = self._transform_question(q.copy())
                     questions.append(Question(**transformed))
                 except Exception as e:
@@ -1513,7 +1389,6 @@ class AssessmentService:
         """Transform frontend/question-bank question format to backend Question model format."""
         import uuid
         
-        # 1. Handle question_text
         logger.info(f"Transforming question payload: {q}")
         
         if "text" in q:
@@ -1522,7 +1397,6 @@ class AssessmentService:
         if "question_text" not in q:
             q["question_text"] = "Question Text Missing"
             
-        # 2. Normalize and Prepare Options
         raw_options = q.get("options", [])
         options_text = []
         
@@ -1533,11 +1407,9 @@ class AssessmentService:
                 elif isinstance(raw_options[0], dict):
                     options_text = [str(opt.get("text", "")) for opt in raw_options]
         
-        # 3. Determine Correct Index(es) - Auto-detect single vs multi
         q_type = q.get("type", "mcq")
         correct_indices = set()
         
-        # For MCQ type, check correct_answers array
         if q_type == "mcq":
             correct_answers_raw = q.get("correct_answers", [])
             for ca in correct_answers_raw:
@@ -1546,7 +1418,6 @@ class AssessmentService:
                 except (ValueError, TypeError):
                     pass
             
-            # Fallback to correct_answer (single value) if correct_answers is empty
             if not correct_indices:
                 raw_correct = q.get("correct_answer")
                 if raw_correct is not None:
@@ -1556,11 +1427,9 @@ class AssessmentService:
                         if isinstance(raw_correct, str) and raw_correct in options_text:
                             correct_indices.add(options_text.index(raw_correct))
             
-            # Auto-detect: if more than 1 correct answer, set type to mcq_multi
             if len(correct_indices) > 1:
                 q["type"] = "mcq_multi"
         
-        # 4. Construct QuestionOption objects
         new_options = []
         for idx, text in enumerate(options_text):
             is_correct = (idx in correct_indices)
@@ -1577,26 +1446,17 @@ class AssessmentService:
             
         q["options"] = new_options
             
-        # 5. Ensure ID
         if "id" not in q:
             q["id"] = str(uuid.uuid4())
         
-        # 6. Default Type (fallback)
         if "type" not in q:
             q["type"] = "mcq"
 
-        # 7. Map marks to points
         if "points" not in q:
             try:
                 q["points"] = int(q.get("marks", 1))
             except (ValueError, TypeError):
                 q["points"] = 1
-
-        # 8. Preserve answer fields for AI evaluation
-        # fillup_answers: comma-separated accepted answers
-        # answer_text: model answer for subjective questions
-        # topic: question topic for analytics
-        # These are already in the dict from frontend, just ensure they're preserved
 
         return q
     
@@ -1629,6 +1489,4 @@ class AssessmentService:
             time_spent_seconds=doc.get("time_spent_seconds", 0)
         )
 
-
-# Global instance
 assessment_service = AssessmentService()

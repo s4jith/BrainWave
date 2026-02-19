@@ -15,7 +15,6 @@ router = APIRouter(
     tags=["History"]
 )
 
-
 @router.post("/", response_model=AnnotationHistoryItem)
 async def save_history(request: AnnotationHistoryCreateRequest):
     """Save an AI annotation to history."""
@@ -24,7 +23,6 @@ async def save_history(request: AnnotationHistoryCreateRequest):
     except Exception as e:
         logger.error(f"Save history error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/{student_id}", response_model=AnnotationHistoryListResponse)
 async def get_history(
@@ -50,7 +48,6 @@ async def get_history(
     except Exception as e:
         logger.error(f"Get history error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/{entry_id}", response_model=SuccessResponse)
 async def delete_history_entry(entry_id: str):

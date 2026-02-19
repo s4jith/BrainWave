@@ -43,7 +43,6 @@ import CurriculumManagement from "./pages/CurriculumManagement";
 import ForgotPassword from "./pages/ForgotPassword";
 import "./App.css";
 
-// Protected Route wrapper - For authenticated users
 function ProtectedRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
 
@@ -54,7 +53,6 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
-  // Admin should only access admin routes
   if (user.role === "admin") {
     const path = window.location.pathname;
     const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management"];
@@ -65,7 +63,6 @@ function ProtectedRoute({ children }) {
     }
   }
 
-  // Teacher should only access teacher routes
   if (user.role === "teacher") {
     const path = window.location.pathname;
     const teacherRoutes = [
@@ -81,7 +78,6 @@ function ProtectedRoute({ children }) {
     }
   }
 
-  // Students need onboarding first
   if (user.role === "student" && !user.isOnboarded) {
     const path = window.location.pathname;
     if (path !== "/onboarding") {
@@ -93,7 +89,6 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Onboarding Route wrapper
 function OnboardingRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
 
@@ -103,7 +98,6 @@ function OnboardingRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
-  // Admin/Teacher should not be in onboarding
   if (user.role === "admin") {
     console.log("Admin in onboarding, redirecting to /admin-dashboard");
     return <Navigate to="/admin-dashboard" replace />;
@@ -122,14 +116,13 @@ function OnboardingRoute({ children }) {
   return children;
 }
 
-// Public Route wrapper
 function PublicRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
 
   console.log("PublicRoute - isAuth:", isAuthenticated, "user:", user);
 
   if (isAuthenticated) {
-    // Route based on role
+    
     if (user.role === "admin") {
       console.log("Admin logged in, redirecting to /admin-dashboard");
       return <Navigate to="/admin-dashboard" replace />;
@@ -140,7 +133,6 @@ function PublicRoute({ children }) {
       return <Navigate to="/teacher-dashboard" replace />;
     }
 
-    // Students
     if (user.isOnboarded) {
       console.log("Student onboarded, redirecting to /dashboard");
       return <Navigate to="/dashboard" replace />;
@@ -153,7 +145,6 @@ function PublicRoute({ children }) {
   return children;
 }
 
-// Admin/Staff Route wrapper
 function StaffRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
 
@@ -176,7 +167,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Landing Page - Always accessible */}
+        {}
         <Route path="/" element={<LandingPage />} />
         <Route
           path="/login"
@@ -197,7 +188,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/teacher" element={<TeacherPlaceholder />} />
 
-        {/* Onboarding Route */}
+        {}
         <Route
           path="/onboarding"
           element={
@@ -207,7 +198,7 @@ function App() {
           }
         />
 
-        {/* Student Protected Routes */}
+        {}
         <Route
           path="/dashboard"
           element={
@@ -281,7 +272,7 @@ function App() {
           }
         />
 
-        {/* Admin/Staff Routes */}
+        {}
         <Route
           path="/admin-dashboard"
           element={
@@ -315,7 +306,7 @@ function App() {
           }
         />
 
-        {/* Admin Test Management Routes */}
+        {}
         <Route
           path="/create-test"
           element={
@@ -413,7 +404,7 @@ function App() {
           }
         />
 
-        {/* Teacher LMS Routes */}
+        {}
         <Route
           path="/teacher-dashboard"
           element={
@@ -471,7 +462,7 @@ function App() {
           }
         />
 
-        {/* Assessment LMS Routes */}
+        {}
         <Route
           path="/assessment-builder"
           element={
@@ -497,7 +488,7 @@ function App() {
           }
         />
 
-        {/* Student Test Routes */}
+        {}
         <Route
           path="/my-tests"
           element={
@@ -507,7 +498,7 @@ function App() {
           }
         />
 
-        {/* Student Groups */}
+        {}
         <Route
           path="/my-groups"
           element={
@@ -517,7 +508,7 @@ function App() {
           }
         />
 
-        {/* Student Dashboard */}
+        {}
         <Route
           path="/student-dashboard"
           element={
@@ -527,7 +518,7 @@ function App() {
           }
         />
 
-        {/* Gradebook & Analytics Routes */}
+        {}
         <Route
           path="/gradebook/:courseId"
           element={
@@ -545,7 +536,7 @@ function App() {
           }
         />
 
-        {/* Fallback */}
+        {}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes >
     </BrowserRouter >

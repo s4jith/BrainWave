@@ -8,7 +8,6 @@ from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
 
-
 class Topic(BaseModel):
     """Individual topic within a chapter"""
     topic_id: str = Field(..., description="Unique topic identifier")
@@ -23,7 +22,6 @@ class Topic(BaseModel):
     order: int = Field(1, description="Display order within chapter")
     is_active: bool = Field(True, description="Is topic active/visible")
     question_count: Optional[int] = Field(0, description="Number of questions available")
-
 
 class Chapter(BaseModel):
     """Chapter within a subject"""
@@ -41,7 +39,6 @@ class Chapter(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-
 class Subject(BaseModel):
     """Subject with hierarchical chapter and topic structure"""
     subject_id: str = Field(..., description="Unique subject identifier")
@@ -57,9 +54,6 @@ class Subject(BaseModel):
     is_active: bool = Field(True, description="Is subject active/visible")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# ==================== MongoDB Document Models ====================
 
 class SubjectDocument(BaseModel):
     """MongoDB document for subjects collection"""
@@ -81,9 +75,6 @@ class SubjectDocument(BaseModel):
     class Config:
         populate_by_name = True
 
-
-# ==================== Request/Response Models ====================
-
 class CreateSubjectRequest(BaseModel):
     """Request to create a new subject"""
     subject_name: str = Field(..., min_length=1, max_length=100)
@@ -93,7 +84,6 @@ class CreateSubjectRequest(BaseModel):
     icon: Optional[str] = "📚"
     color: Optional[str] = "#3B82F6"
 
-
 class UpdateSubjectRequest(BaseModel):
     """Request to update subject details"""
     subject_name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -101,7 +91,6 @@ class UpdateSubjectRequest(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     is_active: Optional[bool] = None
-
 
 class CreateChapterRequest(BaseModel):
     """Request to create a new chapter"""
@@ -111,7 +100,6 @@ class CreateChapterRequest(BaseModel):
     pdf_url: Optional[str] = ""
     video_url: Optional[str] = ""
     total_pages: Optional[int] = 0
-
 
 class UpdateChapterRequest(BaseModel):
     """Request to update chapter details"""
@@ -124,7 +112,6 @@ class UpdateChapterRequest(BaseModel):
     order: Optional[int] = None
     is_active: Optional[bool] = None
 
-
 class CreateTopicRequest(BaseModel):
     """Request to create a new topic"""
     topic_name: str = Field(..., min_length=1, max_length=200)
@@ -135,7 +122,6 @@ class CreateTopicRequest(BaseModel):
     estimated_time_minutes: Optional[int] = 45
     difficulty_level: Optional[str] = "medium"
     prerequisites: List[str] = Field(default_factory=list)
-
 
 class UpdateTopicRequest(BaseModel):
     """Request to update topic details"""
@@ -150,7 +136,6 @@ class UpdateTopicRequest(BaseModel):
     order: Optional[int] = None
     is_active: Optional[bool] = None
 
-
 class SubjectSummary(BaseModel):
     """Summary of a subject for list views"""
     subject_id: str
@@ -162,7 +147,6 @@ class SubjectSummary(BaseModel):
     total_topics: int
     is_active: bool
 
-
 class ChapterSummary(BaseModel):
     """Summary of a chapter for list views"""
     chapter_id: str
@@ -171,7 +155,6 @@ class ChapterSummary(BaseModel):
     total_topics: int
     pdf_url: Optional[str] = ""
     is_active: bool
-
 
 class TopicSummary(BaseModel):
     """Summary of a topic for list views"""
@@ -183,15 +166,11 @@ class TopicSummary(BaseModel):
     question_count: int
     is_active: bool
 
-
-# ==================== AI Extraction Models ====================
-
 class ExtractedTopic(BaseModel):
     """Topic extracted from PDF/image by AI"""
     topic_name: str
     page_range: Optional[str] = ""
     description: Optional[str] = ""
-
 
 class ExtractedChapter(BaseModel):
     """Chapter extracted from PDF/image by AI"""
@@ -200,7 +179,6 @@ class ExtractedChapter(BaseModel):
     author: Optional[str] = ""
     page_number: Optional[int] = None
     topics: List[ExtractedTopic] = Field(default_factory=list)
-
 
 class PendingCurriculumItem(BaseModel):
     """Pending curriculum item awaiting admin approval"""
@@ -219,19 +197,16 @@ class PendingCurriculumItem(BaseModel):
     reviewed_at: Optional[datetime] = Field(None, description="Review timestamp")
     rejection_reason: Optional[str] = Field("", description="Reason if rejected")
 
-
 class UploadCurriculumRequest(BaseModel):
     """Request to upload PDF/image for curriculum extraction"""
     subject_name: str = Field(..., min_length=1, max_length=100)
     class_level: int = Field(..., ge=5, le=12)
     board: str = Field(default="CBSE")
 
-
 class ApprovePendingItemRequest(BaseModel):
     """Request to approve or reject a pending curriculum item"""
     action: str = Field(..., description="'approve' or 'reject'")
     rejection_reason: Optional[str] = Field("", description="Required if action is reject")
-    # Optional modifications before approval
     subject_name_override: Optional[str] = None
     icon: Optional[str] = "📚"
     color: Optional[str] = "#3B82F6"

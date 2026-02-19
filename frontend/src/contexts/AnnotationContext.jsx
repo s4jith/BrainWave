@@ -13,10 +13,9 @@ export const useAnnotations = () => {
 export const AnnotationProvider = ({ children }) => {
   const [annotations, setAnnotations] = useState([]);
   const [selectedText, setSelectedText] = useState(null);
-  const [activePanel, setActivePanel] = useState(null); // 'ai' | 'note' | null
+  const [activePanel, setActivePanel] = useState(null); 
   const [viewingAnnotation, setViewingAnnotation] = useState(null);
 
-  // Add a note annotation
   const addNote = useCallback((data) => {
     const newAnnotation = {
       id: Date.now(),
@@ -35,13 +34,12 @@ export const AnnotationProvider = ({ children }) => {
     return newAnnotation;
   }, []);
 
-  // Add an AI annotation
   const addAIAnnotation = useCallback((data) => {
     const newAnnotation = {
       id: Date.now(),
       type: "ai",
       text: data.text,
-      action: data.action, // 'simplify' | 'refine' | 'examples' | 'explain'
+      action: data.action, 
       response: data.response,
       pageNumber: data.pageNumber,
       position: data.position,
@@ -52,19 +50,16 @@ export const AnnotationProvider = ({ children }) => {
     return newAnnotation;
   }, []);
 
-  // Update AI annotation with response
   const updateAIResponse = useCallback((id, response) => {
     setAnnotations((prev) =>
       prev.map((ann) => (ann.id === id ? { ...ann, response } : ann))
     );
   }, []);
 
-  // Delete annotation
   const deleteAnnotation = useCallback((id) => {
     setAnnotations((prev) => prev.filter((ann) => ann.id !== id));
   }, []);
 
-  // Get annotations for current lesson
   const getAnnotationsByLesson = useCallback(
     (lessonId) => {
       return annotations.filter((ann) => ann.lessonId === lessonId);
@@ -72,7 +67,6 @@ export const AnnotationProvider = ({ children }) => {
     [annotations]
   );
 
-  // Get annotations by page
   const getAnnotationsByPage = useCallback(
     (lessonId, pageNumber) => {
       return annotations.filter(

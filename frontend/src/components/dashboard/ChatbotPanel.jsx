@@ -14,10 +14,6 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
-/**
- * ChatbotPanel - Clean UI matching reference design
- */
-
 export default function ChatbotPanel({ isOpen, onClose }) {
   const { user } = useUserStore();
   const { theme, setTheme } = useThemeStore();
@@ -35,7 +31,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef(null);
 
-  // Cleanup stream on unmount
   useEffect(() => {
     return () => {
       if (abortStreamRef.current) {
@@ -44,7 +39,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     };
   }, []);
 
-  // Close theme menu on outside click
   useEffect(() => {
     const handleClick = (e) => {
       if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
@@ -71,22 +65,13 @@ export default function ChatbotPanel({ isOpen, onClose }) {
 
   const ThemeIcon = getThemeIcon();
 
-  // Dynamic subjects from database
   const [subjects, setSubjects] = useState([]);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [activeSubject, setActiveSubject] = useState("");
 
-  /**
-   * TOP QUESTIONS STATE
-   * Now fetched dynamically from the database based on selected subject and mode
-   */
   const [topQuestions, setTopQuestions] = useState([]);
   const [topQuestionsLoading, setTopQuestionsLoading] = useState(false);
 
-  /**
-   * FETCH AVAILABLE SUBJECTS FROM DATABASE
-   * Only shows subjects that have data for the student's class level
-   */
   useEffect(() => {
     const fetchSubjects = async () => {
       if (!isOpen) return;
@@ -98,20 +83,20 @@ export default function ChatbotPanel({ isOpen, onClose }) {
 
         if (response.success && response.subjects && response.subjects.length > 0) {
           setSubjects(response.subjects);
-          // Auto-select first subject or user's preferred subject
+          
           const preferredSubject = response.subjects.find(
             s => s.value.toLowerCase() === (user.preferredSubject || "").toLowerCase()
           );
           setActiveSubject(preferredSubject ? preferredSubject.value : response.subjects[0].value);
         } else {
-          // No subjects available for this class - show empty state
+          
           console.log("No subjects found for class", user.classLevel);
           setSubjects([]);
           setActiveSubject("");
         }
       } catch (error) {
         console.error("Failed to fetch subjects:", error);
-        // On error, show empty state - don't use fallback
+        
         setSubjects([]);
         setActiveSubject("");
       } finally {
@@ -122,10 +107,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     fetchSubjects();
   }, [isOpen, user.classLevel]);
 
-  /**
-   * FETCH TOP QUESTIONS FROM DATABASE
-   * Updates when subject or mode changes
-   */
   useEffect(() => {
     const fetchTopQuestions = async () => {
       if (!isOpen || !activeSubject) return;
@@ -141,7 +122,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
         );
 
         if (response.success && response.questions) {
-          // Transform API response to match UI format
+          
           const formattedQuestions = response.questions.map((q, index) => ({
             id: index + 1,
             text: q.question,
@@ -217,12 +198,12 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     setMessage("");
     setSelectedImage(null);
     setIsLoading(true);
-    // Reset textarea height
+    
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
       if (currentImage) {
-        // Image chat - non-streaming (keep existing behavior)
+        
         const result = await chatService.imageChat(
           currentImage,
           user.classLevel || 6,
@@ -242,11 +223,10 @@ export default function ChatbotPanel({ isOpen, onClose }) {
         }]);
         setIsLoading(false);
       } else {
-        // Text chat - use STREAMING for real-time token display
+        
         const messageId = Date.now();
         setStreamingMessageId(messageId);
 
-        // Add empty assistant message that will fill in real-time
         setMessages(prev => [...prev, {
           id: messageId,
           role: "assistant",
@@ -255,11 +235,10 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           mode: chatMode,
           isStreaming: true
         }]);
-        setIsLoading(false); // Hide loading dots, show streaming message
+        setIsLoading(false); 
 
         let fullAnswer = "";
 
-        // Cancel any existing stream
         if (abortStreamRef.current) {
           abortStreamRef.current();
         }
@@ -270,7 +249,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           activeSubject,
           1,
           chatMode,
-          // onChunk - append each token as it arrives
+          
           (text) => {
             fullAnswer += text;
             setMessages(prev => prev.map(msg =>
@@ -279,7 +258,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 : msg
             ));
           },
-          // onComplete
+          
           (data) => {
             setStreamingMessageId(null);
             abortStreamRef.current = null;
@@ -289,7 +268,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 : msg
             ));
 
-            // Track the question and refresh top questions
             topQuestionsService.trackQuestion({
               question: currentMessage,
               answer: fullAnswer,
@@ -299,7 +277,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
               user_id: user.id || "guest",
               session_id: `${user.id || "guest"}_${Date.now()}`
             }).then(() => {
-              // Refresh top questions after tracking
+              
               const mode = chatMode === "deepdive" ? "deep" : "quick";
               return topQuestionsService.getTopQuestions(activeSubject, user.classLevel || 7, mode, 5);
             }).then(response => {
@@ -315,7 +293,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
               }
             }).catch(err => console.log("Question tracking/refresh failed:", err));
           },
-          // onError
+          
           (error) => {
             console.error("Stream error:", error);
             setStreamingMessageId(null);
@@ -341,12 +319,10 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     }
   };
 
-  // Handle image upload
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
     if (!validTypes.includes(file.type)) {
       setMessages(prev => [...prev, {
@@ -358,7 +334,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
       return;
     }
 
-    // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -370,7 +345,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     }
 
     setSelectedImage(file);
-    // Reset input so same file can be selected again if cleared
     event.target.value = '';
   };
 
@@ -395,9 +369,9 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose}>
       <div className="absolute inset-0 flex" onClick={e => e.stopPropagation()}>
 
-        {/* Left Sidebar */}
+        {}
         <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-          {/* Profile */}
+          {}
           <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
             <img src={getAvatarUrl()} alt="" className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700" />
             <div className="flex-1 min-w-0">
@@ -409,7 +383,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             </button>
           </div>
 
-          {/* Subject Selector */}
+          {}
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Subject</p>
             {subjectsLoading ? (
@@ -458,7 +432,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             </p>
             <div className="space-y-2">
               {topQuestionsLoading ? (
-                // Loading skeleton
                 [...Array(5)].map((_, i) => (
                   <div key={i} className="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 animate-pulse">
                     <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
@@ -521,7 +494,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
             </div>
           </div>
 
-
         </div>
 
         {/* Main Chat Area */}
@@ -567,7 +539,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           {/* Content Area - Scrollable */}
           <div className="relative z-10 flex-1 overflow-y-scroll">
             {messages.length === 0 ? (
-              /* Welcome State */
               <div className="h-full flex flex-col items-center justify-center px-6 pb-32">
                 <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center mb-6 shadow-sm">
                   <Sparkles className="w-7 h-7 text-gray-700 dark:text-gray-300" />
@@ -596,7 +567,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 </div>
               </div>
             ) : (
-              /* Messages */
               <div className="max-w-3xl mx-auto p-6 pb-32 space-y-4">
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
@@ -698,7 +668,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                   value={message}
                   onChange={e => {
                     setMessage(e.target.value);
-                    // Auto-resize textarea
                     e.target.style.height = 'auto';
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
                   }}

@@ -2,14 +2,6 @@ import { useState } from 'react';
 import { X, Plus, Trash2, Edit3, Save, StickyNote } from 'lucide-react';
 import useNotesStore from '../../stores/notesStore';
 
-/**
- * StickyNotesCard Component
- * 
- * A funky, colorful sticky notes widget with hot pink, blue, and dark colors.
- * Displays recent notes as sticky note cards with add/edit functionality.
- */
-
-// Funky color palette for sticky notes
 const stickyColors = [
   { bg: 'bg-pink-500', text: 'text-white', shadow: 'shadow-pink-500/30' },
   { bg: 'bg-orange-500', text: 'text-white', shadow: 'shadow-blue-500/30' },
@@ -25,13 +17,10 @@ export default function StickyNotesCard() {
   const [editingNote, setEditingNote] = useState(null);
   const [newNote, setNewNote] = useState({ title: '', content: '' });
 
-  // Get color based on note index
   const getColor = (index) => stickyColors[index % stickyColors.length];
 
-  // Get recent notes (max 6)
   const recentNotes = notes.slice(0, 6);
 
-  // Handle add note
   const handleAddNote = () => {
     if (newNote.title.trim() || newNote.content.trim()) {
       addNote({
@@ -44,7 +33,6 @@ export default function StickyNotesCard() {
     }
   };
 
-  // Handle update note
   const handleUpdateNote = () => {
     if (editingNote) {
       updateNote(editingNote.id, {
@@ -57,7 +45,7 @@ export default function StickyNotesCard() {
 
   return (
     <div className="bg-gradient-to-br from-slate-100 via-slate-300 to-slate-200 rounded-2xl p-6 border border-slate-200">
-      {/* Header */}
+      {}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-grey-100 to-red-500 flex items-center justify-center">
@@ -76,7 +64,7 @@ export default function StickyNotesCard() {
         </button>
       </div>
 
-      {/* Notes Grid */}
+      {}
       {recentNotes.length === 0 ? (
         <div className="text-center py-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-700 flex items-center justify-center">
@@ -100,7 +88,7 @@ export default function StickyNotesCard() {
                 className={`${color.bg} ${color.text} ${color.shadow} rounded-xl p-4 shadow-lg group relative cursor-pointer hover:scale-105 transition-transform`}
                 style={{ minHeight: '120px' }}
               >
-                {/* Delete button */}
+                {}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -126,7 +114,7 @@ export default function StickyNotesCard() {
                 <h4 className="font-bold text-sm mb-2 line-clamp-1">{note.title}</h4>
                 <p className="text-xs opacity-80 line-clamp-3">{note.content}</p>
 
-                {/* Folded corner effect */}
+                {}
                 <div className="absolute bottom-0 right-0 w-4 h-4 bg-white/10 rounded-tl-lg" />
               </div>
             );
@@ -134,7 +122,7 @@ export default function StickyNotesCard() {
         </div>
       )}
 
-      {/* Add Note Modal */}
+      {}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl w-full max-w-md p-6 border border-slate-700">
@@ -177,7 +165,7 @@ export default function StickyNotesCard() {
         </div>
       )}
 
-      {/* Edit Note Modal */}
+      {}
       {editingNote && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl w-full max-w-md p-6 border border-slate-700">

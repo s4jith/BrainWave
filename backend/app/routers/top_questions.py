@@ -4,7 +4,7 @@ API endpoints for managing top questions and recommendations.
 Supports subject-wise filtering for Quick and Deep modes.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import Optional
 from app.models.top_questions import (
     GetTopQuestionsRequest,
@@ -29,9 +29,6 @@ router = APIRouter(
     prefix="/api/top-questions",
     tags=["Top Questions"]
 )
-
-
-# ==================== GET TOP QUESTIONS ====================
 
 @router.post("/top", response_model=GetTopQuestionsResponse)
 async def get_top_questions(request: GetTopQuestionsRequest):
@@ -80,9 +77,6 @@ async def get_top_questions(request: GetTopQuestionsRequest):
         logger.error(f" Error getting top questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== GET PERSONALIZED RECOMMENDATIONS ====================
-
 @router.post("/recommendations", response_model=GetRecommendationsResponse)
 async def get_recommendations(request: GetRecommendationsRequest):
     """
@@ -125,9 +119,6 @@ async def get_recommendations(request: GetRecommendationsRequest):
     except Exception as e:
         logger.error(f" Error getting recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== TRACK QUESTION-ANSWER ====================
 
 @router.post("/track", response_model=TrackQuestionResponse)
 async def track_question(request: TrackQuestionRequest):
@@ -181,9 +172,6 @@ async def track_question(request: TrackQuestionRequest):
         logger.error(f" Error tracking question: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== UPDATE FEEDBACK ====================
-
 @router.post("/feedback", response_model=UpdateFeedbackResponse)
 async def update_feedback(request: UpdateFeedbackRequest):
     """
@@ -226,9 +214,6 @@ async def update_feedback(request: UpdateFeedbackRequest):
         logger.error(f" Error updating feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== GET TRENDING QUESTIONS ====================
-
 @router.post("/trending", response_model=TrendingQuestionsResponse)
 async def get_trending_questions(request: TrendingQuestionsRequest):
     """
@@ -270,9 +255,6 @@ async def get_trending_questions(request: TrendingQuestionsRequest):
         logger.error(f" Error getting trending questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== SIMPLE GET ENDPOINTS ====================
-
 @router.get("/top/{subject}/{class_level}")
 async def get_top_questions_simple(
     subject: str,
@@ -309,7 +291,6 @@ async def get_top_questions_simple(
         logger.error(f" Error in simple GET endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/recommendations/{user_id}/{subject}/{class_level}")
 async def get_recommendations_simple(
     user_id: str,
@@ -345,9 +326,6 @@ async def get_recommendations_simple(
     except Exception as e:
         logger.error(f" Error in simple GET endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== DYNAMIC SUBJECTS ====================
 
 @router.get("/subjects/{class_level}")
 async def get_available_subjects(class_level: int):
@@ -399,7 +377,6 @@ async def get_available_subjects(class_level: int):
         logger.error(f" Error getting available subjects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/subjects/{class_level}/stats")
 async def get_subject_stats(
     class_level: int,
@@ -433,14 +410,12 @@ async def get_subject_stats(
             raise HTTPException(status_code=400, detail="Class level must be between 6 and 12")
         
         if subject:
-            # Get stats for specific subject
             stats = subject_service.get_subject_stats(subject, class_level)
             return {
                 "success": True,
                 "stats": stats
             }
         else:
-            # Get stats for all available subjects
             subjects = subject_service.get_available_subjects_for_class(class_level)
             all_stats = []
             
@@ -460,9 +435,6 @@ async def get_subject_stats(
     except Exception as e:
         logger.error(f" Error getting subject stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== DOUBT HISTORY (Q&A BROWSE) ====================
 
 @router.get("/doubts/{user_id}")
 async def get_doubt_history(
@@ -490,17 +462,14 @@ async def get_doubt_history(
         db = mongodb.db
         qa_col = db["top_questions"]
         
-        # Build filter
         filter_query = {"user_id": user_id}
         if subject:
             filter_query["subject"] = {"$regex": subject, "$options": "i"}
         if search:
             filter_query["question"] = {"$regex": search, "$options": "i"}
         
-        # Get total count
         total = qa_col.count_documents(filter_query)
         
-        # Fetch paginated results
         doubts = list(
             qa_col.find(filter_query)
             .sort("created_at", -1)
@@ -508,7 +477,6 @@ async def get_doubt_history(
             .limit(limit)
         )
         
-        # Format response
         result = []
         for d in doubts:
             result.append({
@@ -534,7 +502,6 @@ async def get_doubt_history(
     except Exception as e:
         logger.error(f" Error getting doubt history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/doubts/{user_id}/{qa_id}")
 async def get_doubt_detail(user_id: str, qa_id: str):

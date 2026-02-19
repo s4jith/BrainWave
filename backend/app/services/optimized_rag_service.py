@@ -20,15 +20,10 @@ import hashlib
 import time
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from functools import lru_cache
 
-# Import Subject Classifier
 from app.services.subject_classifier import subject_classifier
 
 logger = logging.getLogger(__name__)
-
-
-# ==================== API CALL TRACKER ====================
 
 class APICallTracker:
     """Track Gemini API calls for monitoring and optimization."""
@@ -63,12 +58,7 @@ class APICallTracker:
         """Reset call history."""
         self.calls = []
 
-
-# Global tracker
 api_tracker = APICallTracker()
-
-
-# ==================== CACHING LAYER ====================
 
 class EmbeddingCache:
     """In-memory cache for embeddings (Redis-compatible interface)."""
@@ -97,7 +87,6 @@ class EmbeddingCache:
     
     def set(self, text: str, lang: str, embedding: List[float]):
         """Cache an embedding."""
-        # Evict oldest if full
         if len(self._cache) >= self.max_size:
             oldest_key = min(self._access_times, key=self._access_times.get)
             del self._cache[oldest_key]
@@ -117,7 +106,6 @@ class EmbeddingCache:
             "misses": self.misses,
             "hit_rate": self.hits / total if total > 0 else 0
         }
-
 
 class AnswerCache:
     """In-memory cache for full RAG answers."""
@@ -140,12 +128,10 @@ class AnswerCache:
         key = self._make_key(question, subject, class_level)
         
         if key in self._cache:
-            # Check TTL
             if time.time() - self._timestamps[key] < self.ttl_seconds:
                 self.hits += 1
                 return self._cache[key]
             else:
-                # Expired
                 del self._cache[key]
                 del self._timestamps[key]
         
@@ -155,7 +141,6 @@ class AnswerCache:
     def set(self, question: str, subject: str, class_level: int, answer: Dict):
         """Cache an answer."""
         if len(self._cache) >= self.max_size:
-            # Evict oldest
             oldest_key = min(self._timestamps, key=self._timestamps.get)
             del self._cache[oldest_key]
             del self._timestamps[oldest_key]
@@ -174,15 +159,9 @@ class AnswerCache:
             "hit_rate": self.hits / total if total > 0 else 0
         }
 
-
-# Global caches
 embedding_cache = EmbeddingCache(max_size=2000)
 answer_cache = AnswerCache(max_size=1000)
 
-
-# ==================== POPULAR HINDI QUERIES CACHE ====================
-
-# Pre-computed responses for frequently asked Hindi literature questions
 POPULAR_HINDI_QUERIES = {
     "माँ कह एक कहानी": {
         "summary": "यह एक प्रसिद्ध हिंदी कविता है जो माँ की कहानी सुनाने की परंपरा को दर्शाती है।",
@@ -201,9 +180,6 @@ POPULAR_HINDI_QUERIES = {
     }
 }
 
-
-# ==================== OPTIMIZED RAG SERVICE ====================
-
 @dataclass
 class OptimizedConfig:
     """Configuration for optimized RAG service."""
@@ -212,7 +188,6 @@ class OptimizedConfig:
     skip_web_for_literature: bool = True
     cache_enabled: bool = True
     fallback_to_gemini_embed: bool = True
-
 
 class OptimizedRagService:
     """
@@ -231,11 +206,9 @@ class OptimizedRagService:
     def __init__(self, config: Optional[OptimizedConfig] = None):
         self.config = config or OptimizedConfig()
         
-        # Services - lazy loaded
         self._gemini_service = None
         self._pinecone_index = None
         
-        # Metrics
         self.queries_processed = 0
         self.gemini_calls_saved = 0
         
@@ -267,7 +240,6 @@ class OptimizedRagService:
             from langdetect import detect
             lang = detect(text)
             
-            # Map to our supported languages
             supported = ["en", "hi", "ur", "ta", "te", "bn", "mr", "gu", "kn", "ml", "pa"]
             if lang in supported:
                 return lang
@@ -281,14 +253,12 @@ class OptimizedRagService:
         """
         Get embedding using Gemini with caching.
         """
-        # Check cache first
         if self.config.cache_enabled:
             cached = embedding_cache.get(text, lang)
             if cached:
                 logger.debug("📦 Embedding cache hit")
                 return cached
         
-        # Use Gemini embeddings
         if self.config.fallback_to_gemini_embed:
             try:
                 from app.services.gemini_key_manager import gemini_key_manager
@@ -311,7 +281,7 @@ class OptimizedRagService:
             except Exception as e:
                 logger.error(f"Gemini embedding failed: {e}")
         
-        return [0.0] * 768  # Zero vector fallback
+        return [0.0] * 768
     
     def batch_retrieve(
         self,
@@ -352,25 +322,18 @@ class OptimizedRagService:
             except Exception as e:
                 logger.debug(f"Namespace {namespace} query failed: {e}")
         
-        # Sort by score and deduplicate
         all_chunks.sort(key=lambda x: x['score'], reverse=True)
         
-        # CONFIDENCE THRESHOLD: Filter out low relevance chunks to prevent hallucination
-        # Scores: >0.7 is good, <0.6 is usually irrelevant
         CONFIDENCE_THRESHOLD = 0.68
         
         high_confidence_chunks = [c for c in all_chunks if c['score'] >= CONFIDENCE_THRESHOLD]
         
-        # If we have high confidence chunks, use only those. 
-        # Otherwise, keep top 2 results but flag them.
         if high_confidence_chunks:
             all_chunks = high_confidence_chunks
         else:
             logger.warning(f" Low confidence retrieval (Top score: {all_chunks[0]['score'] if all_chunks else 0:.4f})")
-            # Keep extremely few chunks if confidence is low to avoid noise
             all_chunks = all_chunks[:2]
         
-        # Deduplicate by text content
         seen_texts = set()
         unique_chunks = []
         for chunk in all_chunks:
@@ -379,7 +342,7 @@ class OptimizedRagService:
                 seen_texts.add(text_hash)
                 unique_chunks.append(chunk)
         
-        return unique_chunks[:top_k * 2]  # Return top 2x results
+        return unique_chunks[:top_k * 2]
     
     def build_rag_prompt(
         self,
@@ -395,16 +358,14 @@ class OptimizedRagService:
         
         Single prompt = single Gemini call.
         """
-        # Build context
         context_parts = []
-        for i, chunk in enumerate(chunks[:10]):  # Max 10 chunks
+        for i, chunk in enumerate(chunks[:10]):
             ns = chunk.get('namespace', '')
             score = chunk.get('score', 0)
             context_parts.append(f"[Source {i+1} ({ns}, relevance: {score:.2f})]:\n{chunk['text']}")
         
         combined_context = "\n\n".join(context_parts)
         
-        # Language instruction
         lang_names = {
             "hi": "Hindi", "ur": "Urdu", "ta": "Tamil", "te": "Telugu",
             "bn": "Bengali", "mr": "Marathi", "gu": "Gujarati",
@@ -415,7 +376,6 @@ class OptimizedRagService:
         if lang != "en" and lang in lang_names:
             lang_instruction = f"\n\n**IMPORTANT**: Respond entirely in {lang_names[lang]} using the same script as the question."
         
-        # Mode-specific instructions
         if mode in ["annotation", "define"]:
             instructions = """
 1. Provide a clear, concise definition
@@ -475,14 +435,12 @@ Answer:"""
         self.queries_processed += 1
         gemini_calls_before = len(api_tracker.calls)
         
-        # Check answer cache
         if self.config.cache_enabled:
             cached = answer_cache.get(question, subject, class_level)
             if cached:
                 logger.info("📦 Answer cache hit!")
                 return {**cached, "cached": True, "gemini_calls": 0}
         
-        # Check popular queries cache
         q_lower = question.lower().strip()
         for popular_q, data in POPULAR_HINDI_QUERIES.items():
             if popular_q in q_lower:
@@ -495,19 +453,13 @@ Answer:"""
                     "gemini_calls": 0
                 }
         
-        # STEP 0: Subject Validation (0 Gemini calls - runs in parallel/optimized)
-        # Validate that the question matches the subject
         subject_check = await subject_classifier.classify(question)
         detected_subject = subject_check.get("detected_subject", "Unknown")
         confidence = subject_check.get("confidence", 0)
         
-        # Only block if high confidence mismatch
-        # Allow "Science" to match Physics/Chem/Bio
         is_science = subject.lower() in ["science", "physics", "chemistry", "biology"]
         detected_is_science = detected_subject.lower() in ["science", "physics", "chemistry", "biology"]
         
-        # Lower threshold to 0.60 to ensure we catch mismatches
-        # User explicitly requested strict checking
         if confidence > 0.60 and detected_subject.lower() != subject.lower():
              logger.warning(f" Subject mismatch: User={subject}, Detected={detected_subject}")
              return {
@@ -519,35 +471,29 @@ Answer:"""
                  "gemini_calls": 0
              }
         
-        # STEP 1: Language detection (0 Gemini calls)
         lang = self.detect_language(question)
         logger.info(f"🌐 Detected language: {lang}")
         
-        # STEP 2: Get embedding (Gemini, cached)
         query_embedding = self.get_embedding(question, lang)
         
-        # STEP 3: Batch retrieve from relevant namespaces
         namespaces = [
             f"{subject.lower()}",
             f"{subject.lower()}-{lang}" if lang != "en" else None,
             f"{subject.lower()}-en" if lang != "en" else None
         ]
-        namespaces = [n for n in namespaces if n]  # Remove None
+        namespaces = [n for n in namespaces if n]
         
         chunks = self.batch_retrieve(query_embedding, namespaces, top_k=5)
         logger.info(f"Retrieved {len(chunks)} chunks from {len(namespaces)} namespaces")
         
-        # Skip web for annotation/literature (optimization)
         skip_web = (
             self.config.skip_web_for_annotation and mode in ["annotation", "define"] or
             self.config.skip_web_for_literature and subject.lower() in ["hindi", "urdu", "english"]
         )
         
         if not skip_web and not chunks:
-            # Could add web retrieval here, but we're optimizing
             logger.info("⏭️ Skipping web retrieval for optimization")
         
-        # STEP 4: Single Gemini call for answer generation
         prompt = self.build_rag_prompt(question, chunks, mode, lang, class_level, subject)
         
         try:
@@ -557,7 +503,6 @@ Answer:"""
             logger.error(f"Generation failed: {e}")
             answer = "I'm sorry, I couldn't generate an answer. Please try again."
         
-        # Calculate calls used
         gemini_calls_after = len(api_tracker.calls)
         calls_used = gemini_calls_after - gemini_calls_before
         
@@ -572,7 +517,6 @@ Answer:"""
             "chunks_used": len(chunks)
         }
         
-        # Cache the result
         if self.config.cache_enabled and answer and len(answer) > 50:
             answer_cache.set(question, subject, class_level, result)
         
@@ -592,6 +536,4 @@ Answer:"""
             }
         }
 
-
-# Singleton instance
 optimized_rag_service = OptimizedRagService()

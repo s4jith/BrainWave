@@ -15,7 +15,6 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class LatencyMetrics:
     """Stores moving average latency metrics."""
@@ -35,7 +34,6 @@ class LatencyMetrics:
         self.total_time_ms += time_ms
         self.min_time_ms = min(self.min_time_ms, time_ms)
         self.max_time_ms = max(self.max_time_ms, time_ms)
-
 
 class PerformanceLogger:
     """
@@ -72,7 +70,6 @@ class PerformanceLogger:
         
         logger.info(f"[PERF] {component_name}: {time_ms:.2f}ms")
         
-        # Optionally log to MongoDB
         cls._log_to_mongo(component_name, time_ms, metadata)
     
     @classmethod
@@ -92,7 +89,6 @@ class PerformanceLogger:
                 }
                 cls._mongo_db.intel_perf_logs.insert_one(log_entry)
         except Exception as e:
-            # Don't fail on logging errors
             logger.debug(f"MongoDB perf logging failed: {e}")
     
     @classmethod
@@ -102,7 +98,6 @@ class PerformanceLogger:
             name: round(metrics.avg_time_ms, 2)
             for name, metrics in cls._metrics.items()
         }
-
 
 def measure_latency(component_name: str):
     """
@@ -147,14 +142,12 @@ def measure_latency(component_name: str):
                     {"function": func.__name__}
                 )
         
-        # Return appropriate wrapper based on function type
         import asyncio
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return wrapper
     
     return decorator
-
 
 class LatencyContext:
     """
@@ -179,7 +172,3 @@ class LatencyContext:
         elapsed_ms = (end_time - self.start_time) * 1000
         PerformanceLogger.record_latency(self.component_name, elapsed_ms, self.metadata)
         return False
-
-
-# Singleton instance
-performance_logger = PerformanceLogger()

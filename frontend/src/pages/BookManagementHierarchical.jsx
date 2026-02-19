@@ -1,7 +1,3 @@
-/**
- * BookManagement - Admin page to manage textbooks and AI embeddings
- * Uses AdminLayout with light/dark theme support
- */
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -23,7 +19,7 @@ export default function BookManagement() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [pineconeStats, setPineconeStats] = useState(null);
-  const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]); 
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
   const [expandedSubjects, setExpandedSubjects] = useState({});
@@ -36,7 +32,7 @@ export default function BookManagement() {
 
   const [uploadForm, setUploadForm] = useState({
     title: "",
-    classSubject: "6-Mathematics",  // Combined class-subject
+    classSubject: "6-Mathematics",  
     chapter_number: 1,
     description: "",
     pdf_file: null
@@ -79,7 +75,6 @@ export default function BookManagement() {
     }
   };
 
-  // Generate class-subject options from curriculum
   const classSubjectOptions = curriculumSubjects.map(subj => ({
     value: `${subj.class_level}-${subj.subject_name}`,
     label: `Class ${subj.class_level} - ${subj.subject_name}`
@@ -187,7 +182,7 @@ export default function BookManagement() {
 
   return (
     <AdminLayout title="Book Management" icon={BookOpen}>
-      {/* Action Buttons */}
+      {}
       <div className="flex gap-3 mb-6">
         <button onClick={fetchHierarchicalStructure}
           className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center gap-2">
@@ -199,7 +194,7 @@ export default function BookManagement() {
         </button>
       </div>
 
-      {/* Pinecone Stats */}
+      {}
       {pineconeStats && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">

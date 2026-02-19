@@ -8,7 +8,7 @@ Support Router
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from bson import ObjectId
 import logging
@@ -19,16 +19,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/support", tags=["Support"])
 
-
-# ==================== PYDANTIC MODELS ====================
-
 class FAQCreate(BaseModel):
     """Model for creating an FAQ."""
     question: str = Field(..., min_length=5, max_length=500)
     answer: str = Field(..., min_length=10, max_length=5000)
     category: str = Field(default="general")
     order: int = Field(default=0)
-
 
 class FAQUpdate(BaseModel):
     """Model for updating an FAQ."""
@@ -38,7 +34,6 @@ class FAQUpdate(BaseModel):
     order: Optional[int] = None
     is_active: Optional[bool] = None
 
-
 class ContactMessage(BaseModel):
     """Model for contact form submission."""
     name: str = Field(..., min_length=2, max_length=100)
@@ -46,16 +41,12 @@ class ContactMessage(BaseModel):
     subject: str = Field(..., min_length=5, max_length=200)
     message: str = Field(..., min_length=10, max_length=5000)
 
-
 class FeedbackSubmission(BaseModel):
     """Model for feedback submission."""
     rating: int = Field(..., ge=1, le=5)
     feedback_type: str = Field(default="general", description="general, bug, feature, content")
     message: str = Field(..., min_length=10, max_length=5000)
     page: Optional[str] = None
-
-
-# ==================== FAQ ENDPOINTS ====================
 
 @router.get("/faqs")
 async def get_faqs(
@@ -99,7 +90,6 @@ async def get_faqs(
         logger.error(f"Error fetching FAQs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/faqs")
 async def create_faq(faq: FAQCreate):
     """
@@ -133,7 +123,6 @@ async def create_faq(faq: FAQCreate):
     except Exception as e:
         logger.error(f"Error creating FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.put("/faqs/{faq_id}")
 async def update_faq(faq_id: str, faq: FAQUpdate):
@@ -183,7 +172,6 @@ async def update_faq(faq_id: str, faq: FAQUpdate):
         logger.error(f"Error updating FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/faqs/{faq_id}")
 async def delete_faq(faq_id: str):
     """
@@ -202,7 +190,6 @@ async def delete_faq(faq_id: str):
     except Exception as e:
         logger.error(f"Error deleting FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/faqs/{faq_id}/helpful")
 async def mark_faq_helpful(faq_id: str):
@@ -226,7 +213,6 @@ async def mark_faq_helpful(faq_id: str):
         logger.error(f"Error marking FAQ helpful: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/faqs/{faq_id}/view")
 async def increment_faq_views(faq_id: str):
     """
@@ -243,9 +229,6 @@ async def increment_faq_views(faq_id: str):
     except Exception as e:
         logger.error(f"Error incrementing FAQ views: {e}")
         return {"success": False}
-
-
-# ==================== CONTACT ENDPOINTS ====================
 
 @router.post("/contact")
 async def submit_contact_message(message: ContactMessage):
@@ -276,7 +259,6 @@ async def submit_contact_message(message: ContactMessage):
     except Exception as e:
         logger.error(f"Error submitting contact message: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/contact/messages")
 async def get_contact_messages(
@@ -313,9 +295,6 @@ async def get_contact_messages(
         logger.error(f"Error fetching contact messages: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== FEEDBACK ENDPOINTS ====================
-
 @router.post("/feedback")
 async def submit_feedback(
     feedback: FeedbackSubmission,
@@ -347,7 +326,6 @@ async def submit_feedback(
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/feedback")
 async def get_feedback(
@@ -388,7 +366,6 @@ async def get_feedback(
         logger.error(f"Error fetching feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/feedback/stats")
 async def get_feedback_stats():
     """
@@ -399,19 +376,16 @@ async def get_feedback_stats():
         
         total = collection.count_documents({})
         
-        # Average rating
         pipeline = [{"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}]
         avg_result = list(collection.aggregate(pipeline))
         avg_rating = round(avg_result[0]["avg_rating"], 2) if avg_result and avg_result[0].get("avg_rating") else 0
         
-        # Rating distribution
         rating_pipeline = [
             {"$group": {"_id": "$rating", "count": {"$sum": 1}}},
             {"$sort": {"_id": 1}}
         ]
         ratings = {str(r["_id"]): r["count"] for r in collection.aggregate(rating_pipeline)}
         
-        # Type distribution
         type_pipeline = [
             {"$group": {"_id": "$feedback_type", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}
@@ -429,15 +403,11 @@ async def get_feedback_stats():
         logger.error(f"Error getting feedback stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== HELP DOCUMENTATION ====================
-
 @router.get("/help")
 async def get_help_topics():
     """
     Get help documentation topics.
     """
-    # Static help documentation
     return {
         "topics": [
             {
@@ -487,16 +457,12 @@ async def get_help_topics():
         }
     }
 
-
-# ==================== SYSTEM STATUS ====================
-
 @router.get("/status")
 async def get_system_status():
     """
     Get system status and announcements.
     """
     try:
-        # Check database connectivity
         db_status = "operational"
         try:
             db.users.find_one({})

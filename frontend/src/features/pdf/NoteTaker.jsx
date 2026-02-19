@@ -10,16 +10,6 @@ import {
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 
-/**
- * NoteTaker Component - Persistent page-specific notes
- * 
- * Features:
- * - Create notes tied to specific pages
- * - Edit and delete existing notes
- * - Persistent storage (survives logout/refresh)
- * - Shows note markers on pages
- */
-
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
@@ -34,7 +24,6 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch notes for current page when component mounts or page changes
   useEffect(() => {
     if (currentLesson && user) {
       fetchNotes();
@@ -69,7 +58,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
       }
 
       const data = await response.json();
-      // Backend returns {notes: [...], total: X}, so extract the array
+      
       setNotes(data.notes || []);
     } catch (err) {
       console.error("Error fetching notes:", err);
@@ -97,7 +86,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         page_number: pageNumber,
         heading: noteForm.heading || `Page ${pageNumber} Note`,
         note_content: noteForm.note_content,
-        highlight_text: "", // Optional - can be added later if needed
+        highlight_text: "", 
       };
 
       const response = await fetch(`${API_BASE}/api/notes/`, {
@@ -207,7 +196,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
 
   return (
     <div className="fixed bottom-6 left-6 z-40 max-w-md animate-in slide-in-from-left-4 duration-300">
-      {/* Panel Header with Close Button */}
+      {}
       <div className="bg-card border rounded-t-2xl shadow-xl px-4 py-3 flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-2">
           <StickyNote className="h-4 w-4 text-yellow-600" />
@@ -226,7 +215,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         )}
       </div>
 
-      {/* Notes List */}
+      {}
       {notes.length > 0 && !isCreating && !editingNote && (
         <div className="bg-card border-x border-b rounded-b-2xl shadow-xl p-4 max-h-80 overflow-y-auto">
           <div className="space-y-3">

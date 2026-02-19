@@ -32,14 +32,12 @@ import quotesData from "../data/quotes.json";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// Sample course data - Purple/Violet theme
 const courses = [
   { id: 1, title: "Social Studies", watched: 2, total: 8, icon: Target, color: "bg-amber-100 text-amber-600" },
   { id: 2, title: "Mathematics", watched: 3, total: 8, icon: BarChart3, color: "bg-orange-100 text-orange-600" },
   { id: 3, title: "Physics", watched: 6, total: 12, icon: BookOpen, color: "bg-green-100 text-green-600" },
 ];
 
-// Quick action cards data - Purple/Violet theme
 const quickActions = [
   {
     id: 1,
@@ -83,9 +81,6 @@ const quickActions = [
   },
 ];
 
-
-
-// Stats data
 const statsData = [
   { label: "1-10 Jan", value: 45 },
   { label: "11-20 Jan", value: 50 },
@@ -103,24 +98,19 @@ export default function Dashboard() {
   const [pendingTests, setPendingTests] = useState([]);
   const [loadingTests, setLoadingTests] = useState(true);
 
-  // Dynamic dashboard data
   const [progressPercentage, setProgressPercentage] = useState(0);
   const [activityData, setActivityData] = useState([]);
   const [dynamicCourses, setDynamicCourses] = useState([]);
   const [loadingProgress, setLoadingProgress] = useState(true);
 
-
-
-  // Daily motivational quotes - rotates based on day of month
   const getDailyQuote = () => {
-    // Get current day of the month (1-31)
+    
     const day = new Date().getDate();
-    // Map to 0-based index
+    
     const quoteIndex = (day - 1) % quotesData.quotes.length;
     return quotesData.quotes[quoteIndex];
   };
 
-  // Get current month's activity periods (1-10, 11-20, 21-end)
   const getActivityPeriods = () => {
     const now = new Date();
     const currentDay = now.getDate();
@@ -143,7 +133,6 @@ export default function Dashboard() {
     logUserActivity();
   }, [user.id]);
 
-  // Fetch progress data from backend
   const fetchProgressData = async () => {
     try {
       setLoadingProgress(true);
@@ -152,14 +141,13 @@ export default function Dashboard() {
         const data = await response.json();
         setProgressPercentage(data.progress?.overall_progress || 0);
 
-        // Calculate activity data from streak data
         if (data.streak?.weekly_activity) {
           const periods = getActivityPeriods();
-          // Map weekly activity to period bars
+          
           const totalHours = data.streak.weekly_activity.reduce((sum, d) => sum + (d.hours || 0), 0);
           setActivityData(periods.map((p, i) => ({
             ...p,
-            value: Math.min(60, 20 + (totalHours * 10 * (p.isActive ? 1.5 : 0.5))) // Scale to bar height
+            value: Math.min(60, 20 + (totalHours * 10 * (p.isActive ? 1.5 : 0.5))) 
           })));
         } else {
           setActivityData(getActivityPeriods().map(p => ({ ...p, value: p.isActive ? 50 : 30 })));
@@ -173,13 +161,11 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch available subjects from curriculum API for this student's class
   const fetchAvailableSubjects = async () => {
     try {
       const classLevel = user.classLevel || 10;
       console.log(`Fetching subjects for class ${classLevel}`);
       
-      // Try curriculum API first
       const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true&class_level=${classLevel}`);
       if (response.ok) {
         const data = await response.json();
@@ -187,12 +173,11 @@ export default function Dashboard() {
         
         if (subjectList.length === 0) {
           console.log("No subjects found in curriculum for this class level, trying books API");
-          // Fallback: try books API
+          
           await fetchSubjectsFromBooks();
           return;
         }
 
-        // Map curriculum subjects to course cards with icons
         const iconMap = {
           'Physics': BookOpen, 'Chemistry': BarChart3, 'Mathematics': BarChart3,
           'Hindi': Target, 'English': FileText, 'Social Science': Users,
@@ -218,7 +203,7 @@ export default function Dashboard() {
         console.log("Mapped curriculum courses:", mappedCourses);
         setDynamicCourses(mappedCourses);
       } else {
-        // Fallback to books API
+        
         await fetchSubjectsFromBooks();
       }
     } catch (err) {
@@ -227,7 +212,6 @@ export default function Dashboard() {
     }
   };
 
-  // Fallback: fetch subjects from books API  
   const fetchSubjectsFromBooks = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel || 10}&student_id=${user.id}`);
@@ -266,7 +250,6 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch streak data from backend
   const fetchStreakData = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/user/streak/${user.id}`);
@@ -279,7 +262,6 @@ export default function Dashboard() {
     }
   };
 
-  // Log user activity for streak tracking
   const logUserActivity = async () => {
     try {
       await fetch(`${API_BASE}/api/user/activity/log?student_id=${user.id}&hours=0.5`, {
@@ -296,9 +278,9 @@ export default function Dashboard() {
       const response = await fetch(`${API_BASE}/api/tests/student/${user.id}`);
       if (response.ok) {
         const data = await response.json();
-        // Filter for pending tests (not submitted)
+        
         const pending = (data.tests || []).filter(test => test.status !== 'submitted');
-        setPendingTests(pending.slice(0, 3)); // Show max 3
+        setPendingTests(pending.slice(0, 3)); 
       }
     } catch (err) {
       console.error("Failed to fetch tests:", err);
@@ -364,15 +346,14 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
-        {/* Top Bar */}
+        {}
 
-
-        {/* Main Grid */}
+        {}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Main Content */}
+          {}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Motivational Quote Banner - No course pills */}
+            {}
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-8 text-white relative overflow-hidden">
               <div className="absolute right-0 top-0 w-64 h-64 opacity-20">
                 <div className="w-full h-full bg-white/20 rounded-full blur-3xl"></div>
@@ -409,7 +390,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Your Tests */}
+            {}
             <div className="bg-white rounded-2xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">Your Pending Tests</h3>
@@ -542,8 +523,6 @@ export default function Dashboard() {
                 <div className="text-4xl font-bold">{streakDays}</div>
               </div>
             </div>
-
-
 
             {/* Suggestions to Admin */}
             <div

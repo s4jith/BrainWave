@@ -12,7 +12,6 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
-  BookOpen,
   Target,
   AlertTriangle,
   Shield
@@ -20,22 +19,11 @@ import {
 import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
 
-/**
- * TestSession Page
- * 
- * Handles the actual test-taking experience:
- * - Display questions one at a time
- * - Voice/text input for answers
- * - Submit answers
- * - Complete test and get evaluation
- */
-
 export default function TestSession() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useUserStore();
 
-  // Get session data from navigation state
   const { session: initialSession, testConfig } = location.state || {};
 
   const [session, setSession] = useState(initialSession);
@@ -48,19 +36,16 @@ export default function TestSession() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isLoading, setIsLoading] = useState(!initialSession);
   const [error, setError] = useState(null);
-  const [testCompleted, setTestCompleted] = useState(false); // Track if test is completed
-  const [showExitWarning, setShowExitWarning] = useState(false); // Show modal when trying to navigate
+  const [testCompleted, setTestCompleted] = useState(false); 
+  const [showExitWarning, setShowExitWarning] = useState(false); 
 
-  // Voice recognition
   const [recognition, setRecognition] = useState(null);
 
-  // Anti-cheating tracking
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [typingWarnings, setTypingWarnings] = useState([]);
   const [showCheatingWarning, setShowCheatingWarning] = useState(false);
-  const [testBlocked, setTestBlocked] = useState(false); // Block test on cheating
+  const [testBlocked, setTestBlocked] = useState(false); 
 
-  // Prevent duplicate API calls (React StrictMode)
   const initCalledRef = useRef(false);
 
   useEffect(() => {
@@ -78,13 +63,11 @@ export default function TestSession() {
 
         let newSession;
 
-        // Check test type
-        // Check test type
         if (testConfig.test_type === 'qb_test') {
-          // New QB test
+          
           newSession = await testService.startQBTest(testConfig);
         } else if (testConfig.test_type === 'ai_with_analytics') {
-          // AI test with topic-level analytics and difficulty selection
+          
           newSession = await testService.startAITest({
             studentId: user?.id || user?.sub || "guest",
             classLevel: testConfig.class_level || user?.classLevel || 11,
@@ -94,7 +77,7 @@ export default function TestSession() {
             num_questions: testConfig.num_questions || 15
           });
         } else if (testConfig.use_chapter_test) {
-          // Fixed-format chapter test
+          
           newSession = await testService.startChapterTest({
             studentId: user?.id || user?.sub || "guest",
             classLevel: testConfig.class_level || user?.classLevel || 11,
@@ -102,7 +85,7 @@ export default function TestSession() {
             chapterNumber: testConfig.chapter_number
           });
         } else {
-          // Legacy test start
+          
           newSession = await testService.startTestV2({
             ...testConfig,
             studentId: user?.id || user?.sub || "guest",
@@ -111,7 +94,7 @@ export default function TestSession() {
         }
 
         setSession(newSession);
-        // Set timer from response (null if no timer)
+        
         if (newSession.time_limit) {
           setTimeRemaining(newSession.time_limit * 60);
         } else {
@@ -131,12 +114,10 @@ export default function TestSession() {
   useEffect(() => {
     if (!session) return;
 
-    // Set initial time if not set
     if (timeRemaining === 0 && session.time_limit_minutes) {
       setTimeRemaining(session.time_limit_minutes * 60);
     }
 
-    // Initialize speech recognition
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const rec = new SpeechRecognition();
@@ -165,14 +146,13 @@ export default function TestSession() {
     }
   }, [session]);
 
-  // Timer
   useEffect(() => {
     if (timeRemaining === null || timeRemaining <= 0) return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
-          // Auto-submit when time runs out
+          
           handleCompleteTest();
           return 0;
         }
@@ -183,7 +163,6 @@ export default function TestSession() {
     return () => clearInterval(timer);
   }, [timeRemaining]);
 
-  // Block navigation during test
   useEffect(() => {
     if (testCompleted || !session) return;
 
@@ -200,12 +179,11 @@ export default function TestSession() {
     };
   }, [testCompleted, session]);
 
-  // Intercept DashboardLayout navigation clicks
   useEffect(() => {
     if (testCompleted || !session) return;
 
     const handleClick = (e) => {
-      // Check if clicking on navigation elements
+      
       const target = e.target.closest('a, button[class*="nav"], button[class*="sidebar"]');
       if (target && !target.closest('.test-session-content')) {
         const href = target.getAttribute('href');
@@ -260,13 +238,11 @@ export default function TestSession() {
         currentAnswer.trim()
       );
 
-      // Save locally
       setAnswers(prev => ({
         ...prev,
         [currentQuestion.question_id]: currentAnswer.trim()
       }));
 
-      // Move to next question if not last
       if (currentQuestionIndex < session.questions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
         setCurrentAnswer(answers[session.questions[currentQuestionIndex + 1]?.question_id] || "");
@@ -280,7 +256,7 @@ export default function TestSession() {
   };
 
   const handleNavigate = (direction) => {
-    // Save current answer before navigating
+    
     if (currentAnswer.trim() && currentQuestion) {
       setAnswers(prev => ({
         ...prev,
@@ -294,7 +270,7 @@ export default function TestSession() {
 
     setCurrentQuestionIndex(newIndex);
     setCurrentAnswer(answers[session.questions[newIndex]?.question_id] || "");
-    // Reset timer for new question
+    
     setQuestionStartTime(Date.now());
   };
 
@@ -303,7 +279,7 @@ export default function TestSession() {
       alert("Test blocked due to suspected cheating. Please contact your teacher.");
       return;
     }
-    // Save current answer first
+    
     if (currentAnswer.trim() && currentQuestion) {
       try {
         await testService.submitAnswer(
@@ -321,7 +297,7 @@ export default function TestSession() {
     setError(null);
 
     try {
-      // Include suspicious activity flag if cheating was detected
+      
       const completionData = {
         student_id: user.id,
         suspicious_activity: typingWarnings.length > 0,
@@ -329,7 +305,6 @@ export default function TestSession() {
         warnings: typingWarnings
       };
 
-      // Construct final answers array
       const finalAnswersMap = { ...answers };
       if (currentAnswer.trim() && currentQuestion) {
         finalAnswersMap[currentQuestion.question_id] = currentAnswer.trim();
@@ -344,10 +319,8 @@ export default function TestSession() {
 
       const result = await testService.completeTest(session.session_id, user.id, formattedAnswers, completionData);
 
-      // Mark test as completed to allow navigation
       setTestCompleted(true);
 
-      // Navigate to results page
       navigate("/test-result", {
         state: {
           result: {
@@ -383,7 +356,7 @@ export default function TestSession() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+        {}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -400,7 +373,7 @@ export default function TestSession() {
 
             <div className="flex items-center gap-4">
               {/* Timer */}
-              {/* Timer - only show if active */}
+              {}
               {timeRemaining !== null && (
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl ${timeRemaining < 60 ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-700"
                   }`}>
@@ -409,7 +382,7 @@ export default function TestSession() {
                 </div>
               )}
 
-              {/* Progress */}
+              {}
               <div className="text-sm text-gray-500">
                 <span className="font-semibold text-gray-800">{answeredCount}</span>
                 /{session.questions.length} answered
@@ -418,9 +391,9 @@ export default function TestSession() {
           </div>
         </div>
 
-        {/* Question Card */}
+        {}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Question Header */}
+          {}
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-orange-600">
@@ -440,7 +413,7 @@ export default function TestSession() {
             </div>
           </div>
 
-          {/* Question Text */}
+          {}
           <div className="p-6">
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
@@ -457,10 +430,10 @@ export default function TestSession() {
             </p>
           </div>
 
-          {/* Answer Input - Conditional based on question type */}
+          {}
           <div className="p-6 pt-0">
             <div className="space-y-4">
-              {/* MCQ Options */}
+              {}
               {currentQuestion?.question_type === 'mcq' && currentQuestion?.options ? (
                 <>
                   <label className="text-sm font-medium text-gray-700">Select your answer:</label>
@@ -487,7 +460,7 @@ export default function TestSession() {
                   </div>
                 </>
               ) : currentQuestion?.question_type === 'fillup' ? (
-                /* Fill in the Blank - Short text input */
+                
                 <>
                   <label className="text-sm font-medium text-gray-700">Your Answer:</label>
                   <input
@@ -521,7 +494,6 @@ export default function TestSession() {
                   />
                 </>
               ) : (
-                /* Two-mark / Short Answer / Long Answer - Textarea with voice input */
                 <>
                   <label className="text-sm font-medium text-gray-700">
                     {currentQuestion?.question_type === 'long_answer'
@@ -532,7 +504,6 @@ export default function TestSession() {
                     <textarea
                       value={currentAnswer}
                       onChange={(e) => {
-                        // Allow voice input without restrictions
                         if (isRecording) {
                           setCurrentAnswer(e.target.value);
                           return;
@@ -543,7 +514,6 @@ export default function TestSession() {
                         const newLength = newValue.length;
                         const lengthDiff = newLength - oldLength;
 
-                        // Detect suspiciously fast typing
                         if (lengthDiff > 0) {
                           const timeSinceStart = (Date.now() - questionStartTime) / 1000;
                           const typingSpeed = newLength / timeSinceStart;
@@ -598,7 +568,7 @@ export default function TestSession() {
                         }`}
                     />
 
-                    {/* Voice Input Button */}
+                    {}
                     {recognition && (
                       <button
                         onClick={toggleRecording}
@@ -624,7 +594,7 @@ export default function TestSession() {
             </div>
           </div>
 
-          {/* Cheating Warning - Red Card */}
+          {}
           {showCheatingWarning && (
             <div className="px-6 pb-4">
               <div className="bg-red-50 border-2 border-red-500 rounded-xl p-4">
@@ -727,7 +697,7 @@ export default function TestSession() {
           </div>
         </div>
 
-        {/* Question Navigator */}
+        {}
         <div className="mt-6 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Questions Overview</h4>
 
@@ -774,7 +744,7 @@ export default function TestSession() {
         </div>
       </div>
 
-      {/* Exit Warning Modal */}
+      {}
       {showExitWarning && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">

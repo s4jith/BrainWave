@@ -6,7 +6,7 @@ const API_BASE = "http://localhost:8000";
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
-    const [step, setStep] = useState(1); // 1=email, 2=otp, 3=reset
+    const [step, setStep] = useState(1); 
     const [email, setEmail] = useState("");
     const [otp, setOtp] = useState("");
     const [resetToken, setResetToken] = useState("");
@@ -99,7 +99,7 @@ export default function ForgotPassword() {
     return (
         <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50/30 px-4">
             <div className="w-full max-w-md">
-                {/* Back link */}
+                {}
                 <Link
                     to="/login"
                     className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-8 transition-colors"
@@ -110,7 +110,7 @@ export default function ForgotPassword() {
 
                 {/* Card */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-                    {/* Header */}
+                    {}
                     <div className="text-center mb-8">
                         <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                             <KeyRound className="w-8 h-8 text-indigo-600" />
@@ -123,7 +123,7 @@ export default function ForgotPassword() {
                         </p>
                     </div>
 
-                    {/* Step indicator */}
+                    {}
                     <div className="flex items-center justify-center gap-2 mb-8">
                         {stepInfo.map((s, i) => {
                             const Icon = s.icon;
@@ -149,7 +149,7 @@ export default function ForgotPassword() {
                         })}
                     </div>
 
-                    {/* Step 1: Email */}
+                    {}
                     {step === 1 && (
                         <form onSubmit={handleSendOTP} className="space-y-4">
                             <div>
@@ -178,7 +178,7 @@ export default function ForgotPassword() {
                         </form>
                     )}
 
-                    {/* Step 2: OTP */}
+                    {}
                     {step === 2 && (
                         <form onSubmit={handleVerifyOTP} className="space-y-4">
                             <div>

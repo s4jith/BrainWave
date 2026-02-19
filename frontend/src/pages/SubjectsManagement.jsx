@@ -1,7 +1,3 @@
-/**
- * SubjectsManagement - Admin page to manage subjects, chapters, and topics
- * Hierarchical content organization for curriculum management
- */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -23,14 +19,12 @@ export default function SubjectsManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
 
-  // Modals
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showAIExtractionModal, setShowAIExtractionModal] = useState(false);
   const [showPendingReview, setShowPendingReview] = useState(false);
 
-  // Forms
   const [subjectForm, setSubjectForm] = useState({
     subject_name: "",
     class_level: 10,
@@ -50,19 +44,16 @@ export default function SubjectsManagement() {
     difficulty_level: "medium"
   });
 
-  // Expansion states
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
 
-  // Editing states
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingChapter, setEditingChapter] = useState(null);
   const [editingTopic, setEditingTopic] = useState(null);
 
   const [submitting, setSubmitting] = useState(false);
 
-  // Summary editor state
-  const [summaryModal, setSummaryModal] = useState(null); // { subjectId, chapterId, chapterName, chapterNumber, summary }
+  const [summaryModal, setSummaryModal] = useState(null); 
   const [summarySaving, setSummarySaving] = useState(false);
   const [summarySaveStatus, setSummarySaveStatus] = useState(null);
   const summaryEditorRef = useRef(null);
@@ -106,7 +97,7 @@ export default function SubjectsManagement() {
       );
       if (!res.ok) throw new Error("Save failed");
       setSummarySaveStatus("success");
-      // Update local chapter summary
+      
       if (selectedSubject) {
         const updatedChapters = selectedSubject.chapters.map(ch =>
           ch.chapter_id === summaryModal.chapterId ? { ...ch, summary: html } : ch
@@ -216,7 +207,6 @@ export default function SubjectsManagement() {
         });
         fetchSubjects();
 
-        // Refresh selected subject details
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
           setSelectedSubject(updated);
@@ -260,7 +250,6 @@ export default function SubjectsManagement() {
         });
         fetchSubjects();
 
-        // Refresh selected subject details
         if (selectedSubject && selectedSubject.subject_id === subjectId) {
           const updated = await fetchSubjectDetails(subjectId);
           if (updated) {
@@ -289,7 +278,7 @@ export default function SubjectsManagement() {
       });
 
       if (response.ok) {
-        // Optimistically remove from local state immediately
+        
         setSubjects(prev => prev.filter(s => s.subject_id !== subjectId));
 
         if (selectedSubject && selectedSubject.subject_id === subjectId) {
@@ -298,7 +287,7 @@ export default function SubjectsManagement() {
         }
 
         alert("Subject deleted successfully!");
-        // Refresh from server to ensure consistency
+        
         fetchSubjects();
       } else {
         const error = await response.json();
@@ -343,7 +332,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        // Refresh selected subject details
+        
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
           setSelectedSubject(updated);
@@ -377,7 +366,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        // Refresh selected subject details
+        
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
           setSelectedSubject(updated);
@@ -427,7 +416,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        // Refresh selected subject details
+        
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
           setSelectedSubject(updated);
@@ -461,7 +450,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        // Refresh selected subject details
+        
         const updated = await fetchSubjectDetails(selectedSubject.subject_id);
         if (updated) {
           setSelectedSubject(updated);
@@ -507,7 +496,7 @@ export default function SubjectsManagement() {
 
   return (
     <AdminLayout title="Subjects, Chapters and Topics" icon={BookOpen}>
-      {/* Header Actions */}
+      {}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -553,7 +542,7 @@ export default function SubjectsManagement() {
         </button>
       </div>
 
-      {/* Subjects Grid */}
+      {}
       {filteredSubjects.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
           <BookOpen className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />

@@ -14,9 +14,6 @@ import useAnnotationStore from "../../stores/annotationStore";
 import useUserStore from "../../stores/userStore";
 import ReactMarkdown from "react-markdown";
 
-/**
- * Expandable Text Component
- */
 const ExpandableText = ({ text, limit = 600 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -48,11 +45,6 @@ const ExpandableText = ({ text, limit = 600 }) => {
   );
 };
 
-/**
- * History Panel Component
- * Shows all annotations for the current lesson (AI + Notes)
- */
-
 export default function HistoryPanel({ open, onClose, currentLesson }) {
   const {
     getAnnotationsByLesson,
@@ -63,7 +55,6 @@ export default function HistoryPanel({ open, onClose, currentLesson }) {
 
   const { user } = useUserStore();
 
-  // Fetch annotations when panel opens
   useEffect(() => {
     if (open && user?.id && currentLesson) {
       fetchAnnotations(
@@ -76,10 +67,9 @@ export default function HistoryPanel({ open, onClose, currentLesson }) {
   }, [open, user, currentLesson, fetchAnnotations]);
 
   const lessonAnnotations = currentLesson
-    ? getAnnotationsByLesson(currentLesson.number) // Use chapter number as ID mapping
+    ? getAnnotationsByLesson(currentLesson.number) 
     : [];
 
-  // Fallback: Try with ID if number didn't return anything (handling flexible ID mapping)
   const annotations = lessonAnnotations.length > 0
     ? lessonAnnotations
     : (currentLesson ? getAnnotationsByLesson(currentLesson.id) : []);
@@ -89,17 +79,16 @@ export default function HistoryPanel({ open, onClose, currentLesson }) {
 
   const formatDate = (timestamp) => {
     try {
-      // Backend stores UTC timestamps - ensure proper parsing
+      
       let date;
       if (typeof timestamp === 'string') {
-        // Add 'Z' suffix if not present to indicate UTC
+        
         const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
         date = new Date(utcTimestamp);
       } else {
         date = new Date(timestamp);
       }
 
-      // Format in user's local timezone
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",

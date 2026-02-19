@@ -3,7 +3,7 @@ Curriculum Management Router
 Admin endpoints for managing subjects, chapters, and topics hierarchy
 """
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -29,9 +29,6 @@ router = APIRouter(prefix="/api/curriculum", tags=["Curriculum Management"])
 SUBJECTS_COLLECTION = "subjects"
 PENDING_CURRICULUM_COLLECTION = "pending_curriculum"
 
-
-# ==================== SUBJECT MANAGEMENT ====================
-
 @router.get("/subjects", response_model=List[SubjectSummary])
 async def get_all_subjects(
     class_level: Optional[int] = Query(None, ge=5, le=12),
@@ -47,15 +44,12 @@ async def get_all_subjects(
         if class_level:
             query["class_level"] = class_level
         
-        # Filter by is_active - handle both new format and legacy documents
         if is_active is True:
-            # Show active subjects (explicit True) but exclude explicitly False ones
             query["is_active"] = {"$ne": False}
         elif is_active is False:
             query["is_active"] = False
         elif is_active is not None:
             query["is_active"] = is_active
-        # If is_active is None (default True), show only active
         else:
             query["is_active"] = {"$ne": False}
         
@@ -64,10 +58,8 @@ async def get_all_subjects(
         
         logger.info(f"Query: {query}, Retrieved {len(subjects)} subjects")
         
-        # Convert to summary format
         summaries = []
         for subject in subjects:
-            # Filter active chapters and topics for counts
             active_chapters = [ch for ch in subject.get("chapters", []) if ch.get("is_active", True) != False]
             total_topics = sum(
                 len([t for t in ch.get("topics", []) if t.get("is_active", True) != False]) 
@@ -92,7 +84,6 @@ async def get_all_subjects(
         logger.error(f" Get subjects failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/subjects/{subject_id}", response_model=Subject)
 async def get_subject_details(subject_id: str):
     """
@@ -105,17 +96,14 @@ async def get_subject_details(subject_id: str):
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        # Filter out inactive chapters and topics
         active_chapters = []
         for chapter in subject.get("chapters", []):
             if chapter.get("is_active", True) != False:
-                # Also filter out inactive topics within the chapter
                 chapter_copy = chapter.copy()
                 active_topics = [t for t in chapter_copy.get("topics", []) if t.get("is_active", True) != False]
                 chapter_copy["topics"] = active_topics
                 active_chapters.append(chapter_copy)
         
-        # Convert MongoDB document to Subject model
         subject_data = {
             "subject_id": subject["subject_id"],
             "subject_name": subject["subject_name"],
@@ -140,7 +128,6 @@ async def get_subject_details(subject_id: str):
         logger.error(f" Get subject details failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/subjects", response_model=Subject)
 async def create_subject(request: CreateSubjectRequest):
     """
@@ -149,7 +136,6 @@ async def create_subject(request: CreateSubjectRequest):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Check if active subject already exists for this class
         existing = await collection.find_one({
             "subject_name": request.subject_name,
             "class_level": request.class_level,
@@ -162,7 +148,6 @@ async def create_subject(request: CreateSubjectRequest):
                 detail=f"Subject '{request.subject_name}' already exists for Class {request.class_level}"
             )
         
-        # Check if there's an inactive subject - reactivate it instead
         inactive_subject = await collection.find_one({
             "subject_name": request.subject_name,
             "class_level": request.class_level,
@@ -170,7 +155,6 @@ async def create_subject(request: CreateSubjectRequest):
         })
         
         if inactive_subject:
-            # Reactivate the existing subject
             subject_id = inactive_subject["subject_id"]
             await collection.update_one(
                 {"subject_id": subject_id},
@@ -185,7 +169,6 @@ async def create_subject(request: CreateSubjectRequest):
                 }
             )
             logger.info(f"Reactivated subject: {request.subject_name} for Class {request.class_level}")
-            # Return the reactivated subject
             updated_subject = await collection.find_one({"subject_id": subject_id})
             subject_data = {
                 "subject_id": updated_subject["subject_id"],
@@ -204,7 +187,6 @@ async def create_subject(request: CreateSubjectRequest):
             }
             return Subject(**subject_data)
         
-        # Create subject document
         subject_id = f"{request.subject_name.lower().replace(' ', '_')}_{request.class_level}"
         subject_doc = {
             "subject_id": subject_id,
@@ -236,7 +218,6 @@ async def create_subject(request: CreateSubjectRequest):
         logger.error(f" Create subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/subjects/{subject_id}", response_model=Subject)
 async def update_subject(subject_id: str, request: UpdateSubjectRequest):
     """
@@ -245,7 +226,6 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Build update document
         update_data = {"updated_at": datetime.utcnow()}
         
         if request.subject_name:
@@ -270,7 +250,6 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
         
         logger.info(f"Updated subject: {subject_id}")
         
-        # Convert to Subject model
         subject_data = {
             "subject_id": result["subject_id"],
             "subject_name": result["subject_name"],
@@ -295,7 +274,6 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
         logger.error(f" Update subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/subjects/{subject_id}")
 async def delete_subject(subject_id: str):
     """
@@ -304,7 +282,6 @@ async def delete_subject(subject_id: str):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Log before deletion
         logger.info(f" Attempting to delete subject: {subject_id}")
         
         result = await collection.find_one_and_update(
@@ -326,9 +303,6 @@ async def delete_subject(subject_id: str):
         logger.error(f" Delete subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== CHAPTER MANAGEMENT ====================
-
 @router.get("/subjects/{subject_id}/chapters", response_model=List[ChapterSummary])
 async def get_chapters(subject_id: str):
     """
@@ -343,7 +317,6 @@ async def get_chapters(subject_id: str):
         
         chapters = subject.get("chapters", [])
         
-        # Convert to summary format
         summaries = []
         for chapter in chapters:
             summaries.append(ChapterSummary(
@@ -363,7 +336,6 @@ async def get_chapters(subject_id: str):
         logger.error(f" Get chapters failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/subjects/{subject_id}/chapters", response_model=Chapter)
 async def create_chapter(subject_id: str, request: CreateChapterRequest):
     """
@@ -372,12 +344,10 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Get subject
         subject = await collection.find_one({"subject_id": subject_id})
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        # Check if chapter number already exists
         chapters = subject.get("chapters", [])
         if any(ch["chapter_number"] == request.chapter_number for ch in chapters):
             raise HTTPException(
@@ -385,7 +355,6 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
                 detail=f"Chapter {request.chapter_number} already exists"
             )
         
-        # Create chapter
         chapter_id = f"{subject_id}_ch{request.chapter_number}"
         chapter_doc = {
             "chapter_id": chapter_id,
@@ -403,7 +372,6 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
             "updated_at": datetime.utcnow()
         }
         
-        # Add chapter to subject
         result = await collection.update_one(
             {"subject_id": subject_id},
             {
@@ -424,7 +392,6 @@ async def create_chapter(subject_id: str, request: CreateChapterRequest):
         logger.error(f" Create chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/subjects/{subject_id}/chapters/{chapter_id}", response_model=Chapter)
 async def update_chapter(
     subject_id: str,
@@ -437,7 +404,6 @@ async def update_chapter(
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Build update document
         update_fields = {}
         if request.chapter_name:
             update_fields["chapters.$.chapter_name"] = request.chapter_name
@@ -468,7 +434,6 @@ async def update_chapter(
         if not result:
             raise HTTPException(status_code=404, detail="Chapter not found")
         
-        # Find updated chapter
         updated_chapter = next(
             (ch for ch in result["chapters"] if ch["chapter_id"] == chapter_id),
             None
@@ -485,7 +450,6 @@ async def update_chapter(
     except Exception as e:
         logger.error(f" Update chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/subjects/{subject_id}/chapters/{chapter_id}")
 async def delete_chapter(subject_id: str, chapter_id: str):
@@ -518,12 +482,8 @@ async def delete_chapter(subject_id: str, chapter_id: str):
         logger.error(f" Delete chapter failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== CHAPTER SUMMARY ENDPOINTS ====================
-
 class UpdateChapterSummaryRequest(BaseModel):
     summary: str
-
 
 @router.put("/subjects/{subject_id}/chapters/{chapter_id}/summary")
 async def update_chapter_summary(
@@ -562,7 +522,6 @@ async def update_chapter_summary(
         logger.error(f" Update chapter summary failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/subjects/{subject_id}/chapters/{chapter_id}/summary")
 async def get_chapter_summary(subject_id: str, chapter_id: str):
     """
@@ -600,7 +559,6 @@ async def get_chapter_summary(subject_id: str, chapter_id: str):
         logger.error(f" Get chapter summary failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/chapter-summary-by-book")
 async def get_chapter_summary_by_book(
     subject_name: str = Query(...),
@@ -614,7 +572,6 @@ async def get_chapter_summary_by_book(
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Find subject by name and class level (case-insensitive)
         subject = await collection.find_one({
             "subject_name": {"$regex": f"^{subject_name}$", "$options": "i"},
             "class_level": class_level,
@@ -644,9 +601,6 @@ async def get_chapter_summary_by_book(
         logger.error(f" Get chapter summary by book failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== TOPIC MANAGEMENT ====================
-
 @router.get("/subjects/{subject_id}/chapters/{chapter_id}/topics", response_model=List[TopicSummary])
 async def get_topics(subject_id: str, chapter_id: str):
     """
@@ -659,7 +613,6 @@ async def get_topics(subject_id: str, chapter_id: str):
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        # Find chapter
         chapter = next(
             (ch for ch in subject.get("chapters", []) if ch["chapter_id"] == chapter_id),
             None
@@ -670,7 +623,6 @@ async def get_topics(subject_id: str, chapter_id: str):
         
         topics = chapter.get("topics", [])
         
-        # Convert to summary format
         summaries = []
         for topic in topics:
             summaries.append(TopicSummary(
@@ -691,7 +643,6 @@ async def get_topics(subject_id: str, chapter_id: str):
         logger.error(f" Get topics failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/subjects/{subject_id}/chapters/{chapter_id}/topics", response_model=Topic)
 async def create_topic(
     subject_id: str,
@@ -704,10 +655,8 @@ async def create_topic(
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Generate topic ID
         topic_id = f"{chapter_id}_{request.topic_name.lower().replace(' ', '_')}"
         
-        # Create topic document
         topic_doc = {
             "topic_id": topic_id,
             "topic_name": request.topic_name,
@@ -718,12 +667,11 @@ async def create_topic(
             "estimated_time_minutes": request.estimated_time_minutes or 45,
             "difficulty_level": request.difficulty_level or "medium",
             "prerequisites": request.prerequisites or [],
-            "order": 999,  # Will be set based on existing topics
+            "order": 999,
             "is_active": True,
             "question_count": 0
         }
         
-        # Add topic to chapter
         result = await collection.update_one(
             {"subject_id": subject_id, "chapters.chapter_id": chapter_id},
             {
@@ -744,7 +692,6 @@ async def create_topic(
         logger.error(f" Create topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/subjects/{subject_id}/chapters/{chapter_id}/topics/{topic_id}", response_model=Topic)
 async def update_topic(
     subject_id: str,
@@ -758,7 +705,6 @@ async def update_topic(
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Build update fields
         update_fields = {}
         if request.topic_name:
             update_fields["chapters.$[chapter].topics.$[topic].topic_name"] = request.topic_name
@@ -796,7 +742,6 @@ async def update_topic(
         if not result:
             raise HTTPException(status_code=404, detail="Topic not found")
         
-        # Find updated topic
         chapter = next(
             (ch for ch in result["chapters"] if ch["chapter_id"] == chapter_id),
             None
@@ -820,7 +765,6 @@ async def update_topic(
     except Exception as e:
         logger.error(f" Update topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/subjects/{subject_id}/chapters/{chapter_id}/topics/{topic_id}")
 async def delete_topic(subject_id: str, chapter_id: str, topic_id: str):
@@ -856,9 +800,6 @@ async def delete_topic(subject_id: str, chapter_id: str, topic_id: str):
         logger.error(f=" Delete topic failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== AVAILABLE BOOKS METADATA ====================
-
 @router.get("/available-books")
 async def get_available_books():
     """
@@ -877,13 +818,10 @@ async def get_available_books():
         }
     """
     try:
-        # Get distinct subjects and classes from books collection
         books_collection = db.books
         
-        # Get all books
         all_books = list(books_collection.find({}, {"subject": 1, "class": 1}))
         
-        # Extract unique subjects and classes
         subjects_set = set()
         classes_set = set()
         subject_class_map = {}
@@ -902,11 +840,9 @@ async def get_available_books():
                     classes_set.add(class_level)
                     subject_class_map[subject].add(class_level)
         
-        # Convert sets to sorted lists
         subjects = sorted(list(subjects_set))
         classes = sorted(list(classes_set))
         
-        # Convert subject_class_map sets to sorted lists
         subject_class_map_final = {
             subject: sorted(list(classes))
             for subject, classes in subject_class_map.items()
@@ -923,9 +859,6 @@ async def get_available_books():
     except Exception as e:
         logger.error(f" Get available books failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== AI-POWERED EXTRACTION ====================
 
 @router.post("/extract-from-upload")
 async def extract_curriculum_from_upload(
@@ -952,7 +885,6 @@ async def extract_curriculum_from_upload(
     try:
         logger.info(f"📤 Received curriculum extraction request: {file.filename}")
         
-        # Validate file type
         allowed_types = [
             "application/pdf",
             "image/jpeg", "image/jpg", "image/png", "image/webp"
@@ -964,12 +896,10 @@ async def extract_curriculum_from_upload(
                 detail=f"Invalid file type: {file.content_type}. Allowed: PDF, JPEG, PNG, WebP"
             )
         
-        # Read file bytes
         file_bytes = await file.read()
         
         logger.info(f"📖 Processing {file.content_type} file ({len(file_bytes)} bytes)...")
         
-        # Extract chapters using AI
         extracted_chapters: List[ExtractedChapter] = []
         
         if file.content_type == "application/pdf":
@@ -979,7 +909,6 @@ async def extract_curriculum_from_upload(
                 class_level=class_level
             )
         else:
-            # Image file
             extracted_chapters = await curriculum_extraction_service.extract_from_image(
                 image_bytes=file_bytes,
                 mime_type=file.content_type,
@@ -987,7 +916,6 @@ async def extract_curriculum_from_upload(
                 class_level=class_level
             )
         
-        # Create pending curriculum item
         pending_id = f"pending_{subject_name.lower().replace(' ', '_')}_{class_level}_{uuid.uuid4().hex[:8]}"
         
         pending_item = {
@@ -997,7 +925,7 @@ async def extract_curriculum_from_upload(
             "board": board,
             "extracted_chapters": [ch.dict() for ch in extracted_chapters],
             "source_file_name": file.filename,
-            "source_file_url": "",  # Could upload to cloud storage here
+            "source_file_url": "",
             "extraction_method": "ai",
             "status": "pending",
             "uploaded_by": uploaded_by,
@@ -1007,7 +935,6 @@ async def extract_curriculum_from_upload(
             "rejection_reason": ""
         }
         
-        # Save to pending collection
         collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
         result = await collection.insert_one(pending_item)
         
@@ -1022,7 +949,6 @@ async def extract_curriculum_from_upload(
     except Exception as e:
         logger.error(f" Curriculum extraction failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/pending", response_model=List[PendingCurriculumItem])
 async def get_pending_curriculum_items(
@@ -1042,7 +968,6 @@ async def get_pending_curriculum_items(
         if status:
             query["status"] = status
         else:
-            # Default to showing only pending items
             query["status"] = "pending"
         
         collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
@@ -1056,7 +981,6 @@ async def get_pending_curriculum_items(
     except Exception as e:
         logger.error(f" Get pending items failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/pending/{pending_id}", response_model=PendingCurriculumItem)
 async def get_pending_curriculum_item(pending_id: str):
@@ -1084,13 +1008,12 @@ async def get_pending_curriculum_item(pending_id: str):
         logger.error(f" Get pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/pending/{pending_id}")
 async def update_pending_curriculum_item(
     pending_id: str,
     subject_name: str = Form(None),
     class_level: int = Form(None),
-    extracted_chapters: str = Form(None)  # JSON string
+    extracted_chapters: str = Form(None)
 ):
     """
     Update a pending curriculum item before approval.
@@ -1110,13 +1033,11 @@ async def update_pending_curriculum_item(
         
         collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
         
-        # Get existing item
         existing = await collection.find_one({"pending_id": pending_id})
         
         if not existing:
             raise HTTPException(status_code=404, detail="Pending item not found")
         
-        # Build update data
         update_data = {}
         
         if subject_name is not None:
@@ -1126,17 +1047,14 @@ async def update_pending_curriculum_item(
             update_data["class_level"] = class_level
         
         if extracted_chapters is not None:
-            # Parse JSON string to list of chapters
             chapters_data = json.loads(extracted_chapters)
             update_data["extracted_chapters"] = chapters_data
         
         if not update_data:
             raise HTTPException(status_code=400, detail="No data to update")
         
-        # Add updated timestamp
         update_data["updated_at"] = datetime.utcnow()
         
-        # Update the item
         result = await collection.update_one(
             {"pending_id": pending_id},
             {"$set": update_data}
@@ -1145,7 +1063,6 @@ async def update_pending_curriculum_item(
         if result.modified_count == 0:
             raise HTTPException(status_code=500, detail="Failed to update item")
         
-        # Get updated item
         updated_item = await collection.find_one({"pending_id": pending_id})
         
         logger.info(f"Updated pending item: {pending_id}")
@@ -1158,7 +1075,6 @@ async def update_pending_curriculum_item(
     except Exception as e:
         logger.error(f" Update pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/pending/{pending_id}/approve")
 async def approve_or_reject_pending_item(
@@ -1190,7 +1106,6 @@ async def approve_or_reject_pending_item(
         pending_collection = mongodb.db[PENDING_CURRICULUM_COLLECTION]
         subjects_collection = mongodb.db[SUBJECTS_COLLECTION]
         
-        # Get pending item
         pending_item = await pending_collection.find_one({"pending_id": pending_id})
         
         if not pending_item:
@@ -1202,7 +1117,6 @@ async def approve_or_reject_pending_item(
                 detail=f"Item already {pending_item['status']}"
             )
         
-        # Handle rejection
         if action == "reject":
             if not rejection_reason:
                 raise HTTPException(
@@ -1229,12 +1143,9 @@ async def approve_or_reject_pending_item(
                 "action": "rejected"
             }
         
-        # Handle approval
         if action == "approve":
-            # Use override values if provided
             subject_name = subject_name_override or pending_item["subject_name"]
             
-            # Check if subject already exists
             subject_id = f"{subject_name.lower().replace(' ', '_')}_{pending_item['class_level']}"
             
             existing = await subjects_collection.find_one({
@@ -1242,10 +1153,8 @@ async def approve_or_reject_pending_item(
                 "is_active": True
             })
             
-            # Convert extracted chapters to proper Chapter format
             chapters = []
             for idx, extracted_ch in enumerate(pending_item["extracted_chapters"], 1):
-                # Convert extracted topics to Topic format
                 topics = []
                 for topic_idx, extracted_topic in enumerate(extracted_ch.get("topics", []), 1):
                     topic_id = f"{subject_id}_ch{extracted_ch['chapter_number']}_topic{topic_idx}"
@@ -1264,7 +1173,6 @@ async def approve_or_reject_pending_item(
                         "question_count": 0
                     })
                 
-                # Create chapter
                 chapter_id = f"{subject_id}_ch{extracted_ch['chapter_number']}"
                 chapters.append({
                     "chapter_id": chapter_id,
@@ -1281,7 +1189,6 @@ async def approve_or_reject_pending_item(
                     "updated_at": datetime.utcnow()
                 })
             
-            # Create subject document
             subject_doc = {
                 "subject_id": subject_id,
                 "subject_name": subject_name,
@@ -1298,20 +1205,16 @@ async def approve_or_reject_pending_item(
                 "updated_at": datetime.utcnow()
             }
             
-            # If subject exists, MERGE chapters instead of creating new
             if existing:
-                # Get existing chapters and find which new ones to add
                 existing_chapters = existing.get("chapters", [])
                 existing_chapter_numbers = set(ch.get("chapter_number") for ch in existing_chapters)
                 
-                # Add only new chapters (those not already present)
                 new_chapters_to_add = [ch for ch in chapters if ch["chapter_number"] not in existing_chapter_numbers]
                 
                 if new_chapters_to_add:
                     merged_chapters = existing_chapters + new_chapters_to_add
                     merged_chapters.sort(key=lambda ch: ch.get("chapter_number", 0))
                     
-                    # Update existing subject with merged chapters
                     total_topics = sum(len(ch.get("topics", [])) for ch in merged_chapters)
                     await subjects_collection.update_one(
                         {"subject_id": subject_id},
@@ -1325,7 +1228,6 @@ async def approve_or_reject_pending_item(
                         }
                     )
                     
-                    # Update pending item status
                     await pending_collection.update_one(
                         {"pending_id": pending_id},
                         {
@@ -1349,7 +1251,6 @@ async def approve_or_reject_pending_item(
                         "new_chapters_added": len(new_chapters_to_add)
                     }
                 else:
-                    # All chapters already exist - just mark as approved
                     await pending_collection.update_one(
                         {"pending_id": pending_id},
                         {
@@ -1371,11 +1272,9 @@ async def approve_or_reject_pending_item(
                         "new_chapters_added": 0
                     }
             
-            # Insert NEW subject
             result = await subjects_collection.insert_one(subject_doc)
             
             if result.inserted_id:
-                # Update pending item status
                 await pending_collection.update_one(
                     {"pending_id": pending_id},
                     {
@@ -1409,7 +1308,6 @@ async def approve_or_reject_pending_item(
     except Exception as e:
         logger.error(f" Approve/reject pending item failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/pending/{pending_id}")
 async def delete_pending_item(pending_id: str):

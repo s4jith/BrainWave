@@ -1,33 +1,10 @@
-/**
- * API Service - Backend Integration
- * 
- * This file contains all API calls to the FastAPI backend
- * Base URL: http://localhost:8000
- */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// Import user store for auth token access
 import useUserStore from "../stores/userStore";
 
-/**
- * Chat Service - AI Explanations with RAG
- * Integrates with the backend RAG system for annotations and assessment
- */
 export const chatService = {
-  /**
-   * Process annotation with AI (Define, Elaborate, Stick Flow)
-   * UNIFIED ENDPOINT - Main function for text annotations
-   * Supports both text and image-based (screenshot) annotations
-   * @param {string} text - The selected text to process
-   * @param {string} action - Action type: "define", "elaborate", "stick_flow", "summarize_page", or "summarize_chapter"
-   * @param {number} classLevel - User's class level (5-10)
-   * @param {string} subject - Subject name
-   * @param {number} chapter - Chapter number
-   * @param {string} imageData - Optional base64 image data for screenshot doubts
-   * @param {number} pageNumber - Optional page number for page-specific actions
-   * @returns {Promise<{answer: string, action_type: string, source_count: number}>}
-   */
+  
   async processAnnotation(text, action, classLevel, subject, chapter, imageData = null, pageNumber = null) {
     try {
       const requestBody = {
@@ -38,12 +15,10 @@ export const chatService = {
         chapter: chapter,
       };
 
-      // Add image data if provided (for screenshot-based doubts)
       if (imageData) {
         requestBody.image_data = imageData;
       }
 
-      // Add page number if provided (for page-specific actions like summarize_page)
       if (pageNumber) {
         requestBody.page_number = pageNumber;
       }
@@ -73,31 +48,14 @@ export const chatService = {
     }
   },
 
-  /**
-   * @deprecated Use processAnnotation() instead
-   * Get AI explanation for selected text
-   */
   async getExplanation(text, mode, classLevel, subject, chapter) {
     return this.processAnnotation(text, mode, classLevel, subject, chapter);
   },
 
-  /**
-   * @deprecated Use processAnnotation() with action="stick_flow" instead
-   * Get Stick Flow visual diagram
-   */
   async getStickFlow(text, classLevel, subject, chapter) {
     return this.processAnnotation(text, "stick_flow", classLevel, subject, chapter);
   },
 
-  /**
-   * Student chatbot - Open-ended questions with RAG
-   * @param {string} question - Student's question
-   * @param {number} classLevel - User's class level (5-10)
-   * @param {string} subject - Subject name
-   * @param {number} chapter - Chapter number
-   * @param {string} mode - Chat mode: "quick" (exam-style) or "deepdive" (comprehensive)
-   * @returns {Promise<{answer: string, sources: array}>}
-   */
   async studentChat(question, classLevel, subject, chapter, mode = "quick") {
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat/student`, {
@@ -130,20 +88,6 @@ export const chatService = {
     }
   },
 
-  /**
-   * Student chatbot with STREAMING - Reduced perceived latency
-   * Streams the response token-by-token using Server-Sent Events (SSE)
-   * 
-   * @param {string} question - Student's question
-   * @param {number} classLevel - User's class level (5-12)
-   * @param {string} subject - Subject name
-   * @param {number} chapter - Chapter number
-   * @param {string} mode - Chat mode: "quick" or "deepdive"
-   * @param {function} onChunk - Callback for each text chunk: (text) => void
-   * @param {function} onComplete - Callback when complete: ({sources, cached}) => void
-   * @param {function} onError - Callback on error: (error) => void
-   * @returns {function} Abort function to cancel the stream
-   */
   studentChatStream(question, classLevel, subject, chapter, mode = "quick", onChunk, onComplete, onError) {
     const controller = new AbortController();
 
@@ -179,9 +123,8 @@ export const chatService = {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Process complete SSE messages
           const lines = buffer.split("\n\n");
-          buffer = lines.pop() || ""; // Keep incomplete message in buffer
+          buffer = lines.pop() || ""; 
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
@@ -220,20 +163,9 @@ export const chatService = {
 
     fetchStream();
 
-    // Return abort function
     return () => controller.abort();
   },
 
-  /**
-   * Image-based chat - Upload photo of textbook/diagram/handwritten question
-   * Uses Intel OpenVINO OCR to extract text and generate RAG answer
-   * @param {File} imageFile - Image file (jpg/png, max 5MB)
-   * @param {number} classLevel - User's class level (5-12)
-   * @param {string} subject - Subject name
-   * @param {number} chapter - Chapter number
-   * @param {string} mode - Chat mode: "quick" or "deepdive"
-   * @returns {Promise<{answer: string, sources: array, imageAnalysis: object}>}
-   */
   async imageChat(imageFile, classLevel, subject, chapter, mode = "quick", userQuery = null) {
     try {
       const formData = new FormData();
@@ -269,13 +201,8 @@ export const chatService = {
   },
 };
 
-/**
- * Assessment Service - Voice Assessment Integration
- */
 export const assessmentService = {
-  /**
-   * Get enhanced assessment questions (15 questions for 10-page interval)
-   */
+  
   async getEnhancedQuestions(classLevel, subject, chapter, lessonName, pageRange, studentId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/assessment/questions/enhanced`, {
@@ -305,9 +232,6 @@ export const assessmentService = {
     }
   },
 
-  /**
-   * Get assessment questions from textbook content (RAG-based)
-   */
   async getQuestions(classLevel, subject, chapter, numQuestions = 3) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/assessment/questions`, {
@@ -334,9 +258,6 @@ export const assessmentService = {
     }
   },
 
-  /**
-   * Evaluate voice assessment answers
-   */
   async evaluateAnswers(classLevel, subject, chapter, answers) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/assessment/evaluate`, {
@@ -364,16 +285,8 @@ export const assessmentService = {
   },
 };
 
-/**
- * User Stats Service - Dashboard data (progress, streaks, notes)
- */
 export const userStatsService = {
-  /**
-   * Get all dashboard data in one call
-   * @param {string} studentId - Student identifier
-   * @param {string} subject - Optional subject filter
-   * @returns {Promise<{streak, progress, recent_notes, total_notes}>}
-   */
+  
   async getDashboardData(studentId, subject = null) {
     try {
       let url = `${API_BASE_URL}/api/user/dashboard/${studentId}`;
@@ -394,11 +307,6 @@ export const userStatsService = {
     }
   },
 
-  /**
-   * Get streak data only
-   * @param {string} studentId - Student identifier
-   * @returns {Promise<{current_streak, longest_streak, weekly_activity}>}
-   */
   async getStreakData(studentId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/user/streak/${studentId}`);
@@ -414,12 +322,6 @@ export const userStatsService = {
     }
   },
 
-  /**
-   * Get progress data only
-   * @param {string} studentId - Student identifier
-   * @param {string} subject - Optional subject filter
-   * @returns {Promise<{overall_progress, total_tests, completed_tests, average_score}>}
-   */
   async getProgressData(studentId, subject = null) {
     try {
       let url = `${API_BASE_URL}/api/user/progress/${studentId}`;
@@ -440,11 +342,6 @@ export const userStatsService = {
     }
   },
 
-  /**
-   * Log user activity for streak tracking
-   * @param {string} studentId - Student identifier
-   * @param {number} hours - Hours of activity (default 0.5)
-   */
   async logActivity(studentId, hours = 0.5) {
     try {
       const response = await fetch(
@@ -459,21 +356,13 @@ export const userStatsService = {
       return await response.json();
     } catch (error) {
       console.error("Activity Log API Error:", error);
-      // Don't throw - activity logging shouldn't break the app
+      
     }
   },
 };
 
-/**
- * Notes Service - User saved notes
- */
 export const notesService = {
-  /**
-   * Get notes for a student
-   * @param {string} studentId - Student identifier
-   * @param {object} filters - Optional filters (class_level, subject, chapter)
-   * @returns {Promise<{notes: array, total: number}>}
-   */
+  
   async getNotes(studentId, filters = {}) {
     try {
       let url = `${API_BASE_URL}/api/notes/${studentId}`;
@@ -500,11 +389,6 @@ export const notesService = {
     }
   },
 
-  /**
-   * Create a new note
-   * @param {object} noteData - Note data
-   * @returns {Promise<Note>}
-   */
   async createNote(noteData) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/notes/`, {
@@ -524,12 +408,6 @@ export const notesService = {
     }
   },
 
-  /**
-   * Update a note
-   * @param {string} id
-   * @param {object} updates
-   * @returns {Promise<Note>}
-   */
   async updateNote(id, updates) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
@@ -549,10 +427,6 @@ export const notesService = {
     }
   },
 
-  /**
-   * Delete a note
-   * @param {string} id
-   */
   async deleteNote(id) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
@@ -571,15 +445,8 @@ export const notesService = {
   },
 };
 
-/**
- * AI Annotation History Service
- */
 export const historyService = {
-  /**
-   * Save an AI annotation to history
-   * @param {object} data - Annotation data
-   * @returns {Promise<AnnotationHistoryItem>}
-   */
+  
   async createEntry(data) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/history/`, {
@@ -599,12 +466,6 @@ export const historyService = {
     }
   },
 
-  /**
-   * Get annotation history for a student
-   * @param {string} studentId
-   * @param {object} filters
-   * @returns {Promise<{history: array, total: number}>}
-   */
   async getHistory(studentId, filters = {}) {
     try {
       let url = `${API_BASE_URL}/api/history/${studentId}`;
@@ -632,10 +493,6 @@ export const historyService = {
     }
   },
 
-  /**
-   * Delete a history entry
-   * @param {string} id
-   */
   async deleteEntry(id) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/history/${id}`, {
@@ -654,17 +511,8 @@ export const historyService = {
   },
 };
 
-/**
- * Test Service - AI and Staff Tests
- */
 export const testService = {
-  // ==================== QB TEST SELECTION (NEW) ====================
-
-  /**
-   * Get available subjects from Question Bank
-   * @param {number} classLevel
-   * @returns {Promise<array>}
-   */
+  
   async getQBSubjects(classLevel) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/qb-test/subjects/${classLevel}`);
@@ -676,12 +524,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get chapters from Question Bank with question counts
-   * @param {number} classLevel
-   * @param {string} subject
-   * @returns {Promise<array>}
-   */
   async getQBChapters(classLevel, subject) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/qb-test/chapters/${classLevel}/${encodeURIComponent(subject)}`);
@@ -693,11 +535,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Start a Question Bank Test
-   * @param {object} params - {studentId, classLevel, subject, chapter, difficulty, mcq_count, fillup_count, short_answer_count, long_answer_count, time_limit_minutes}
-   * @returns {Promise<object>}
-   */
   async startQBTest(params) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/qb-test/start`, {
@@ -729,13 +566,6 @@ export const testService = {
     }
   },
 
-  // ==================== TOPIC-BASED TEST SELECTION ====================
-
-  /**
-   * Get available subjects for a class level
-   * @param {number} classLevel - Class level (5-12)
-   * @returns {Promise<array>} - List of subjects with chapter/question counts
-   */
   async getAvailableSubjects(classLevel) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/subjects/${classLevel}`);
@@ -747,12 +577,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get chapters for a subject
-   * @param {number} classLevel - Class level
-   * @param {string} subject - Subject name
-   * @returns {Promise<array>} - List of chapters with topic/question counts
-   */
   async getChaptersForSubject(classLevel, subject, studentId = null) {
     try {
       const params = studentId ? `?student_id=${studentId}` : '';
@@ -767,14 +591,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get topics for a chapter with student performance
-   * @param {number} classLevel - Class level
-   * @param {string} subject - Subject name
-   * @param {number} chapterNumber - Chapter number
-   * @param {string} studentId - Student ID for performance data
-   * @returns {Promise<array>} - Topics with student scores and recommendations
-   */
   async getTopicsForChapter(classLevel, subject, chapterNumber, studentId = null) {
     try {
       const params = studentId ? `?student_id=${studentId}` : '';
@@ -789,14 +605,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get personalized topic recommendations for student
-   * @param {number} classLevel - Class level
-   * @param {string} subject - Subject name
-   * @param {string} studentId - Student ID
-   * @param {number} limit - Max recommendations
-   * @returns {Promise<array>} - Recommended topics based on weak areas
-   */
   async getRecommendations(classLevel, subject, studentId, limit = 5) {
     try {
       const response = await fetch(
@@ -810,13 +618,6 @@ export const testService = {
     }
   },
 
-  // ==================== AI TEST SESSION ====================
-
-  /**
-   * Start a topic-based AI test
-   * @param {object} params - Test parameters
-   * @returns {Promise<{session_id, questions, time_limit}>}
-   */
   async startTopicTest(params) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/start`, {
@@ -845,15 +646,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Start fixed-format chapter test (15 questions, 20 marks, 40 minutes)
-   * @param {object} params - Test parameters
-   * @param {string} params.studentId - Student ID
-   * @param {number} params.classLevel - Class level (default 11)
-   * @param {string} params.subject - Subject name
-   * @param {number} params.chapterNumber - Chapter number
-   * @returns {Promise<{session_id, questions, total_marks, time_limit_minutes}>}
-   */
   async startChapterTest(params) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/start-chapter`, {
@@ -879,15 +671,6 @@ export const testService = {
     }
   },
 
-
-  /**
-   * Submit a single answer during test
-   * @param {string} sessionId - Session ID
-   * @param {string} questionId - Question ID
-   * @param {number} questionNumber - Question number
-   * @param {string} answer - Student's answer
-   * @returns {Promise<{status: string}>}
-   */
   async submitAnswer(sessionId, questionId, questionNumber, answer) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/answer`, {
@@ -909,12 +692,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Complete test and get RAG-based evaluation
-   * @param {string} sessionId - Session ID
-   * @param {string} studentId - Student ID
-   * @returns {Promise<{score, evaluations, feedback, strengths, improvements}>}
-   */
   async completeTest(sessionId, studentId, answers = [], completionData = {}) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/complete`, {
@@ -936,12 +713,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get test history for a student
-   * @param {string} studentId - Student ID
-   * @param {number} limit - Number of results to return
-   * @returns {Promise<{history, total, analytics}>}
-   */
   async getTestHistory(studentId, limit = 20) {
     try {
       const response = await fetch(
@@ -955,11 +726,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get full test result for a session (for viewing historical results)
-   * @param {string} sessionId - Session ID
-   * @returns {Promise<{score, evaluations, feedback, ...}>}
-   */
   async getTestResult(sessionId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/result/${sessionId}`);
@@ -971,11 +737,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Delete a single test history item
-   * @param {string} sessionId - Session ID to delete
-   * @returns {Promise<{status, session_id}>}
-   */
   async deleteTestHistory(sessionId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/history/${sessionId}`, {
@@ -989,11 +750,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Delete all test history for a student
-   * @param {string} studentId - Student ID
-   * @returns {Promise<{status, deleted_count}>}
-   */
   async deleteAllTestHistory(studentId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/history/all/${studentId}`, {
@@ -1007,11 +763,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Start Test V2 - Supports on-demand generation
-   * @param {object} params - Test parameters
-   * @returns {Promise<{session_id, questions, time_limit}>}
-   */
   async startTestV2(params) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/start-v3`, {
@@ -1042,11 +793,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Start an AI test with topic-level analytics support
-   * @param {object} params - Test parameters
-   * @returns {Promise<{session_id, chapter_name, questions, topics_covered}>}
-   */
   async startAITest(params) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
@@ -1074,13 +820,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Check if questions are available for a chapter
-   * @param {number} classLevel
-   * @param {string} subject
-   * @param {number} chapterNumber
-   * @returns {Promise<{available, count, difficulty_distribution}>}
-   */
   async checkQuestionsAvailable(classLevel, subject, chapterNumber) {
     try {
       const response = await fetch(
@@ -1094,13 +833,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get student analytics
-   * @param {string} studentId
-   * @param {number} classLevel
-   * @param {string} subject
-   * @returns {Promise<object>}
-   */
   async getStudentAnalytics(studentId, classLevel = 10, subject = null) {
     try {
       const params = new URLSearchParams();
@@ -1118,15 +850,6 @@ export const testService = {
     }
   },
 
-  // ==================== LEGACY AI TEST ENDPOINTS (kept for compatibility) ====================
-
-  /**
-   * Get AI tests available
-   * @param {string} subject - Optional subject filter
-   * @param {number} chapter - Optional chapter filter
-   * @param {string} studentId - Student ID for best scores
-   * @returns {Promise<array>}
-   */
   async getAITests(subject = null, chapter = null, studentId = null) {
     try {
       const params = new URLSearchParams();
@@ -1148,12 +871,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Start an AI test session (legacy) - used by AITestModal
-   * @param {string} testId - Test ID
-   * @param {string} studentId - Student ID
-   * @returns {Promise<{session_id, questions, time_limit}>}
-   */
   async startAITestLegacy(testId, studentId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
@@ -1173,13 +890,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Submit a single answer during AI test (legacy)
-   * @param {string} sessionId - Session ID
-   * @param {number} questionNumber - Question number
-   * @param {string} answer - Student's answer
-   * @returns {Promise<{status: string}>}
-   */
   async submitAIAnswer(sessionId, questionNumber, answer) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/ai-tests/answer`, {
@@ -1203,12 +913,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Complete AI test and get results (legacy)
-   * @param {string} sessionId - Session ID
-   * @param {string} studentId - Student ID
-   * @returns {Promise<{score, feedback, question_results, topics_to_review}>}
-   */
   async completeAITest(sessionId, studentId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/ai-tests/complete`, {
@@ -1231,14 +935,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get staff-assigned tests for a student
-   * Fetches from the assessments collection (tests created by admin/teacher via CreateTest)
-   * @param {string} subject - Optional subject filter (not used currently)
-   * @param {number} chapter - Optional chapter filter (not used currently)
-   * @param {string} studentId - Student ID for getting assigned tests
-   * @returns {Promise<array>}
-   */
   async getStaffTests(subject = null, chapter = null, studentId = null) {
     try {
       if (!studentId) {
@@ -1246,7 +942,6 @@ export const testService = {
         return [];
       }
 
-      // Get auth token for the assessments endpoint
       const token = useUserStore.getState().accessToken;
       if (!token) {
         console.error("No auth token found");
@@ -1266,7 +961,6 @@ export const testService = {
 
       const data = await response.json();
 
-      // Backend returns { assessments: [...], total: N }
       if (data && Array.isArray(data.assessments)) {
         return data.assessments.map(test => ({
           id: test.id,
@@ -1297,13 +991,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Upload student's answer sheet for a staff test
-   * @param {string} testId - Test ID
-   * @param {string} studentId - Student ID
-   * @param {File} pdfFile - Answer sheet PDF file
-   * @returns {Promise<{success, message, submission}>}
-   */
   async uploadAnswerSheet(testId, studentId, pdfFile) {
     try {
       console.log("📤 Upload Answer Sheet:", { testId, studentId, fileName: pdfFile?.name });
@@ -1331,22 +1018,10 @@ export const testService = {
     }
   },
 
-  /**
-   * Download question paper PDF
-   * @param {string} filename - PDF filename
-   * @returns {string} - Download URL
-   */
   getQuestionPaperUrl(filename) {
     return `${API_BASE_URL}/api/tests/pdf/${filename}`;
   },
 
-  /**
-   * Upload answer sheet for a staff test
-   * @param {string} testId - Test ID
-   * @param {string} studentId - Student ID
-   * @param {File} file - PDF file to upload
-   * @returns {Promise<{success, submission_id, message}>}
-   */
   async uploadAnswerSheet(testId, studentId, file) {
     try {
       const formData = new FormData();
@@ -1370,13 +1045,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get test analytics for a student
-   * @param {string} studentId - Student ID
-   * @param {number} classLevel - Class level
-   * @param {string} subject - Optional subject filter
-   * @returns {Promise<{total_tests_taken, average_score, topic_breakdown, performance_history}>}
-   */
   async getTestAnalytics(studentId, classLevel = 10, subject = null) {
     try {
       const params = new URLSearchParams();
@@ -1396,10 +1064,6 @@ export const testService = {
     }
   },
 
-  /**
-   * Get question bank statistics
-   * @returns {Promise<{total_subjects, total_chapters, total_questions, breakdown}>}
-   */
   async getQuestionBankStats() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/test/question-bank/stats`);
@@ -1415,17 +1079,11 @@ export const testService = {
     }
   },
 
-  /**
-   * Alias for getTestAnalytics (for backward compatibility)
-   */
   async getStudentAnalytics(studentId, classLevel = 10, subject = null) {
     return this.getTestAnalytics(studentId, classLevel, subject);
   },
 };
 
-/**
- * Utility: Check backend health
- */
 export const healthCheck = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/health`);
@@ -1436,16 +1094,8 @@ export const healthCheck = async () => {
   }
 };
 
-/**
- * Top Questions Service - Dynamic subjects and top questions from database
- */
 export const topQuestionsService = {
-  /**
-   * Get available subjects for a class level
-   * Only returns subjects that have data in the database
-   * @param {number} classLevel - Class level (6-12)
-   * @returns {Promise<{success: boolean, subjects: Array, count: number}>}
-   */
+  
   async getAvailableSubjects(classLevel) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/top-questions/subjects/${classLevel}`);
@@ -1457,7 +1107,7 @@ export const topQuestionsService = {
       return await response.json();
     } catch (error) {
       console.error("Get Available Subjects Error:", error);
-      // Return empty - no fallback to prevent showing incorrect subjects
+      
       return {
         success: false,
         subjects: [],
@@ -1466,14 +1116,6 @@ export const topQuestionsService = {
     }
   },
 
-  /**
-   * Get top questions for a subject
-   * @param {string} subject - Subject name
-   * @param {number} classLevel - Class level
-   * @param {string} mode - "quick" or "deep"
-   * @param {number} limit - Number of questions to return
-   * @returns {Promise<{success: boolean, questions: Array, count: number}>}
-   */
   async getTopQuestions(subject, classLevel, mode = "quick", limit = 5) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/top-questions/top`, {
@@ -1504,11 +1146,6 @@ export const topQuestionsService = {
     }
   },
 
-  /**
-   * Track a question-answer pair
-   * @param {Object} data - Question data
-   * @returns {Promise<{success: boolean, question_id: string}>}
-   */
   async trackQuestion(data) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/top-questions/track`, {
@@ -1530,15 +1167,6 @@ export const topQuestionsService = {
     }
   },
 
-  /**
-   * Get personalized recommendations for a user
-   * @param {string} userId - User ID
-   * @param {string} subject - Subject name
-   * @param {number} classLevel - Class level
-   * @param {string} mode - "quick" or "deep"
-   * @param {number} limit - Number of recommendations
-   * @returns {Promise<{success: boolean, recommendations: Array}>}
-   */
   async getRecommendations(userId, subject, classLevel, mode = "quick", limit = 5) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/top-questions/recommendations`, {

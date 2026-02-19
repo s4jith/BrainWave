@@ -7,9 +7,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from datetime import datetime
 
-
-# ==================== CHAT / RAG SCHEMAS ====================
-
 class ChatRequest(BaseModel):
     """Request schema for RAG-based chat."""
     class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
@@ -19,10 +16,8 @@ class ChatRequest(BaseModel):
     mode: Literal["define", "elaborate", "simple", "meaning", "story", "example", "summary"] = Field(
         ..., description="Explanation mode requested by student"
     )
-    # Optional fields for top questions tracking
     user_id: Optional[str] = Field(None, description="User ID for tracking (optional)")
     session_id: Optional[str] = Field(None, description="Session ID for tracking (optional)")
-
 
 class ChatResponse(BaseModel):
     """Response schema for RAG-based chat."""
@@ -30,16 +25,12 @@ class ChatResponse(BaseModel):
     used_mode: str = Field(..., description="Mode used for explanation")
     source_chunks: List[str] = Field(..., description="RAG chunks used for context")
 
-
-# ==================== MCQ SCHEMAS ====================
-
 class MCQ(BaseModel):
     """Single MCQ question structure."""
     question: str = Field(..., description="MCQ question text")
     options: List[str] = Field(..., min_length=4, max_length=4, description="Four options")
     correct_index: int = Field(..., ge=0, le=3, description="Index of correct answer (0-3)")
     explanation: str = Field(..., description="Explanation of correct answer")
-
 
 class MCQGenerationRequest(BaseModel):
     """Request schema for generating MCQs."""
@@ -50,7 +41,6 @@ class MCQGenerationRequest(BaseModel):
     page_range: Optional[tuple[int, int]] = Field(None, description="Optional page range (start, end)")
     use_local_model: bool = Field(False, description="Use local model for generation")
 
-
 class MCQGenerationResponse(BaseModel):
     """Response schema for MCQ generation."""
     mcqs: List[MCQ] = Field(..., description="Generated MCQs")
@@ -58,14 +48,10 @@ class MCQGenerationResponse(BaseModel):
     used_pipeline: str = Field("gemini", description="Pipeline used for generation")
     inference_time_ms: Optional[float] = Field(None, description="Inference time in milliseconds")
 
-
-# ==================== EVALUATION SCHEMAS ====================
-
 class MCQAnswer(BaseModel):
     """Student's answer to an MCQ."""
     question_index: int = Field(..., description="Index of the question answered")
     selected_index: int = Field(..., ge=0, le=3, description="Selected answer index (0-3)")
-
 
 class EvaluationRequest(BaseModel):
     """Request schema for evaluating MCQ answers."""
@@ -76,7 +62,6 @@ class EvaluationRequest(BaseModel):
     mcqs: List[MCQ] = Field(..., description="Original MCQs")
     answers: List[MCQAnswer] = Field(..., description="Student's answers")
 
-
 class EvaluationResult(BaseModel):
     """Detailed evaluation result."""
     total_questions: int = Field(..., description="Total number of questions")
@@ -85,15 +70,11 @@ class EvaluationResult(BaseModel):
     feedback: str = Field(..., description="AI-generated feedback")
     question_results: List[dict] = Field(..., description="Per-question results")
 
-
 class EvaluationResponse(BaseModel):
     """Response schema for evaluation."""
     result: EvaluationResult = Field(..., description="Evaluation result")
     saved_to_db: bool = Field(..., description="Whether result was saved to MongoDB")
     evaluation_id: Optional[str] = Field(None, description="MongoDB document ID")
-
-
-# ==================== NOTES SCHEMAS ====================
 
 class NoteCreateRequest(BaseModel):
     """Request schema for creating a note."""
@@ -105,7 +86,6 @@ class NoteCreateRequest(BaseModel):
     highlight_text: str = Field(..., description="Highlighted text")
     note_content: str = Field(..., description="Note content")
     heading: Optional[str] = Field(None, description="Optional note heading")
-
 
 class Note(BaseModel):
     """Note model with metadata."""
@@ -121,62 +101,20 @@ class Note(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
-
 class NotesListResponse(BaseModel):
     """Response schema for listing notes."""
     notes: List[Note] = Field(..., description="List of notes")
     total: int = Field(..., description="Total number of notes")
-
-
-# ==================== ASSESSMENT SCHEMAS (VOICE) ====================
-
-class AssessmentAnswer(BaseModel):
-    """Single answer in voice assessment."""
-    question: str = Field(..., description="Question asked")
-    answer: str = Field(..., description="Student's transcribed answer")
-    timestamp: float = Field(..., description="Timestamp in video/audio")
-
-
-class AssessmentSubmitRequest(BaseModel):
-    """Request schema for submitting assessment."""
-    student_id: str = Field(..., description="Student identifier")
-    class_level: int = Field(..., ge=5, le=12, description="Class level")
-    subject: str = Field(..., description="Subject name")
-    chapter: int = Field(..., ge=1, description="Chapter number")
-    answers: List[AssessmentAnswer] = Field(..., description="List of Q&A pairs")
-
-
-class AssessmentResult(BaseModel):
-    """Assessment evaluation result."""
-    score: float = Field(..., ge=0, le=100, description="Overall score (0-100)")
-    feedback: str = Field(..., description="AI-generated feedback")
-    strengths: List[str] = Field(..., description="Student's strengths")
-    improvements: List[str] = Field(..., description="Areas for improvement")
-    question_scores: List[dict] = Field(..., description="Per-question scores")
-
-
-class AssessmentResponse(BaseModel):
-    """Response schema for assessment submission."""
-    result: AssessmentResult = Field(..., description="Assessment result")
-    assessment_id: str = Field(..., description="MongoDB document ID")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# ==================== GENERIC RESPONSE ====================
 
 class ErrorResponse(BaseModel):
     """Standard error response."""
     error: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
 
-
 class SuccessResponse(BaseModel):
     """Standard success response."""
     message: str = Field(..., description="Success message")
     data: Optional[dict] = Field(None, description="Optional response data")
-
-
-# ==================== ANNOTATION HISTORY SCHEMAS ====================
 
 class AnnotationHistoryCreateRequest(BaseModel):
     """Request schema for saving an AI annotation."""
@@ -189,7 +127,6 @@ class AnnotationHistoryCreateRequest(BaseModel):
     action_type: str = Field(..., description="Action type (define, elaborate, stick_flow, etc.)")
     ai_response: str = Field(..., description="AI generated response")
     source_count: int = Field(0, description="Number of sources used")
-
 
 class AnnotationHistoryItem(BaseModel):
     """Annotation history item model."""
@@ -204,7 +141,6 @@ class AnnotationHistoryItem(BaseModel):
     ai_response: str
     source_count: int
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
 
 class AnnotationHistoryListResponse(BaseModel):
     """Response schema for listing annotation history."""

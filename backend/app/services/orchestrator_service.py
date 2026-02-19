@@ -15,16 +15,13 @@ from app.services.llm_storage_service import llm_storage_service
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class OrchestratorConfig:
     """Configuration for Orchestrator Service."""
     component_name: str = "OrchestratorService"
     
-    # Cache settings
     cache_similarity_threshold: float = 0.95
     store_generated_answers: bool = True
-
 
 class OrchestratorService:
     """
@@ -80,7 +77,6 @@ class OrchestratorService:
         logger.info(f"🎯 [{self.config.component_name}] Processing query: {question[:50]}...")
         logger.info(f"   Subject: {subject}, Class: {student_class}, Mode: {mode}")
         
-        # Step 1: Retrieve content from all indices
         with LatencyContext("orchestrator_retrieval"):
             retrieval_result = self.retrieval.retrieve(
                 query_text=question,
@@ -95,13 +91,11 @@ class OrchestratorService:
         web_chunks = retrieval_result["web_chunks"]
         class_dist = retrieval_result["class_distribution"]
         
-        # Step 2: Check for cache hit
         if llm_chunks and llm_chunks[0]['score'] >= self.config.cache_similarity_threshold:
             cached_answer = llm_chunks[0]['text']
             logger.info(f"🎯 [{self.config.component_name}] CACHE HIT (score: {llm_chunks[0]['score']:.3f})")
             return cached_answer, textbook_chunks + llm_chunks
         
-        # Step 3: Generate answer
         with LatencyContext("orchestrator_generation"):
             answer = self.generation.generate_answer(
                 question=question,
@@ -114,7 +108,6 @@ class OrchestratorService:
                 mode=mode
             )
         
-        # Step 4: Store generated answer for future cache hits
         if self.config.store_generated_answers and answer:
             self._store_answer(question, answer, subject, student_class)
         
@@ -171,17 +164,14 @@ class OrchestratorService:
         Returns:
             Tuple of (answer, source_chunks)
         """
-        # Level to mode mapping
         level_to_mode = {
             "beginner": "simple",
             "intermediate": "quick",
             "advanced": "deepdive"
         }
         
-        # Default mode
         mode = "quick"
         
-        # Look up student level if ID provided
         if student_id:
             try:
                 from app.db.mongo import get_database
@@ -229,6 +219,4 @@ class OrchestratorService:
             "generation": self.generation.get_status()
         }
 
-
-# Singleton instance
 orchestrator_service = OrchestratorService()

@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-
 class PhysicsUploader:
     """Upload physics chunks to Pinecone"""
     
@@ -23,7 +22,6 @@ class PhysicsUploader:
         
         logger.info(f"🌲 Initializing Physics Uploader...")
         
-        # Connect to Pinecone
         self.pc = Pinecone(api_key=self.api_key)
         self.index = self.pc.Index(self.index_name)
         
@@ -49,10 +47,8 @@ class PhysicsUploader:
         """
         logger.info(f"📤 Uploading {len(chunks)} chunks to namespace '{namespace}'...")
         
-        # Convert chunks to Pinecone format
         vectors = self._prepare_vectors(chunks)
         
-        # Upload in batches
         total_uploaded = 0
         failed = 0
         
@@ -70,7 +66,6 @@ class PhysicsUploader:
                 logger.error(f"Failed to upload batch {i//batch_size}: {e}")
                 failed += len(batch)
         
-        # Get final statistics
         stats = self.index.describe_index_stats()
         namespace_stats = stats.namespaces.get(namespace, {})
         
@@ -99,17 +94,14 @@ class PhysicsUploader:
         vectors = []
         
         for chunk in chunks:
-            # Extract embedding
             embedding = chunk.get('embedding')
             if embedding is None:
                 logger.warning(f"Chunk {chunk.get('chunk_id')} missing embedding, skipping")
                 continue
             
-            # Convert to list if numpy array
             if hasattr(embedding, 'tolist'):
                 embedding = embedding.tolist()
             
-            # Prepare metadata (exclude embedding and large fields)
             metadata = {
                 'content_type': chunk.get('content_type'),
                 'class': chunk.get('metadata', {}).get('class'),
@@ -119,10 +111,9 @@ class PhysicsUploader:
                 'has_formula': str(chunk.get('has_formula', False)),
                 'has_image': str(chunk.get('has_image', False)),
                 'has_table': str(chunk.get('has_table', False)),
-                'raw_text': chunk.get('raw_text', '')[:500],  # Truncate
+                'raw_text': chunk.get('raw_text', '')[:500],
             }
             
-            # Add optional fields
             if chunk.get('latex_formula'):
                 metadata['latex_formula'] = chunk.get('latex_formula')[:200]
             
@@ -135,7 +126,6 @@ class PhysicsUploader:
             if chunk.get('table_data'):
                 metadata['table_data'] = chunk.get('table_data')[:300]
             
-            # Create vector tuple
             vector = (
                 chunk['chunk_id'],
                 embedding,

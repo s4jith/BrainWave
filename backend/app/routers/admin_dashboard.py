@@ -6,22 +6,23 @@ Admin Dashboard Router
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timedelta
 from bson import ObjectId
 import hashlib
 import logging
+import time
 
 from app.db.mongo import db
 from app.utils.email import send_credentials_email
 
 logger = logging.getLogger(__name__)
 
+_analytics_cache = {"data": None, "timestamp": 0}
+ANALYTICS_CACHE_TTL = 60
+
 router = APIRouter(prefix="/api/admin", tags=["Admin Dashboard"])
-
-
-# ==================== PYDANTIC MODELS ====================
 
 class StudentCreate(BaseModel):
     """Model for creating a new student."""
@@ -31,7 +32,6 @@ class StudentCreate(BaseModel):
     email: str = Field(..., description="Gmail address")
     mobile: str = Field(..., min_length=10, max_length=15)
 
-
 class StudentUpdate(BaseModel):
     """Model for updating a student."""
     name: Optional[str] = None
@@ -40,7 +40,6 @@ class StudentUpdate(BaseModel):
     email: Optional[str] = None
     mobile: Optional[str] = None
     is_active: Optional[bool] = None
-
 
 class StudentResponse(BaseModel):
     """Model for student response."""
@@ -58,13 +57,9 @@ class StudentResponse(BaseModel):
     tests_completed: int = 0
     avg_score: float = 0.0
 
-
-# ==================== HELPER FUNCTIONS ====================
-
 def hash_password(password: str) -> str:
     """Hash password using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
-
 
 def generate_student_id(name: str, age: int) -> str:
     """
@@ -73,7 +68,6 @@ def generate_student_id(name: str, age: int) -> str:
     Example: sajith141 (Sajith, age 14, student #1)
     """
     try:
-        # Get next student number
         counter = db.student_counters.find_one_and_update(
             {"_id": "student_count"},
             {"$inc": {"count": 1}},
@@ -82,18 +76,15 @@ def generate_student_id(name: str, age: int) -> str:
         )
         student_number = counter.get("count", 1)
         
-        # Generate ID: name (lowercase, no spaces) + age + number
         clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
         user_id = f"{clean_name}{age}{student_number}"
         
         return user_id
     except Exception as e:
         logger.error(f"Error generating student ID: {e}")
-        # Fallback: use timestamp
         import time
         clean_name = name.lower().replace(" ", "")[:10]
         return f"{clean_name}{age}{int(time.time()) % 10000}"
-
 
 def generate_password(name: str, age: int) -> str:
     """
@@ -103,7 +94,6 @@ def generate_password(name: str, age: int) -> str:
     """
     clean_name = name.lower().replace(" ", "").replace(".", "")
     return f"{clean_name}{age}"
-
 
 def serialize_student(student: dict) -> dict:
     """Convert MongoDB document to response dict."""
@@ -123,32 +113,96 @@ def serialize_student(student: dict) -> dict:
         "avg_score": student.get("avg_score", 0.0)
     }
 
-
-# ==================== ANALYTICS ENDPOINTS ====================
-
-@router.get("/analytics")
-async def get_analytics():
+@router.get("/dashboard-stats")
+async def get_dashboard_stats():
     """
-    Get comprehensive analytics for admin dashboard.
-    Returns user stats, test stats, activity trends, etc.
+    Lightweight stats endpoint for the admin dashboard.
+    Only runs essential count queries for fast loading.
     """
     try:
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = today_start - timedelta(days=7)
         month_ago = today_start - timedelta(days=30)
+
+        total_students = db.users.count_documents({"role": "student"})
+        total_teachers = db.users.count_documents({"role": "teacher"})
+        active_today = db.users.count_documents({"last_login": {"$gte": today_start}})
+        active_this_week = db.users.count_documents({"last_login": {"$gte": week_ago}})
+        new_users_this_month = db.users.count_documents({"created_at": {"$gte": month_ago}})
+
+        tests_col = db.get_collection("tests")
+        assessments_col = db.get_collection("assessments")
+        test_sessions = db.get_collection("test_sessions")
+        submissions_col = db.get_collection("submissions")
+
+        total_tests_created = tests_col.count_documents({}) + assessments_col.count_documents({})
+
+        old_taken = test_sessions.count_documents({"status": "completed"})
+        new_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
+        total_tests_taken = old_taken + new_taken
+
+        tests_this_week = (
+            test_sessions.count_documents({"completed_at": {"$gte": week_ago}}) +
+            submissions_col.count_documents({"submitted_at": {"$gte": week_ago}, "status": {"$in": ["submitted", "graded"]}})
+        )
+
+        avg_pipeline = [
+            {"$match": {"status": {"$in": ["submitted", "graded"]}, "percentage": {"$exists": True}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$percentage"}}}
+        ]
+        avg_result = list(submissions_col.aggregate(avg_pipeline))
+        average_score = round(avg_result[0]["avg"], 1) if avg_result else 0
+
+        passed = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}, "percentage": {"$gte": 60}})
+        pass_rate = round((passed / new_taken * 100), 1) if new_taken > 0 else 0
+
+        return {
+            "total_students": total_students,
+            "total_teachers": total_teachers,
+            "active_today": active_today,
+            "active_this_week": active_this_week,
+            "new_users_this_month": new_users_this_month,
+            "total_tests_created": total_tests_created,
+            "total_tests_taken": total_tests_taken,
+            "tests_this_week": tests_this_week,
+            "average_score": average_score,
+            "pass_rate": pass_rate
+        }
+    except Exception as e:
+        logger.error(f"Dashboard stats error: {e}")
+        return {
+            "total_students": 0, "total_teachers": 0,
+            "active_today": 0, "active_this_week": 0, "new_users_this_month": 0,
+            "total_tests_created": 0, "total_tests_taken": 0,
+            "tests_this_week": 0, "average_score": 0, "pass_rate": 0
+        }
+
+@router.get("/analytics")
+async def get_analytics():
+    """
+    Get comprehensive analytics for admin dashboard.
+    Returns user stats, test stats, activity trends, etc.
+    Cached for 60 seconds to avoid repeated slow queries.
+    """
+    now_ts = time.time()
+    if _analytics_cache["data"] and (now_ts - _analytics_cache["timestamp"]) < ANALYTICS_CACHE_TTL:
+        return _analytics_cache["data"]
+
+    try:
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_ago = today_start - timedelta(days=7)
+        month_ago = today_start - timedelta(days=30)
         
-        # User Statistics
         total_users = db.users.count_documents({})
         total_students = db.users.count_documents({"role": "student"})
         total_teachers = db.users.count_documents({"role": "teacher"})
         
-        # Active users (logged in today/week/month)
         active_today = db.users.count_documents({"last_login": {"$gte": today_start}})
         active_this_week = db.users.count_documents({"last_login": {"$gte": week_ago}})
         active_this_month = db.users.count_documents({"last_login": {"$gte": month_ago}})
         
-        # Inactive users (no login in 30 days)
         inactive_users = db.users.count_documents({
             "$or": [
                 {"last_login": {"$lt": month_ago}},
@@ -156,7 +210,6 @@ async def get_analytics():
             ]
         })
         
-        # New users
         new_users_today = db.users.count_documents({"created_at": {"$gte": today_start}})
         new_users_this_week = db.users.count_documents({"created_at": {"$gte": week_ago}})
         new_users_this_month = db.users.count_documents({"created_at": {"$gte": month_ago}})
@@ -174,29 +227,20 @@ async def get_analytics():
             "new_users_this_month": new_users_this_month
         }
         
-        # Test Statistics - Use BOTH old and new systems
-        # Old system: tests collection and test_sessions
-        # New system: assessments collection and submissions
-        
-        # Old collections
         test_sessions = db.get_collection("test_sessions")
         tests_col = db.get_collection("tests")
         
-        # New collections
         assessments_col = db.get_collection("assessments")
         submissions_col = db.get_collection("submissions")
         
-        # Total tests created (from both systems)
         old_tests_created = tests_col.count_documents({})
         new_tests_created = assessments_col.count_documents({})
         total_tests_created = old_tests_created + new_tests_created
         
-        # Total tests taken/completed (from both systems)
         old_tests_taken = test_sessions.count_documents({"status": "completed"})
         new_tests_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
         total_tests_taken = old_tests_taken + new_tests_taken
         
-        # Tests today (from both systems)
         old_tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
         new_tests_today = submissions_col.count_documents({
             "submitted_at": {"$gte": today_start},
@@ -204,7 +248,6 @@ async def get_analytics():
         })
         tests_today = old_tests_today + new_tests_today
         
-        # Tests this week (from both systems)
         old_tests_week = test_sessions.count_documents({"completed_at": {"$gte": week_ago}})
         new_tests_week = submissions_col.count_documents({
             "submitted_at": {"$gte": week_ago},
@@ -212,13 +255,10 @@ async def get_analytics():
         })
         tests_this_week = old_tests_week + new_tests_week
         
-        # Tests in progress (from both systems)
         old_in_progress = test_sessions.count_documents({"status": "in_progress"})
         new_in_progress = submissions_col.count_documents({"status": "in_progress"})
         tests_in_progress = old_in_progress + new_in_progress
         
-        # Calculate average score from both systems
-        # Old system scores
         old_pipeline = [
             {"$match": {"status": "completed", "score": {"$exists": True}}},
             {"$group": {"_id": None, "avg_score": {"$avg": "$score"}, "count": {"$sum": 1}}}
@@ -226,7 +266,6 @@ async def get_analytics():
         old_avg_result = list(test_sessions.aggregate(old_pipeline))
         old_avg = old_avg_result[0] if old_avg_result else {"avg_score": 0, "count": 0}
         
-        # New system scores (using percentage field)
         new_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}, "percentage": {"$exists": True}}},
             {"$group": {"_id": None, "avg_score": {"$avg": "$percentage"}, "count": {"$sum": 1}}}
@@ -234,7 +273,6 @@ async def get_analytics():
         new_avg_result = list(submissions_col.aggregate(new_pipeline))
         new_avg = new_avg_result[0] if new_avg_result else {"avg_score": 0, "count": 0}
         
-        # Weighted average
         total_count = old_avg["count"] + new_avg["count"]
         if total_count > 0:
             average_score = round(
@@ -244,7 +282,6 @@ async def get_analytics():
         else:
             average_score = 0
         
-        # Pass rate (score >= 60%) from both systems
         old_passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
         new_passed = submissions_col.count_documents({
             "status": {"$in": ["submitted", "graded"]}, 
@@ -264,7 +301,6 @@ async def get_analytics():
             "tests_this_week": tests_this_week
         }
         
-        # Activity Trend (last 14 days) - Include both systems
         activity_trend = []
         for i in range(13, -1, -1):
             date = today_start - timedelta(days=i)
@@ -274,7 +310,6 @@ async def get_analytics():
                 "last_login": {"$gte": date, "$lt": next_date}
             })
             
-            # Tests taken from both systems
             old_tests = test_sessions.count_documents({
                 "completed_at": {"$gte": date, "$lt": next_date}
             })
@@ -290,12 +325,8 @@ async def get_analytics():
                 "tests_taken": tests_taken
             })
         
-        # Subject-wise Performance - From new assessments system primarily
-        # (Old system may not have consistent subject field)
         subject_pipeline = []
         
-        # Try to get from new submissions (linked to assessments with subjects)
-        # Note: assessment_id in submissions is stored as string, need to convert
         new_subject_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}}},
             {"$addFields": {
@@ -327,12 +358,9 @@ async def get_analytics():
         try:
             subject_stats = list(submissions_col.aggregate(new_subject_pipeline))
         except Exception as e:
-            # Fallback if aggregation fails
             print(f"Subject stats aggregation error: {e}")
             subject_stats = []
         
-        # Top Performers - Combine both systems
-        # Get from new system
         new_performer_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}}},
             {"$group": {
@@ -344,7 +372,6 @@ async def get_analytics():
         ]
         new_performers = list(submissions_col.aggregate(new_performer_pipeline))
         
-        # Get from old system
         old_performer_pipeline = [
             {"$match": {"status": "completed"}},
             {"$group": {
@@ -356,7 +383,6 @@ async def get_analytics():
         ]
         old_performers = list(test_sessions.aggregate(old_performer_pipeline))
         
-        # Merge performers by student_id
         performers_dict = {}
         for p in new_performers:
             student_id = str(p["_id"])
@@ -368,7 +394,6 @@ async def get_analytics():
         for p in old_performers:
             student_id = str(p["_id"])
             if student_id in performers_dict:
-                # Weighted average
                 existing = performers_dict[student_id]
                 total_tests = existing["tests_completed"] + p["tests_completed"]
                 weighted_avg = (
@@ -385,7 +410,6 @@ async def get_analytics():
                     "tests_completed": p["tests_completed"]
                 }
         
-        # Sort and get top 5
         top_performers_raw = sorted(
             [{"_id": k, **v} for k, v in performers_dict.items()],
             key=lambda x: x["avg_score"],
@@ -402,8 +426,6 @@ async def get_analytics():
                 "tests_completed": p["tests_completed"]
             })
         
-        # Weak Students (low scores or inactive) - Combine both systems
-        # Get from new system
         new_weak_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}}},
             {"$group": {
@@ -415,7 +437,6 @@ async def get_analytics():
         ]
         new_weak = list(submissions_col.aggregate(new_weak_pipeline))
         
-        # Get from old system
         old_weak_pipeline = [
             {"$match": {"status": "completed"}},
             {"$group": {
@@ -427,7 +448,6 @@ async def get_analytics():
         ]
         old_weak = list(test_sessions.aggregate(old_weak_pipeline))
         
-        # Merge weak students by student_id (same logic as performers)
         weak_dict = {}
         for w in new_weak:
             student_id = str(w["_id"])
@@ -455,7 +475,6 @@ async def get_analytics():
                     "tests_completed": w["tests_completed"]
                 }
         
-        # Sort and get bottom 5
         weak_students_raw = sorted(
             [{"_id": k, **v} for k, v in weak_dict.items()],
             key=lambda x: x["avg_score"]
@@ -474,8 +493,6 @@ async def get_analytics():
                 "days_inactive": days_inactive
             })
         
-        # Recent Activities - Combine both systems
-        # Get from old system
         old_recent_pipeline = [
             {"$match": {"status": "completed"}},
             {"$sort": {"completed_at": -1}},
@@ -490,7 +507,6 @@ async def get_analytics():
         ]
         old_recent = list(test_sessions.aggregate(old_recent_pipeline))
         
-        # Get from new system
         new_recent_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}}},
             {"$sort": {"submitted_at": -1}},
@@ -520,19 +536,16 @@ async def get_analytics():
             print(f"Recent activities aggregation error: {e}")
             new_recent = []
         
-        # Combine and sort by date, take top 10
         all_recent = old_recent + new_recent
         all_recent.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
         recent_activities_raw = all_recent[:10]
         
-        # Serialize recent_activities and look up student names
         recent_activities = []
         for activity in recent_activities_raw:
             student_id = activity.get("student_id", "")
             student_name = "Unknown Student"
             class_level = None
             
-            # Try to find student by ObjectId or user_id
             if student_id:
                 student = None
                 if ObjectId.is_valid(str(student_id)):
@@ -552,7 +565,7 @@ async def get_analytics():
                 "created_at": activity.get("created_at").isoformat() if activity.get("created_at") else None
             })
         
-        return {
+        result = {
             "user_stats": user_stats,
             "test_stats": test_stats,
             "activity_trend": activity_trend,
@@ -561,10 +574,12 @@ async def get_analytics():
             "weak_students": weak_students,
             "recent_activities": recent_activities
         }
+        _analytics_cache["data"] = result
+        _analytics_cache["timestamp"] = time.time()
+        return result
         
     except Exception as e:
         logger.error(f"Analytics error: {e}")
-        # Return empty data on error
         return {
             "user_stats": {
                 "total_users": 0, "total_students": 0, "total_teachers": 0,
@@ -583,9 +598,6 @@ async def get_analytics():
             "recent_activities": []
         }
 
-
-# ==================== STUDENT MANAGEMENT ENDPOINTS ====================
-
 @router.get("/students")
 async def get_students(
     limit: int = Query(100, ge=1, le=500),
@@ -598,7 +610,6 @@ async def get_students(
     Get list of all students with optional filters.
     """
     try:
-        # Build filter
         filter_query = {"role": "student"}
         
         if is_active is not None:
@@ -614,12 +625,10 @@ async def get_students(
                 {"user_id": {"$regex": search, "$options": "i"}}
             ]
         
-        # Query students
         cursor = db.users.find(filter_query).skip(skip).limit(limit).sort("created_at", -1)
         students = []
         for s in cursor:
             student_data = serialize_student(s)
-            # Find groups this student belongs to
             sid = str(s["_id"])
             student_groups = list(db.groups.find(
                 {"student_ids": sid},
@@ -635,7 +644,6 @@ async def get_students(
         logger.error(f"Error fetching students: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/students")
 async def create_student(student: StudentCreate):
     """
@@ -646,17 +654,14 @@ async def create_student(student: StudentCreate):
     Password: {name}{age} (e.g., sajith14)
     """
     try:
-        # Check if email already exists
         existing = db.users.find_one({"email": student.email})
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        # Generate user_id and password
         user_id = generate_student_id(student.name, student.age)
         password = generate_password(student.name, student.age)
         hashed_password = hash_password(password)
         
-        # Create student document (no preferred_subject - students access all subjects for their class)
         student_doc = {
             "user_id": user_id,
             "name": student.name,
@@ -675,19 +680,16 @@ async def create_student(student: StudentCreate):
             "created_by": "admin"
         }
         
-        # Insert into database
         result = db.users.insert_one(student_doc)
         student_doc["_id"] = result.inserted_id
         
-        # Return with credentials
         response = serialize_student(student_doc)
         response["generated_credentials"] = {
             "user_id": user_id,
-            "password": password,  # Plain text for admin to share
+            "password": password,
             "note": "Share these credentials with the student. They will be prompted to change password on first login."
         }
         
-        # Send email
         email_sent = send_credentials_email(student.email, user_id, password, student.name)
         if email_sent:
             response["generated_credentials"]["email_status"] = "sent"
@@ -704,14 +706,12 @@ async def create_student(student: StudentCreate):
         logger.error(f"Error creating student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/students/{student_id}")
 async def get_student(student_id: str):
     """
     Get a single student by ID (MongoDB _id or user_id).
     """
     try:
-        # Try as ObjectId first
         student = None
         if ObjectId.is_valid(student_id):
             student = db.users.find_one({"_id": ObjectId(student_id), "role": "student"})
@@ -730,14 +730,12 @@ async def get_student(student_id: str):
         logger.error(f"Error fetching student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/students/{student_id}")
 async def update_student(student_id: str, student: StudentUpdate):
     """
     Update a student's information.
     """
     try:
-        # Build update document
         update_doc = {}
         if student.name is not None:
             update_doc["name"] = student.name
@@ -757,7 +755,6 @@ async def update_student(student_id: str, student: StudentUpdate):
         
         update_doc["updated_at"] = datetime.utcnow()
         
-        # Find and update
         query = {"_id": ObjectId(student_id), "role": "student"} if ObjectId.is_valid(student_id) else {"user_id": student_id, "role": "student"}
         result = db.users.find_one_and_update(
             query,
@@ -777,17 +774,14 @@ async def update_student(student_id: str, student: StudentUpdate):
         logger.error(f"Error updating student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/students/{student_id}")
 async def delete_student(student_id: str):
     """
     Delete a student (soft delete by setting is_active=False, or hard delete).
     """
     try:
-        # Find student
         query = {"_id": ObjectId(student_id), "role": "student"} if ObjectId.is_valid(student_id) else {"user_id": student_id, "role": "student"}
         
-        # Hard delete
         result = db.users.delete_one(query)
         
         if result.deleted_count == 0:
@@ -802,25 +796,21 @@ async def delete_student(student_id: str):
         logger.error(f"Error deleting student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/students/{student_id}/reset-password")
 async def reset_student_password(student_id: str):
     """
     Reset a student's password to the default (name + age).
     """
     try:
-        # Find student
         query = {"_id": ObjectId(student_id), "role": "student"} if ObjectId.is_valid(student_id) else {"user_id": student_id, "role": "student"}
         student = db.users.find_one(query)
         
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         
-        # Generate new password
         new_password = generate_password(student.get("name", "student"), student.get("age", 10))
         hashed_password = hash_password(new_password)
         
-        # Update password
         db.users.update_one(
             {"_id": student["_id"]},
             {"$set": {"password": hashed_password, "password_changed_at": None}}
@@ -839,9 +829,6 @@ async def reset_student_password(student_id: str):
     except Exception as e:
         logger.error(f"Error resetting password: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== TEACHER MANAGEMENT ENDPOINTS ====================
 
 @router.get("/teachers")
 async def get_teachers(
@@ -867,7 +854,6 @@ async def get_teachers(
             ]
             
         if subject:
-            # Case-insensitive match for subject in subjects array
             filter_query["subjects"] = {"$regex": f"^{subject}$", "$options": "i"}
         
         cursor = db.users.find(filter_query).limit(limit).sort("created_at", -1)
@@ -877,7 +863,6 @@ async def get_teachers(
             teacher_id_str = str(t.get("_id", ""))
             teacher_user_id = t.get("user_id", "")
             
-            # Count groups and get group names for this teacher
             teacher_groups = list(db.groups.find({
                 "$or": [
                     {"teacher_id": teacher_user_id},
@@ -909,23 +894,22 @@ async def get_teachers(
         logger.error(f"Error fetching teachers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class TeacherCreate(BaseModel):
     """Model for creating a new teacher."""
     name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., description="Email address")
     mobile: Optional[str] = None
+    age: Optional[int] = Field(None, ge=18, le=100)
     subjects: List[str] = []
-
 
 class TeacherUpdate(BaseModel):
     """Model for updating a teacher."""
     name: Optional[str] = None
     email: Optional[str] = None
     mobile: Optional[str] = None
+    age: Optional[int] = None
     subjects: Optional[List[str]] = None
     is_active: Optional[bool] = None
-
 
 def generate_teacher_id(name: str) -> str:
     """Generate unique teacher ID in format: staff_{number}_{name}"""
@@ -945,12 +929,10 @@ def generate_teacher_id(name: str) -> str:
         clean_name = name.lower().replace(" ", "")[:10]
         return f"staff_{int(time.time()) % 10000}_{clean_name}"
 
-
 def generate_teacher_password(name: str) -> str:
     """Generate default teacher password."""
     clean_name = name.lower().replace(" ", "").replace(".", "")
     return f"{clean_name}@123"
-
 
 @router.post("/teachers")
 async def create_teacher(teacher: TeacherCreate):
@@ -969,6 +951,7 @@ async def create_teacher(teacher: TeacherCreate):
             "name": teacher.name,
             "email": teacher.email,
             "mobile": teacher.mobile or "",
+            "age": teacher.age,
             "subjects": teacher.subjects,
             "password": hashed_password,
             "role": "teacher",
@@ -992,9 +975,18 @@ async def create_teacher(teacher: TeacherCreate):
             "generated_credentials": {
                 "user_id": user_id,
                 "password": password,
+                "user_id": user_id,
+                "password": password,
                 "note": "Share these credentials with the teacher."
             }
         }
+        
+        email_sent = send_credentials_email(teacher.email, user_id, password, teacher.name)
+        if email_sent:
+            response["generated_credentials"]["email_status"] = "sent"
+        else:
+            response["generated_credentials"]["email_status"] = "failed"
+            logger.warning(f"Failed to send email to {teacher.email}")
         
         logger.info(f"Created teacher: {user_id} ({teacher.name})")
         return response
@@ -1004,7 +996,6 @@ async def create_teacher(teacher: TeacherCreate):
     except Exception as e:
         logger.error(f"Error creating teacher: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.put("/teachers/{teacher_id}")
 async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
@@ -1017,6 +1008,8 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
             update_doc["email"] = teacher.email
         if teacher.mobile is not None:
             update_doc["mobile"] = teacher.mobile
+        if teacher.age is not None:
+            update_doc["age"] = teacher.age
         if teacher.subjects is not None:
             update_doc["subjects"] = teacher.subjects
         if teacher.is_active is not None:
@@ -1054,7 +1047,6 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
         logger.error(f"Error updating teacher: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/teachers/{teacher_id}")
 async def delete_teacher(teacher_id: str):
     """Delete a teacher."""
@@ -1073,7 +1065,6 @@ async def delete_teacher(teacher_id: str):
     except Exception as e:
         logger.error(f"Error deleting teacher: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/teachers/{teacher_id}/reset-password")
 async def reset_teacher_password(teacher_id: str):
@@ -1107,9 +1098,6 @@ async def reset_teacher_password(teacher_id: str):
         logger.error(f"Error resetting password: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== GROUP MANAGEMENT ENDPOINTS ====================
-
 class GroupCreate(BaseModel):
     """Model for creating a group."""
     class_level: int = Field(..., ge=1, le=12, description="Class Level (1-12)")
@@ -1118,18 +1106,15 @@ class GroupCreate(BaseModel):
     teacher_ids: List[str] = Field(default=[], description="List of Teacher IDs")
     student_ids: List[str] = []
 
-
 class GroupStudentUpdate(BaseModel):
     """Model for updating group students."""
     student_ids: List[str] = []
-
 
 class GroupUpdate(BaseModel):
     """Model for updating a group."""
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     teacher_ids: Optional[List[str]] = None
     description: Optional[str] = None
-
 
 @router.get("/groups")
 async def get_groups():
@@ -1140,17 +1125,14 @@ async def get_groups():
         
         for g in cursor:
             teacher_names = []
-            # Handle legacy teacher_id
             if g.get("teacher_id"):
                 tid = g.get("teacher_id")
                 teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
                 if teacher:
                     teacher_names.append(teacher.get("name"))
             
-            # Handle new teacher_ids
             if g.get("teacher_ids"):
                 for tid in g.get("teacher_ids"):
-                    # Avoid duplicates if teacher_id is also present and same
                     if g.get("teacher_id") and tid == g.get("teacher_id"):
                         continue
                         
@@ -1165,7 +1147,7 @@ async def get_groups():
                 "subject": g.get("subject"),
                 "batch_year": g.get("batch_year"),
                 "description": g.get("description", ""),
-                "teacher_id": g.get("teacher_id"), # Keep for legacy compatibility
+                "teacher_id": g.get("teacher_id"),
                 "teacher_ids": g.get("teacher_ids", [g.get("teacher_id")] if g.get("teacher_id") else []),
                 "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
                 "student_ids": g.get("student_ids", []),
@@ -1180,32 +1162,22 @@ async def get_groups():
         logger.error(f"Error fetching groups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/groups")
 async def create_group(group: GroupCreate):
     """Create a new group with auto-generated name."""
     try:
-        # Auto-generate name: Subject_Class_Batch
         group_name = f"{group.subject}_Class{group.class_level}_{group.batch_year}"
         
-        # Check if group already exists (optional, but good practice)
         existing = db.groups.find_one({"name": group_name})
         if existing:
-            # Append a counter or just return existing? Let's just append if needed or fail.
-            # User might want to just add students to existing group.
-            # For now, let's allow duplicates or maybe it's better to prevent.
-            # Let's check constraints. The prompt logic implies unique nature.
-            # I'll just proceed, if they want unique names, they will see it in the list.
             pass
 
-        # Prepare document
         group_doc = {
             "name": group_name,
             "class_level": group.class_level,
             "subject": group.subject,
             "batch_year": group.batch_year,
             "teacher_ids": group.teacher_ids,
-            # For backward compatibility, set teacher_id to the first teacher if available
             "teacher_id": group.teacher_ids[0] if group.teacher_ids else None,
             "student_ids": group.student_ids,
             "created_at": datetime.utcnow()
@@ -1214,7 +1186,6 @@ async def create_group(group: GroupCreate):
         result = db.groups.insert_one(group_doc)
         group_doc["_id"] = result.inserted_id
         
-        # Resolve teacher names
         teacher_names = []
         if group_doc["teacher_ids"]:
             for tid in group_doc["teacher_ids"]:
@@ -1240,7 +1211,6 @@ async def create_group(group: GroupCreate):
         logger.error(f"Error creating group: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/groups/{group_id}")
 async def delete_group(group_id: str):
     """Delete a group."""
@@ -1262,7 +1232,6 @@ async def delete_group(group_id: str):
         logger.error(f"Error deleting group: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.put("/groups/{group_id}")
 async def update_group(group_id: str, data: GroupUpdate):
     """Update group details (name, teachers)."""
@@ -1272,7 +1241,6 @@ async def update_group(group_id: str, data: GroupUpdate):
         
         update_data = {k: v for k, v in data.dict().items() if v is not None}
         
-        # Sync legacy teacher_id if teacher_ids is present
         if "teacher_ids" in update_data:
             update_data["teacher_id"] = update_data["teacher_ids"][0] if update_data["teacher_ids"] else None
             
@@ -1297,7 +1265,6 @@ async def update_group(group_id: str, data: GroupUpdate):
                 if teacher:
                     teacher_names.append(teacher.get("name"))
         elif result.get("teacher_id"):
-            # Fallback for legacy data
             tid = result.get("teacher_id")
             teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
             if teacher:
@@ -1319,10 +1286,6 @@ async def update_group(group_id: str, data: GroupUpdate):
     except Exception as e:
         logger.error(f"Error updating group: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-
 
 @router.put("/groups/{group_id}/students")
 async def update_group_students(group_id: str, data: GroupStudentUpdate):
@@ -1361,4 +1324,3 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
     except Exception as e:
         logger.error(f"Error updating group students: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

@@ -1,7 +1,3 @@
-/**
- * StudentGroups - View assigned groups, teachers, subjects, and tests
- * Wrapped in DashboardLayout for consistent student navigation
- */
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -38,7 +34,7 @@ export default function StudentGroups() {
   const [loading, setLoading] = useState(true);
   const [expandedGroup, setExpandedGroup] = useState(null);
   const [expandedSubject, setExpandedSubject] = useState(null);
-  const [activeTab, setActiveTab] = useState("groups"); // groups, subjects, tests
+  const [activeTab, setActiveTab] = useState("groups"); 
 
   useEffect(() => {
     fetchAll();
@@ -157,7 +153,7 @@ export default function StudentGroups() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           {tabs.map(tab => (
             <button
@@ -246,7 +242,7 @@ export default function StudentGroups() {
                   {expandedGroup === group.id && (
                     <div className="px-6 pb-4 pt-2 border-t border-gray-50">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Teacher Info */}
+                        {}
                         <div className="bg-gray-50 rounded-lg p-4">
                           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Teacher</h4>
                           {group.teacher ? (
@@ -285,7 +281,7 @@ export default function StudentGroups() {
                         </div>
                       </div>
 
-                      {/* Quick Actions */}
+                      {}
                       <div className="flex gap-3 mt-4">
                         <button
                           onClick={() => navigate("/my-tests")}

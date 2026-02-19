@@ -29,12 +29,6 @@ import useUserStore from "../../stores/userStore";
 import useThemeStore from "../../stores/themeStore";
 import ChatbotPanel from "./ChatbotPanel";
 
-/**
- * DashboardLayout Component
- * 
- * Light themed sidebar with orange Pro card.
- */
-
 const navItems = [
   {
     id: "dashboard",
@@ -104,12 +98,10 @@ export default function DashboardLayout({ children }) {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef(null);
 
-  // Initialize theme on mount
   useEffect(() => {
     initTheme();
   }, []);
 
-  // Close theme menu on outside click
   useEffect(() => {
     const handleClick = (e) => {
       if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
@@ -153,12 +145,12 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
-      {/* Sidebar */}
+      {}
       <aside
         className={`flex-shrink-0 transition-all duration-300 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col ${sidebarOpen ? "w-64" : "w-20"
           }`}
       >
-        {/* Logo */}
+        {}
         <div className="p-5 flex items-center justify-between">
           {sidebarOpen ? (
             <>
@@ -187,7 +179,7 @@ export default function DashboardLayout({ children }) {
           )}
         </div>
 
-        {/* Navigation */}
+        {}
         <nav className="flex-1 px-3 py-2 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -229,7 +221,7 @@ export default function DashboardLayout({ children }) {
                 background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)'
               }}
             >
-              {/* Decorative circles */}
+              {}
               <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white/30" />
               <div className="absolute top-8 right-6 w-3 h-3 rounded-full bg-white/20" />
               <div className="absolute bottom-12 right-4 w-16 h-16 rounded-full bg-white/10 blur-sm" />
@@ -240,7 +232,7 @@ export default function DashboardLayout({ children }) {
                 </div>
                 <h3 className="text-white font-bold text-lg mb-1">Reminders</h3>
 
-                {/* Calendar Reminder Logic */}
+                {}
                 {!calendar.exams || calendar.exams.length === 0 ? (
                   <p className="text-white/90 text-sm">
                     No upcoming exams. Have a great day! 📚

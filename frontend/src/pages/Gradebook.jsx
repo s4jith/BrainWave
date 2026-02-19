@@ -1,7 +1,3 @@
-/**
- * Gradebook - View grades and analytics
- * Shows student grades (AI tests + staff tests), topic analysis, and detailed evaluations
- */
 
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -43,7 +39,6 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// StatCard Component
 function StatCard({ icon: Icon, label, value, color }) {
     return (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-colors">
@@ -58,7 +53,6 @@ function StatCard({ icon: Icon, label, value, color }) {
     );
 }
 
-// TopicBar - visual strength bar
 function TopicBar({ topic, accuracy, status }) {
     const barColor = status === "strong" ? "bg-emerald-500" : status === "moderate" ? "bg-amber-500" : "bg-red-500";
     const textColor = status === "strong" ? "text-emerald-600 dark:text-emerald-400" : status === "moderate" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400";
@@ -73,7 +67,6 @@ function TopicBar({ topic, accuracy, status }) {
     );
 }
 
-// Evaluation card for a single question
 function EvaluationCard({ ev, index }) {
     const isPending = ev.evaluation_status === "pending";
     const borderClass = isPending
@@ -115,7 +108,6 @@ function EvaluationCard({ ev, index }) {
     );
 }
 
-// Expandable grade row
 function GradeRow({ grade }) {
     const [expanded, setExpanded] = useState(false);
     const isAI = grade.source === "ai_test";
@@ -184,14 +176,14 @@ function GradeRow({ grade }) {
 
             {expanded && (
                 <div className="px-4 pb-4 space-y-4 bg-gray-50 dark:bg-gray-800/50">
-                    {/* Overall Feedback */}
+                    {}
                     {grade.feedback && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
                             <p className="text-sm text-gray-700 dark:text-gray-300">{grade.feedback}</p>
                         </div>
                     )}
 
-                    {/* Strengths & Improvements side by side */}
+                    {}
                     {(grade.strengths?.length > 0 || grade.improvements?.length > 0) && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {grade.strengths?.length > 0 && (
@@ -344,7 +336,7 @@ export default function Gradebook() {
     const [analytics, setAnalytics] = useState(null);
     const [myGrades, setMyGrades] = useState(null);
     const [viewMode, setViewMode] = useState("gradebook");
-    const [filter, setFilter] = useState("all"); // all | ai_test | staff_test
+    const [filter, setFilter] = useState("all");
 
     const isInstructor = isTeacher() || isAdmin();
 
@@ -434,7 +426,6 @@ export default function Gradebook() {
         );
     }
 
-    // Filtered grades
     const filteredGrades = (myGrades?.grades || []).filter(g => {
         if (filter === "all") return true;
         return g.source === filter;
@@ -443,7 +434,6 @@ export default function Gradebook() {
     const aiCount = (myGrades?.grades || []).filter(g => g.source === "ai_test").length;
     const staffCount = (myGrades?.grades || []).filter(g => g.source === "staff_test").length;
 
-    // Student view
     if (!isInstructor) {
         return (
             <DashboardLayout>
@@ -645,7 +635,6 @@ export default function Gradebook() {
         );
     }
 
-    // Instructor view
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors">
             <header className="bg-white dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-6 py-4">

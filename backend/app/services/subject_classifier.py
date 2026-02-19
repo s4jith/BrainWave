@@ -38,7 +38,6 @@ class SubjectClassifier:
             prompt = self._build_classification_prompt(question)
             response = self.gemini.generate_response(prompt)
             
-            # Clean response to ensure valid JSON
             response = response.strip()
             if response.startswith("```json"):
                 response = response[7:]
@@ -47,9 +46,7 @@ class SubjectClassifier:
             
             data = json.loads(response)
             
-            # Normalize detected subject
             detected = data.get("detected_subject", "Unknown")
-            # Map common variations
             if detected.lower() in ["math", "maths", "mathematics"]: 
                 detected = "Maths"
             
@@ -58,7 +55,6 @@ class SubjectClassifier:
             
         except Exception as e:
             logger.error(f"Subject classification failed: {e}")
-            # Fail open - assume correct subject if classification fails
             return {
                 "detected_subject": "Unknown",
                 "confidence": 0.0,
@@ -95,5 +91,4 @@ Return ONLY a JSON object:
     "keywords": ["key", "words"]
 }}"""
 
-# Singleton instance
 subject_classifier = SubjectClassifier()

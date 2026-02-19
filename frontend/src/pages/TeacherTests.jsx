@@ -1,8 +1,3 @@
-/**
- * TeacherTests - Manage assessments and evaluate student test sessions
- * Shows: Staff-created tests (for all)
- * AI Test evaluations: ADMIN ONLY (teachers don't see/evaluate AI tests)
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -22,27 +17,21 @@ export default function TeacherTests() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Check if current user is admin (AI test tabs only for admin)
     const showAITestTabs = isAdmin();
 
-    // Teacher's subjects from groups
     const [teacherSubjects, setTeacherSubjects] = useState([]);
     const [loadingSubjects, setLoadingSubjects] = useState(true);
     const [selectedSubject, setSelectedSubject] = useState("");
     const [selectedStatus, setSelectedStatus] = useState("");
 
-    // Active tab: "tests" or "evaluations" or "completed"
     const [activeTab, setActiveTab] = useState("tests");
 
-    // Pending evaluations (AI tests - admin only)
     const [pendingSessions, setPendingSessions] = useState([]);
     const [loadingPending, setLoadingPending] = useState(false);
 
-    // Completed test sessions (AI tests - admin only)
     const [completedSessions, setCompletedSessions] = useState([]);
     const [loadingCompleted, setLoadingCompleted] = useState(false);
 
-    // Evaluation modal
     const [evaluatingSession, setEvaluatingSession] = useState(null);
     const [evaluationDetail, setEvaluationDetail] = useState(null);
     const [loadingEvalDetail, setLoadingEvalDetail] = useState(false);
@@ -55,7 +44,7 @@ export default function TeacherTests() {
     }, []);
 
     useEffect(() => {
-        // Only fetch AI test data if admin
+        
         if (showAITestTabs) {
             if (activeTab === "evaluations") fetchPendingEvaluations();
             if (activeTab === "completed") fetchCompletedSessions();
@@ -138,7 +127,7 @@ export default function TeacherTests() {
             if (response.ok) {
                 const data = await response.json();
                 setEvaluationDetail(data);
-                // Initialize grades for pending questions
+                
                 const grades = {};
                 (data.evaluations || []).forEach(e => {
                     if (e.evaluation_status === "pending") {
@@ -217,7 +206,7 @@ export default function TeacherTests() {
 
     return (
         <AdminLayout title="Tests Management" icon={ClipboardList}>
-            {/* Tabs - AI test tabs only visible to admin */}
+            {}
             <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
                 {[
                     { key: "tests", label: "My Tests", icon: ClipboardList, show: true },

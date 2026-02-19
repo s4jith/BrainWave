@@ -13,18 +13,15 @@ from app.services.gemini_service import gemini_service
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class GenerationConfig:
     """Configuration for Generation Service."""
     component_name: str = "GenerationService"
     
-    # Generation settings
     model: str = "gemini-2.0-flash"
     max_textbook_chunks: int = 10
     max_llm_chunks: int = 2
     max_web_chunks: int = 5
-
 
 class GenerationService:
     """
@@ -71,17 +68,13 @@ class GenerationService:
         Returns:
             Generated answer string
         """
-        # Handle no-content fallback
         if not textbook_chunks and not llm_chunks and not web_chunks:
             return self._generate_fallback_answer(question, student_class, subject)
         
-        # Build context from all sources
         context = self._build_context(textbook_chunks, llm_chunks, web_chunks)
         
-        # Generate prompt based on mode
         prompt = self._build_prompt(question, context, student_class, subject, mode)
         
-        # Generate answer
         answer = self.gemini.generate_response(prompt)
         
         logger.info(f"[{self.config.component_name}] Generated answer ({len(answer)} chars)")
@@ -97,7 +90,6 @@ class GenerationService:
         """Build combined context from all sources."""
         sections = []
         
-        # Priority 1: Textbook content
         if textbook_chunks:
             tb_content = []
             for chunk in textbook_chunks[:self.config.max_textbook_chunks]:
@@ -105,7 +97,6 @@ class GenerationService:
                 tb_content.append(f"[Class {class_level}] {chunk['text']}")
             sections.append("**PRIMARY SOURCE - NCERT Textbook:**\n" + "\n\n".join(tb_content))
         
-        # Priority 2: LLM cached answers
         if llm_chunks:
             llm_content = []
             for chunk in llm_chunks[:self.config.max_llm_chunks]:
@@ -113,7 +104,6 @@ class GenerationService:
                 llm_content.append(f"[Topic: {topic}] {chunk['text']}")
             sections.append("**REFERENCE - Previous Explanations:**\n" + "\n\n".join(llm_content))
         
-        # Priority 3: Web content
         if web_chunks:
             web_content = []
             for chunk in web_chunks[:self.config.max_web_chunks]:
@@ -189,7 +179,6 @@ Return JSON format:
         
         response = self.gemini.generate_response(prompt)
         
-        # Parse JSON response (simplified)
         import json
         try:
             return json.loads(response)
@@ -204,6 +193,4 @@ Return JSON format:
             "modes": ["basic", "deepdive"]
         }
 
-
-# Singleton instance
 generation_service = GenerationService()

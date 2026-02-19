@@ -9,7 +9,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class FlashcardService:
     """Generate flashcards from textbook content using AI."""
     
@@ -39,11 +38,8 @@ class FlashcardService:
         try:
             logger.info(f"🎴 Generating {count} flashcards for {subject} Class {class_level}")
             
-            # Get namespace for subject
             namespace = subject.lower().replace(" ", "_")
             
-            # Query random chunks from the chapter/subject
-            # Use a generic query to get representative content
             sample_queries = [
                 f"important concepts in {subject}",
                 f"key terms and definitions in {subject}",
@@ -53,10 +49,8 @@ class FlashcardService:
             all_chunks = []
             for query in sample_queries:
                 try:
-                    # Generate embedding for query
                     embedding = self.gemini.generate_embedding(query)
                     
-                    # Query Pinecone
                     results = self.pinecone.index.query(
                         namespace=namespace,
                         vector=embedding,
@@ -77,11 +71,9 @@ class FlashcardService:
                 logger.warning("No chunks found for flashcard generation")
                 return []
             
-            # Deduplicate and limit chunks
             unique_chunks = list(set(all_chunks))[:15]
             combined_text = "\n\n---\n\n".join(unique_chunks)
             
-            # Generate flashcards using Gemini
             prompt = f"""Based on this Class {class_level} {subject} textbook content, create {count} flashcards for studying.
 
 TEXTBOOK CONTENT:
@@ -104,11 +96,9 @@ JSON:"""
             
             response = self.gemini.generate_response(prompt)
             
-            # Parse JSON from response
             import json
             import re
             
-            # Extract JSON from response
             json_match = re.search(r'\[[\s\S]*\]', response)
             if json_match:
                 flashcards = json.loads(json_match.group())
@@ -158,6 +148,4 @@ JSON:"""
             logger.error(f" Get flashcards failed: {e}")
             return []
 
-
-# Singleton instance
 flashcard_service = FlashcardService()

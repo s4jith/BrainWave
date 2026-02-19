@@ -11,24 +11,23 @@ const QuestionBank = () => {
     const isTeacher = user.role === "teacher";
     const Layout = AdminLayout;
 
-    const [activeTab, setActiveTab] = useState("bank"); // "bank" or "approvals"
+    const [activeTab, setActiveTab] = useState("bank"); 
     const [questions, setQuestions] = useState([]);
-    const [subjects, setSubjects] = useState([]); // Dynamic subjects
-    const [groups, setGroups] = useState([]); // User's groups
-    const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
-    const [loadingGroups, setLoadingGroups] = useState(true); // Loading state for groups
-    const [loadingCurriculum, setLoadingCurriculum] = useState(true); // Loading state for curriculum
+    const [subjects, setSubjects] = useState([]); 
+    const [groups, setGroups] = useState([]); 
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]); 
+    const [loadingGroups, setLoadingGroups] = useState(true); 
+    const [loadingCurriculum, setLoadingCurriculum] = useState(true); 
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-    // Generate combined options from user's groups (for teachers) or curriculum subjects (for admin)
     const combinedOptions = React.useMemo(() => {
         if (isTeacher && groups.length > 0) {
-            // Use group names directly as options
+            
             return groups.map(group => ({
-                value: group.name,  // Use group name as value
-                label: group.name,  // Display group name
+                value: group.name,  
+                label: group.name,  
                 class: group.class_level,
                 subject: group.subject
             })).sort((a, b) => {
@@ -36,7 +35,7 @@ const QuestionBank = () => {
                 return a.subject.localeCompare(b.subject);
             });
         }
-        // Admin sees curriculum subjects from database
+        
         return curriculumSubjects.map(subj => ({
             value: `${subj.class_level}-${subj.subject_name}`,
             label: `Class ${subj.class_level} - ${subj.subject_name}`,
@@ -48,9 +47,8 @@ const QuestionBank = () => {
         });
     }, [isTeacher, groups, curriculumSubjects]);
 
-    // Filters
     const [filters, setFilters] = useState({
-        groupName: "",  // Group name filter (for teachers) or class-subject (for admins)
+        groupName: "",  
         type: "",
         difficulty: "",
         search: ""
@@ -130,18 +128,17 @@ const QuestionBank = () => {
         try {
             const status = activeTab === "approvals" ? "pending" : "approved";
             
-            // Parse filter value
             let classLevel = null;
             let subject = null;
             
             if (filters.groupName) {
                 if (isTeacher && groups.length > 0) {
-                    // For teachers, groupName is the actual group name
+                    
                     const parsed = parseGroupName(filters.groupName);
                     classLevel = parsed.class;
                     subject = parsed.subject;
                 } else {
-                    // For admins, it's the combined value format
+                    
                     const parsed = parseCombinedValue(filters.groupName);
                     classLevel = parsed.class;
                     subject = parsed.subject;
@@ -154,7 +151,6 @@ const QuestionBank = () => {
                 status: status
             });
             
-            // Add individual filters
             if (classLevel) queryParams.append('class_level', classLevel);
             if (subject) queryParams.append('subject', subject);
             if (filters.type) queryParams.append('type', filters.type);
@@ -256,7 +252,7 @@ const QuestionBank = () => {
                     </button>
                 </div>
 
-                {/* Tabs */}
+                {}
                 <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={() => setActiveTab("bank")}
@@ -470,7 +466,7 @@ const QuestionBank = () => {
                     onClose={handleModalClose}
                     isTeacher={isTeacher}
                     userSubjects={user.subjects || []}
-                    availableSubjects={subjects} // Pass dynamic subjects to modal
+                    availableSubjects={subjects}
                 />
             )}
         </Layout>

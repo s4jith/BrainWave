@@ -1,7 +1,3 @@
-/**
- * TeacherDashboard - Main dashboard for teachers
- * Uses AdminLayout for consistent vertical navigation and theme
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +14,6 @@ export default function TeacherDashboard() {
     const navigate = useNavigate();
     const { user, getAuthHeader } = useUserStore();
 
-    // Stats state
     const [stats, setStats] = useState({
         myQuestions: 0,
         myTests: 0,
@@ -35,7 +30,6 @@ export default function TeacherDashboard() {
         fetchGroups();
     }, []);
 
-    // Auto-refresh on window focus
     useEffect(() => {
         const handleFocus = () => {
             fetchDashboardStats();
@@ -75,7 +69,7 @@ export default function TeacherDashboard() {
                     pending: data.pending || 0
                 });
             } else {
-                // Fallback / Mock data if endpoint not ready
+                
                 console.warn("Using mock stats data");
                 setStats({
                     myQuestions: 0,
@@ -86,7 +80,7 @@ export default function TeacherDashboard() {
             }
         } catch (err) {
             console.error("Failed to fetch teacher stats:", err);
-            // Fallback
+            
             setStats({
                 myQuestions: 0,
                 myTests: 0,
@@ -116,7 +110,7 @@ export default function TeacherDashboard() {
     return (
         <AdminLayout title="Teacher Dashboard" icon={LayoutDashboard}>
 
-            {/* Stats Grid */}
+            {}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatCard
                     label="My Questions"

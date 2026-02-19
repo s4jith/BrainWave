@@ -30,21 +30,14 @@ router = APIRouter(
     tags=["Tests"]
 )
 
-# Upload directory for test files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "tests")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-# ==================== SCHEMAS ====================
-
-# --- Subject/Chapter/Topic Selection ---
 
 class SubjectResponse(BaseModel):
     """Subject info for selection."""
     subject: str
     total_chapters: int
     total_questions: int
-
 
 class ChapterInfo(BaseModel):
     """Chapter info with topics."""
@@ -53,7 +46,6 @@ class ChapterInfo(BaseModel):
     total_topics: int
     total_questions: int
     average_score: Optional[float] = None
-
 
 class TopicInfo(BaseModel):
     """Topic info with student performance."""
@@ -69,7 +61,6 @@ class TopicInfo(BaseModel):
     is_weak: bool = False
     is_recommended: bool = False
 
-
 class RecommendationItem(BaseModel):
     """Topic recommendation for student."""
     topic_id: str
@@ -80,9 +71,6 @@ class RecommendationItem(BaseModel):
     is_new: bool = False
     reason: str = ""
 
-
-# --- Test Session ---
-
 class StartTestRequest(BaseModel):
     """Request to start a topic-based test."""
     student_id: str = Field(..., description="Student ID")
@@ -92,7 +80,6 @@ class StartTestRequest(BaseModel):
     topic_id: str = Field(..., description="Topic ID")
     num_questions: int = Field(default=5, ge=1, le=15, description="Number of questions")
     difficulty: str = Field(default="mixed", description="easy/medium/hard/mixed")
-
 
 class TestQuestionItem(BaseModel):
     """Question served in test."""
@@ -106,7 +93,6 @@ class TestQuestionItem(BaseModel):
     options: Optional[Dict[str, str]] = None
     correct_option: Optional[str] = None
 
-
 class StartTestResponse(BaseModel):
     """Response after starting a test."""
     session_id: str
@@ -117,7 +103,6 @@ class StartTestResponse(BaseModel):
     time_limit_minutes: int
     started_at: str
 
-
 class SubmitAnswerRequest(BaseModel):
     """Submit a single answer."""
     session_id: str
@@ -125,13 +110,11 @@ class SubmitAnswerRequest(BaseModel):
     question_number: int
     answer: str
 
-
 class CompleteTestRequest(BaseModel):
     """Complete test and get evaluation."""
     session_id: str
     student_id: str
     answers: List[SubmitAnswerRequest]
-
 
 class EvaluationItem(BaseModel):
     """Single question evaluation."""
@@ -144,7 +127,6 @@ class EvaluationItem(BaseModel):
     feedback: str
     correct_answer: str
 
-
 class CompleteTestResponse(BaseModel):
     """Test completion response with evaluation."""
     session_id: str
@@ -156,11 +138,8 @@ class CompleteTestResponse(BaseModel):
     strengths: List[str]
     improvements: List[str]
     topics_to_review: List[str]
-    topic_analytics: Optional[Dict] = None  # NEW: Topic-level performance breakdown
+    topic_analytics: Optional[Dict] = None
     completed_at: str
-
-
-# --- Staff Tests ---
 
 class StaffTestItem(BaseModel):
     """Staff test response."""
@@ -177,9 +156,6 @@ class StaffTestItem(BaseModel):
     submission_status: Optional[str] = None
     score: Optional[int] = None
 
-
-# --- Analytics ---
-
 class StudentAnalytics(BaseModel):
     """Student analytics data."""
     total_tests_taken: int
@@ -194,9 +170,6 @@ class StudentAnalytics(BaseModel):
     topic_breakdown: List[Dict]
     recommendations: List[Dict]
 
-
-# ==================== SUBJECT/CHAPTER/TOPIC SELECTION ====================
-
 @router.get("/subjects/{class_level}", response_model=List[SubjectResponse])
 async def get_available_subjects(class_level: int):
     """
@@ -209,7 +182,6 @@ async def get_available_subjects(class_level: int):
     except Exception as e:
         logger.error(f"Error fetching subjects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/chapters/{class_level}/{subject}", response_model=List[ChapterInfo])
 async def get_chapters_for_subject(class_level: int, subject: str, student_id: Optional[str] = None):
@@ -228,7 +200,6 @@ async def get_chapters_for_subject(class_level: int, subject: str, student_id: O
     except Exception as e:
         logger.error(f"Error fetching chapters: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/topics/{class_level}/{subject}/{chapter}", response_model=List[TopicInfo])
 async def get_topics_for_chapter(
@@ -253,7 +224,6 @@ async def get_topics_for_chapter(
         logger.error(f"Error fetching topics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/recommendations/{class_level}/{subject}/{student_id}", response_model=List[RecommendationItem])
 async def get_topic_recommendations(
     class_level: int,
@@ -273,7 +243,6 @@ async def get_topic_recommendations(
             limit=limit
         )
         
-        # Add reason for recommendation
         result = []
         for rec in recommendations:
             if rec.get("is_new"):
@@ -300,9 +269,6 @@ async def get_topic_recommendations(
         logger.error(f"Error fetching recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== FIXED-FORMAT CHAPTER TEST ====================
-
 class StartChapterTestRequest(BaseModel):
     """Request for fixed-format chapter test (15Q, 20 marks, 40 min)."""
     student_id: str = Field(..., description="Student ID")
@@ -310,33 +276,30 @@ class StartChapterTestRequest(BaseModel):
     subject: str = Field(..., description="Subject name")
     chapter_number: int = Field(..., description="Chapter number")
 
-
 class ChapterTestQuestion(BaseModel):
     """Question in chapter test with marks."""
     question_number: int
     question_id: str
     question_text: str
     difficulty: str
-    question_type: str  # "mcq", "fillup", "two_mark"
-    marks: int  # 1 or 2
+    question_type: str
+    marks: int
     time_estimate: int
-    options: Optional[Dict[str, str]] = None  # For MCQs: {"A": "...", "B": "...", "C": "...", "D": "..."}
-
+    options: Optional[Dict[str, str]] = None
 
 class ChapterTestResponse(BaseModel):
     """Response for fixed-format chapter test."""
     session_id: str
     chapter_name: str
     questions: List[ChapterTestQuestion]
-    total_questions: int  # Always 15
-    total_marks: int  # Always 20
-    time_limit_minutes: int  # Always 40
+    total_questions: int
+    total_marks: int
+    time_limit_minutes: int
     mcq_count: int = 5
     fillup_count: int = 5
     two_mark_count: int = 5
     started_at: str
-    is_first_time: bool = False  # True if questions were just generated
-
+    is_first_time: bool = False
 
 @router.post("/start-chapter", response_model=ChapterTestResponse)
 async def start_chapter_test(request: StartChapterTestRequest):
@@ -358,14 +321,12 @@ async def start_chapter_test(request: StartChapterTestRequest):
     try:
         is_first_time = False
         
-        # Step 1: Check if question pool exists
         pool_status = await topic_question_bank_service.check_chapter_test_pool_exists(
             class_level=request.class_level,
             subject=request.subject,
             chapter_number=request.chapter_number
         )
         
-        # Step 2: Generate if first time
         if not pool_status.get("exists"):
             logger.info(f"🎯 First student for {request.subject} Ch.{request.chapter_number} - Generating questions...")
             is_first_time = True
@@ -382,7 +343,6 @@ async def start_chapter_test(request: StartChapterTestRequest):
                     detail=f"Failed to generate questions: {gen_result.get('error')}"
                 )
         
-        # Step 3: Select questions from pool (variant based on student attempts)
         selection = await topic_question_bank_service.select_chapter_test_questions(
             class_level=request.class_level,
             subject=request.subject,
@@ -399,7 +359,6 @@ async def start_chapter_test(request: StartChapterTestRequest):
         questions = selection["questions"]
         chapter_name = selection["chapter_name"]
         
-        # Step 4: Create test session
         session_id = str(uuid.uuid4())
         
         session_doc = {
@@ -416,7 +375,7 @@ async def start_chapter_test(request: StartChapterTestRequest):
             "fillup_count": selection.get("fillup_count", 5),
             "two_mark_count": selection.get("two_mark_count", 5),
             "time_limit_minutes": 40,
-            "questions_served": questions,  # Includes expected_answer for evaluation
+            "questions_served": questions,
             "answers": [],
             "status": "started",
             "started_at": datetime.utcnow(),
@@ -425,7 +384,6 @@ async def start_chapter_test(request: StartChapterTestRequest):
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Build response (exclude expected_answer from questions sent to frontend)
         response_questions = [
             ChapterTestQuestion(
                 question_number=q["question_number"],
@@ -462,9 +420,6 @@ async def start_chapter_test(request: StartChapterTestRequest):
         logger.error(f"Error starting chapter test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-
-
 class GenerateQuestionsRequest(BaseModel):
     """Request to generate questions for a chapter."""
     class_level: int = Field(default=10, description="Class level")
@@ -472,7 +427,6 @@ class GenerateQuestionsRequest(BaseModel):
     chapter_number: int = Field(..., description="Chapter number to generate questions for")
     num_questions: int = Field(default=15, ge=5, le=50, description="Number of questions to generate")
     include_variations: bool = Field(default=True, description="Generate question variations")
-
 
 class GenerateQuestionsResponse(BaseModel):
     """Response after generating questions."""
@@ -482,7 +436,6 @@ class GenerateQuestionsResponse(BaseModel):
     difficulty_distribution: Dict
     generated_at: Optional[str] = None
     error: Optional[str] = None
-
 
 @router.post("/generate-questions", response_model=GenerateQuestionsResponse)
 async def generate_questions_on_demand(request: GenerateQuestionsRequest):
@@ -516,7 +469,6 @@ async def generate_questions_on_demand(request: GenerateQuestionsRequest):
         logger.error(f"Error generating questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/check-questions/{class_level}/{subject}/{chapter_number}")
 async def check_questions_available(
     class_level: int,
@@ -538,9 +490,6 @@ async def check_questions_available(
         logger.error(f"Error checking questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== UPDATED TEST START WITH AUTO-GENERATION ====================
-
 class StartTestRequestV2(BaseModel):
     """Request to start a test with optional auto-generation."""
     student_id: str = Field(..., description="Student ID")
@@ -553,7 +502,6 @@ class StartTestRequestV2(BaseModel):
     difficulty: str = Field(default="mixed", description="easy/medium/hard/mixed")
     auto_generate: bool = Field(default=True, description="Auto-generate questions if not available")
 
-
 class StartTestResponseV2(BaseModel):
     """Response after starting a test."""
     session_id: str
@@ -562,8 +510,7 @@ class StartTestResponseV2(BaseModel):
     total_questions: int
     time_limit_minutes: int
     started_at: str
-    question_source: str  # "cached" or "generated"
-
+    question_source: str
 
 @router.post("/start-v2", response_model=StartTestResponseV2)
 async def start_test_v2(request: StartTestRequestV2):
@@ -579,14 +526,12 @@ async def start_test_v2(request: StartTestRequestV2):
     try:
         question_source = "cached"
         
-        # Step 1: Check if questions are available
         availability = await topic_question_bank_service.check_questions_available(
             class_level=request.class_level,
             subject=request.subject,
             chapter_number=request.chapter_number
         )
         
-        # Step 2: Generate if needed
         if not availability.get("available") and request.auto_generate:
             logger.info(f"Questions not available, generating for {request.subject} Ch.{request.chapter_number}")
             
@@ -594,7 +539,7 @@ async def start_test_v2(request: StartTestRequestV2):
                 class_level=request.class_level,
                 subject=request.subject,
                 chapter_number=request.chapter_number,
-                num_questions=20,  # Generate more for variety
+                num_questions=20,
                 include_variations=True
             )
             
@@ -612,7 +557,6 @@ async def start_test_v2(request: StartTestRequestV2):
                 detail="No questions available for this chapter. Please enable auto_generate."
             )
         
-        # Step 3: Get questions from cache
         questions = await topic_question_bank_service.get_cached_questions(
             class_level=request.class_level,
             subject=request.subject,
@@ -627,10 +571,8 @@ async def start_test_v2(request: StartTestRequestV2):
                 detail="No questions found after generation. Please try again."
             )
         
-        # Step 4: Create test session
         session_id = str(uuid.uuid4())
         
-        # Format questions for session
         formatted_questions = []
         for i, q in enumerate(questions):
             formatted_questions.append({
@@ -646,7 +588,6 @@ async def start_test_v2(request: StartTestRequestV2):
                 "is_variation": q.get("is_variation", False)
             })
         
-        # Get chapter name
         chapter_name = questions[0].get("chapter_name", f"Chapter {request.chapter_number}") if questions else f"Chapter {request.chapter_number}"
         
         session_doc = {
@@ -670,7 +611,6 @@ async def start_test_v2(request: StartTestRequestV2):
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Build response
         response_questions = [
             TestQuestionItem(
                 question_number=q["question_number"],
@@ -702,9 +642,6 @@ async def start_test_v2(request: StartTestRequestV2):
         logger.error(f"Error starting test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== AI TEST SESSION ENDPOINTS (LEGACY) ====================
-
 @router.post("/start", response_model=StartTestResponse)
 async def start_test(request: StartTestRequest):
     """
@@ -712,7 +649,6 @@ async def start_test(request: StartTestRequest):
     Fetches pre-generated questions from the question bank (NO Gemini call).
     """
     try:
-        # Get questions from question bank
         questions, topic_name = await topic_question_bank_service.get_questions_for_test(
             class_level=request.class_level,
             subject=request.subject,
@@ -728,7 +664,6 @@ async def start_test(request: StartTestRequest):
                 detail="No questions found for this topic. Please try another topic."
             )
         
-        # Create test session
         session_id = str(uuid.uuid4())
         session_doc = {
             "session_id": session_id,
@@ -744,12 +679,11 @@ async def start_test(request: StartTestRequest):
             "answers": [],
             "status": "started",
             "started_at": datetime.utcnow(),
-            "time_limit_minutes": max(10, len(questions) * 2)  # 2 min per question
+            "time_limit_minutes": max(10, len(questions) * 2)
         }
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Format response
         formatted_questions = [
             TestQuestionItem(
                 question_number=q["question_number"],
@@ -781,18 +715,14 @@ async def start_test(request: StartTestRequest):
         logger.error(f"Error starting test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-
 class StartTestRequestV2(StartTestRequest):
     """Request for V2 test start with on-demand generation."""
     auto_generate: bool = Field(default=True, description="Auto-generate questions if not found")
     total_marks: Optional[int] = Field(default=25, description="Total marks for the test")
 
-
 class StartTestResponseV2(StartTestResponse):
     """Response for V2 test start."""
     question_source: str = Field(..., description="cached/generated/bank")
-
 
 @router.post("/start-v3", response_model=Dict)
 async def start_test_v2(request: StartTestRequestV2):
@@ -802,7 +732,6 @@ async def start_test_v2(request: StartTestRequestV2):
     """
     logger.info(f"📝 Received start-v2 request: {request.model_dump()}")
     try:
-        # Use the new on-demand service
         result = await topic_question_bank_service.generate_questions_on_demand(
             class_level=request.class_level,
             subject=request.subject,
@@ -820,13 +749,8 @@ async def start_test_v2(request: StartTestRequestV2):
         questions = result["questions"]
         question_source = result["status"]
         
-        # Filter by difficulty if needed (though generation usually handles distribution)
-        # For now, we use all generated questions or a subset
-        
-        # Create test session
         session_id = str(uuid.uuid4())
-        # Calculate time limit based on total marks
-        time_limit_minutes = 45  # Default for 25 marks
+        time_limit_minutes = 45
         if request.total_marks == 100:
             time_limit_minutes = 180
         elif request.total_marks == 50:
@@ -853,7 +777,6 @@ async def start_test_v2(request: StartTestRequestV2):
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Format response
         formatted_questions = [
             TestQuestionItem(
                 question_number=i+1,
@@ -891,9 +814,6 @@ async def start_test_v2(request: StartTestRequestV2):
         logger.error(f"Error starting V2 test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== AI TEST WITH TOPIC ANALYTICS ====================
-
 class StartAITestRequest(BaseModel):
     """Request to start an AI test with topic-level analytics."""
     student_id: str = Field(..., description="Student ID")
@@ -902,7 +822,6 @@ class StartAITestRequest(BaseModel):
     chapter_number: int = Field(..., description="Chapter number")
     difficulty: str = Field(default="medium", description="Difficulty level (easy, medium, hard)")
     num_questions: int = Field(default=15, ge=5, le=20, description="Number of questions")
-
 
 class StartAITestResponse(BaseModel):
     """Response after starting an AI test."""
@@ -918,7 +837,6 @@ class StartAITestResponse(BaseModel):
     started_at: str
     topics_covered: List[Dict]
 
-
 @router.post("/ai-test/start", response_model=StartAITestResponse)
 async def start_ai_test_with_topics(request: StartAITestRequest):
     """
@@ -932,21 +850,18 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
     5. After completion, evaluation provides topic-level performance breakdown
     """
     try:
-        # Validate difficulty
         difficulty = request.difficulty.lower() if request.difficulty else "medium"
         if difficulty not in ["easy", "medium", "hard"]:
             difficulty = "medium"
         
         logger.info(f"📝 Starting AI test for {request.subject} Ch.{request.chapter_number} (Difficulty: {difficulty})")
         
-        # Step 1: Check if chapter test pool exists
         pool_status = await topic_question_bank_service.check_chapter_test_pool_exists(
             class_level=request.class_level,
             subject=request.subject,
             chapter_number=request.chapter_number
         )
         
-        # Step 2: Generate pool if first time (2 batches per difficulty × 3 difficulties = 6 API calls, 30 variants total)
         if not pool_status.get("exists"):
             logger.info(f"🎯 First test for {request.subject} Ch.{request.chapter_number} - Generating variants for all difficulties...")
             gen_result = await topic_question_bank_service.generate_chapter_test_pool(
@@ -962,7 +877,6 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         else:
             logger.info(f"✅ Question pool already exists for {request.subject} Ch.{request.chapter_number} - Using cached questions")
         
-        # Step 3: Select variant based on student's difficulty and attempt count
         selection = await topic_question_bank_service.select_chapter_test_questions(
             class_level=request.class_level,
             subject=request.subject,
@@ -986,7 +900,6 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
                 detail="No questions available for this chapter"
             )
         
-        # Step 4: Add topic_id and topic_name for topic-level analytics
         unique_topics = {}
         for q in questions:
             topic = q.get("topic", chapter_name)
@@ -999,7 +912,6 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         
         topics_covered = [{"topic_id": tid, "topic_name": tname} for tid, tname in unique_topics.items()]
         
-        # Create test session
         session_id = str(uuid.uuid4())
         time_limit_minutes = 40
         
@@ -1029,7 +941,6 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         
         await mongodb.db.test_sessions.insert_one(session_doc)
         
-        # Format questions for response (exclude expected answers, include options for MCQ)
         response_questions = [
             TestQuestionItem(
                 question_number=q.get("question_number", i + 1),
@@ -1040,7 +951,7 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
                 marks=q.get("marks", 1),
                 time_estimate=q.get("time_estimate", 90),
                 options=q.get("options") if q.get("question_type") == "mcq" else None,
-                correct_option=None  # Don't send correct answer to frontend
+                correct_option=None
             )
             for i, q in enumerate(questions)
         ]
@@ -1067,9 +978,6 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         logger.error(f"Error starting AI test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== QUESTION BANK TEST ENDPOINTS ====================
-
 class StartQBTestRequest(BaseModel):
     """Request to start a Question Bank test."""
     student_id: str = Field(..., description="Student ID")
@@ -1082,7 +990,6 @@ class StartQBTestRequest(BaseModel):
     short_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 2-mark questions")
     long_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 5-mark questions")
     time_limit_minutes: Optional[int] = Field(default=None, ge=1, le=300, description="Optional timer in minutes (null = no timer)")
-
 
 @router.get("/qb-test/subjects/{class_level}")
 async def get_qb_subjects(class_level: int):
@@ -1109,7 +1016,6 @@ async def get_qb_subjects(class_level: int):
     except Exception as e:
         logger.error(f"Error fetching QB subjects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/qb-test/chapters/{class_level}/{subject}")
 async def get_qb_chapters(class_level: int, subject: str):
@@ -1153,7 +1059,6 @@ async def get_qb_chapters(class_level: int, subject: str):
 
         chapters = []
         for r in results:
-            # Initialize counts
             counts = {
                 "mcq": 0, "fillup": 0, "short_answer": 0, "long_answer": 0,
                 "mcq_easy": 0, "mcq_medium": 0, "mcq_hard": 0,
@@ -1164,13 +1069,11 @@ async def get_qb_chapters(class_level: int, subject: str):
 
             for item in r.get("type_difficulty_counts", []):
                 q_type = item.get("type")
-                difficulty = item.get("difficulty", "medium").lower() # Ensure lowercase
+                difficulty = item.get("difficulty", "medium").lower()
                 count = item.get("count", 0)
 
                 if q_type in ["mcq", "fillup", "short_answer", "long_answer"]:
-                    # Total count for type
                     counts[q_type] += count
-                    # Specific count for type+difficulty
                     key = f"{q_type}_{difficulty}"
                     if key in counts:
                         counts[key] += count
@@ -1183,7 +1086,6 @@ async def get_qb_chapters(class_level: int, subject: str):
                 "fillup_count": counts["fillup"],
                 "short_answer_count": counts["short_answer"],
                 "long_answer_count": counts["long_answer"],
-                # Detailed breakdown
                 "mcq_easy": counts["mcq_easy"],
                 "mcq_medium": counts["mcq_medium"],
                 "mcq_hard": counts["mcq_hard"],
@@ -1202,7 +1104,6 @@ async def get_qb_chapters(class_level: int, subject: str):
     except Exception as e:
         logger.error(f"Error fetching QB chapters: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/qb-test/start")
 async def start_qb_test(request: StartQBTestRequest):
@@ -1228,14 +1129,12 @@ async def start_qb_test(request: StartQBTestRequest):
             "status": "approved"
         }
 
-        # Add difficulty filter (only if not "mixed")
         if request.difficulty and request.difficulty.lower() not in ("mixed", "all"):
             base_query["difficulty"] = {"$regex": f"^{request.difficulty}$", "$options": "i"}
 
         all_questions = []
         notes = []
 
-        # Fetch each type separately and randomly sample
         type_configs = [
             ("mcq", request.mcq_count, 1),
             ("fillup", request.fillup_count, 1),
@@ -1259,13 +1158,13 @@ async def start_qb_test(request: StartQBTestRequest):
 
             for i, q in enumerate(selected):
                 all_questions.append({
-                    "question_number": 0,  # Will renumber below
+                    "question_number": 0,
                     "question_id": str(q["_id"]),
                     "question_text": q.get("text", ""),
                     "difficulty": q.get("difficulty", "medium"),
                     "question_type": q_type,
                     "marks": q.get("marks", marks),
-                    "time_estimate": marks * 60,  # Rough estimate
+                    "time_estimate": marks * 60,
                     "expected_answer": q.get("correct_answer", ""),
                     "correct_option": q.get("correct_answer", "") if q_type == "mcq" else None,
                     "options": q.get("options", {}),
@@ -1281,11 +1180,9 @@ async def start_qb_test(request: StartQBTestRequest):
                 detail="No approved questions found for this configuration. The question bank may need more questions for this chapter and difficulty."
             )
 
-        # Renumber questions
         for i, q in enumerate(all_questions):
             q["question_number"] = i + 1
 
-        # Build MCQ options as dict if stored as list
         for q in all_questions:
             if q["question_type"] == "mcq" and isinstance(q.get("options"), list):
                 options_list = q["options"]
@@ -1294,7 +1191,6 @@ async def start_qb_test(request: StartQBTestRequest):
         total_marks = sum(q["marks"] for q in all_questions)
         chapter_name = all_questions[0].get("chapter_name", f"Chapter {request.chapter}")
 
-        # Create session
         session_id = str(uuid.uuid4())
         session_doc = {
             "session_id": session_id,
@@ -1311,14 +1207,13 @@ async def start_qb_test(request: StartQBTestRequest):
             "answers": [],
             "status": "started",
             "started_at": datetime.utcnow(),
-            "time_limit_minutes": request.time_limit_minutes,  # None = no timer
+            "time_limit_minutes": request.time_limit_minutes,
             "topic_name": chapter_name,
             "topic_id": f"ch_{request.chapter}"
         }
 
         await mongodb.db.test_sessions.insert_one(session_doc)
 
-        # Build response (exclude expected_answer and correct_option from frontend)
         response_questions = [
             {
                 "question_number": q["question_number"],
@@ -1358,7 +1253,6 @@ async def start_qb_test(request: StartQBTestRequest):
         logger.error(f"Error starting QB test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/answer")
 async def submit_answer(request: SubmitAnswerRequest):
     """
@@ -1392,7 +1286,6 @@ async def submit_answer(request: SubmitAnswerRequest):
         logger.error(f"Error submitting answer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/complete")
 async def complete_test(request: CompleteTestRequest):
     """
@@ -1401,13 +1294,11 @@ async def complete_test(request: CompleteTestRequest):
     """
     logger.info(f"Completing test session: {request.session_id}")
     try:
-        # 1. Fetch the session
         session = await mongodb.db.test_sessions.find_one({"session_id": request.session_id})
         if not session:
             logger.error(f"Session not found: {request.session_id}")
             raise HTTPException(status_code=404, detail="Test session not found")
 
-        # 2. Update with student answers and end time
         await mongodb.db.test_sessions.update_one(
             {"session_id": request.session_id},
             {
@@ -1419,9 +1310,7 @@ async def complete_test(request: CompleteTestRequest):
             }
         )
         
-        # 3. Trigger Evaluation
         logger.info(f"Triggering evaluation for session {request.session_id}, type: {session.get('test_type')}")
-        # Re-fetch to get updated answers
         updated_session = await mongodb.db.test_sessions.find_one({"session_id": request.session_id})
         
         evaluation_result = await rag_evaluation_service.evaluate_test_session(updated_session)
@@ -1432,9 +1321,6 @@ async def complete_test(request: CompleteTestRequest):
     except Exception as e:
         logger.error(f"Error completing test {request.session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== STAFF TEST ENDPOINTS ====================
 
 @router.get("/staff-tests", response_model=List[StaffTestItem])
 async def get_staff_tests(
@@ -1452,7 +1338,6 @@ async def get_staff_tests(
         
         tests = await mongodb.db.staff_tests.find(query).to_list(100)
         
-        # Get submission status for student if provided
         submissions = {}
         if student_id:
             student_submissions = await mongodb.db.test_submissions.find(
@@ -1489,7 +1374,6 @@ async def get_staff_tests(
         logger.error(f"Error fetching staff tests: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/staff-tests")
 async def create_staff_test(
     subject: str = Form(...),
@@ -1504,21 +1388,17 @@ async def create_staff_test(
 ):
     """Create a new staff test with question paper upload."""
     try:
-        # Validate file
         if not question_paper.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Generate unique filename
         file_id = str(uuid.uuid4())
         filename = f"{file_id}_{question_paper.filename}"
         file_path = os.path.join(UPLOAD_DIR, filename)
         
-        # Save file
         content = await question_paper.read()
         with open(file_path, "wb") as f:
             f.write(content)
         
-        # Create test record
         test_doc = {
             "subject": subject,
             "chapter": chapter,
@@ -1546,7 +1426,6 @@ async def create_staff_test(
         logger.error(f"Error creating staff test: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/staff-tests/{test_id}/download")
 async def download_question_paper(test_id: str):
     """Download question paper PDF."""
@@ -1570,7 +1449,6 @@ async def download_question_paper(test_id: str):
         logger.error(f"Error downloading question paper: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/staff-tests/{test_id}/submit")
 async def submit_answer_sheet(
     test_id: str,
@@ -1579,33 +1457,27 @@ async def submit_answer_sheet(
 ):
     """Submit answer sheet for a staff test."""
     try:
-        # Validate test exists
         test = await mongodb.db.staff_tests.find_one({"_id": ObjectId(test_id)})
         if not test:
             raise HTTPException(status_code=404, detail="Test not found")
         
-        # Validate file
         if not answer_sheet.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Check for existing submission
         existing = await mongodb.db.test_submissions.find_one({
             "test_id": test_id,
             "student_id": student_id
         })
         
-        # Generate unique filename
         file_id = str(uuid.uuid4())
         filename = f"answer_{file_id}_{answer_sheet.filename}"
         file_path = os.path.join(UPLOAD_DIR, filename)
         
-        # Save file
         content = await answer_sheet.read()
         with open(file_path, "wb") as f:
             f.write(content)
         
         if existing:
-            # Update existing submission
             await mongodb.db.test_submissions.update_one(
                 {"_id": existing["_id"]},
                 {"$set": {
@@ -1617,7 +1489,6 @@ async def submit_answer_sheet(
             )
             submission_id = str(existing["_id"])
         else:
-            # Create new submission
             submission_doc = {
                 "test_id": test_id,
                 "student_id": student_id,
@@ -1640,9 +1511,6 @@ async def submit_answer_sheet(
         logger.error(f"Error submitting answer sheet: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== ANALYTICS ENDPOINTS ====================
-
 @router.get("/analytics/{student_id}", response_model=StudentAnalytics)
 async def get_student_analytics(
     student_id: str,
@@ -1651,27 +1519,23 @@ async def get_student_analytics(
 ):
     """Get comprehensive test analytics for a student."""
     try:
-        # student_id from frontend is MongoDB ObjectId; resolve login ID for staff test queries
         student_login_id = student_id
         try:
             user_doc = await mongodb.db.users.find_one({"_id": ObjectId(student_id)})
             if user_doc:
                 student_login_id = user_doc.get("user_id", student_id)
         except Exception:
-            # student_id might already be a login ID
             user_doc = await mongodb.db.users.find_one({"user_id": student_id})
             if user_doc:
                 student_login_id = student_id
-                student_id = str(user_doc["_id"])  # ensure we have the ObjectId too
+                student_id = str(user_doc["_id"])
         
-        # Get student subject progress (uses MongoDB ObjectId as student_id)
         query = {"student_id": student_id, "class_level": class_level}
         if subject:
             query["subject"] = subject
         
         progress_docs = await mongodb.db.student_subject_progress.find(query).to_list(100)
         
-        # Also get staff test submissions (uses login ID as student_id)
         one_week_ago = datetime.utcnow() - timedelta(days=7)
         staff_submissions = await mongodb.db.submissions.find({
             "student_id": student_login_id,
@@ -1688,7 +1552,6 @@ async def get_student_analytics(
         )
         
         if not progress_docs:
-            # No AI test progress — return staff test stats only
             return StudentAnalytics(
                 total_tests_taken=staff_count,
                 tests_this_week=staff_this_week,
@@ -1703,7 +1566,6 @@ async def get_student_analytics(
                 recommendations=[]
             )
         
-        # Aggregate stats
         total_tests = sum(p.get("total_tests_taken", 0) for p in progress_docs)
         all_averages = [p.get("overall_average", 0) for p in progress_docs if p.get("total_tests_taken", 0) > 0]
         overall_avg = sum(all_averages) / len(all_averages) if all_averages else 0
@@ -1712,18 +1574,15 @@ async def get_student_analytics(
         topics_moderate = sum(p.get("topics_moderate", 0) for p in progress_docs)
         topics_weak = sum(p.get("topics_weak", 0) for p in progress_docs)
         
-        # Collect weak topics
         weak_topics = []
         for p in progress_docs:
             weak_topics.extend(p.get("weak_topics", [])[:5])
         weak_topics.sort(key=lambda x: x.get("score", 0))
         
-        # Get performance history from topic performances
         perf_docs = await mongodb.db.student_topic_performance.find(
             {"student_id": student_id}
         ).sort("last_attempted", -1).to_list(100)
         
-        # Build performance history
         performance_history = []
         for p in perf_docs[:20]:
             for h in p.get("score_history", [])[-3:]:
@@ -1733,11 +1592,9 @@ async def get_student_analytics(
                     "date": h.get("date", "")
                 })
         
-        # Sort by date
         performance_history.sort(key=lambda x: x.get("date", ""), reverse=True)
         performance_history = performance_history[:15]
         
-        # Build topic breakdown
         topic_breakdown = [
             {
                 "topic": p.get("topic_name", ""),
@@ -1748,10 +1605,8 @@ async def get_student_analytics(
             for p in perf_docs
         ]
         
-        # Get best score
         best_score = max((p.get("best_score", 0) for p in perf_docs), default=0)
         
-        # Get recommendations
         recommendations = []
         if subject:
             recs = await topic_question_bank_service.get_student_recommendations(
@@ -1759,18 +1614,14 @@ async def get_student_analytics(
             )
             recommendations = recs
             
-        # Calculate tests this week
         ai_tests_this_week = await mongodb.db.test_sessions.count_documents({
             "student_id": student_id,
             "started_at": {"$gte": one_week_ago}
         })
         
-        # Staff test data already fetched above (using student_login_id)
-        # Combine AI + staff test stats
         combined_total = total_tests + staff_count
         combined_this_week = ai_tests_this_week + staff_this_week
         
-        # Recalculate combined average
         if all_averages or staff_avg_scores:
             combined_averages = all_averages + staff_avg_scores
             combined_avg = sum(combined_averages) / len(combined_averages)
@@ -1796,9 +1647,6 @@ async def get_student_analytics(
     except Exception as e:
         logger.error(f"Error fetching analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== QUESTION BANK ADMIN ENDPOINTS ====================
 
 @router.get("/question-bank/stats")
 async def get_question_bank_stats():
@@ -1839,7 +1687,6 @@ async def get_question_bank_stats():
         logger.error(f"Error fetching question bank stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/debug/pinecone/{namespace}")
 async def debug_pinecone_namespace(namespace: str):
     """Debug endpoint to check Pinecone metadata structure."""
@@ -1850,14 +1697,12 @@ async def debug_pinecone_namespace(namespace: str):
         if not namespace_db.index:
             return {"error": "Namespace DB not connected"}
         
-        # Get stats
         stats = namespace_db.index.describe_index_stats()
         ns_stats = stats.get('namespaces', {}).get(namespace, {})
         
         if not ns_stats.get('vector_count', 0):
             return {"error": f"No vectors in namespace '{namespace}'", "available_namespaces": list(stats.get('namespaces', {}).keys())}
         
-        # Query sample vectors
         sample_embedding = llm_storage_service.embedding_model.encode(f"class 10 chapter").tolist()
         
         results = namespace_db.index.query(
@@ -1873,7 +1718,6 @@ async def debug_pinecone_namespace(namespace: str):
             metadata = match.get('metadata', {})
             samples.append({k: v for k, v in metadata.items() if k != 'text'})
             
-            # Extract chapter info
             chapter = metadata.get('chapter')
             if chapter:
                 unique_chapters[str(chapter)] = metadata.get('chapter_name', f'Chapter {chapter}')
@@ -1890,9 +1734,6 @@ async def debug_pinecone_namespace(namespace: str):
         logger.error(f"Debug error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== TEST HISTORY & ANALYTICS ====================
-
 @router.get("/history/{student_id}")
 async def get_test_history(
     student_id: str,
@@ -1906,7 +1747,6 @@ async def get_test_history(
     try:
         collection = mongodb.db["test_sessions"]
         
-        # Find completed test sessions for this student
         cursor = collection.find(
             {
                 "student_id": student_id,
@@ -1940,13 +1780,11 @@ async def get_test_history(
                 "completed_at": session.get("completed_at", session.get("created_at")).isoformat() if session.get("completed_at") or session.get("created_at") else None
             })
         
-        # Get total count
         total = await collection.count_documents({
             "student_id": student_id,
             "status": "completed"
         })
         
-        # Calculate overall analytics
         all_sessions = collection.find(
             {"student_id": student_id, "status": "completed"},
             {"score": 1, "correct_count": 1, "total_questions": 1, "subject": 1}
@@ -1967,7 +1805,6 @@ async def get_test_history(
             subject_scores[subject]["total"] += score
             subject_scores[subject]["count"] += 1
         
-        # Calculate averages
         average_score = round(total_score / total_tests, 1) if total_tests > 0 else 0
         subject_averages = {
             subject: round(data["total"] / data["count"], 1)
@@ -1990,7 +1827,6 @@ async def get_test_history(
     except Exception as e:
         logger.error(f"Error fetching test history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/result/{session_id}")
 async def get_test_result(session_id: str):
@@ -2030,9 +1866,6 @@ async def get_test_result(session_id: str):
         logger.error(f"Error fetching test result: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ==================== HISTORY & ANALYTICS ====================
-
 @router.get("/history/{student_id}")
 async def get_test_history(
     student_id: str,
@@ -2044,7 +1877,6 @@ async def get_test_history(
     try:
         collection = mongodb.db["test_sessions"]
         
-        # Fetch completed tests
         cursor = collection.find({
             "student_id": student_id,
             "status": "completed"
@@ -2052,7 +1884,6 @@ async def get_test_history(
         
         tests = await cursor.to_list(length=limit)
         
-        # Format history
         history = []
         total_score = 0
         for t in tests:
@@ -2070,7 +1901,6 @@ async def get_test_history(
                 "completed_at": t.get("completed_at").isoformat() if t.get("completed_at") else None
             })
         
-        # Calculate analytics
         avg_score = (total_score / len(tests)) if tests else 0
         
         return {
@@ -2087,7 +1917,6 @@ async def get_test_history(
         logger.error(f"Error fetching test history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/analytics/{student_id}")
 async def get_test_analytics(
     student_id: str,
@@ -2100,7 +1929,6 @@ async def get_test_analytics(
     try:
         collection = mongodb.db["test_sessions"]
         
-        # Build filter
         filter_query = {
             "student_id": student_id,
             "status": "completed"
@@ -2108,7 +1936,6 @@ async def get_test_analytics(
         if subject:
             filter_query["subject"] = {"$regex": subject, "$options": "i"}
         
-        # Fetch all completed tests
         tests = await collection.find(filter_query).sort("completed_at", -1).to_list(length=500)
         
         if not tests:
@@ -2126,14 +1953,12 @@ async def get_test_analytics(
                 recommendations=[]
             )
         
-        # Calculate stats
         from datetime import datetime, timedelta
         one_week_ago = datetime.utcnow() - timedelta(days=7)
         
         scores = [t.get("score", 0) for t in tests]
         tests_this_week = sum(1 for t in tests if t.get("completed_at") and t.get("completed_at") > one_week_ago)
         
-        # Topic breakdown
         topic_scores = {}
         for t in tests:
             topic = t.get("topic_name", "Unknown")
@@ -2141,7 +1966,6 @@ async def get_test_analytics(
                 topic_scores[topic] = []
             topic_scores[topic].append(t.get("score", 0))
         
-        # Categorize topics
         topics_strong = 0
         topics_moderate = 0
         topics_weak = 0
@@ -2164,7 +1988,6 @@ async def get_test_analytics(
                 topics_weak += 1
                 weak_topics.append({"topic": topic, "score": round(avg, 1)})
         
-        # Performance history (last 10)
         performance_history = []
         for t in tests[:10]:
             performance_history.append({
@@ -2184,7 +2007,7 @@ async def get_test_analytics(
             weak_topics=weak_topics,
             performance_history=performance_history,
             topic_breakdown=topic_breakdown,
-            recommendations=weak_topics[:3]  # Top 3 weak areas as recommendations
+            recommendations=weak_topics[:3]
         )
         
     except Exception as e:
@@ -2192,7 +2015,6 @@ async def get_test_analytics(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/history/{session_id}")
 async def delete_test_history_item(session_id: str):
@@ -2214,7 +2036,6 @@ async def delete_test_history_item(session_id: str):
     except Exception as e:
         logger.error(f"Error deleting test history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/history/all/{student_id}")
 async def delete_all_test_history(student_id: str):
@@ -2238,5 +2059,3 @@ async def delete_all_test_history(student_id: str):
     except Exception as e:
         logger.error(f"Error deleting all test history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-

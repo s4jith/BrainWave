@@ -24,16 +24,6 @@ import {
 import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
 
-/**
- * TestResult Page
- * 
- * Shows the AI evaluation results after completing a test:
- * - Overall score
- * - Question-by-question evaluation
- * - Strengths and areas for improvement
- * - Topics to review
- */
-
 export default function TestResult() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,7 +34,6 @@ export default function TestResult() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch result from API if coming from history
   useEffect(() => {
     const fetchHistoricalResult = async () => {
       if (fromHistory && passedResult?.session_id && !passedResult.evaluations) {
@@ -167,7 +156,7 @@ export default function TestResult() {
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl p-4 border border-gray-100">
             <div className="flex items-center gap-2 text-green-600 mb-2">
@@ -240,7 +229,7 @@ export default function TestResult() {
               </div>
             )}
 
-            {/* Weak Topics */}
+            {}
             {result.topic_analytics.weak_topics?.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-red-700 mb-2 flex items-center gap-2">
@@ -258,7 +247,7 @@ export default function TestResult() {
               </div>
             )}
 
-            {/* All Topics Performance */}
+            {}
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-3">All Topics Performance</h4>
               <div className="space-y-2">
@@ -277,7 +266,7 @@ export default function TestResult() {
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <span>{topic.correct_answers}/{topic.total_questions} correct</span>
                     </div>
-                    {/* Progress bar */}
+                    {}
                     <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                       <div 
                         className={`h-2 rounded-full ${

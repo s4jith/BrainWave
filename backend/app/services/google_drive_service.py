@@ -33,13 +33,9 @@ from googleapiclient.errors import HttpError
 
 logger = logging.getLogger(__name__)
 
-# Scopes required for Google Drive access
 SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive']
 
-# Root folder ID from the shared Drive link
-# https://drive.google.com/drive/folders/1OWyxSncLl03Ax2CjJuV7-g7R0LuarZYp
 ROOT_FOLDER_ID = "1OWyxSncLl03Ax2CjJuV7-g7R0LuarZYp"
-
 
 class GoogleDriveService:
     """Service for managing PDF uploads to Google Drive."""
@@ -56,9 +52,7 @@ class GoogleDriveService:
         self.initialized = False
         self.credentials_path = credentials_path
         
-        # Try to find credentials file
         if not self.credentials_path:
-            # Look in backend folder
             backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             possible_paths = [
                 os.path.join(backend_dir, "google_drive_credentials.json"),
@@ -114,7 +108,6 @@ class GoogleDriveService:
         parent_id = parent_id or ROOT_FOLDER_ID
         
         try:
-            # Search for existing folder
             query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and '{parent_id}' in parents and trashed=false"
             results = self.service.files().list(
                 q=query,
@@ -130,7 +123,6 @@ class GoogleDriveService:
                 logger.info(f"📁 Found existing folder: {folder_name}")
                 return files[0]['id']
             
-            # Create new folder
             folder_metadata = {
                 'name': folder_name,
                 'mimeType': 'application/vnd.google-apps.folder',
@@ -167,18 +159,15 @@ class GoogleDriveService:
             return None
         
         try:
-            # Create/find Class folder
             class_folder_name = f"Class {class_level}"
             class_folder_id = self.find_or_create_folder(class_folder_name, ROOT_FOLDER_ID)
             if not class_folder_id:
                 return None
             
-            # Create/find Subject folder
             subject_folder_id = self.find_or_create_folder(subject, class_folder_id)
             if not subject_folder_id:
                 return None
             
-            # Create/find Chapter folder
             chapter_folder_name = f"Chapter {chapter_number}"
             chapter_folder_id = self.find_or_create_folder(chapter_folder_name, subject_folder_id)
             
@@ -218,7 +207,6 @@ class GoogleDriveService:
             return None
         
         try:
-            # Determine target folder
             if folder_id:
                 target_folder_id = folder_id
             elif class_level and subject and chapter_number:
@@ -231,27 +219,22 @@ class GoogleDriveService:
             else:
                 target_folder_id = ROOT_FOLDER_ID
             
-            # Determine filename
             if not filename:
                 if file_path:
                     filename = os.path.basename(file_path)
                 else:
                     filename = "document.pdf"
             
-            # Check if file already exists in folder
             existing_file = self._find_file_in_folder(filename, target_folder_id)
             if existing_file:
                 logger.info(f"📄 File already exists in Drive: {filename}")
-                # Update the existing file instead
                 return self._update_file(existing_file['id'], file_path, file_content)
             
-            # Prepare file metadata
             file_metadata = {
                 'name': filename,
                 'parents': [target_folder_id]
             }
             
-            # Upload file
             if file_path and os.path.exists(file_path):
                 media = MediaFileUpload(file_path, mimetype='application/pdf', resumable=True)
             elif file_content:
@@ -268,16 +251,14 @@ class GoogleDriveService:
                 body=file_metadata,
                 media_body=media,
                 fields='id, name, webViewLink, webContentLink',
-                f1supportsAllDrives=True  # Use owner's storage quota, not service account's
+                f1supportsAllDrives=True
             ).execute()
             
             file_id = file.get('id')
             logger.info(f"Uploaded PDF to Google Drive: {filename} (ID: {file_id})")
             
-            # Make file accessible via link
             self._set_file_permissions(file_id)
             
-            # Get the shareable link
             shareable_link = self._get_shareable_link(file_id)
             
             return {
@@ -340,7 +321,7 @@ class GoogleDriveService:
                 fileId=file_id,
                 media_body=media,
                 fields='id, name, webViewLink, webContentLink',
-                supportsAllDrives=True  # Use owner's storage quota, not service account's
+                supportsAllDrives=True
             ).execute()
             
             logger.info(f"Updated file in Google Drive: {file.get('name')}")
@@ -376,7 +357,6 @@ class GoogleDriveService:
             logger.info(f"Set permissions for file: {file_id}")
             
         except HttpError as e:
-            # Permission might already exist
             if e.resp.status == 400:
                 logger.info(f"ℹ️ Permissions already set for file: {file_id}")
             else:
@@ -452,8 +432,6 @@ class GoogleDriveService:
             logger.error(f" Error listing folder contents: {e}")
             return None
 
-
-# Global instance
 _drive_service = None
 
 def get_drive_service() -> GoogleDriveService:

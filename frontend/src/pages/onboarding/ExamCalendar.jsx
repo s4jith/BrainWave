@@ -3,18 +3,6 @@ import { ChevronLeft, ChevronRight, Plus, X, Upload } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
-/**
- * ExamCalendar Step (Step 4)
- * 
- * OPTIONAL step - add exam dates manually or upload timetable.
- * Enables reminders, revision planning, and dashboard insights.
- * 
- * TODO: Backend Integration
- * - POST /api/onboarding/calendar
- * - Store exam dates
- * - Could integrate OCR for timetable upload
- */
-
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -76,27 +64,18 @@ function ExamCalendar({ data, onNext, onSkip }) {
   };
 
   const handleNext = () => {
-    /**
-     * TODO: Backend Integration
-     * await fetch('/api/onboarding/calendar', {
-     *   method: 'POST',
-     *   body: JSON.stringify({ exams })
-     * });
-     */
+    
     onNext({ exams });
   };
 
-  // Generate calendar grid
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
   const calendarDays = [];
 
-  // Empty cells for days before the first day of the month
   for (let i = 0; i < firstDay; i++) {
     calendarDays.push(null);
   }
 
-  // Days of the month
   for (let day = 1; day <= daysInMonth; day++) {
     calendarDays.push(day);
   }
@@ -114,7 +93,7 @@ function ExamCalendar({ data, onNext, onSkip }) {
 
       {/* Calendar */}
       <div className="border rounded-lg p-4 mb-6 bg-card">
-        {/* Month Navigation */}
+        {}
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigateMonth(-1)}
@@ -133,7 +112,7 @@ function ExamCalendar({ data, onNext, onSkip }) {
           </button>
         </div>
 
-        {/* Weekday Headers */}
+        {}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {WEEKDAYS.map((day) => (
             <div
@@ -145,7 +124,7 @@ function ExamCalendar({ data, onNext, onSkip }) {
           ))}
         </div>
 
-        {/* Calendar Grid */}
+        {}
         <div className="grid grid-cols-7 gap-1">
           {calendarDays.map((day, index) => {
             if (day === null) {
@@ -250,7 +229,7 @@ function ExamCalendar({ data, onNext, onSkip }) {
         </div>
       )}
 
-      {/* Upload Option */}
+      {}
       <div className="mb-6">
         <div className="border-2 border-dashed rounded-lg p-6 text-center">
           <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
@@ -266,7 +245,7 @@ function ExamCalendar({ data, onNext, onSkip }) {
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {}
       <div className="flex gap-3">
         <Button
           variant="outline"

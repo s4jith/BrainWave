@@ -1,7 +1,3 @@
-/**
- * GroupManagement - Admin page to manage student groups
- * Uses AdminLayout with light/dark theme support
- */
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,7 +15,7 @@ export default function GroupManagement() {
     const [teachers, setTeachers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [curriculumSubjects, setCurriculumSubjects] = useState([]); // Curriculum subjects from API
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]); 
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
     const [showAddGroup, setShowAddGroup] = useState(false);
@@ -34,12 +30,11 @@ export default function GroupManagement() {
     const [studentSearchTerm, setStudentSearchTerm] = useState("");
     const [studentClassFilter, setStudentClassFilter] = useState("");
 
-    // Teacher search/filter state
     const [teacherSearchTerm, setTeacherSearchTerm] = useState("");
 
     const [groupForm, setGroupForm] = useState({
         teacher_ids: [],
-        classSubject: "",  // Combined class-subject
+        classSubject: "",  
         batch_year: ""
     });
 
@@ -50,7 +45,6 @@ export default function GroupManagement() {
         fetchCurriculumSubjects();
     }, []);
 
-    // Auto-refresh on window focus
     useEffect(() => {
         const handleFocus = () => {
             fetchGroups();
@@ -106,7 +100,6 @@ export default function GroupManagement() {
         }
     };
 
-    // Generate class-subject options from curriculum
     const classSubjectOptions = React.useMemo(() => {
         return curriculumSubjects.map(subj => ({
             value: `${subj.class_level}-${subj.subject_name}`,
@@ -114,7 +107,6 @@ export default function GroupManagement() {
         })).sort((a, b) => a.label.localeCompare(b.label));
     }, [curriculumSubjects]);
 
-    // Derive available class levels from curriculum
     const availableClassLevels = React.useMemo(() => {
         return [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
     }, [curriculumSubjects]);
@@ -127,7 +119,6 @@ export default function GroupManagement() {
         const { class: classLevel, subject } = parseCombinedValue(groupForm.classSubject);
         if (!classLevel || !subject || !groupForm.batch_year) return alert("Please fill all required fields");
 
-        // Create optimistic group
         const tempId = `temp_${Date.now()}`;
         const teacherNames = teachers
             .filter(t => groupForm.teacher_ids.includes(t.id))
@@ -144,7 +135,6 @@ export default function GroupManagement() {
             students: []
         };
         
-        // Add optimistically
         setGroups([optimisticGroup, ...groups]);
         setShowAddGroup(false);
 
@@ -167,12 +157,11 @@ export default function GroupManagement() {
             }
             const newGroup = await response.json();
             
-            // Replace temp group with real one
             setGroups(prev => prev.map(g => g.id === tempId ? newGroup : g));
             setGroupForm({ teacher_ids: [], classSubject: "", batch_year: "" });
             setSelectedStudentIds([]);
         } catch (err) {
-            // Remove optimistic group on error
+            
             setGroups(prev => prev.filter(g => g.id !== tempId));
             setShowAddGroup(true);
             alert("Error: " + err.message);
@@ -226,7 +215,6 @@ export default function GroupManagement() {
     const handleDeleteGroup = async (groupId) => {
         if (!confirm("Are you sure you want to delete this group?")) return;
         
-        // Optimistic update
         const deletedGroup = groups.find(g => g.id === groupId);
         const updatedGroups = groups.filter(g => g.id !== groupId);
         setGroups(updatedGroups);
@@ -241,7 +229,7 @@ export default function GroupManagement() {
                 throw new Error("Failed to delete group");
             }
         } catch (err) {
-            // Revert on failure
+            
             alert("Error: " + err.message);
             setGroups([...updatedGroups, deletedGroup]);
         }
@@ -305,7 +293,6 @@ export default function GroupManagement() {
         return matchesSearch && matchesClass && (showAssignStudents ? notInGroup : true);
     });
 
-    // Filter teachers by search term
     const filteredTeachers = teachers.filter(teacher => {
         const matchesSearch = teacher.name?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
             teacher.user_id?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
@@ -315,7 +302,7 @@ export default function GroupManagement() {
 
     return (
         <AdminLayout title="Group Management" icon={FolderKanban}>
-            {/* Search and Actions */}
+            {}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-6">
                 <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
@@ -335,7 +322,7 @@ export default function GroupManagement() {
                 </button>
             </div>
 
-            {/* Stats */}
+            {}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
                     <p className="text-2xl font-semibold text-gray-900 dark:text-white">{groups.length}</p>

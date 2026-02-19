@@ -35,6 +35,16 @@ async def init_basic_subjects():
             "subject_name": "Chemistry",
             "icon": "flask-conical",
             "color": "#10B981"
+        },
+        {
+            "subject_name": "English",
+            "icon": "book-open",
+            "color": "#F59E0B"
+        },
+        {
+            "subject_name": "Hindi",
+            "icon": "languages",
+            "color": "#EF4444"
         }
     ]
     

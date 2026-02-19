@@ -10,7 +10,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class NotesService:
     """Service for managing student notes."""
     
@@ -42,7 +41,6 @@ class NotesService:
             
             result = await collection.insert_one(document)
             
-            # Return created note
             note = Note(
                 id=str(result.inserted_id),
                 **document
@@ -79,7 +77,6 @@ class NotesService:
         try:
             collection = get_notes_collection()
             
-            # Build query
             query = {"student_id": student_id}
             if class_level:
                 query["class_level"] = class_level
@@ -90,7 +87,6 @@ class NotesService:
             if page_number:
                 query["page_number"] = page_number
             
-            # Fetch notes
             cursor = collection.find(query).sort("created_at", -1)
             notes = []
             
@@ -137,14 +133,12 @@ class NotesService:
         try:
             collection = get_notes_collection()
             
-            # Build update document
             update_doc = {"updated_at": datetime.utcnow()}
             if note_content is not None:
                 update_doc["note_content"] = note_content
             if heading is not None:
                 update_doc["heading"] = heading
             
-            # Update note
             result = await collection.find_one_and_update(
                 {"_id": ObjectId(note_id)},
                 {"$set": update_doc},
@@ -154,7 +148,6 @@ class NotesService:
             if not result:
                 raise ValueError(f"Note {note_id} not found")
             
-            # Return updated note
             note = Note(
                 id=str(result["_id"]),
                 student_id=result["student_id"],
@@ -201,6 +194,4 @@ class NotesService:
             logger.error(f" Failed to delete note: {e}")
             raise
 
-
-# Global notes service instance
 notes_service = NotesService()

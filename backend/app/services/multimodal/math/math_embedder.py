@@ -19,7 +19,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 class MultimodalEmbedder:
     """
     Generates 768-dimensional embeddings for multimodal math content.
@@ -46,11 +45,9 @@ class MultimodalEmbedder:
         
         logger.info(f"🔢 Initializing Multimodal Embedder on device: {self.device}")
         
-        # Load text/formula embedder
         try:
             self.text_model = SentenceTransformer(text_model_name, device=self.device)
             
-            # Verify output dimension
             test_emb = self.text_model.encode("test")
             if len(test_emb) != 768:
                 raise ValueError(f"Text model must output 768-dim vectors, got {len(test_emb)}")
@@ -62,7 +59,6 @@ class MultimodalEmbedder:
             logger.error(f" Failed to load text model: {e}")
             raise
         
-        # Image processor (lazy load when needed)
         self._image_processor = None
     
     @property
@@ -94,25 +90,21 @@ class MultimodalEmbedder:
         has_image = chunk.get('has_image', False) and chunk.get('image_path')
         has_text = chunk.get('raw_text') and len(chunk.get('raw_text', '').strip()) > 0
         
-        # Priority 1: Formula embedding
         if has_formula:
             latex = chunk['latex_formula']
             logger.debug(f"   Embedding formula: {latex[:50]}...")
             return self.embed_text(latex)
         
-        # Priority 2: Text embedding
         elif has_text and not has_image:
             text = chunk['raw_text']
             logger.debug(f"   Embedding text: {text[:50]}...")
             return self.embed_text(text)
         
-        # Priority 3: Image embedding
         elif has_image and not has_text:
             image_path = chunk['image_path']
             logger.debug(f"   Embedding image: {Path(image_path).name}")
             return self.image_processor.embed_image(image_path)
         
-        # Priority 4: Combined text + image
         elif has_text and has_image:
             text = chunk['raw_text']
             image_path = chunk['image_path']
@@ -120,7 +112,6 @@ class MultimodalEmbedder:
             return self.embed_text_and_image(text, image_path, alpha=0.6)
         
         else:
-            # Fallback: embed type/metadata
             fallback_text = f"{chunk.get('content_type', 'unknown')} content"
             logger.warning(f"   No content found, using fallback: {fallback_text}")
             return self.embed_text(fallback_text)
@@ -136,14 +127,13 @@ class MultimodalEmbedder:
             768-dimensional numpy array
         """
         if not text or not text.strip():
-            # Return zero vector for empty text
             return np.zeros(768, dtype=np.float32)
         
         try:
             embedding = self.text_model.encode(
                 text,
                 convert_to_numpy=True,
-                normalize_embeddings=True  # L2 normalization
+                normalize_embeddings=True
             )
             return embedding.astype(np.float32)
         
@@ -195,16 +185,12 @@ class MultimodalEmbedder:
         Returns:
             768-dimensional combined embedding
         """
-        # Get text embedding
         text_emb = self.embed_text(text)
         
-        # Get image embedding
         image_emb = self.image_processor.embed_image(image_path)
         
-        # Weighted combination
         combined = alpha * text_emb + (1 - alpha) * image_emb
         
-        # Normalize
         combined = combined / np.linalg.norm(combined)
         
         return combined.astype(np.float32)
@@ -228,7 +214,6 @@ class MultimodalEmbedder:
         
         embeddings = []
         
-        # Separate by content type for batch processing
         text_only_chunks = []
         formula_chunks = []
         image_chunks = []
@@ -248,10 +233,8 @@ class MultimodalEmbedder:
             else:
                 text_only_chunks.append((i, chunk))
         
-        # Initialize result array
         result_embeddings = [None] * len(chunks)
         
-        # Batch process text/formulas
         if text_only_chunks or formula_chunks:
             all_text_chunks = text_only_chunks + formula_chunks
             texts = [
@@ -265,14 +248,12 @@ class MultimodalEmbedder:
             for (idx, _), emb in zip(all_text_chunks, text_embeddings):
                 result_embeddings[idx] = emb
         
-        # Process images
         if image_chunks:
             logger.info(f"   Processing {len(image_chunks)} image chunks...")
             for idx, chunk in image_chunks:
                 emb = self.image_processor.embed_image(chunk['image_path'])
                 result_embeddings[idx] = emb
         
-        # Process combined (text + image)
         if combined_chunks:
             logger.info(f"   Processing {len(combined_chunks)} combined chunks...")
             for idx, chunk in combined_chunks:
@@ -285,7 +266,6 @@ class MultimodalEmbedder:
         
         logger.info(f"Generated {len(result_embeddings)} embeddings")
         
-        # Add embeddings back to chunks
         for i, chunk in enumerate(chunks):
             if result_embeddings[i] is not None:
                 chunk['embedding'] = result_embeddings[i]
@@ -309,17 +289,14 @@ class MultimodalEmbedder:
             "dimension": embeddings_array.shape[1] if len(embeddings_array.shape) > 1 else 768,
             "mean_norm": float(np.mean([np.linalg.norm(e) for e in embeddings])),
             "std_norm": float(np.std([np.linalg.norm(e) for e in embeddings])),
-            "mean_values": embeddings_array.mean(axis=0).tolist()[:10],  # First 10 dims
+            "mean_values": embeddings_array.mean(axis=0).tolist()[:10],
         }
 
-
 if __name__ == "__main__":
-    # Test the embedder
     logging.basicConfig(level=logging.INFO)
     
     embedder = MultimodalEmbedder()
     
-    # Test chunks
     test_chunks = [
         {
             "raw_text": "Solve 2x + 3 = 7",

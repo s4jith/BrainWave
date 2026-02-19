@@ -11,7 +11,6 @@ from app.models.curriculum_models import ExtractedChapter, ExtractedTopic
 
 logger = logging.getLogger(__name__)
 
-
 class CurriculumExtractionService:
     """Service for extracting curriculum structure from PDFs and images using AI"""
     
@@ -41,20 +40,17 @@ class CurriculumExtractionService:
         try:
             logger.info(f" Extracting curriculum from image for {subject_name} Class {class_level}")
             
-            # Build detailed prompt for Gemini Vision
             prompt = self._build_extraction_prompt(subject_name, class_level)
             
-            # Use Gemini Vision to extract structure with high token limit for complete extraction
             response_text = self.gemini.generate_response_with_image(
                 prompt=prompt,
                 image_bytes=image_bytes,
                 mime_type=mime_type,
-                max_output_tokens=8000  # High limit for complete table of contents
+                max_output_tokens=8000
             )
             
             logger.info(f"Gemini Vision response received ({len(response_text)} chars), parsing structure...")
             
-            # Parse the response into structured data
             chapters = self._parse_extraction_response(response_text)
             
             logger.info(f"Extracted {len(chapters)} chapters from image")
@@ -87,15 +83,12 @@ class CurriculumExtractionService:
         try:
             logger.info(f"📄 Extracting curriculum from PDF for {subject_name} Class {class_level}")
             
-            # Try to convert PDF to images using pdf2image or similar
-            # For now, we'll extract text and use text-based extraction
             import PyPDF2
             from io import BytesIO
             
             pdf_file = BytesIO(pdf_bytes)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             
-            # Extract text from first 5 pages (usually contains TOC)
             toc_text = ""
             max_pages = min(5, len(pdf_reader.pages))
             
@@ -105,7 +98,6 @@ class CurriculumExtractionService:
             
             logger.info(f"📖 Extracted text from {max_pages} pages, analyzing with Gemini...")
             
-            # Build prompt for text-based extraction
             prompt = f"""
 You are analyzing the table of contents from a {subject_name} textbook for Class {class_level} (CBSE board).
 
@@ -142,12 +134,10 @@ Here is the table of contents text:
 Return only the JSON array, no markdown formatting, no explanations.
 """
             
-            # Use Gemini to extract structure from text with high token limit
             response_text = self.gemini.generate_response(prompt, max_output_tokens=8000)
             
             logger.info(f"Gemini response received ({len(response_text)} chars), parsing structure...")
             
-            # Parse the response into structured data
             chapters = self._parse_extraction_response(response_text)
             
             logger.info(f"Extracted {len(chapters)} chapters from PDF")
@@ -215,27 +205,22 @@ Important:
         Handles both JSON array format and markdown code blocks.
         """
         try:
-            # Clean up response - remove markdown code blocks if present
             response_text = response_text.strip()
             
-            # Remove markdown code blocks
             if response_text.startswith("```json"):
-                response_text = response_text[7:]  # Remove ```json
+                response_text = response_text[7:]
             elif response_text.startswith("```"):
-                response_text = response_text[3:]  # Remove ```
+                response_text = response_text[3:]
             
             if response_text.endswith("```"):
-                response_text = response_text[:-3]  # Remove trailing ```
+                response_text = response_text[:-3]
             
             response_text = response_text.strip()
             
-            # Parse JSON
             chapters_data = json.loads(response_text)
             
-            # Convert to ExtractedChapter objects
             chapters = []
             for ch_data in chapters_data:
-                # Parse topics
                 topics = []
                 for topic_data in ch_data.get("topics", []):
                     topics.append(ExtractedTopic(
@@ -244,7 +229,6 @@ Important:
                         description=topic_data.get("description", "")
                     ))
                 
-                # Create chapter
                 chapter = ExtractedChapter(
                     chapter_number=ch_data.get("chapter_number", 0),
                     chapter_name=ch_data.get("chapter_name", ""),
@@ -266,6 +250,4 @@ Important:
             logger.error(f" Failed to parse extraction response: {e}")
             raise
 
-
-# Singleton instance
 curriculum_extraction_service = CurriculumExtractionService()

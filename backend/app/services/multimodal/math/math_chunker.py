@@ -19,7 +19,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class MathChunker:
     """
     Semantic chunker for mathematical content.
@@ -29,10 +28,9 @@ class MathChunker:
         chunks = chunker.chunk_content(text_blocks, images, formulas)
     """
     
-    # Patterns for detecting content types
     QUESTION_PATTERNS = [
-        r'^\d+\.\s+',  # Numbered questions: "1. "
-        r'^Q\s*\d+[:.)]',  # Q1:, Q1., Q1)
+        r'^\d+\.\s+',
+        r'^Q\s*\d+[:.)]',
         r'^Question\s+\d+',
         r'Solve:',
         r'Find:',
@@ -47,8 +45,8 @@ class MathChunker:
         r'^Answer:?',
         r'^Sol:?',
         r'^Step\s+\d+:',
-        r'^\(\d+\)',  # Step markers: (1), (2)
-        r'^[a-z]\)',  # Sub-steps: a), b)
+        r'^\(\d+\)',
+        r'^[a-z]\)',
     ]
     
     DEFINITION_PATTERNS = [
@@ -113,21 +111,17 @@ class MathChunker:
         chunks = []
         chunk_counter = 0
         
-        # Process text blocks
         for block in text_blocks:
             text = block['text']
             page = block.get('page_number', 0)
             
-            # Detect content type
             content_type = self._detect_content_type(text)
             
-            # Handle multi-step solutions
             if content_type == "solution":
                 solution_chunks = self._split_solution_steps(text, block, class_num, chapter_num, chunk_counter)
                 chunks.extend(solution_chunks)
                 chunk_counter += len(solution_chunks)
             else:
-                # Single chunk
                 chunk_id = f"class{class_num}_ch{chapter_num}_{chunk_counter:04d}"
                 
                 chunk = {
@@ -153,7 +147,6 @@ class MathChunker:
                 chunks.append(chunk)
                 chunk_counter += 1
         
-        # Process standalone formulas
         for formula in formulas:
             chunk_id = f"class{class_num}_ch{chapter_num}_{chunk_counter:04d}"
             
@@ -170,7 +163,7 @@ class MathChunker:
                 "metadata": {
                     "class": str(class_num),
                     "chapter": str(chapter_num),
-                    "page": 0,  # Formula position info if available
+                    "page": 0,
                     "subject": "Mathematics",
                     "type": "formula",
                     "ncert_id": chunk_id,
@@ -181,7 +174,6 @@ class MathChunker:
             chunks.append(chunk)
             chunk_counter += 1
         
-        # Process images (diagrams)
         for image in images:
             chunk_id = f"class{class_num}_ch{chapter_num}_{chunk_counter:04d}"
             
@@ -212,7 +204,6 @@ class MathChunker:
         
         logger.info(f"Created {len(chunks)} semantic chunks")
         
-        # Add topics to chunks
         chunks = self._add_topics(chunks)
         
         return chunks
@@ -227,9 +218,8 @@ class MathChunker:
         Returns:
             Content type string
         """
-        text_start = text[:100]  # Check first 100 chars
+        text_start = text[:100]
         
-        # Check patterns in priority order
         for pattern in self.question_re:
             if pattern.match(text_start):
                 return "question"
@@ -246,7 +236,6 @@ class MathChunker:
             if pattern.match(text_start):
                 return "example"
         
-        # Default to general text
         return "text"
     
     def _split_solution_steps(
@@ -272,15 +261,12 @@ class MathChunker:
         """
         chunks = []
         
-        # Split by step markers
         step_pattern = r'(?:Step\s+\d+:|^\(\d+\)|^[a-z]\))'
         steps = re.split(step_pattern, text, flags=re.MULTILINE | re.IGNORECASE)
         
-        # Clean and filter steps
         steps = [s.strip() for s in steps if s.strip() and len(s.strip()) > 10]
         
         if len(steps) <= 1:
-            # No clear steps, return as single chunk
             chunk_id = f"class{class_num}_ch{chapter_num}_{start_counter:04d}"
             chunk = {
                 "chunk_id": chunk_id,
@@ -303,7 +289,6 @@ class MathChunker:
             }
             return [chunk]
         
-        # Create chunk for each step
         for step_num, step_text in enumerate(steps, 1):
             chunk_id = f"class{class_num}_ch{chapter_num}_{start_counter + step_num - 1:04d}"
             
@@ -365,7 +350,6 @@ class MathChunker:
         Returns:
             Chunks with topic tags added
         """
-        # Simple keyword-based topic detection
         topic_keywords = {
             "algebra": ["variable", "equation", "expression", "solve", "x", "y"],
             "geometry": ["triangle", "circle", "angle", "parallel", "perpendicular", "area", "perimeter"],
@@ -391,14 +375,11 @@ class MathChunker:
         
         return chunks
 
-
 if __name__ == "__main__":
-    # Test the chunker
     logging.basicConfig(level=logging.INFO)
     
     chunker = MathChunker()
     
-    # Test data
     test_blocks = [
         {"text": "1. Solve the equation: 2x + 3 = 7", "page_number": 5},
         {"text": "Solution: Step 1: Subtract 3 from both sides. Step 2: Divide by 2.", "page_number": 5},

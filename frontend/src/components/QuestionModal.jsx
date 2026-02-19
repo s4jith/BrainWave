@@ -4,32 +4,18 @@ import useUserStore from "../stores/userStore";
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-/**
- * QuestionModal Component
- * Handles creating and editing questions (manual and AI).
- * 
- * Props:
- * - question: Question object to edit (null for create)
- * - onClose: Function to close modal (arg: refresh boolean)
- * - isTeacher: Boolean, if current user is teacher
- * - userSubjects: Array of subjects assigned to teacher
- * - availableSubjects: Array of all available subjects (for dynamic dropdowns)
- */
 const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSubjects = [] }) => {
     const [activeTab, setActiveTab] = useState(question ? "manual" : "manual");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    // Curriculum data from API
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
-    const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); // full subject detail obj
+    const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); 
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
     const [loadingSubjectDetail, setLoadingSubjectDetail] = useState(false);
 
-    // Determine subject list based on role (for teachers use assigned subjects, for admin use curriculum)
     const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : []);
 
-    // Load saved form defaults from localStorage
     const savedDefaults = (() => {
         try {
             const saved = localStorage.getItem("questionFormDefaults");
@@ -37,7 +23,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         } catch { return {}; }
     })();
 
-    // Manual Form State
     const [formData, setFormData] = useState({
         text: "",
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
@@ -53,7 +38,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         status: "approved"
     });
 
-    // AI Gen State
     const [aiConfig, setAiConfig] = useState({
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
         class_level: savedDefaults.class_level || 10,
@@ -66,7 +50,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         }
     });
 
-    // Populate form when editing existing question
     useEffect(() => {
         if (question) {
             setFormData({
@@ -86,7 +69,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         }
     }, [question]);
 
-    // Fetch curriculum subjects on mount
     useEffect(() => {
         const fetchCurriculum = async () => {
             setLoadingCurriculum(true);
@@ -105,8 +87,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         fetchCurriculum();
     }, []);
 
-    // Fetch subject details when subject+class changes (for chapters & topics)
-    // Uses the active tab's subject/class
     const activeSubject = activeTab === 'ai' ? aiConfig.subject : formData.subject;
     const activeClassLevel = activeTab === 'ai' ? aiConfig.class_level : formData.class_level;
 
@@ -137,22 +117,19 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         fetchSubjectDetail();
     }, [activeSubject, activeClassLevel]);
 
-    // Get chapters for current subject
     const availableChapters = selectedCurrSubject?.chapters?.filter(ch => ch.is_active !== false) || [];
 
-    // Get topics for currently selected chapter
     const selectedChapterObj = availableChapters.find(ch => ch.chapter_number === formData.chapter);
     const availableTopics = selectedChapterObj?.topics?.filter(t => t.is_active !== false) || [];
 
-    // Get unique subject names from curriculum
     const curriculumSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
-    // Get unique class levels for selected subject
+    
     const curriculumClassLevels = [...new Set(
         curriculumSubjects
             .filter(s => s.subject_name === activeSubject)
             .map(s => s.class_level)
     )].sort((a, b) => a - b);
-    // Get all available class levels from curriculum (not subject-specific)
+    
     const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
     useEffect(() => {
@@ -177,7 +154,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
             const method = question ? "PUT" : "POST";
 
-            // Validation for MCQ
             if (formData.type === 'mcq') {
                 if (formData.options.some(o => !o.trim())) throw new Error("All options are required for MCQ");
                 const correctAnswers = (formData.correct_answer || "").split("|").filter(Boolean);
@@ -186,17 +162,11 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 if (invalidAnswers.length > 0) throw new Error("Correct answer(s) must match one of the options");
             }
 
-            // Validation for fill-up
             if (formData.type === 'fillup') {
                 const answers = (formData.correct_answer || "").split("|").filter(Boolean);
                 if (answers.length === 0) throw new Error("At least one correct answer is required for fill-in-the-blanks");
             }
 
-            // If creating new manual question, status is 'approved' (or 'pending' if desired policy)
-            // If editing, status might be preserved or reset. For now, let's keep it as is or default 'approved'
-            // The user wanted approval workflow for AI questions primarily. Manual additions by admins/teachers often trusted?
-            // Let's force 'approved' for manual to avoid them getting lost if not intended.
-            // UNLESS user is teacher and config requires approval? For now, manual = approved.
             const payload = { ...formData, status: formData.status || 'approved' };
 
             const response = await fetch(url, {
@@ -213,9 +183,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 throw new Error(err.detail || "Failed to save question");
             }
 
-            onClose(true); // refresh
+            onClose(true); 
 
-            // Save form defaults for next time
             try {
                 localStorage.setItem("questionFormDefaults", JSON.stringify({
                     subject: formData.subject,
@@ -236,7 +205,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         setLoading(true);
         setError("");
         try {
-            // Flatten config for API
+            
             const payload = {
                 class_level: parseInt(aiConfig.class_level),
                 subject: aiConfig.subject,
@@ -262,7 +231,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             const result = await response.json();
             if (!result.success) throw new Error(result.error || "Generation failed");
 
-            alert(result.message); // Likely messages "Questions generated and sent for approval"
+            alert(result.message); 
             onClose(true);
         } catch (err) {
             setError(err.message);
@@ -494,7 +463,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                         const newOpts = [...formData.options];
                                                         const oldOpt = newOpts[idx];
                                                         newOpts[idx] = e.target.value;
-                                                        // Update correct_answer if this option was selected
                                                         let updatedCorrect = correctAnswers.filter(a => a !== oldOpt);
                                                         if (isChecked && e.target.value) updatedCorrect.push(e.target.value);
                                                         setFormData({ ...formData, options: newOpts, correct_answer: updatedCorrect.join("|") });

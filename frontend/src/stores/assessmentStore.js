@@ -1,7 +1,3 @@
-/**
- * Assessment Store - Manages assessments, submissions, and grading
- * Zustand store for quiz/exam creation and student taking
- */
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
@@ -9,14 +5,10 @@ import useUserStore from "./userStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * Assessment Store
- */
-
 const useAssessmentStore = create(
     devtools(
         (set, get) => ({
-            // State
+            
             assessments: [],
             currentAssessment: null,
             submissions: [],
@@ -24,15 +16,9 @@ const useAssessmentStore = create(
             loading: false,
             error: null,
 
-            // Timer state for timed assessments
             timeRemaining: null,
             timerActive: false,
 
-            // === Teacher Actions ===
-
-            /**
-             * Fetch assessments (teacher sees their own, student sees available)
-             */
             fetchAssessments: async (courseId = null) => {
                 set({ loading: true, error: null });
                 try {
@@ -56,9 +42,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Get assessment details (teacher view with answers)
-             */
             fetchAssessmentDetails: async (assessmentId) => {
                 set({ loading: true, error: null });
                 try {
@@ -81,9 +64,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Create a new assessment
-             */
             createAssessment: async (assessmentData) => {
                 set({ loading: true, error: null });
                 try {
@@ -118,9 +98,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Update an assessment
-             */
             updateAssessment: async (assessmentId, updateData) => {
                 set({ loading: true, error: null });
                 try {
@@ -152,9 +129,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Publish an assessment
-             */
             publishAssessment: async (assessmentId) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -180,9 +154,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Add a question to an assessment
-             */
             addQuestion: async (assessmentId, questionData) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -200,7 +171,6 @@ const useAssessmentStore = create(
 
                     const question = await res.json();
 
-                    // Refresh assessment details
                     await get().fetchAssessmentDetails(assessmentId);
 
                     return question;
@@ -211,9 +181,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Delete a question
-             */
             deleteQuestion: async (assessmentId, questionId) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -228,7 +195,6 @@ const useAssessmentStore = create(
 
                     if (!res.ok) throw new Error("Failed to delete question");
 
-                    // Refresh assessment details
                     await get().fetchAssessmentDetails(assessmentId);
 
                     return true;
@@ -238,11 +204,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            // === Student Actions ===
-
-            /**
-             * Start an assessment (get student view)
-             */
             startAssessment: async (assessmentId) => {
                 set({ loading: true, error: null });
                 try {
@@ -259,7 +220,6 @@ const useAssessmentStore = create(
 
                     const assessment = await res.json();
 
-                    // Set up timer if time limit exists
                     if (assessment.time_limit_minutes) {
                         set({
                             timeRemaining: assessment.time_limit_minutes * 60,
@@ -276,9 +236,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Submit answers
-             */
             submitAnswers: async (assessmentId, answers) => {
                 set({ loading: true, error: null, timerActive: false });
                 try {
@@ -306,9 +263,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Get my submissions
-             */
             fetchMySubmissions: async () => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -329,11 +283,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            // === Teacher Grading ===
-
-            /**
-             * Get submissions for an assessment
-             */
             fetchSubmissions: async (assessmentId) => {
                 set({ loading: true });
                 try {
@@ -357,9 +306,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Grade a submission
-             */
             gradeSubmission: async (submissionId, grades, feedback) => {
                 try {
                     const { getAuthHeader } = useUserStore.getState();
@@ -383,7 +329,6 @@ const useAssessmentStore = create(
 
                     const result = await res.json();
 
-                    // Update local state
                     set(state => ({
                         submissions: state.submissions.map(s =>
                             s.id === submissionId ? { ...s, ...result } : s
@@ -397,11 +342,6 @@ const useAssessmentStore = create(
                 }
             },
 
-            // === Timer ===
-
-            /**
-             * Tick timer (call every second)
-             */
             tickTimer: () => {
                 const { timeRemaining, timerActive } = get();
                 if (timerActive && timeRemaining !== null && timeRemaining > 0) {
@@ -411,12 +351,8 @@ const useAssessmentStore = create(
                 }
             },
 
-            /**
-             * Stop timer
-             */
             stopTimer: () => set({ timerActive: false, timeRemaining: null }),
 
-            // Clear state
             clearCurrentAssessment: () => set({ currentAssessment: null, timeRemaining: null, timerActive: false }),
             clearError: () => set({ error: null })
         }),

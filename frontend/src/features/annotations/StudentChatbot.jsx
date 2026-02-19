@@ -7,14 +7,10 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import useUserStore from "../../stores/userStore";
 import { chatService } from "../../services/api";
 
-/**
- * Student Chatbot - Floating chatbot for open-ended questions
- * Two modes: Quick (exam-style) and DeepDive (comprehensive with web content)
- */
 export default function StudentChatbot({ currentLesson }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [chatMode, setChatMode] = useState("quick"); // "quick" or "deepdive"
+  const [chatMode, setChatMode] = useState("quick"); 
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -47,7 +43,6 @@ export default function StudentChatbot({ currentLesson }) {
     setMessages((prev) => [...prev, modeMessage]);
   };
 
-  // Use lesson's subject if available, otherwise use user's preferred subject
   const effectiveSubject = currentLesson?.subject || user.preferredSubject || "Mathematics";
 
   const handleSendMessage = async () => {
@@ -77,7 +72,7 @@ export default function StudentChatbot({ currentLesson }) {
         user.classLevel || 6,
         effectiveSubject,
         currentLesson?.number || 1,
-        chatMode // Pass the mode to backend
+        chatMode 
       );
 
       const assistantMessage = {
@@ -118,14 +113,14 @@ export default function StudentChatbot({ currentLesson }) {
         aria-label="Open student chatbot"
       >
         <div className="relative">
-          {/* Pulsing ring effect */}
+          {}
           <span className="absolute inset-0 rounded-full bg-violet-500 opacity-75 animate-ping"></span>
           
           {/* Main button */}
           <div className="relative flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-600 to-purple-700 rounded-full shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:shadow-xl">
             <MessageCircle className="w-8 h-8 text-white" />
             
-            {/* Sparkle indicator */}
+            {}
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center animate-bounce">
               <Sparkles className="w-3 h-3 text-white" />
             </div>
@@ -141,7 +136,7 @@ export default function StudentChatbot({ currentLesson }) {
         isMinimized ? "w-80 h-16" : "w-96 h-[600px]"
       }`}
     >
-      {/* Header */}
+      {}
       <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-violet-600 to-purple-700 rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">

@@ -11,7 +11,7 @@ Features:
 - Metadata preservation
 """
 
-import fitz  # PyMuPDF
+import fitz
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import logging
@@ -20,7 +20,6 @@ import io
 import re
 
 logger = logging.getLogger(__name__)
-
 
 class PDFProcessor:
     """
@@ -80,11 +79,9 @@ class PDFProcessor:
                 page = doc[page_num]
                 logger.info(f"   Processing page {page_num + 1}/{total_pages}")
                 
-                # Extract text blocks
                 page_text_blocks = self._extract_text_blocks(page, page_num, class_num, chapter_num)
                 text_blocks.extend(page_text_blocks)
                 
-                # Extract images
                 page_images = self._extract_images(page, page_num, class_num, chapter_num)
                 images.extend(page_images)
             
@@ -128,15 +125,12 @@ class PDFProcessor:
         """
         blocks = []
         
-        # Get text blocks with positions
         text_dict = page.get_text("dict")
         
         for block_idx, block in enumerate(text_dict.get("blocks", [])):
-            # Skip image blocks (type 1)
             if block.get("type") != 0:
                 continue
             
-            # Extract text from lines
             text_lines = []
             for line in block.get("lines", []):
                 line_text = ""
@@ -146,19 +140,17 @@ class PDFProcessor:
             
             full_text = " ".join(text_lines).strip()
             
-            # Skip empty blocks
             if not full_text or len(full_text) < 3:
                 continue
             
-            # Skip page numbers and headers
             if self._is_noise(full_text):
                 continue
             
             blocks.append({
                 "text": full_text,
-                "page_number": page_num + 1,  # 1-indexed for user
+                "page_number": page_num + 1,
                 "block_index": block_idx,
-                "bbox": block.get("bbox"),  # Bounding box [x0, y0, x1, y1]
+                "bbox": block.get("bbox"),
                 "metadata": {
                     "class": str(class_num),
                     "chapter": str(chapter_num),
@@ -197,21 +189,17 @@ class PDFProcessor:
                 image_bytes = base_image["image"]
                 image_ext = base_image["ext"]
                 
-                # Create unique filename
                 image_filename = f"class{class_num}_ch{chapter_num}_page{page_num+1}_img{img_idx+1}.{image_ext}"
                 image_path = self.output_dir / image_filename
                 
-                # Save image
                 with open(image_path, "wb") as img_file:
                     img_file.write(image_bytes)
                 
-                # Get image dimensions
                 pil_image = Image.open(io.BytesIO(image_bytes))
                 width, height = pil_image.size
                 
-                # Skip very small images (likely decorative)
                 if width < 50 or height < 50:
-                    image_path.unlink()  # Delete small image
+                    image_path.unlink()
                     continue
                 
                 images.append({
@@ -249,7 +237,7 @@ class PDFProcessor:
             True if text is noise
         """
         noise_patterns = [
-            r"^\d+$",  # Just page numbers
+            r"^\d+$",
             r"^Page \d+",
             r"^Chapter \d+$",
             r"^NCERT",
@@ -290,7 +278,6 @@ class PDFProcessor:
         
         logger.info(f" Using OCR for scanned PDF: {pdf_path}")
         
-        # Convert PDF to images
         images = convert_from_path(pdf_path)
         
         text_blocks = []
@@ -298,7 +285,6 @@ class PDFProcessor:
         for page_num, img in enumerate(images):
             logger.info(f"   OCR page {page_num + 1}/{len(images)}")
             
-            # Apply OCR
             text = pytesseract.image_to_string(img, lang='eng')
             
             if text.strip():
@@ -318,7 +304,7 @@ class PDFProcessor:
         
         return {
             "text_blocks": text_blocks,
-            "images": [],  # Images already present in PDF
+            "images": [],
             "metadata": {
                 "class": class_num,
                 "chapter": chapter_num,
@@ -327,14 +313,7 @@ class PDFProcessor:
             }
         }
 
-
 if __name__ == "__main__":
-    # Test the processor
     logging.basicConfig(level=logging.INFO)
     
     processor = PDFProcessor(output_dir="./test_extracted_images")
-    
-    # Example usage (replace with actual PDF path)
-    # data = processor.process_pdf("sample_math.pdf", class_num=5, chapter_num=1)
-    # print(f"Extracted {len(data['text_blocks'])} text blocks")
-    # print(f"Extracted {len(data['images'])} images")

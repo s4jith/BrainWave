@@ -12,23 +12,19 @@ from app.utils.performance_logger import measure_latency
 from app.db.mongo import pinecone_db, pinecone_web_db, pinecone_llm_db
 from app.services.gemini_key_manager import gemini_key_manager
 from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
-import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class RetrievalConfig:
     """Configuration for Retrieval Service."""
     component_name: str = "RetrievalService"
     
-    # Retrieval settings
     embedding_model: str = EMBEDDING_MODEL
     chunks_per_class: int = 5
     web_top_k: int = 10
     llm_top_k: int = 3
     llm_similarity_threshold: float = 0.75
-
 
 class RetrievalService:
     """
@@ -43,16 +39,14 @@ class RetrievalService:
     def __init__(self, config: Optional[RetrievalConfig] = None):
         self.config = config or RetrievalConfig()
         
-        # Pinecone indices
         self.textbook_db = pinecone_db
         self.web_db = pinecone_web_db
         self.llm_db = pinecone_llm_db
         
-        # Subject configurations (include aliases for backward compatibility)
         self.subject_namespaces = {
             "Maths": "maths",
-            "Mathematics": "maths",  # Alias
-            "Math": "maths",  # Alias
+            "Mathematics": "maths",
+            "Math": "maths",
             "Physics": "physics",
             "Chemistry": "chemistry",
             "Biology": "biology",
@@ -67,8 +61,8 @@ class RetrievalService:
         
         self.subject_class_ranges = {
             "Maths": list(range(5, 13)),
-            "Mathematics": list(range(5, 13)),  # Alias
-            "Math": list(range(5, 13)),  # Alias
+            "Mathematics": list(range(5, 13)),
+            "Math": list(range(5, 13)),
             "Physics": list(range(11, 13)),
             "Chemistry": list(range(11, 13)),
             "Biology": list(range(11, 13)),
@@ -144,10 +138,8 @@ class RetrievalService:
         """
         logger.info(f" [{self.config.component_name}] Retrieving for: {query_text[:50]}...")
         
-        # Generate embedding ONCE (optimized)
         query_embedding = self.generate_embedding(query_text)
         
-        # Query all indices with shared embedding
         textbook_chunks, class_dist = self.query_textbook(
             query_embedding, subject, student_class, chapter, mode
         )
@@ -214,7 +206,6 @@ class RetrievalService:
                 if chunks_found > 0:
                     class_distribution[class_level] = chunks_found
             
-            # Sort by score
             all_chunks.sort(key=lambda x: x['score'], reverse=True)
             
             return all_chunks, class_distribution
@@ -292,6 +283,4 @@ class RetrievalService:
             "indices": ["textbook", "web", "llm_cache"]
         }
 
-
-# Singleton instance
 retrieval_service = RetrievalService()

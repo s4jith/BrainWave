@@ -1,7 +1,3 @@
-/**
- * PendingCurriculumReview - Review and approve AI-extracted curriculum
- * Shows pending items with approve/reject functionality
- */
 
 import { useState, useEffect } from "react";
 import { Clock, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, FileText, User, Calendar, Sparkles, Edit2, Save, X } from "lucide-react";
@@ -91,7 +87,6 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
         const result = await response.json();
         alert(`Subject created successfully!\n\n${result.total_chapters} chapters, ${result.total_topics} topics`);
         
-        // Remove from pending list
         setPendingItems(prev => prev.filter(i => i.pending_id !== pendingId));
         
         if (onApproved) {
@@ -174,9 +169,9 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
     setEditForm({
       subject_name: item.subject_name,
       class_level: item.class_level,
-      extracted_chapters: JSON.parse(JSON.stringify(item.extracted_chapters)) // Deep copy
+      extracted_chapters: JSON.parse(JSON.stringify(item.extracted_chapters)) 
     });
-    // Auto-expand the item when editing
+    
     setExpandedItems(prev => ({ ...prev, [item.pending_id]: true }));
   };
 
@@ -205,7 +200,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
 
       if (response.ok) {
         const updated = await response.json();
-        // Update the item in the list
+        
         setPendingItems(prev => prev.map(item =>
           item.pending_id === pendingId ? updated : item
         ));
@@ -278,7 +273,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+        {}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -303,7 +298,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
           </div>
         </div>
 
-        {/* Content */}
+        {}
         <div className="p-6">
           {loading ? (
             <div className="text-center py-12">

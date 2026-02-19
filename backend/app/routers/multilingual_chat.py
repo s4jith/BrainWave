@@ -11,7 +11,7 @@ responses in the same language.
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Optional
 import logging
 
 from app.services.orchestrator_service import orchestrator_service
@@ -27,16 +27,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Multilingual Chat"])
 
-
 class MultilingualChatRequest(BaseModel):
     """Request model for multilingual chat."""
     question: str
     class_level: int = 9
     subject: str = "science"
     chapter: Optional[int] = None
-    preferred_lang: Optional[str] = None  # Override detected language
+    preferred_lang: Optional[str] = None
     student_id: Optional[str] = None
-
 
 class MultilingualChatResponse(BaseModel):
     """Response model for multilingual chat."""
@@ -45,7 +43,6 @@ class MultilingualChatResponse(BaseModel):
     language_name: str
     sources_count: int
     mode: str
-
 
 @router.post("/multilingual", response_model=MultilingualChatResponse)
 @measure_latency("multilingual_chat")
@@ -81,7 +78,6 @@ async def multilingual_chat(request: MultilingualChatRequest):
         if not question:
             raise HTTPException(status_code=400, detail="Question cannot be empty")
         
-        # Detect language
         if request.preferred_lang and request.preferred_lang in SUPPORTED_LANGUAGES:
             detected_lang = request.preferred_lang
             logger.info(f"🌐 Using preferred language: {detected_lang}")
@@ -91,16 +87,12 @@ async def multilingual_chat(request: MultilingualChatRequest):
         
         language_name = get_language_name(detected_lang)
         
-        # Determine retrieval mode based on language
-        # For Indic languages, we use cross-lingual retrieval
         if is_indic_language(detected_lang):
             mode = "multilingual"
             logger.info(f"   Using multilingual retrieval for {language_name}")
         else:
             mode = "basic"
         
-        # Process through orchestrator with language context
-        # Gemini natively handles multilingual responses
         answer, sources = orchestrator_service.answer_question(
             question=question,
             subject=request.subject,
@@ -109,7 +101,6 @@ async def multilingual_chat(request: MultilingualChatRequest):
             mode=mode
         )
         
-        # Log multilingual interaction
         await _log_multilingual_interaction(
             question=question,
             answer=answer,
@@ -131,7 +122,6 @@ async def multilingual_chat(request: MultilingualChatRequest):
     except Exception as e:
         logger.error(f" Multilingual chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/languages")
 async def get_supported_languages():
@@ -163,7 +153,6 @@ async def get_supported_languages():
         }
     }
 
-
 @router.post("/detect-language")
 async def detect_language(text: str):
     """
@@ -184,7 +173,6 @@ async def detect_language(text: str):
         "confidence": round(confidence, 2),
         "is_indic": is_indic_language(lang)
     }
-
 
 async def _log_multilingual_interaction(
     question: str,

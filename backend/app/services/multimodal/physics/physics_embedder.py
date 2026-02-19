@@ -15,7 +15,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 class PhysicsEmbedder:
     """Generate 768-dim embeddings for physics content"""
     
@@ -24,13 +23,11 @@ class PhysicsEmbedder:
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f"🔢 Initializing Physics Embedder on device: {self.device}")
         
-        # Text model (768-dim native)
         logger.info("   Loading text model...")
         self.text_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
         self.text_model.to(self.device)
         logger.info(f"   Text model loaded: all-mpnet-base-v2 (768-dim)")
         
-        # CLIP for diagrams (lazy load)
         self.clip_model = None
         self.clip_processor = None
         self.clip_projection = None
@@ -47,7 +44,6 @@ class PhysicsEmbedder:
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         self.clip_model.to(self.device)
         
-        # Create projection layer: 512 (CLIP) -> 768 (target)
         self.clip_projection = torch.nn.Sequential(
             torch.nn.Linear(512, 768),
             torch.nn.LayerNorm(768),
@@ -74,13 +70,12 @@ class PhysicsEmbedder:
         """
         logger.info(f"🔄 Batch processing {len(chunks)} physics chunks...")
         
-        # Separate chunks by type
         text_chunks = []
         diagram_chunks = []
         table_chunks = []
         
         for i, chunk in enumerate(chunks):
-            chunk['_index'] = i  # Track original position
+            chunk['_index'] = i
             
             if chunk.get('has_image'):
                 diagram_chunks.append(chunk)
@@ -93,24 +88,20 @@ class PhysicsEmbedder:
         logger.info(f"   Processing {len(table_chunks)} table chunks...")
         logger.info(f"   Processing {len(diagram_chunks)} diagram chunks...")
         
-        # Process text/formula chunks
         for chunk in text_chunks:
             embedding = self._embed_text_or_formula(chunk)
             chunk['embedding'] = embedding
         
-        # Process table chunks
         for chunk in table_chunks:
             embedding = self._embed_table(chunk)
             chunk['embedding'] = embedding
         
-        # Process diagram chunks
         if diagram_chunks:
-            self._init_clip()  # Lazy load CLIP
+            self._init_clip()
             for chunk in diagram_chunks:
                 embedding = self._embed_diagram(chunk)
                 chunk['embedding'] = embedding
         
-        # Remove temporary index
         for chunk in chunks:
             chunk.pop('_index', None)
         
@@ -119,7 +110,6 @@ class PhysicsEmbedder:
     
     def _embed_text_or_formula(self, chunk: Dict) -> np.ndarray:
         """Embed text or formula chunk"""
-        # Priority: formula > text
         if chunk.get('has_formula') and chunk.get('latex_formula'):
             text = f"{chunk.get('raw_text', '')} {chunk['latex_formula']}"
         else:
@@ -128,7 +118,6 @@ class PhysicsEmbedder:
         if not text:
             text = "Empty physics content"
         
-        # Generate embedding
         embedding = self.text_model.encode(
             text,
             convert_to_numpy=True,
@@ -140,17 +129,14 @@ class PhysicsEmbedder:
     
     def _embed_table(self, chunk: Dict) -> np.ndarray:
         """Embed table chunk"""
-        # Convert table to structured text
         table_data = chunk.get('table_data', '')
         text = chunk.get('raw_text', '')
         
-        # Combine caption and table data
         combined_text = f"{text}\n{table_data}" if table_data else text
         
         if not combined_text:
             combined_text = "Physics data table"
         
-        # Generate embedding
         embedding = self.text_model.encode(
             combined_text,
             convert_to_numpy=True,
@@ -169,31 +155,25 @@ class PhysicsEmbedder:
             return self._embed_text_or_formula(chunk)
         
         try:
-            # Load image
             image = Image.open(diagram_path).convert('RGB')
             
-            # Process with CLIP
             inputs = self.clip_processor(
                 images=image,
                 return_tensors="pt"
             ).to(self.device)
             
-            # Get CLIP embedding
             with torch.no_grad():
                 clip_embedding = self.clip_model.get_image_features(**inputs)
-                clip_embedding = clip_embedding.squeeze(0)  # Remove batch dim
+                clip_embedding = clip_embedding.squeeze(0)
                 
-                # Project to 768-dim
                 projected_embedding = self.clip_projection(clip_embedding)
                 
-                # Normalize
                 projected_embedding = torch.nn.functional.normalize(
                     projected_embedding,
                     p=2,
                     dim=0
                 )
             
-            # Convert to numpy
             embedding = projected_embedding.cpu().numpy()
             
             return embedding

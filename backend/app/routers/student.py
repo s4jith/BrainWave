@@ -22,9 +22,8 @@ router = APIRouter(prefix="/api/student", tags=["student"])
 
 def _get_student_id_variants(current_user: TokenData) -> list:
     """Get all possible ID formats for the current student to match against student_ids in groups."""
-    ids = [current_user.user_id]  # e.g., "NCERT2025001"
+    ids = [current_user.user_id]
     
-    # Also look up the user's MongoDB _id since groups store student_ids as ObjectId strings
     user_doc = db.users.find_one({
         "$or": [
             {"user_id": current_user.user_id},
@@ -51,7 +50,6 @@ async def get_student_groups(current_user: TokenData = Depends(require_role([Use
         
         result = []
         for g in groups:
-            # Get teacher details
             teacher = None
             tid = None
             if g.get("teacher_ids"):
@@ -72,7 +70,6 @@ async def get_student_groups(current_user: TokenData = Depends(require_role([Use
                         "email": teacher_doc.get("email")
                     }
 
-            # Count tests assigned to this group
             test_count = db.tests.count_documents({
                 "$or": [
                     {"group_id": str(g["_id"])},
@@ -99,12 +96,10 @@ async def get_student_groups(current_user: TokenData = Depends(require_role([Use
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/upcoming-tests")
 async def get_upcoming_tests(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
     """Get upcoming/pending tests for the student."""
     try:
-        # Get student's groups
         student_ids = _get_student_id_variants(current_user)
         groups = list(db.groups.find({
             "student_ids": {"$in": student_ids}
@@ -114,7 +109,6 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
         if not group_ids:
             return {"tests": [], "total": 0}
         
-        # Find tests assigned to these groups
         now = datetime.utcnow()
         tests = list(db.tests.find({
             "$or": [
@@ -126,7 +120,6 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
         
         result = []
         for t in tests:
-            # Check if student already submitted
             submission = db.test_submissions.find_one({
                 "test_id": str(t["_id"]),
                 "student_id": {"$in": student_ids}
@@ -149,18 +142,15 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/my-subjects")
 async def get_student_subjects(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
     """Get subjects for the student based on their groups and curriculum."""
     try:
-        # Get student's groups
         student_ids = _get_student_id_variants(current_user)
         groups = list(db.groups.find({
             "student_ids": {"$in": student_ids}
         }))
         
-        # Extract unique subjects from groups
         subjects_set = set()
         class_levels = set()
         for g in groups:
@@ -169,7 +159,6 @@ async def get_student_subjects(current_user: TokenData = Depends(require_role([U
             if g.get("class_level"):
                 class_levels.add(g["class_level"])
         
-        # Get curriculum details for those subjects
         result = []
         for subj_name in subjects_set:
             for cls in class_levels:

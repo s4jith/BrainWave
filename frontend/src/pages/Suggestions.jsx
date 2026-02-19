@@ -103,7 +103,7 @@ export default function Suggestions() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
+        {}
         <div className="bg-white rounded-2xl p-6 border border-gray-100">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -116,7 +116,7 @@ export default function Suggestions() {
           </div>
         </div>
 
-        {/* Suggestion Form */}
+        {}
         <div className="bg-white rounded-2xl p-6 border border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-orange-600" />
@@ -175,7 +175,7 @@ export default function Suggestions() {
           </form>
         </div>
 
-        {/* My Suggestions History */}
+        {}
         <div className="bg-white rounded-2xl p-6 border border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-orange-600" />

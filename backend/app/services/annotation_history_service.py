@@ -10,7 +10,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class AnnotationHistoryService:
     """Service for managing annotation history."""
     
@@ -32,7 +31,6 @@ class AnnotationHistoryService:
             
             result = await collection.insert_one(document)
             
-            # Return created item
             item = AnnotationHistoryItem(
                 id=str(result.inserted_id),
                 **document
@@ -59,7 +57,6 @@ class AnnotationHistoryService:
         try:
             collection = get_annotation_history_collection()
             
-            # Build query
             query = {"student_id": student_id}
             if class_level:
                 query["class_level"] = class_level
@@ -68,7 +65,6 @@ class AnnotationHistoryService:
             if chapter:
                 query["chapter"] = chapter
             
-            # Fetch history
             cursor = collection.find(query).sort("created_at", -1).limit(limit)
             history = []
             
@@ -108,6 +104,4 @@ class AnnotationHistoryService:
             logger.error(f" Failed to delete history entry: {e}")
             raise
 
-
-# Global instance
 annotation_history_service = AnnotationHistoryService()
