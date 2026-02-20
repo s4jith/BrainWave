@@ -3,12 +3,25 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import {
-  LayoutDashboard, Users, FileText,
-  ClipboardList, TrendingUp, CheckCircle, AlertCircle,
-  GraduationCap, BarChart3, UserPlus, CalendarDays, Target, Activity
+  LayoutDashboard, Users, FileText, ClipboardList, Activity,
+  GraduationCap, AlertCircle, TrendingUp
 } from "lucide-react";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend
+} from "recharts";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+const EMPTY_TREND = Array.from({ length: 7 }, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() - (6 - i));
+  return {
+    date: d.toLocaleDateString("en-US", { weekday: "short" }),
+    full_date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    active_users: 0, tests_taken: 0, new_signups: 0
+  };
+});
 
 export default function AdminDashboard() {
   const { user } = useUserStore();
@@ -18,105 +31,167 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    const fetchStats = async () => {
+    (async () => {
       try {
-        const response = await fetch(`${API_URL}/api/admin/dashboard-stats`);
+        const res = await fetch(`${API_URL}/api/admin/dashboard-stats`);
         if (cancelled) return;
-        if (!response.ok) throw new Error("Failed to fetch stats");
-        setStats(await response.json());
+        if (!res.ok) throw new Error("Failed to fetch stats");
+        setStats(await res.json());
       } catch (err) {
         if (cancelled) return;
         setError(err.message);
-        setStats({
-          total_students: 0, total_teachers: 0, active_today: 0,
-          active_this_week: 0, new_users_this_month: 0,
-          total_tests_created: 0, total_tests_taken: 0,
-          tests_this_week: 0, average_score: 0, pass_rate: 0
-        });
+        setStats({ total_students: 0, total_teachers: 0, active_today: 0, total_tests_created: 0, total_tests_taken: 0, daily_trend: EMPTY_TREND, class_distribution: [] });
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
-    fetchStats();
+    })();
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) {
-    return (
-      <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-gray-900 dark:border-white mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
   const s = stats || {};
+  const trend = s.daily_trend?.length ? s.daily_trend : EMPTY_TREND;
+  const classDist = s.class_distribution || [];
+
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
     <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
       {error && (
-        <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Connection Issue</p>
-            <p className="text-sm text-amber-700 dark:text-amber-400">Could not fetch live data. Showing defaults.</p>
-          </div>
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center gap-3">
+          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-400">Could not fetch live data — showing defaults.</p>
         </div>
       )}
 
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Welcome back, {user?.name || "Admin"}
-        </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Here's an overview of your platform</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Good {getGreeting()}, {user?.name?.split(" ")[0] || "Admin"} 👋
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{today}</p>
+        </div>
+        {loading && (
+          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+            <div className="w-3 h-3 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+            Loading…
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-        <StatCard label="Total Students" value={s.total_students} icon={Users} color="blue" />
-        <StatCard label="Total Teachers" value={s.total_teachers} icon={GraduationCap} color="purple" />
-        <StatCard label="Active Today" value={s.active_today} icon={Activity} color="green" />
-        <StatCard label="Active This Week" value={s.active_this_week} icon={TrendingUp} color="emerald" />
-        <StatCard label="New This Month" value={s.new_users_this_month} icon={UserPlus} color="indigo" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <StatCard label="Total Students" value={s.total_students ?? "—"} icon={Users} color="blue" loading={loading} />
+        <StatCard label="Total Teachers" value={s.total_teachers ?? "—"} icon={GraduationCap} color="violet" loading={loading} />
+        <StatCard label="Active Today" value={s.active_today ?? "—"} icon={Activity} color="green" loading={loading} />
+        <StatCard label="Tests Created" value={s.total_tests_created ?? "—"} icon={ClipboardList} color="orange" loading={loading} />
+        <StatCard label="Tests Taken" value={s.total_tests_taken ?? "—"} icon={FileText} color="cyan" loading={loading} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard label="Tests Created" value={s.total_tests_created} icon={ClipboardList} color="orange" />
-        <StatCard label="Tests Taken" value={s.total_tests_taken} icon={FileText} color="cyan" />
-        <StatCard label="Tests This Week" value={s.tests_this_week} icon={CalendarDays} color="teal" />
-        <StatCard label="Avg Score" value={`${s.average_score || 0}%`} icon={BarChart3} color="blue" />
-        <StatCard label="Pass Rate" value={`${s.pass_rate || 0}%`} icon={Target} color="green" />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+        <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">User Activity — Last 7 Days</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Daily active users and tests completed</p>
+            </div>
+            <TrendingUp className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={trend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorTests" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} className="text-gray-400" />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.full_date || ""}
+              />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="active_users" name="Active Users" stroke="#6366f1" strokeWidth={2} fill="url(#colorUsers)" dot={false} activeDot={{ r: 4 }} />
+              <Area type="monotone" dataKey="tests_taken" name="Tests Taken" stroke="#06b6d4" strokeWidth={2} fill="url(#colorTests)" dot={false} activeDot={{ r: 4 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">New Signups — Last 7 Days</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Daily new user registrations</p>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={trend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.full_date || ""}
+              />
+              <Bar dataKey="new_signups" name="New Signups" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
+
+      {classDist.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Students by Class</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Distribution of enrolled students across class levels</p>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={classDist} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" />
+              <XAxis dataKey="class" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }} />
+              <Bar dataKey="students" name="Students" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </AdminLayout>
   );
 }
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
+
 const colorMap = {
   blue: "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
-  purple: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+  violet: "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400",
   green: "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400",
-  emerald: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
-  indigo: "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400",
   orange: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400",
   cyan: "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400",
-  teal: "bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400",
 };
 
-function StatCard({ label, value, icon: Icon, color = "blue" }) {
-  const colorClasses = colorMap[color] || colorMap.blue;
+function StatCard({ label, value, icon: Icon, color = "blue", loading }) {
+  const cls = colorMap[color] || colorMap.blue;
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${colorClasses}`}>
-          <Icon className="w-4.5 h-4.5" />
-        </div>
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${cls}`}>
+        <Icon className="w-4 h-4" />
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+      {loading ? (
+        <div className="h-7 w-12 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mb-1" />
+      ) : (
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+      )}
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{label}</p>
     </div>
   );
 }
+
 

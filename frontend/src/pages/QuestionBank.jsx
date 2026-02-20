@@ -237,37 +237,33 @@ const QuestionBank = () => {
     };
 
     return (
-        <Layout>
-            <div className="p-6">
+        <Layout title="Question Bank">
+            <div className="">
                 <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold">Question Bank</h1>
-                        <p className="text-gray-600 dark:text-gray-400">Manage and organize all test questions</p>
-                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">Manage and organize all test questions</p>
                     <button
                         onClick={handleAddNew}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 font-medium transition"
                     >
-                        <Plus size={20} /> Add Question
+                        <Plus size={18} /> Add Question
                     </button>
                 </div>
 
-                {}
-                <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={() => setActiveTab("bank")}
-                        className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === "bank"
-                            ? "border-blue-500 text-blue-500"
-                            : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
+                        className={`px-4 py-2.5 font-medium border-b-2 transition-colors text-sm ${activeTab === "bank"
+                            ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
+                            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
                             }`}
                     >
                         Question Bank
                     </button>
                     <button
                         onClick={() => setActiveTab("approvals")}
-                        className={`px-4 py-2 font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === "approvals"
-                            ? "border-yellow-500 text-yellow-500"
-                            : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
+                        className={`px-4 py-2.5 font-medium border-b-2 transition-colors flex items-center gap-2 text-sm ${activeTab === "approvals"
+                            ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
+                            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
                             }`}
                     >
                         Pending Approvals
@@ -275,20 +271,19 @@ const QuestionBank = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400" size={18} />
+                <div className="flex flex-wrap gap-3 mb-6">
+                    <div className="relative flex-1 min-w-48">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
                         <input
                             type="text"
                             placeholder="Search questions..."
-                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-blue-500"
+                            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
                             value={filters.search}
                             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
-
                     <select
-                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
                         value={filters.groupName}
                         onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
                     >
@@ -303,9 +298,8 @@ const QuestionBank = () => {
                             ))
                         )}
                     </select>
-
                     <select
-                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
                         value={filters.difficulty}
                         onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
                     >
@@ -315,9 +309,8 @@ const QuestionBank = () => {
                         <option value="hard">Hard</option>
                         <option value="advanced">Advanced</option>
                     </select>
-
                     <select
-                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
                         value={filters.type}
                         onChange={(e) => setFilters({ ...filters, type: e.target.value })}
                     >
@@ -332,83 +325,92 @@ const QuestionBank = () => {
                 {/* Questions List */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {loading ? (
-                        <div className="p-8 text-center text-gray-600 dark:text-gray-400">Loading questions...</div>
+                        <div className="p-12 text-center">
+                            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+                            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading questions...</p>
+                        </div>
                     ) : questions.length === 0 ? (
-                        <div className="p-8 text-center text-gray-600 dark:text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
+                        <div className="p-12 text-center text-gray-500 dark:text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
                     ) : (
-                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <div className="divide-y divide-gray-100 dark:divide-gray-700">
                             {questions.map((q) => (
-                                <div key={q.id} className="p-4 hover:bg-gray-750 transition-colors">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1">
-                                            <div className="flex gap-2 mb-2">
-                                                <span className={`px-2 py-0.5 rounded text-xs font-medium 
-                                            ${q.difficulty === 'easy' ? 'bg-green-900 text-green-300' :
-                                                        q.difficulty === 'medium' ? 'bg-yellow-900 text-yellow-300' :
-                                                            'bg-red-900 text-red-300'}`}>
+                                <div key={q.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold 
+                                                    ${q.difficulty === 'easy' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                                                    q.difficulty === 'medium' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                                                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
                                                     {q.difficulty.toUpperCase()}
                                                 </span>
-                                                <span className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
+                                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
                                                     {q.type.replace('_', ' ').toUpperCase()}
                                                 </span>
-                                                <span className="bg-blue-900 text-blue-300 px-2 py-0.5 rounded text-xs">
+                                                <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
                                                     {q.subject} • Class {q.class_level}
                                                 </span>
-                                                <span className="bg-purple-900 text-purple-300 px-2 py-0.5 rounded text-xs">
+                                                <span className="bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
                                                     {q.marks} Mark{q.marks > 1 ? 's' : ''}
                                                 </span>
                                                 {q.status === 'pending' && (
-                                                    <span className="bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded text-xs border border-yellow-700">
+                                                    <span className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full text-xs font-medium border border-amber-200 dark:border-amber-700">
                                                         Pending Approval
                                                     </span>
                                                 )}
                                             </div>
-                                            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{q.text}</h3>
+                                            <p className="text-base font-medium text-gray-900 dark:text-white mb-3 leading-relaxed">{q.text}</p>
 
                                             {q.type === 'mcq' && (
-                                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                                <div className="grid grid-cols-2 gap-2 mb-3">
                                                     {q.options.map((opt, idx) => (
-                                                        <div key={idx} className={`p-2 rounded text-sm ${opt === q.correct_answer ? 'bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700' : 'bg-gray-100 dark:bg-gray-700/30'}`}>
-                                                            <span className="font-bold mr-2">{String.fromCharCode(65 + idx)}.</span> {opt}
+                                                        <div key={idx} className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${opt === q.correct_answer ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300'}`}>
+                                                            <span className="font-semibold text-xs w-5 h-5 rounded-full bg-white dark:bg-gray-600 flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-gray-500">{String.fromCharCode(65 + idx)}</span>
+                                                            {opt}
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
 
-                                            {q.type !== 'mcq' && (
-                                                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">Answer:</span> {q.correct_answer}
+                                            {q.type !== 'mcq' && q.correct_answer && (
+                                                <div className="mb-3 text-sm">
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">Answer: </span>
+                                                    <span className="text-gray-600 dark:text-gray-400">{q.correct_answer}</span>
                                                 </div>
                                             )}
 
-                                            <div className="mt-2 text-xs text-gray-500">
-                                                Chapter {q.chapter} • {q.is_ai_generated ? `Triggered by ${q.triggered_by || q.created_by}` : `Created by ${q.created_by}`} • {new Date(q.created_at).toLocaleDateString()}
-                                                {q.is_ai_generated && <span className="ml-2 text-blue-400 flex items-center inline-flex gap-1">✨ AI Generated</span>}
+                                            <div className="text-xs text-gray-400 dark:text-gray-500 flex flex-wrap items-center gap-x-1">
+                                                <span>Chapter {q.chapter}</span>
+                                                <span>•</span>
+                                                <span>{q.is_ai_generated ? `Triggered by ${q.triggered_by || q.created_by}` : `Created by ${q.created_by}`}</span>
+                                                <span>•</span>
+                                                <span>{new Date(q.created_at).toLocaleDateString('en-GB')}</span>
+                                                {q.is_ai_generated && <span className="ml-1 text-indigo-500 dark:text-indigo-400">✨ AI Generated</span>}
                                                 {q.status === 'pending' && q.expires_at && (() => {
                                                     const daysLeft = Math.ceil((new Date(q.expires_at) - new Date()) / (1000 * 60 * 60 * 24));
                                                     return daysLeft > 0 ? (
-                                                        <span className={`ml-2 ${daysLeft <= 2 ? 'text-red-400' : 'text-yellow-400'}`}>
+                                                        <span className={`ml-1 ${daysLeft <= 2 ? 'text-red-500' : 'text-amber-500'}`}>
                                                             ⏱️ Auto-deletes in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
                                                         </span>
                                                     ) : (
-                                                        <span className="ml-2 text-red-400">⏱️ Expired</span>
+                                                        <span className="ml-1 text-red-500">⏱️ Expired</span>
                                                     );
                                                 })()}
                                             </div>
                                         </div>
 
-                                        <div className="flex gap-2 ml-4">
+                                        <div className="flex items-center gap-1 flex-shrink-0">
                                             {activeTab === "approvals" && (
                                                 <>
                                                     <button
                                                         onClick={() => handleApprove(q.id)}
-                                                        className="px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs text-white transition-colors"
+                                                        className="px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 border border-green-200 dark:border-green-700 rounded-lg text-xs font-medium transition"
                                                     >
                                                         Approve
                                                     </button>
                                                     <button
                                                         onClick={() => handleReject(q.id)}
-                                                        className="px-3 py-1 bg-red-700 hover:bg-red-600 rounded text-xs text-white transition-colors"
+                                                        className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-700 rounded-lg text-xs font-medium transition"
                                                     >
                                                         Reject
                                                     </button>
@@ -416,18 +418,18 @@ const QuestionBank = () => {
                                             )}
                                             <button
                                                 onClick={() => handleEdit(q)}
-                                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
                                                 title="Edit"
                                                 disabled={isTeacher && q.created_role !== 'teacher' && q.created_by !== user.user_id && q.triggered_by !== user.user_id}
                                             >
-                                                <Edit size={18} />
+                                                <Edit size={17} />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(q.id)}
-                                                className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition"
                                                 title="Delete"
                                             >
-                                                <Trash2 size={18} />
+                                                <Trash2 size={17} />
                                             </button>
                                         </div>
                                     </div>
@@ -436,22 +438,22 @@ const QuestionBank = () => {
                         </div>
                     )}
 
-                    {/* Pagination settings */}
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
-                        <div>Showing {questions.length} of {pagination.total} questions</div>
-                        <div className="flex gap-2">
+                    {/* Pagination */}
+                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Showing {questions.length} of {pagination.total} questions</p>
+                        <div className="flex items-center gap-2">
                             <button
                                 disabled={pagination.page === 1}
                                 onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
                             >
                                 Previous
                             </button>
-                            <span className="px-2 py-1">Page {pagination.page} of {pagination.pages}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 px-2">Page {pagination.page} of {pagination.pages}</span>
                             <button
                                 disabled={pagination.page === pagination.pages}
                                 onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                                className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
                             >
                                 Next
                             </button>

@@ -284,7 +284,7 @@ export default function TestManagement() {
     <AdminLayout title="Test Management" icon={ClipboardList}>
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
             <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total_tests}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Tests</p>
@@ -296,10 +296,6 @@ export default function TestManagement() {
           <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
             <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total_submissions}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Submissions</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total_students}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Students</p>
           </div>
         </div>
       )}

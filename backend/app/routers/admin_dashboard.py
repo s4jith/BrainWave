@@ -117,19 +117,15 @@ def serialize_student(student: dict) -> dict:
 async def get_dashboard_stats():
     """
     Lightweight stats endpoint for the admin dashboard.
-    Only runs essential count queries for fast loading.
+    Returns essential counts + 7-day activity trend for charts.
     """
     try:
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_ago = today_start - timedelta(days=7)
-        month_ago = today_start - timedelta(days=30)
 
         total_students = db.users.count_documents({"role": "student"})
         total_teachers = db.users.count_documents({"role": "teacher"})
         active_today = db.users.count_documents({"last_login": {"$gte": today_start}})
-        active_this_week = db.users.count_documents({"last_login": {"$gte": week_ago}})
-        new_users_this_month = db.users.count_documents({"created_at": {"$gte": month_ago}})
 
         tests_col = db.get_collection("tests")
         assessments_col = db.get_collection("assessments")
@@ -137,45 +133,59 @@ async def get_dashboard_stats():
         submissions_col = db.get_collection("submissions")
 
         total_tests_created = tests_col.count_documents({}) + assessments_col.count_documents({})
-
         old_taken = test_sessions.count_documents({"status": "completed"})
         new_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
         total_tests_taken = old_taken + new_taken
 
-        tests_this_week = (
-            test_sessions.count_documents({"completed_at": {"$gte": week_ago}}) +
-            submissions_col.count_documents({"submitted_at": {"$gte": week_ago}, "status": {"$in": ["submitted", "graded"]}})
-        )
+        daily_trend = []
+        for i in range(6, -1, -1):
+            day_start = today_start - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            active_users = db.users.count_documents({"last_login": {"$gte": day_start, "$lt": day_end}})
+            tests_done = (
+                test_sessions.count_documents({"completed_at": {"$gte": day_start, "$lt": day_end}}) +
+                submissions_col.count_documents({
+                    "submitted_at": {"$gte": day_start, "$lt": day_end},
+                    "status": {"$in": ["submitted", "graded"]}
+                })
+            )
+            new_signups = db.users.count_documents({"created_at": {"$gte": day_start, "$lt": day_end}})
+            daily_trend.append({
+                "date": day_start.strftime("%a"),
+                "full_date": day_start.strftime("%b %d"),
+                "active_users": active_users,
+                "tests_taken": tests_done,
+                "new_signups": new_signups
+            })
 
-        avg_pipeline = [
-            {"$match": {"status": {"$in": ["submitted", "graded"]}, "percentage": {"$exists": True}}},
-            {"$group": {"_id": None, "avg": {"$avg": "$percentage"}}}
+        student_pipeline = [
+            {"$match": {"role": "student"}},
+            {"$group": {
+                "_id": "$class_level",
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"_id": 1}}
         ]
-        avg_result = list(submissions_col.aggregate(avg_pipeline))
-        average_score = round(avg_result[0]["avg"], 1) if avg_result else 0
-
-        passed = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}, "percentage": {"$gte": 60}})
-        pass_rate = round((passed / new_taken * 100), 1) if new_taken > 0 else 0
+        class_dist = [
+            {"class": f"Class {r['_id']}" if r["_id"] else "Unknown", "students": r["count"]}
+            for r in db.users.aggregate(student_pipeline)
+        ]
 
         return {
             "total_students": total_students,
             "total_teachers": total_teachers,
             "active_today": active_today,
-            "active_this_week": active_this_week,
-            "new_users_this_month": new_users_this_month,
             "total_tests_created": total_tests_created,
             "total_tests_taken": total_tests_taken,
-            "tests_this_week": tests_this_week,
-            "average_score": average_score,
-            "pass_rate": pass_rate
+            "daily_trend": daily_trend,
+            "class_distribution": class_dist
         }
     except Exception as e:
         logger.error(f"Dashboard stats error: {e}")
         return {
-            "total_students": 0, "total_teachers": 0,
-            "active_today": 0, "active_this_week": 0, "new_users_this_month": 0,
+            "total_students": 0, "total_teachers": 0, "active_today": 0,
             "total_tests_created": 0, "total_tests_taken": 0,
-            "tests_this_week": 0, "average_score": 0, "pass_rate": 0
+            "daily_trend": [], "class_distribution": []
         }
 
 @router.get("/analytics")
@@ -193,139 +203,56 @@ async def get_analytics():
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = today_start - timedelta(days=7)
-        month_ago = today_start - timedelta(days=30)
-        
-        total_users = db.users.count_documents({})
+
         total_students = db.users.count_documents({"role": "student"})
-        total_teachers = db.users.count_documents({"role": "teacher"})
-        
-        active_today = db.users.count_documents({"last_login": {"$gte": today_start}})
-        active_this_week = db.users.count_documents({"last_login": {"$gte": week_ago}})
-        active_this_month = db.users.count_documents({"last_login": {"$gte": month_ago}})
-        
-        inactive_users = db.users.count_documents({
-            "$or": [
-                {"last_login": {"$lt": month_ago}},
-                {"last_login": None}
-            ]
-        })
-        
-        new_users_today = db.users.count_documents({"created_at": {"$gte": today_start}})
-        new_users_this_week = db.users.count_documents({"created_at": {"$gte": week_ago}})
-        new_users_this_month = db.users.count_documents({"created_at": {"$gte": month_ago}})
-        
+        active_this_week = db.users.count_documents({"role": "student", "last_login": {"$gte": week_ago}})
+
         user_stats = {
-            "total_users": total_users,
             "total_students": total_students,
-            "total_teachers": total_teachers,
-            "active_today": active_today,
             "active_this_week": active_this_week,
-            "active_this_month": active_this_month,
-            "inactive_users": inactive_users,
-            "new_users_today": new_users_today,
-            "new_users_this_week": new_users_this_week,
-            "new_users_this_month": new_users_this_month
         }
         
         test_sessions = db.get_collection("test_sessions")
-        tests_col = db.get_collection("tests")
-        
         assessments_col = db.get_collection("assessments")
         submissions_col = db.get_collection("submissions")
-        
-        old_tests_created = tests_col.count_documents({})
-        new_tests_created = assessments_col.count_documents({})
-        total_tests_created = old_tests_created + new_tests_created
-        
-        old_tests_taken = test_sessions.count_documents({"status": "completed"})
-        new_tests_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
-        total_tests_taken = old_tests_taken + new_tests_taken
-        
-        old_tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
-        new_tests_today = submissions_col.count_documents({
-            "submitted_at": {"$gte": today_start},
-            "status": {"$in": ["submitted", "graded"]}
-        })
-        tests_today = old_tests_today + new_tests_today
-        
+
         old_tests_week = test_sessions.count_documents({"completed_at": {"$gte": week_ago}})
         new_tests_week = submissions_col.count_documents({
             "submitted_at": {"$gte": week_ago},
             "status": {"$in": ["submitted", "graded"]}
         })
         tests_this_week = old_tests_week + new_tests_week
-        
-        old_in_progress = test_sessions.count_documents({"status": "in_progress"})
-        new_in_progress = submissions_col.count_documents({"status": "in_progress"})
-        tests_in_progress = old_in_progress + new_in_progress
-        
-        old_pipeline = [
+
+        old_avg_result = list(test_sessions.aggregate([
             {"$match": {"status": "completed", "score": {"$exists": True}}},
             {"$group": {"_id": None, "avg_score": {"$avg": "$score"}, "count": {"$sum": 1}}}
-        ]
-        old_avg_result = list(test_sessions.aggregate(old_pipeline))
+        ]))
         old_avg = old_avg_result[0] if old_avg_result else {"avg_score": 0, "count": 0}
-        
-        new_pipeline = [
+
+        new_avg_result = list(submissions_col.aggregate([
             {"$match": {"status": {"$in": ["submitted", "graded"]}, "percentage": {"$exists": True}}},
             {"$group": {"_id": None, "avg_score": {"$avg": "$percentage"}, "count": {"$sum": 1}}}
-        ]
-        new_avg_result = list(submissions_col.aggregate(new_pipeline))
+        ]))
         new_avg = new_avg_result[0] if new_avg_result else {"avg_score": 0, "count": 0}
-        
+
         total_count = old_avg["count"] + new_avg["count"]
-        if total_count > 0:
-            average_score = round(
-                (old_avg["avg_score"] * old_avg["count"] + new_avg["avg_score"] * new_avg["count"]) / total_count,
-                1
-            )
-        else:
-            average_score = 0
-        
+        average_score = round(
+            (old_avg["avg_score"] * old_avg["count"] + new_avg["avg_score"] * new_avg["count"]) / total_count, 1
+        ) if total_count > 0 else 0
+
+        old_tests_taken = test_sessions.count_documents({"status": "completed"})
+        new_tests_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
+        total_tests_taken = old_tests_taken + new_tests_taken
+
         old_passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
-        new_passed = submissions_col.count_documents({
-            "status": {"$in": ["submitted", "graded"]}, 
-            "percentage": {"$gte": 60}
-        })
-        total_passed = old_passed + new_passed
-        pass_rate = round((total_passed / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
-        
+        new_passed = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}, "percentage": {"$gte": 60}})
+        pass_rate = round(((old_passed + new_passed) / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
+
         test_stats = {
-            "total_tests_created": total_tests_created,
-            "total_tests_taken": total_tests_taken,
-            "tests_completed": total_tests_taken,
-            "tests_in_progress": tests_in_progress,
             "average_score": average_score,
+            "tests_this_week": tests_this_week,
             "pass_rate": pass_rate,
-            "tests_today": tests_today,
-            "tests_this_week": tests_this_week
         }
-        
-        activity_trend = []
-        for i in range(13, -1, -1):
-            date = today_start - timedelta(days=i)
-            next_date = date + timedelta(days=1)
-            
-            active_users = db.users.count_documents({
-                "last_login": {"$gte": date, "$lt": next_date}
-            })
-            
-            old_tests = test_sessions.count_documents({
-                "completed_at": {"$gte": date, "$lt": next_date}
-            })
-            new_tests = submissions_col.count_documents({
-                "submitted_at": {"$gte": date, "$lt": next_date},
-                "status": {"$in": ["submitted", "graded"]}
-            })
-            tests_taken = old_tests + new_tests
-            
-            activity_trend.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "active_users": active_users,
-                "tests_taken": tests_taken
-            })
-        
-        subject_pipeline = []
         
         new_subject_pipeline = [
             {"$match": {"status": {"$in": ["submitted", "graded"]}}},
@@ -568,7 +495,6 @@ async def get_analytics():
         result = {
             "user_stats": user_stats,
             "test_stats": test_stats,
-            "activity_trend": activity_trend,
             "subject_stats": subject_stats,
             "top_performers": top_performers,
             "weak_students": weak_students,
@@ -581,17 +507,8 @@ async def get_analytics():
     except Exception as e:
         logger.error(f"Analytics error: {e}")
         return {
-            "user_stats": {
-                "total_users": 0, "total_students": 0, "total_teachers": 0,
-                "active_today": 0, "active_this_week": 0, "active_this_month": 0,
-                "inactive_users": 0, "new_users_today": 0, "new_users_this_week": 0, "new_users_this_month": 0
-            },
-            "test_stats": {
-                "total_tests_created": 0, "total_tests_taken": 0, "tests_completed": 0,
-                "tests_in_progress": 0, "average_score": 0, "pass_rate": 0,
-                "tests_today": 0, "tests_this_week": 0
-            },
-            "activity_trend": [],
+            "user_stats": {"total_students": 0, "active_this_week": 0},
+            "test_stats": {"average_score": 0, "tests_this_week": 0, "pass_rate": 0},
             "subject_stats": [],
             "top_performers": [],
             "weak_students": [],
@@ -776,20 +693,31 @@ async def update_student(student_id: str, student: StudentUpdate):
 
 @router.delete("/students/{student_id}")
 async def delete_student(student_id: str):
-    """
-    Delete a student (soft delete by setting is_active=False, or hard delete).
-    """
+    """Delete a student and all associated data (cascade delete)."""
     try:
         query = {"_id": ObjectId(student_id), "role": "student"} if ObjectId.is_valid(student_id) else {"user_id": student_id, "role": "student"}
-        
-        result = db.users.delete_one(query)
-        
-        if result.deleted_count == 0:
+
+        student = db.users.find_one(query)
+        if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        
-        logger.info(f"Deleted student: {student_id}")
-        return {"success": True, "message": "Student deleted successfully"}
-        
+
+        uid = student.get("user_id", "")
+        oid_str = str(student["_id"])
+
+        user_id_filter = {"$or": [{"user_id": uid}, {"user_id": oid_str}, {"student_id": uid}, {"student_id": oid_str}]}
+        db.db.test_sessions.delete_many(user_id_filter)
+        db.submissions.delete_many({"$or": [{"student_id": uid}, {"student_id": oid_str}]})
+        db.test_submissions.delete_many({"$or": [{"student_id": uid}, {"student_id": oid_str}, {"user_id": uid}, {"user_id": oid_str}]})
+        db.notifications.delete_many({"$or": [{"user_id": uid}, {"user_id": oid_str}]})
+        db.dismissed_notifications.delete_many({"$or": [{"user_id": uid}, {"user_id": oid_str}]})
+        for col in ["chat_sessions", "chat_messages", "annotations", "annotation_history", "notes", "flashcards", "quiz_results"]:
+            db.db[col].delete_many({"$or": [{"user_id": uid}, {"user_id": oid_str}, {"student_id": uid}, {"student_id": oid_str}]})
+
+        db.users.delete_one({"_id": student["_id"]})
+
+        logger.info(f"Cascade deleted student: {student_id}")
+        return {"success": True, "message": "Student and all associated data deleted successfully"}
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1049,17 +977,42 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
 
 @router.delete("/teachers/{teacher_id}")
 async def delete_teacher(teacher_id: str):
-    """Delete a teacher."""
+    """Delete a teacher. Blocked if the teacher is assigned to any groups."""
     try:
         query = {"_id": ObjectId(teacher_id), "role": "teacher"} if ObjectId.is_valid(teacher_id) else {"user_id": teacher_id, "role": "teacher"}
-        result = db.users.delete_one(query)
-        
-        if result.deleted_count == 0:
+
+        teacher = db.users.find_one(query)
+        if not teacher:
             raise HTTPException(status_code=404, detail="Teacher not found")
-        
+
+        t_user_id = teacher.get("user_id", "")
+        t_oid_str = str(teacher["_id"])
+
+        groups = list(db.groups.find(
+            {"$or": [
+                {"teacher_id": t_user_id},
+                {"teacher_id": t_oid_str},
+                {"teacher_ids": t_user_id},
+                {"teacher_ids": t_oid_str},
+            ]},
+            {"_id": 0, "name": 1, "class_level": 1, "subject": 1, "batch_year": 1}
+        ))
+
+        if groups:
+            group_list = [
+                g.get("name") or f"Class {g.get('class_level')} - {g.get('subject', '')} ({g.get('batch_year', '')})"
+                for g in groups
+            ]
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Teacher is assigned to groups", "groups": group_list}
+            )
+
+        db.users.delete_one({"_id": teacher["_id"]})
+
         logger.info(f"Deleted teacher: {teacher_id}")
         return {"success": True, "message": "Teacher deleted successfully"}
-        
+
     except HTTPException:
         raise
     except Exception as e:

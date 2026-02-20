@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import AdminLayout from "../components/AdminLayout";
 import useUserStore from "../stores/userStore";
 import {
-    BarChart3, TrendingUp, Users, BookOpen, ClipboardList, Calendar,
-    Award, Target, AlertTriangle, Activity, Download, RefreshCcw, UserCheck, UserX
+    BarChart3, Users, BookOpen, ClipboardList,
+    Award, AlertTriangle, Activity, Download, RefreshCcw, UserCheck
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -72,9 +72,9 @@ export default function AdminReports() {
     const userStats = analytics?.user_stats || {};
     const testStats = analytics?.test_stats || {};
     const subjectStats = analytics?.subject_stats || [];
-    const topPerformers = analytics?.top_performers || [];
-    const weakStudents = analytics?.weak_students || [];
-    const recentActivities = analytics?.recent_activities || [];
+    const topPerformers = (analytics?.top_performers || []).filter(s => s.name && s.name !== "Unknown" && s.name !== "Unknown Student");
+    const weakStudents = (analytics?.weak_students || []).filter(s => s.name && s.name !== "Unknown" && s.name !== "Unknown Student");
+    const recentActivities = (analytics?.recent_activities || []).filter(a => a.student_name && a.student_name !== "Unknown" && a.student_name !== "Unknown Student");
 
     const uniqueClasses = [...new Set(recentActivities.map(a => a.class_level).filter(Boolean))].sort((a, b) => a - b);
     
@@ -114,20 +114,12 @@ export default function AdminReports() {
                 </div>
             </div>
 
-            {/* Stats Grid - Row 1: User Activity Focus */}
+            {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <StatCard icon={Users} label="Total Students" value={userStats.total_students || 0} color="blue" />
                 <StatCard icon={UserCheck} label="Active This Week" value={userStats.active_this_week || 0} color="green" />
-                <StatCard icon={UserX} label="Inactive Users" value={userStats.inactive_users || 0} color="red" />
-                <StatCard icon={TrendingUp} label="New This Month" value={userStats.new_users_this_month || 0} color="purple" />
-            </div>
-
-            {/* Stats Grid - Row 2: Test Performance Focus */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <StatCard icon={Award} label="Avg Score" value={`${testStats.average_score || 0}%`} color="amber" />
-                <StatCard icon={Target} label="Pass Rate" value={`${testStats.pass_rate || 0}%`} color="emerald" />
                 <StatCard icon={ClipboardList} label="Tests This Week" value={testStats.tests_this_week || 0} color="cyan" />
-                <StatCard icon={Activity} label="In Progress" value={testStats.tests_in_progress || 0} color="pink" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

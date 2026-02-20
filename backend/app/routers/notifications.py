@@ -57,8 +57,33 @@ def generate_admin_notifications():
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
+        yesterday = now - timedelta(days=1)
 
         notifications = []
+
+        new_students_today = db.users.count_documents({
+            "role": "student",
+            "created_at": {"$gte": today_start}
+        })
+        if new_students_today > 0:
+            notifications.append({
+                "title": "New Student Registrations",
+                "message": f"{new_students_today} new student(s) registered today",
+                "type": "success",
+                "category": "users"
+            })
+
+        new_teachers_today = db.users.count_documents({
+            "role": "teacher",
+            "created_at": {"$gte": today_start}
+        })
+        if new_teachers_today > 0:
+            notifications.append({
+                "title": "New Teacher Registrations",
+                "message": f"{new_teachers_today} new teacher(s) joined today",
+                "type": "success",
+                "category": "users"
+            })
 
         inactive_students = db.users.count_documents({
             "role": "student",
@@ -66,7 +91,6 @@ def generate_admin_notifications():
             "$or": [
                 {"last_login": {"$lt": week_ago}},
                 {"last_login": None, "created_at": {"$lt": week_ago}},
-                {"last_login": None, "created_at": None}
             ]
         })
         if inactive_students > 0:
@@ -83,7 +107,6 @@ def generate_admin_notifications():
             "$or": [
                 {"last_login": {"$lt": week_ago}},
                 {"last_login": None, "created_at": {"$lt": week_ago}},
-                {"last_login": None, "created_at": None}
             ]
         })
         if inactive_teachers > 0:
@@ -102,8 +125,22 @@ def generate_admin_notifications():
         })
         if failed_tests > 0:
             notifications.append({
-                "title": "Student Test Failures",
+                "title": "Poor Test Performance",
                 "message": f"{failed_tests} test(s) scored below 40% in the past week",
+                "type": "error",
+                "category": "performance"
+            })
+
+        submissions_col = db.get_collection("submissions")
+        failing_new = submissions_col.count_documents({
+            "status": {"$in": ["submitted", "graded"]},
+            "percentage": {"$lt": 40},
+            "submitted_at": {"$gte": week_ago}
+        })
+        if failing_new > 0:
+            notifications.append({
+                "title": "Low Assessment Scores",
+                "message": f"{failing_new} assessment(s) scored below 40% this week",
                 "type": "error",
                 "category": "performance"
             })
@@ -115,7 +152,7 @@ def generate_admin_notifications():
             if pending_tickets > 0:
                 notifications.append({
                     "title": "Pending Support Queries",
-                    "message": f"{pending_tickets} unresolved support query/queries from students",
+                    "message": f"{pending_tickets} unresolved support quer{'y' if pending_tickets == 1 else 'ies'} from students",
                     "type": "info",
                     "category": "support"
                 })
@@ -123,10 +160,15 @@ def generate_admin_notifications():
             pass
 
         tests_today = test_sessions.count_documents({"completed_at": {"$gte": today_start}})
-        if tests_today > 0:
+        new_tests_today = submissions_col.count_documents({
+            "submitted_at": {"$gte": today_start},
+            "status": {"$in": ["submitted", "graded"]}
+        })
+        total_tests_today = tests_today + new_tests_today
+        if total_tests_today > 0:
             notifications.append({
                 "title": "Daily Test Activity",
-                "message": f"{tests_today} test(s) completed today",
+                "message": f"{total_tests_today} test(s) completed today",
                 "type": "success",
                 "category": "tests"
             })

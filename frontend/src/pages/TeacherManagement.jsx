@@ -19,6 +19,7 @@ export default function TeacherManagement() {
     const [searchTerm, setSearchTerm] = useState("");
     const [saving, setSaving] = useState(false);
     const [expandedTeacherGroups, setExpandedTeacherGroups] = useState({});
+    const [teacherGroupConflict, setTeacherGroupConflict] = useState(null);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -134,9 +135,16 @@ export default function TeacherManagement() {
     };
 
     const handleDeleteTeacher = async (teacherId) => {
+        const teacher = teachers.find(t => t.id === teacherId);
+
+        if (teacher && teacher.group_count > 0) {
+            setTeacherGroupConflict({ teacherName: teacher.name, groups: teacher.group_names || [] });
+            return;
+        }
+
         if (!confirm("Are you sure you want to delete this teacher?")) return;
 
-        const deletedTeacher = teachers.find(t => t.id === teacherId);
+        const deletedTeacher = teacher;
         const updatedTeachers = teachers.filter(t => t.id !== teacherId);
         setTeachers(updatedTeachers);
 
@@ -146,12 +154,17 @@ export default function TeacherManagement() {
                 headers: getAuthHeader()
             });
             if (!response.ok) {
-                throw new Error("Failed to delete teacher");
+                const errorData = await response.json().catch(() => ({}));
+                if (response.status === 409 && errorData.detail?.groups) {
+                    setTeachers(prev => [...prev.filter(t => t.id !== teacherId), deletedTeacher]);
+                    setTeacherGroupConflict({ teacherName: deletedTeacher?.name || "This teacher", groups: errorData.detail.groups });
+                    return;
+                }
+                throw new Error(errorData.detail?.message || errorData.detail || "Failed to delete teacher");
             }
         } catch (err) {
-            
             alert("Error: " + err.message);
-            setTeachers([...updatedTeachers, deletedTeacher]);
+            setTeachers(prev => [...prev.filter(t => t.id !== teacherId), deletedTeacher]);
         }
     };
 
@@ -558,6 +571,42 @@ export default function TeacherManagement() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Teacher Group Conflict Modal */}
+            {teacherGroupConflict && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700">
+                        <div className="flex items-start gap-4 mb-5">
+                            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Users className="w-6 h-6 text-red-600 dark:text-red-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cannot Delete Teacher</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">{teacherGroupConflict.teacherName}</span> is assigned to the following group{teacherGroupConflict.groups.length !== 1 ? "s" : ""}. Please remove them from all groups before deleting.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-5">
+                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Assigned Groups</p>
+                            <ul className="space-y-2">
+                                {teacherGroupConflict.groups.map((g, i) => (
+                                    <li key={i} className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+                                        <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span>
+                                        {g}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <button
+                            onClick={() => setTeacherGroupConflict(null)}
+                            className="w-full px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 font-medium transition"
+                        >
+                            OK, Got It
+                        </button>
                     </div>
                 </div>
             )}
