@@ -27,6 +27,7 @@ import {
 import useUserStore from "../stores/userStore";
 import useNotesStore from "../stores/notesStore";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import StickyNotesCard from "../components/dashboard/StickyNotesCard";
 import quotesData from "../data/quotes.json";
 
@@ -399,7 +400,7 @@ export default function Dashboard() {
 
               {loadingTests ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  <LoadingSpinner size="sm" color="orange" text="" />
                 </div>
               ) : pendingTests.length === 0 ? (
                 <div className="text-center py-8">

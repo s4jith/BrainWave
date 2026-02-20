@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer, Legend, Cell
 } from "recharts";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -23,8 +23,23 @@ const EMPTY_TREND = Array.from({ length: 7 }, (_, i) => {
   };
 });
 
+const CLASS_COLORS = [
+  ["#6366f1", "#4f46e5"],
+  ["#06b6d4", "#0891b2"],
+  ["#10b981", "#059669"],
+  ["#f59e0b", "#d97706"],
+  ["#ec4899", "#db2777"],
+  ["#8b5cf6", "#7c3aed"],
+  ["#f97316", "#ea580c"],
+  ["#14b8a6", "#0d9488"],
+  ["#84cc16", "#65a30d"],
+  ["#e879f9", "#d946ef"],
+  ["#38bdf8", "#0ea5e9"],
+  ["#fb923c", "#f97316"],
+];
+
 export default function AdminDashboard() {
-  const { user } = useUserStore();
+  const { user, getAuthHeader } = useUserStore();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,7 +48,9 @@ export default function AdminDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/admin/dashboard-stats`);
+        const res = await fetch(`${API_URL}/api/admin/dashboard-stats`, {
+          headers: getAuthHeader()
+        });
         if (cancelled) return;
         if (!res.ok) throw new Error("Failed to fetch stats");
         setStats(await res.json());
@@ -127,15 +144,22 @@ export default function AdminDashboard() {
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Daily new user registrations</p>
           </div>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={trend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" />
+            <BarChart data={trend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barCategoryGap="35%">
+              <defs>
+                <linearGradient id="signupGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34d399" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip
                 contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.full_date || ""}
+                cursor={{ fill: "rgba(0,0,0,0.04)" }}
               />
-              <Bar dataKey="new_signups" name="New Signups" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="new_signups" name="New Signups" fill="url(#signupGrad)" radius={[6, 6, 0, 0]} maxBarSize={40} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -147,13 +171,29 @@ export default function AdminDashboard() {
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Students by Class</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Distribution of enrolled students across class levels</p>
           </div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={classDist} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" />
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={classDist} margin={{ top: 4, right: 16, left: -28, bottom: 0 }} barCategoryGap="30%">
+              <defs>
+                {CLASS_COLORS.map((c, i) => (
+                  <linearGradient key={i} id={`classGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={c[0]} stopOpacity={1} />
+                    <stop offset="100%" stopColor={c[1]} stopOpacity={0.85} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:[&>line]:stroke-gray-700" vertical={false} />
               <XAxis dataKey="class" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }} />
-              <Bar dataKey="students" name="Students" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                formatter={(val) => [val, "Students"]}
+                cursor={{ fill: "rgba(0,0,0,0.04)" }}
+              />
+              <Bar dataKey="students" name="Students" radius={[6, 6, 0, 0]} maxBarSize={52}>
+                {classDist.map((_, idx) => (
+                  <Cell key={idx} fill={`url(#classGrad${idx % CLASS_COLORS.length})`} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

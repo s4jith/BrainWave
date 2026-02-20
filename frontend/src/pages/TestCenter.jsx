@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import useUserStore from "../stores/userStore";
 import {
   FileText,
@@ -136,7 +137,7 @@ export default function TestCenter() {
         {/* Content */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-gray-800" />
+            <LoadingSpinner size="lg" color="orange" text="Loading tests…" />
           </div>
         ) : (
           <>

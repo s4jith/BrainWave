@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -288,8 +289,7 @@ export default function TeacherManagement() {
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {loading ? (
                     <div className="p-12 text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
-                        <p className="mt-4 text-gray-500 dark:text-gray-400">Loading teachers...</p>
+                        <LoadingSpinner size="lg" text="Loading teachers…" />
                     </div>
                 ) : teachers.length === 0 ? (
                     <div className="p-12 text-center">

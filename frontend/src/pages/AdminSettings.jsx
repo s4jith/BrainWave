@@ -55,7 +55,7 @@ export default function AdminSettings() {
         try {
             const res = await fetch(`${API_URL}/api/auth/change-password-secure`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({ user_id: user.user_id, old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd })
             });
             const data = await res.json();

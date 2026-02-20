@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import useUserStore from "../stores/userStore";
 import {
   TrendingUp,
@@ -89,10 +90,7 @@ export default function ReportCard() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto" />
-            <p className="text-gray-500">Loading your performance data...</p>
-          </div>
+          <LoadingSpinner size="lg" color="orange" text="Loading your performance data…" />
         </div>
       </DashboardLayout>
     );

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from "react";
-import { Copy, Edit, Trash2, Plus, Filter, Search, RotateCcw } from "lucide-react";
+import { Edit, Trash2, Plus, Search, BookOpen } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import QuestionModal from "../components/QuestionModal";
 import useUserStore from "../stores/userStore";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
@@ -9,7 +10,6 @@ import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
     const isTeacher = user.role === "teacher";
-    const Layout = AdminLayout;
 
     const [activeTab, setActiveTab] = useState("bank"); 
     const [questions, setQuestions] = useState([]);
@@ -237,8 +237,8 @@ const QuestionBank = () => {
     };
 
     return (
-        <Layout title="Question Bank">
-            <div className="">
+        <AdminLayout title="Question Bank" icon={BookOpen}>
+            <div>
                 <div className="flex justify-between items-center mb-6">
                     <p className="text-gray-500 dark:text-gray-400">Manage and organize all test questions</p>
                     <button
@@ -326,8 +326,7 @@ const QuestionBank = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {loading ? (
                         <div className="p-12 text-center">
-                            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
-                            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading questions...</p>
+                            <LoadingSpinner size="lg" text="Loading questions…" />
                         </div>
                     ) : questions.length === 0 ? (
                         <div className="p-12 text-center text-gray-500 dark:text-gray-400">No questions found. Try adjusting filters or add a new one.</div>
@@ -471,7 +470,7 @@ const QuestionBank = () => {
                     availableSubjects={subjects}
                 />
             )}
-        </Layout>
+        </AdminLayout>
     );
 };
 

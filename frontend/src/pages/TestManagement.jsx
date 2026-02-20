@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, Search, ExternalLink } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -45,7 +46,7 @@ export default function TestManagement() {
 
   useEffect(() => {
     fetchTests();
-  }, [filterClass, filterSubject, filterStatus]);
+  }, [filterClass, filterSubject]);
 
   useEffect(() => {
     if (tests.length > 0 && teacherGroups.length > 0) {
@@ -59,7 +60,7 @@ export default function TestManagement() {
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [filterClass, filterSubject, filterStatus]);
+  }, [filterClass, filterSubject]);
 
   const fetchTeacherGroups = async () => {
     try {
@@ -111,10 +112,9 @@ export default function TestManagement() {
   const fetchTests = async () => {
     try {
       setLoading(true);
-      let url = `${API_URL}/api/assessments?`; 
+      let url = `${API_URL}/api/assessments?`;
       if (filterClass) url += `class_level=${filterClass}&`;
       if (filterSubject) url += `subject=${filterSubject}&`;
-      if (filterStatus) url += `status=${filterStatus}&`;
 
       const response = await fetch(url, {
         headers: getAuthHeader()
@@ -280,6 +280,16 @@ export default function TestManagement() {
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[testStatus] || styles.closed}`}>{testStatus}</span>;
   };
 
+  const displayedTests = filterStatus
+    ? tests.filter(t => {
+        const s = getTestStatus(t);
+        if (filterStatus === "active") return s === "active";
+        if (filterStatus === "upcoming") return s === "upcoming";
+        if (filterStatus === "closed") return s === "completed" || s === "closed" || s === "draft";
+        return true;
+      })
+    : tests;
+
   return (
     <AdminLayout title="Test Management" icon={ClipboardList}>
       {/* Stats */}
@@ -329,7 +339,7 @@ export default function TestManagement() {
               <option value="">All Status</option>
               <option value="active">Active</option>
               <option value="upcoming">Upcoming</option>
-              <option value="closed">Closed</option>
+              <option value="closed">Completed</option>
             </select>
           </div>
           <button onClick={() => navigate("/create-test")}
@@ -342,19 +352,24 @@ export default function TestManagement() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Test List */}
         <div className="lg:col-span-1 space-y-3">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Tests ({tests.length})</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Tests ({displayedTests.length}{filterStatus ? ` of ${tests.length}` : ""})</h2>
           {loading ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+              <LoadingSpinner text="Loading tests…" />
             </div>
           ) : tests.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
               <ClipboardList className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-gray-500 dark:text-gray-400">No tests found</p>
             </div>
+          ) : displayedTests.length === 0 ? (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+              <ClipboardList className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No tests match the selected filters</p>
+            </div>
           ) : (
             <div className="space-y-2">
-              {tests.map(test => (
+              {displayedTests.map(test => (
                 <div key={test.id} onClick={() => handleTestClick(test)}
                   className={`bg-white dark:bg-gray-800 p-4 rounded-xl border cursor-pointer transition hover:shadow-md
                     ${selectedTest?.id === test.id ? "border-gray-900 dark:border-white ring-1 ring-gray-900 dark:ring-white" : "border-gray-200 dark:border-gray-700"}`}>
@@ -396,7 +411,7 @@ export default function TestManagement() {
               </div>
               <h3 className="font-medium text-gray-900 dark:text-white mb-4">Submissions ({submissions.length})</h3>
               {loadingSubmissions ? (
-                <div className="text-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-900 dark:border-white mx-auto"></div></div>
+                <div className="py-8"><LoadingSpinner text="Loading submissions…" /></div>
               ) : submissions.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">No submissions yet</div>
               ) : (
@@ -482,7 +497,7 @@ export default function TestManagement() {
             
             {loadingDetail ? (
               <div className="p-12 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+                <LoadingSpinner size="lg" text="Loading submission…" />
               </div>
             ) : submissionDetail ? (
               <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">

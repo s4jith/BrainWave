@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
+import LoadingSpinner from "../components/LoadingSpinner";
 import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen } from "lucide-react";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 
@@ -348,7 +349,7 @@ export default function GroupManagement() {
                     <h2 className="text-base font-semibold text-gray-900 dark:text-white">Groups</h2>
                     {loading ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-900 dark:border-white mx-auto"></div>
+                            <LoadingSpinner text="Loading groups…" />
                         </div>
                     ) : filteredGroups.length === 0 ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
