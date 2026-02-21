@@ -742,3 +742,65 @@ async def change_password_secure(request: ChangePasswordConfirmRequest):
     except Exception as e:
         logger.error(f"Change password secure error: {e}")
         return {"success": False, "error": "Failed to change password."}
+
+
+# ─── Profile Update ────────────────────────────────────────────────────────────
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    new_user_id: Optional[str] = None
+
+
+@router.patch("/profile")
+async def update_profile(
+    request: ProfileUpdateRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Update the currently logged-in user's profile (name, email, phone, user_id)."""
+    try:
+        user = db.users.find_one({"user_id": current_user.user_id})
+        if not user:
+            return {"success": False, "error": "User not found."}
+
+        updates: dict = {}
+
+        if request.name and request.name.strip():
+            updates["name"] = request.name.strip()
+
+        if request.email and request.email.strip():
+            new_email = request.email.strip().lower()
+            # Check uniqueness (allow same user to keep their own email)
+            existing = db.users.find_one({"email": new_email})
+            if existing and str(existing["_id"]) != str(user["_id"]):
+                return {"success": False, "error": "Email is already in use by another account."}
+            updates["email"] = new_email
+
+        if request.phone is not None:
+            updates["phone"] = request.phone.strip()
+            updates["mobile"] = request.phone.strip()  # keep both fields in sync
+
+        if request.new_user_id and request.new_user_id.strip():
+            new_uid = request.new_user_id.strip()
+            if new_uid != current_user.user_id:
+                existing = db.users.find_one({"user_id": new_uid})
+                if existing:
+                    return {"success": False, "error": "User ID is already taken."}
+                updates["user_id"] = new_uid
+
+        if not updates:
+            return {"success": False, "error": "No changes provided."}
+
+        updates["updated_at"] = datetime.utcnow()
+        db.users.update_one({"_id": user["_id"]}, {"$set": updates})
+
+        return {
+            "success": True,
+            "message": "Profile updated successfully.",
+            "updated_fields": list(updates.keys()),
+        }
+
+    except Exception as e:
+        logger.error(f"Profile update error: {e}")
+        return {"success": False, "error": "Failed to update profile."}

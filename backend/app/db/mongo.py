@@ -142,6 +142,11 @@ class SyncMongoDB:
     def subjects(self):
         """Get subjects collection (for curriculum)."""
         return self.db.subjects
+
+    @property
+    def platform_settings(self):
+        """Get platform_settings collection for admin settings."""
+        return self.db.platform_settings
     
     def get_collection(self, name: str):
         """Get a collection by name."""

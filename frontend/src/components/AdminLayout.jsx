@@ -202,6 +202,22 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
                 {/* Bottom Section */}
 
+                {/* Teacher Settings Link */}
+                {user?.role === "teacher" && (
+                    <div className="px-3 pb-2">
+                        <button
+                            onClick={() => navigate("/teacher-settings")}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
+                                ${currentPath === "/teacher-settings"
+                                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                        >
+                            <Settings className="w-5 h-5" />
+                            <span>Settings</span>
+                        </button>
+                    </div>
+                )}
+
                 {}
                 <div className="p-3 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-3 px-3 py-2">

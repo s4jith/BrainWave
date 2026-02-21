@@ -1277,3 +1277,70 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
     except Exception as e:
         logger.error(f"Error updating group students: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Platform Settings ─────────────────────────────────────────────────────────
+
+_DEFAULT_SETTINGS = {
+    "platformName": "NCERT Learning Platform",
+    "platformDescription": "Interactive learning platform for NCERT curriculum",
+    "maintenanceMode": False,
+    "backupFrequency": "daily",
+    "retentionDays": 30,
+}
+
+class PlatformSettings(BaseModel):
+    platformName: Optional[str] = None
+    platformDescription: Optional[str] = None
+    maintenanceMode: Optional[bool] = None
+    backupFrequency: Optional[str] = None
+    retentionDays: Optional[int] = None
+
+
+@router.get("/settings")
+async def get_admin_settings():
+    """Return current platform settings (admin only)."""
+    try:
+        col = db.get_collection("platform_settings")
+        doc = col.find_one({"_id": "global"})
+        if not doc:
+            return _DEFAULT_SETTINGS
+        doc.pop("_id", None)
+        return {**_DEFAULT_SETTINGS, **doc}
+    except Exception as e:
+        logger.error(f"Error fetching platform settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/settings")
+async def save_admin_settings(settings: PlatformSettings):
+    """Save platform settings to DB (admin only)."""
+    try:
+        updates = {k: v for k, v in settings.dict().items() if v is not None}
+        if not updates:
+            return {"success": False, "error": "No settings provided."}
+
+        col = db.get_collection("platform_settings")
+        col.update_one(
+            {"_id": "global"},
+            {"$set": {**updates, "updated_at": datetime.utcnow()}},
+            upsert=True
+        )
+        return {"success": True, "message": "Settings saved successfully."}
+    except Exception as e:
+        logger.error(f"Error saving platform settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/public/maintenance", tags=["Public"])
+async def get_maintenance_status():
+    """Public endpoint: returns maintenance mode status. No auth required."""
+    try:
+        col = db.get_collection("platform_settings")
+        doc = col.find_one({"_id": "global"})
+        maintenance = doc.get("maintenanceMode", False) if doc else False
+        platform_name = doc.get("platformName", "NCERT Learning Platform") if doc else "NCERT Learning Platform"
+        return {"maintenance_mode": maintenance, "platform_name": platform_name}
+    except Exception as e:
+        logger.error(f"Error fetching maintenance status: {e}")
+        return {"maintenance_mode": False, "platform_name": "NCERT Learning Platform"}

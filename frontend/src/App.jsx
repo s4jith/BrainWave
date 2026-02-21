@@ -1,4 +1,5 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+﻿import React, { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import useUserStore from "./stores/userStore";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -39,18 +40,51 @@ import TeacherGroups from "./pages/TeacherGroups";
 import QuestionBank from "./pages/QuestionBank";
 import TeacherTests from "./pages/TeacherTests";
 import TeacherReports from "./pages/TeacherReports";
+import TeacherSettings from "./pages/TeacherSettings";
+import MaintenancePage from "./pages/MaintenancePage";
 import CurriculumManagement from "./pages/CurriculumManagement";
 import ForgotPassword from "./pages/ForgotPassword";
 import "./App.css";
 
+function useMaintenanceMode() {
+  const [maintenance, setMaintenance] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/public/maintenance`);
+        if (res.ok) {
+          const data = await res.json();
+          setMaintenance(data.maintenance_mode === true);
+        }
+      } catch {}
+      setChecked(true);
+    };
+    check();
+    // Re-check every 60 seconds
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { maintenance, checked };
+}
+
 function ProtectedRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
+  const { maintenance, checked } = useMaintenanceMode();
 
   console.log("ProtectedRoute - isAuth:", isAuthenticated, "user:", user);
 
   if (!isAuthenticated) {
     console.log("Not authenticated, redirecting to /");
     return <Navigate to="/" replace />;
+  }
+
+  // Block non-admins when maintenance mode is on
+  if (checked && maintenance && user.role !== "admin") {
+    return <MaintenancePage />;
   }
 
   if (user.role === "admin") {
@@ -69,7 +103,7 @@ function ProtectedRoute({ children }) {
       "/staff-tests", "/teacher-dashboard", "/teacher-tests", "/course-builder",
       "/courses/", "/create-test",
       "/assessment-builder", "/assessments/", "/question-bank", "/teacher-groups",
-      "/teacher-reports"
+      "/teacher-reports", "/teacher-settings"
     ];
     const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
     if (!isTeacherRoute) {
@@ -147,6 +181,7 @@ function PublicRoute({ children }) {
 
 function StaffRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
+  const { maintenance, checked } = useMaintenanceMode();
 
   console.log("StaffRoute - isAuth:", isAuthenticated, "user:", user);
 
@@ -158,6 +193,11 @@ function StaffRoute({ children }) {
   if (user.role !== "admin" && user.role !== "teacher") {
     console.log("Not admin/teacher, redirecting to /dashboard");
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Block non-admins (teachers) when maintenance mode is on
+  if (checked && maintenance && user.role !== "admin") {
+    return <MaintenancePage />;
   }
 
   return children;
@@ -442,6 +482,14 @@ function App() {
           element={
             <StaffRoute>
               <TeacherReports />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/teacher-settings"
+          element={
+            <StaffRoute>
+              <TeacherSettings />
             </StaffRoute>
           }
         />

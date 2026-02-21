@@ -136,6 +136,20 @@ app.include_router(assessments.router)
 from app.routers import gradebook
 app.include_router(gradebook.router)
 
+@app.get("/api/public/maintenance", tags=["Public"])
+async def public_maintenance_alias():
+    """Alias for /api/admin/public/maintenance (backward compat)."""
+    from app.db.mongo import db
+    try:
+        col = db.get_collection("platform_settings")
+        doc = col.find_one({"_id": "global"})
+        maintenance = doc.get("maintenanceMode", False) if doc else False
+        platform_name = doc.get("platformName", "NCERT Learning Platform") if doc else "NCERT Learning Platform"
+        return {"maintenance_mode": maintenance, "platform_name": platform_name}
+    except Exception:
+        return {"maintenance_mode": False, "platform_name": "NCERT Learning Platform"}
+
+
 @app.get("/", tags=["Health Check"])
 async def root():
     """Root endpoint - API health check."""
