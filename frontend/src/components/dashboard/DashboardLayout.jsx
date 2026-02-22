@@ -23,11 +23,22 @@ import {
   Home,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Lock
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import useThemeStore from "../../stores/themeStore";
 import ChatbotPanel from "./ChatbotPanel";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// Map nav item IDs to their required feature flag
+const featureGatedItems = {
+  "ai-chat": "ai_chatbot",
+  "test-center": "test_center",
+  "grades": "my_grades",
+  "book-to-bot": "book_to_bot"
+};
 
 const navItems = [
   {
@@ -40,7 +51,7 @@ const navItems = [
     id: "ai-chat",
     label: "AI Chat Helper",
     icon: MessageSquare,
-    path: null,
+    path: "/ai-chat",
     isChat: true
   },
   {
@@ -65,8 +76,7 @@ const navItems = [
     id: "book-to-bot",
     label: "Book to Bot",
     icon: BookOpen,
-    path: "/book-to-bot",
-    badge: "PRO"
+    path: "/book-to-bot"
   },
   {
     id: "notes",
@@ -88,19 +98,44 @@ const navItems = [
   }
 ];
 
-export default function DashboardLayout({ children }) {
+export default function DashboardLayout({ children, noPadding = false, noHeader = false }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, calendar, logout } = useUserStore();
+  const { user, calendar, logout, getAuthHeader } = useUserStore();
   const { theme, setTheme, initTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatbotOpen, setChatbotOpen] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef(null);
+  const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+  const [featuresLoaded, setFeaturesLoaded] = useState(false);
 
   useEffect(() => {
     initTheme();
+    fetchFeatures();
   }, []);
+
+  const fetchFeatures = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/student/my-features`, {
+        headers: getAuthHeader()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFeatures(data.features || { ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+      }
+    } catch (err) {
+      console.error("Failed to fetch features:", err);
+    } finally {
+      setFeaturesLoaded(true);
+    }
+  };
+
+  // Mark nav items as locked based on feature flags (show all, don't filter)
+  const displayNavItems = navItems.map(item => ({
+    ...item,
+    isLocked: featureGatedItems[item.id] ? !features[featureGatedItems[item.id]] : false
+  }));
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -118,6 +153,11 @@ export default function DashboardLayout({ children }) {
   };
 
   const handleNavClick = (item) => {
+    if (item.isLocked) {
+      // Navigate to the item's page so the FeatureGatedRoute shows the lock overlay
+      if (item.path) navigate(item.path);
+      return;
+    }
     if (item.isChat) {
       setChatbotOpen(true);
     } else if (item.path) {
@@ -181,7 +221,7 @@ export default function DashboardLayout({ children }) {
 
         {}
         <nav className="flex-1 px-3 py-2 space-y-1">
-          {navItems.map((item) => {
+          {displayNavItems.map((item) => {
             const Icon = item.icon;
             const active = item.path && isActive(item.path);
             const isChatActive = item.isChat && chatbotOpen;
@@ -193,19 +233,28 @@ export default function DashboardLayout({ children }) {
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                   isChatActive || active
                     ? "bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+                    : item.isLocked
+                    ? "text-gray-400 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white"
                   }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-5 h-5 ${isChatActive || active ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`} />
+                  <Icon className={`w-5 h-5 ${isChatActive || active ? 'text-gray-900 dark:text-white' : item.isLocked ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400 dark:text-gray-500'}`} />
                   {sidebarOpen && (
                     <span className="font-medium text-sm">{item.label}</span>
                   )}
                 </div>
-                {sidebarOpen && item.badge && (
-                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
-                    {item.badge}
-                  </span>
+                {sidebarOpen && (
+                  <div className="flex items-center gap-1">
+                    {item.isLocked && (
+                      <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600" />
+                    )}
+                    {!item.isLocked && item.badge && (
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             );
@@ -306,6 +355,7 @@ export default function DashboardLayout({ children }) {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header with Theme Toggle */}
+        {!noHeader && (
         <header className="flex-shrink-0 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 flex items-center justify-between transition-colors">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -346,9 +396,10 @@ export default function DashboardLayout({ children }) {
             )}
           </div>
         </header>
+        )}
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+        <div className={noPadding ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-950 transition-colors duration-200"}>
           {children}
         </div>
       </main>

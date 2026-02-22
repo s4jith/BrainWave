@@ -94,7 +94,6 @@ export default function StudentGroups() {
 
   const tabs = [
     { id: "groups", label: "My Groups", icon: Users, count: groups.length },
-    { id: "subjects", label: "My Subjects", icon: BookOpen, count: subjects.length },
     { id: "tests", label: "Upcoming Tests", icon: FileText, count: upcomingTests.filter(t => t.status === "pending").length },
   ];
 
@@ -114,7 +113,7 @@ export default function StudentGroups() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">My Groups & Subjects</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Groups</h1>
           <p className="text-gray-500 text-sm mt-1">
             View your assigned groups, subjects, and upcoming tests
           </p>

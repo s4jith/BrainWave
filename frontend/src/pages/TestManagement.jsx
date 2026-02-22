@@ -280,12 +280,31 @@ export default function TestManagement() {
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[testStatus] || styles.closed}`}>{testStatus}</span>;
   };
 
+  const handlePublishTest = async (testId) => {
+    if (!confirm("Publish this draft test? Students will be able to see it.")) return;
+    try {
+      const response = await fetch(`${API_URL}/api/assessments/${testId}/publish`, {
+        method: "POST",
+        headers: getAuthHeader()
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Failed to publish");
+      }
+      setTests(prev => prev.map(t => t.id === testId ? { ...t, status: "published" } : t));
+      if (selectedTest?.id === testId) setSelectedTest(prev => ({ ...prev, status: "published" }));
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
   const displayedTests = filterStatus
     ? tests.filter(t => {
         const s = getTestStatus(t);
         if (filterStatus === "active") return s === "active";
         if (filterStatus === "upcoming") return s === "upcoming";
-        if (filterStatus === "closed") return s === "completed" || s === "closed" || s === "draft";
+        if (filterStatus === "closed") return s === "completed" || s === "closed";
+        if (filterStatus === "draft") return t.status === "draft";
         return true;
       })
     : tests;
@@ -340,6 +359,7 @@ export default function TestManagement() {
               <option value="active">Active</option>
               <option value="upcoming">Upcoming</option>
               <option value="closed">Completed</option>
+              <option value="draft">Draft</option>
             </select>
           </div>
           <button onClick={() => navigate("/create-test")}
@@ -381,15 +401,20 @@ export default function TestManagement() {
                     <p>Class {test.class_level} • {test.subject}</p>
                     <p>{test.submission_count} submissions</p>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex gap-2 mt-3 flex-wrap">
                     <button onClick={(e) => {
                       e.stopPropagation();
-                      console.log("Edit clicked:", test.id);
                       navigate(`/test/edit/${test.id}`);
                     }}
                       className="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 flex items-center gap-1">
                       <Edit2 className="w-3 h-3" /> Edit
                     </button>
+                    {test.status === "draft" && (
+                      <button onClick={e => { e.stopPropagation(); handlePublishTest(test.id); }}
+                        className="text-xs px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-100 dark:hover:bg-green-900/30 flex items-center gap-1">
+                        <FileText className="w-3 h-3" /> Publish
+                      </button>
+                    )}
                     <button onClick={e => { e.stopPropagation(); handleDeleteTest(test.id); }}
                       className="text-xs px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-1">
                       <Trash2 className="w-3 h-3" /> Delete

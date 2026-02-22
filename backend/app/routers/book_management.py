@@ -24,6 +24,7 @@ from bson import ObjectId
 from app.db.mongo import db
 from app.core.config import settings
 from app.services.cloudinary_service import get_cloudinary_service
+from app.services.google_drive_service import get_drive_service
 
 logger = logging.getLogger(__name__)
 

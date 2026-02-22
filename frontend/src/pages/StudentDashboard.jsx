@@ -32,13 +32,29 @@ export default function StudentDashboard() {
     const [recentGrades, setRecentGrades] = useState([]);
     const [groups, setGroups] = useState([]);
     const [subjects, setSubjects] = useState([]);
+    const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
 
     useEffect(() => {
         fetchStudentStats();
         fetchRecentGrades();
         fetchGroups();
         fetchSubjects();
+        fetchFeatures();
     }, []);
+
+    const fetchFeatures = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/student/my-features`, {
+                headers: getAuthHeader()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setFeatures(data.features || { ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+            }
+        } catch (err) {
+            console.error("Features error:", err);
+        }
+    };
 
     const fetchGroups = async () => {
         try {
@@ -113,21 +129,24 @@ export default function StudentDashboard() {
             description: "View your progress",
             icon: Award,
             color: "bg-emerald-500",
-            onClick: () => navigate("/my-grades")
+            onClick: () => navigate("/my-grades"),
+            featureKey: "my_grades"
         },
         {
             title: "Test Center",
             description: "AI & Staff tests",
             icon: CheckCircle,
             color: "bg-purple-500",
-            onClick: () => navigate("/my-tests")
+            onClick: () => navigate("/my-tests"),
+            featureKey: "test_center"
         },
         {
             title: "Book to Bot",
             description: "AI-powered learning",
             icon: BookOpen,
             color: "bg-orange-500",
-            onClick: () => navigate("/book-to-bot")
+            onClick: () => navigate("/book-to-bot"),
+            featureKey: "book_to_bot"
         },
         {
             title: "Notes",
@@ -151,6 +170,11 @@ export default function StudentDashboard() {
             onClick: () => navigate("/report-card")
         }
     ];
+
+    const visibleActions = quickActions.map(action => ({
+        ...action,
+        isLocked: action.featureKey && !features[action.featureKey]
+    }));
 
     return (
         <div className="min-h-screen text-gray-900 dark:text-white">
@@ -191,17 +215,22 @@ export default function StudentDashboard() {
                 <section className="mb-8">
                     <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {quickActions.map((action, idx) => (
+                        {visibleActions.map((action, idx) => (
                             <button
                                 key={idx}
                                 onClick={action.onClick}
-                                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all group"
+                                className={`relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 transition-all group ${action.isLocked ? 'opacity-80' : 'hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-gray-800/80'}`}
                             >
+                                {action.isLocked && (
+                                    <div className="absolute top-2 right-2 w-5 h-5 bg-gray-700 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    </div>
+                                )}
                                 <div className={`${action.color} w-10 h-10 rounded-lg flex items-center justify-center mb-3`}>
                                     <action.icon size={20} className="text-white" />
                                 </div>
                                 <h3 className="font-medium text-gray-900 dark:text-white">{action.title}</h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">{action.description}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">{action.isLocked ? 'Locked by admin' : action.description}</p>
                             </button>
                         ))}
                     </div>

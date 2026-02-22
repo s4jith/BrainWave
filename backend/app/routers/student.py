@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/student", tags=["student"])
 
+DEFAULT_FEATURE_FLAGS = {
+    "ai_chatbot": False,
+    "test_center": False,
+    "my_grades": False,
+    "book_to_bot": True,  # Unlocked by default; admin/group can lock it
+}
+
 def _get_student_id_variants(current_user: TokenData) -> list:
     """Get all possible ID formats for the current student to match against student_ids in groups."""
     ids = [current_user.user_id]
@@ -141,6 +148,64 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
         return {"tests": result, "total": len(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/my-features")
+async def get_student_features(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
+    """Get effective feature flags for the current student.
+    
+    Resolution order:
+    1. Student-level overrides (highest priority)
+    2. Group-level flags (if ANY group enables a feature, it's enabled)
+    3. Default (all locked)
+    """
+    try:
+        student_ids = _get_student_id_variants(current_user)
+        
+        # Get student's feature overrides
+        user_doc = db.users.find_one({
+            "$or": [
+                {"user_id": current_user.user_id},
+                {"email": current_user.email}
+            ]
+        })
+        student_overrides = user_doc.get("feature_overrides", {}) if user_doc else {}
+        
+        # Get all groups this student belongs to
+        groups = list(db.groups.find({"student_ids": {"$in": student_ids}}))
+        
+        # Merge group flags with direction-aware logic:
+        # - Default-False features: any group enabling it unlocks it (OR)
+        # - Default-True features (e.g. book_to_bot): any group disabling it locks it
+        group_flags = {}
+        for g in groups:
+            gf = g.get("feature_flags", {})
+            for key, default_val in DEFAULT_FEATURE_FLAGS.items():
+                if key in gf:
+                    val = gf[key]
+                    if not default_val:
+                        # Default-locked: any group enabling unlocks
+                        if val:
+                            group_flags[key] = True
+                    else:
+                        # Default-unlocked: any group disabling locks
+                        if not val:
+                            group_flags[key] = False
+        
+        # Resolve: student override > group flags > default
+        effective = {}
+        for key, default_val in DEFAULT_FEATURE_FLAGS.items():
+            if key in student_overrides:
+                effective[key] = student_overrides[key]
+            elif key in group_flags:
+                effective[key] = group_flags[key]
+            else:
+                effective[key] = default_val
+        
+        return {"features": effective}
+    except Exception as e:
+        logger.error(f"Error fetching student features: {e}")
+        return {"features": DEFAULT_FEATURE_FLAGS}
+
 
 @router.get("/my-subjects")
 async def get_student_subjects(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):

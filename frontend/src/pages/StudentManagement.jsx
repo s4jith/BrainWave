@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
+import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp, Shield } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -22,6 +22,48 @@ export default function StudentManagement() {
   const [filterClass, setFilterClass] = useState("all");
   const [saving, setSaving] = useState(false);
   const [expandedStudentGroups, setExpandedStudentGroups] = useState({});
+
+  const [showFeaturesModal, setShowFeaturesModal] = useState(false);
+  const [featuresStudent, setFeaturesStudent] = useState(null);
+  const [studentFeatures, setStudentFeatures] = useState({});
+  const [savingFeatures, setSavingFeatures] = useState(false);
+
+  const featureLabels = {
+    ai_chatbot: "AI Chatbot",
+    test_center: "Test Center",
+    my_grades: "My Grades",
+    book_to_bot: "Book to Bot"
+  };
+
+  const openFeaturesModal = (student) => {
+    setFeaturesStudent(student);
+    setStudentFeatures(student.feature_overrides || {});
+    setShowFeaturesModal(true);
+  };
+
+  const handleToggleStudentFeature = async (key, value) => {
+    setStudentFeatures(prev => ({ ...prev, [key]: value }));
+    
+    try {
+      const response = await fetch(`${API_URL}/api/admin/students/${featuresStudent.id}/features`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ [key]: value })
+      });
+      if (!response.ok) throw new Error("Failed to update feature");
+      
+      // Update local state
+      setStudents(prev => prev.map(s => 
+        s.id === featuresStudent.id 
+          ? { ...s, feature_overrides: { ...s.feature_overrides, [key]: value } }
+          : s
+      ));
+    } catch (err) {
+      // Revert
+      setStudentFeatures(prev => ({ ...prev, [key]: !value }));
+      alert("Error: " + err.message);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: "",
@@ -398,6 +440,12 @@ export default function StudentManagement() {
                           <Edit className="w-3.5 h-3.5" /> Edit
                         </button>
                         <button
+                          onClick={() => openFeaturesModal(student)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition"
+                        >
+                          <Shield className="w-3.5 h-3.5" /> Features
+                        </button>
+                        <button
                           onClick={() => handleDeleteStudent(student.id)}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
                         >
@@ -621,6 +669,62 @@ export default function StudentManagement() {
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+      {/* Features Modal */}
+      {showFeaturesModal && featuresStudent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Feature Access</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{featuresStudent.name}</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+              Student-level overrides take priority over group settings. Toggle features on/off for this individual student.
+            </p>
+            <div className="space-y-3">
+              {Object.entries(featureLabels).map(([key, label]) => {
+                const value = studentFeatures[key];
+                const isSet = value !== undefined && value !== null;
+                const enabled = value === true;
+                return (
+                  <div key={key} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white text-sm">{label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {!isSet ? "Using group default" : enabled ? "Enabled (override)" : "Locked (override)"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleToggleStudentFeature(key, !enabled)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          enabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          enabled ? "translate-x-6" : "translate-x-1"
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-3 pt-5">
+              <button
+                onClick={() => { setShowFeaturesModal(false); setFeaturesStudent(null); }}
+                className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 font-medium transition"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

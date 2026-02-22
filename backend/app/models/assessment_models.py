@@ -105,19 +105,29 @@ class AssessmentCreateRequest(BaseModel):
     questions: Optional[List[dict]] = Field(default_factory=list)
     created_by: Optional[str] = None
     evaluation_type: Optional[str] = Field(default="manual", description="'ai' for AI evaluation, 'manual' for teacher grading")
+    status: Optional[AssessmentStatus] = None
 
 class AssessmentUpdateRequest(BaseModel):
     """Request to update an assessment."""
     title: Optional[str] = None
     description: Optional[str] = None
+    subject: Optional[str] = None
+    class_level: Optional[int] = None
     type: Optional[AssessmentType] = None
     settings: Optional[AssessmentSettings] = None
     due_date: Optional[datetime] = None
     available_from: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    num_attempts: Optional[int] = None
+    show_results_immediately: Optional[bool] = None
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
     status: Optional[AssessmentStatus] = None
     questions: Optional[List[dict]] = None
     student_ids: Optional[List[str]] = None
     group_ids: Optional[List[str]] = None
+    evaluation_type: Optional[str] = None
+    created_by: Optional[str] = None
 
 class QuestionCreateRequest(BaseModel):
     """Request to add a question."""

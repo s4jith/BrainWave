@@ -46,13 +46,12 @@ export default function TopicSelector({
     mcq: 5,
     fillup: 5,
     short: 5,
-    long: 2,
     timer: false,
     timeLimit: 40
   });
 
-  const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.short || 0) + (testConfig.long || 0);
-  const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.short || 0) * 2 + (testConfig.long || 0) * 5;
+  const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.short || 0);
+  const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.short || 0) * 2;
 
   useEffect(() => {
     fetchSubjects();
@@ -116,14 +115,11 @@ export default function TopicSelector({
       const maxMcq = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
       const maxFill = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
       const maxShort = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
-      const maxLong = selectedChapter[`long_answer${diffSuffix}`] || selectedChapter.long_answer_count || 0;
-
       setTestConfig(prev => ({
         ...prev,
         mcq: Math.min(5, maxMcq),
         fillup: Math.min(5, maxFill),
-        short: Math.min(5, maxShort),
-        long: Math.min(2, maxLong)
+        short: Math.min(5, maxShort)
       }));
     }
 
@@ -142,7 +138,7 @@ export default function TopicSelector({
       mcq_count: testConfig.mcq,
       fillup_count: testConfig.fillup,
       short_answer_count: testConfig.short,
-      long_answer_count: testConfig.long,
+      long_answer_count: 0,
 
       total_marks: totalMarks,
       time_limit_minutes: testConfig.timer ? testConfig.timeLimit : null,
@@ -159,7 +155,6 @@ export default function TopicSelector({
       if (type === 'mcq') max = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
       if (type === 'fillup') max = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
       if (type === 'short') max = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
-      if (type === 'long') max = selectedChapter[`long_answer${diffSuffix}`] || selectedChapter.long_answer_count || 0;
     }
 
     const newValue = Math.max(0, Math.min(value, max));
@@ -466,7 +461,6 @@ export default function TopicSelector({
                         <span>MCQ: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}</span>
                         <span>Fill: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}</span>
                         <span>Short: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}</span>
-                        <span>Long: {selectedChapter[`long_answer_${selectedDifficulty}`] || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -575,39 +569,6 @@ export default function TopicSelector({
                       </div>
                     </div>
 
-                    {/* Long Answer Config */}
-                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="w-5 h-5 text-blue-600" />
-                          <div>
-                            <h4 className="font-medium text-gray-700">Long Answer</h4>
-                            <p className="text-xs text-gray-400">5 marks each</p>
-                          </div>
-                        </div>
-                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
-                          Max: {selectedChapter[`long_answer_${selectedDifficulty}`] || 0}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => handleConfigChange('long', (testConfig.long || 0) - 1)}
-                          disabled={(testConfig.long || 0) <= 0}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </Button>
-                        <span className="text-xl font-bold w-12 text-center">{testConfig.long || 0}</span>
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => handleConfigChange('long', (testConfig.long || 0) + 1)}
-                          disabled={(testConfig.long || 0) >= (selectedChapter[`long_answer_${selectedDifficulty}`] || 0)}
-                          title={(testConfig.long || 0) >= (selectedChapter[`long_answer_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
                   </div>
 
                   {}

@@ -48,7 +48,8 @@ const quickActions = [
     color: "bg-orange-600",
     bgColor: "bg-orange-50",
     textColor: "text-orange-600",
-    route: "/my-tests"
+    route: "/my-tests",
+    featureKey: "test_center"
   },
   {
     id: 2,
@@ -58,7 +59,8 @@ const quickActions = [
     color: "bg-orange-500",
     bgColor: "bg-orange-50",
     textColor: "text-orange-600",
-    route: "/book-to-bot"
+    route: "/book-to-bot",
+    featureKey: "book_to_bot"
   },
   {
     id: 3,
@@ -78,7 +80,8 @@ const quickActions = [
     color: "bg-orange-500",
     bgColor: "bg-orange-50",
     textColor: "text-orange-600",
-    route: "/book-to-bot"
+    route: "/book-to-bot",
+    featureKey: "book_to_bot"
   },
 ];
 
@@ -90,7 +93,7 @@ const statsData = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, calendar } = useUserStore();
+  const { user, calendar, getAuthHeader } = useUserStore();
   const { getRecentNotes } = useNotesStore();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -103,6 +106,7 @@ export default function Dashboard() {
   const [activityData, setActivityData] = useState([]);
   const [dynamicCourses, setDynamicCourses] = useState([]);
   const [loadingProgress, setLoadingProgress] = useState(true);
+  const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
 
   const getDailyQuote = () => {
     
@@ -132,7 +136,22 @@ export default function Dashboard() {
     fetchProgressData();
     fetchAvailableSubjects();
     logUserActivity();
+    fetchFeatures();
   }, [user.id]);
+
+  const fetchFeatures = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/student/my-features`, {
+        headers: getAuthHeader()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFeatures(data.features || { ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+      }
+    } catch (err) {
+      console.error("Failed to fetch features:", err);
+    }
+  };
 
   const fetchProgressData = async () => {
     try {
@@ -372,22 +391,37 @@ export default function Dashboard() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {quickActions.map(item => (
+                {quickActions.map(item => {
+                  const isLocked = item.featureKey && !features[item.featureKey];
+                  return (
                   <div
                     key={item.id}
                     onClick={() => navigate(item.route)}
-                    className="bg-white rounded-2xl p-6 border border-gray-100 cursor-pointer hover:shadow-lg hover:border-gray-200 group"
+                    className={`relative bg-white rounded-2xl p-6 border cursor-pointer hover:shadow-lg group transition-all ${isLocked ? 'border-gray-100 opacity-80' : 'border-gray-100 hover:border-gray-200'}`}
                   >
+                    {isLocked && (
+                      <div className="absolute top-3 right-3 w-6 h-6 bg-gray-800/80 rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      </div>
+                    )}
                     <div className={`w-14 h-14 ${item.bgColor} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110`}>
                       <item.icon className={`w-7 h-7 ${item.textColor}`} />
                     </div>
                     <h4 className="font-semibold text-gray-800 text-lg mb-2">{item.title}</h4>
                     <p className="text-sm text-gray-500 mb-4">{item.description}</p>
-                    <div className={`inline-flex items-center gap-2 px-4 py-2 ${item.color} text-white rounded-full text-sm font-medium`}>
-                      Go to {item.title} <ArrowRight className="w-4 h-4" />
-                    </div>
+                    {isLocked ? (
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-500 rounded-full text-sm font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Locked by Admin
+                      </div>
+                    ) : (
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 ${item.color} text-white rounded-full text-sm font-medium`}>
+                        Go to {item.title} <ArrowRight className="w-4 h-4" />
+                      </div>
+                    )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             </div>
 

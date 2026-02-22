@@ -25,11 +25,9 @@ import classesData from '../data/classes.json';
 
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
-  { id: 'academics', label: 'Academics', icon: GraduationCap },
   { id: 'avatar', label: 'Avatar', icon: Palette },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'security', label: 'Security', icon: Lock },
-  { id: 'privacy', label: 'Privacy', icon: Shield },
 ];
 
 const AVATAR_STYLES = [
@@ -53,11 +51,10 @@ export default function Settings() {
     user,
     academics,
     calendar,
-    privacySettings,
     updateProfile,
     updateAcademics,
     updateCalendar,
-    updatePrivacySettings
+    getAuthHeader
   } = useUserStore();
 
   const [activeTab, setActiveTab] = useState('profile');
@@ -66,7 +63,6 @@ export default function Settings() {
   const [profileData, setProfileData] = useState({
     name: user.name || '',
     classLevel: user.classLevel || 6,
-    username: user.username || '',
   });
 
   const [subjects, setSubjects] = useState(academics.subjects || []);
@@ -82,8 +78,6 @@ export default function Settings() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [newExam, setNewExam] = useState({ subject: '', date: '' });
 
-  const [privacy, setPrivacy] = useState(privacySettings);
-
   const [oldPassword, setOldPassword] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
@@ -92,6 +86,11 @@ export default function Settings() {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
+
+  const [newUserId, setNewUserId] = useState('');
+  const [userIdLoading, setUserIdLoading] = useState(false);
+  const [userIdError, setUserIdError] = useState('');
+  const [userIdSuccess, setUserIdSuccess] = useState('');
 
   const showSaveMessage = (message) => {
     setSaveMessage(message);
@@ -138,7 +137,6 @@ export default function Settings() {
     updateProfile({
       name: profileData.name,
       classLevel: profileData.classLevel,
-      username: profileData.username,
     });
     showSaveMessage('Profile saved!');
   };
@@ -191,13 +189,6 @@ export default function Settings() {
     showSaveMessage('Exam removed!');
   };
 
-  const togglePrivacy = (key) => {
-    const updated = { ...privacy, [key]: !privacy[key] };
-    setPrivacy(updated);
-    updatePrivacySettings(updated);
-    showSaveMessage('Privacy setting updated!');
-  };
-
   const handleChangePassword = async () => {
     setPwdError('');
     setPwdSuccess('');
@@ -224,6 +215,33 @@ export default function Settings() {
     setPwdLoading(false);
   };
 
+  const handleChangeUserId = async () => {
+    setUserIdError('');
+    setUserIdSuccess('');
+    const trimmed = newUserId.trim();
+    if (!trimmed) { setUserIdError('Please enter a new User ID.'); return; }
+    if (trimmed === user.user_id) { setUserIdError('New User ID is the same as current.'); return; }
+    setUserIdLoading(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ new_user_id: trimmed })
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateProfile({ user_id: trimmed });
+        setUserIdSuccess('User ID updated successfully!');
+        setNewUserId('');
+      } else {
+        setUserIdError(data.error || 'Failed to update User ID.');
+      }
+    } catch {
+      setUserIdError('Network error. Please try again.');
+    }
+    setUserIdLoading(false);
+  };
+
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
   const calendarDays = [];
@@ -246,23 +264,6 @@ export default function Settings() {
                 placeholder="Enter your name"
                 className="h-12"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username
-              </label>
-              <Input
-                type="text"
-                value={profileData.username}
-                onChange={(e) => setProfileData({
-                  ...profileData,
-                  username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
-                })}
-                placeholder="your_username"
-                className="h-12"
-              />
-              <p className="text-xs text-gray-500 mt-1">Letters, numbers, and underscores only</p>
             </div>
 
             <div>
@@ -729,74 +730,36 @@ export default function Settings() {
               {pwdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
               {pwdLoading ? 'Changing...' : 'Change Password'}
             </Button>
-          </div>
-        );
 
-      case 'privacy':
-        return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-500 mb-6">
-              Control your privacy preferences and data sharing settings.
-            </p>
-
-            {/* Privacy Toggle Items */}
-            <div className="space-y-3">
-              <div
-                onClick={() => togglePrivacy('showProfileToOthers')}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <div>
-                  <p className="font-medium text-gray-800">Show Profile to Others</p>
-                  <p className="text-sm text-gray-500">Allow other students to view your profile</p>
-                </div>
-                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.showProfileToOthers ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.showProfileToOthers ? 'translate-x-6' : 'translate-x-1'}`} />
-                </div>
+            {/* User ID Section */}
+            <div className="border-t border-gray-200 pt-6 space-y-4">
+              <p className="text-sm text-gray-500">
+                Change your login User ID. The new ID must be unique across all students.
+              </p>
+              <p className="text-sm text-gray-500">
+                Current ID: <span className="font-medium text-gray-800">{user.user_id}</span>
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">New User ID</label>
+                <input
+                  type="text"
+                  value={newUserId}
+                  onChange={(e) => setNewUserId(e.target.value)}
+                  placeholder="Enter new user ID"
+                  className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+                />
               </div>
-
-              <div
-                onClick={() => togglePrivacy('allowNotifications')}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              {userIdError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{userIdError}</p>}
+              {userIdSuccess && <p className="text-green-600 text-sm text-center bg-green-50 p-2 rounded-lg">{userIdSuccess}</p>}
+              <Button
+                onClick={handleChangeUserId}
+                disabled={userIdLoading}
+                className="w-full h-12"
               >
-                <div>
-                  <p className="font-medium text-gray-800">Allow Notifications</p>
-                  <p className="text-sm text-gray-500">Receive updates about your learning progress</p>
-                </div>
-                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.allowNotifications ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.allowNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
-                </div>
-              </div>
-
-              <div
-                onClick={() => togglePrivacy('shareProgressWithTeacher')}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <div>
-                  <p className="font-medium text-gray-800">Share Progress with Teacher</p>
-                  <p className="text-sm text-gray-500">Let your teacher track your learning progress</p>
-                </div>
-                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.shareProgressWithTeacher ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.shareProgressWithTeacher ? 'translate-x-6' : 'translate-x-1'}`} />
-                </div>
-              </div>
-
-              <div
-                onClick={() => togglePrivacy('dataCollectionConsent')}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <div>
-                  <p className="font-medium text-gray-800">Anonymous Data Collection</p>
-                  <p className="text-sm text-gray-500">Help improve the app with anonymous usage data</p>
-                </div>
-                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.dataCollectionConsent ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.dataCollectionConsent ? 'translate-x-6' : 'translate-x-1'}`} />
-                </div>
-              </div>
+                {userIdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <User className="w-4 h-4 mr-2" />}
+                {userIdLoading ? 'Updating...' : 'Update User ID'}
+              </Button>
             </div>
-
-            <p className="text-xs text-gray-400 mt-6">
-              Your privacy settings are automatically saved. Changes take effect immediately.
-            </p>
           </div>
         );
 

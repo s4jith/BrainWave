@@ -55,7 +55,7 @@ class AssessmentService:
         """Create a new assessment."""
         try:
             questions_list = request.questions or []
-            status = AssessmentStatus.PUBLISHED.value
+            status = request.status.value if request.status else AssessmentStatus.DRAFT.value
             
             doc = {
                 "course_id": request.course_id or "",
@@ -89,7 +89,8 @@ class AssessmentService:
             
             logger.info(f"Assessment created: {doc['title']} with status: {status}")
             
-            await self._notify_users(doc)
+            if status == AssessmentStatus.PUBLISHED.value:
+                await self._notify_users(doc)
             
             await self._save_new_questions_to_bank(
                 questions_list, 
@@ -489,14 +490,27 @@ class AssessmentService:
                 update_data["available_from"] = request.available_from
             if request.status:
                 update_data["status"] = request.status.value
+            if request.subject is not None:
+                update_data["subject"] = request.subject
+            if request.class_level is not None:
+                update_data["class_level"] = request.class_level
+            if request.duration_minutes is not None:
+                update_data["duration_minutes"] = request.duration_minutes
+            if request.num_attempts is not None:
+                update_data["num_attempts"] = request.num_attempts
+            if request.show_results_immediately is not None:
+                update_data["show_results_immediately"] = request.show_results_immediately
+            if request.start_datetime is not None:
+                update_data["start_datetime"] = request.start_datetime
+            if request.end_datetime is not None:
+                update_data["end_datetime"] = request.end_datetime
+            if request.evaluation_type is not None:
+                update_data["evaluation_type"] = request.evaluation_type
             
             if request.questions is not None:
                 questions = [self._transform_question(q) for q in request.questions]
                 update_data["questions"] = questions
                 update_data["total_points"] = sum(q.get("points", 1) for q in questions)
-                if existing.get("status") == AssessmentStatus.DRAFT.value and len(questions) > 0:
-                    update_data["status"] = AssessmentStatus.PUBLISHED.value
-                    logger.info(f"Auto-publishing assessment {assessment_id} after adding questions")
             
             if request.student_ids is not None:
                 update_data["student_ids"] = request.student_ids

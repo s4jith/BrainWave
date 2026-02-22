@@ -14,7 +14,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function BookToBot() {
   const navigate = useNavigate();
-  const { user, setPreferredSubject } = useUserStore();
+  const { user, setPreferredSubject, getAuthHeader } = useUserStore();
 
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [lessons, setLessons] = useState([]);
@@ -25,11 +25,21 @@ function BookToBot() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatbotOpen, setChatbotOpen] = useState(false);
+  const [aiChatUnlocked, setAiChatUnlocked] = useState(false);
 
   const hasAISupport = currentLesson?.has_ai_support || SUBJECTS_WITH_RAG.includes(user.preferredSubject);
 
   useEffect(() => {
     fetchAvailableSubjects();
+    // Check ai_chatbot feature flag to gate the AI Chat button
+    if (user?.role === "student") {
+      fetch(`${API_BASE}/api/student/my-features`, { headers: getAuthHeader() })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setAiChatUnlocked(data.features?.ai_chatbot === true); })
+        .catch(() => {});
+    } else {
+      setAiChatUnlocked(true); // teachers/admins always have access
+    }
   }, [user.classLevel]);
 
   useEffect(() => {
@@ -120,7 +130,7 @@ function BookToBot() {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
+    <div className="flex h-full w-full overflow-hidden bg-background">
       {}
       <div
         className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
@@ -226,16 +236,29 @@ function BookToBot() {
               <p className="text-xs font-medium">{user.preferredSubject}</p>
             </div>
 
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setChatbotOpen(true)}
-              className="bg-primary hover:bg-primary/90"
-              disabled={!hasAISupport}
-            >
-              <MessageCircle className="h-4 w-4 mr-2" />
-              AI Chat
-            </Button>
+            {aiChatUnlocked ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setChatbotOpen(true)}
+                className="bg-primary hover:bg-primary/90"
+                disabled={!hasAISupport}
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                AI Chat
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="opacity-50 cursor-not-allowed"
+                title="AI Chat is locked for your account"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                AI Chat
+              </Button>
+            )}
 
             <Button
               variant="outline"
@@ -275,7 +298,7 @@ function BookToBot() {
       />
 
       <ChatbotPanel
-        isOpen={chatbotOpen}
+        isOpen={chatbotOpen && aiChatUnlocked}
         onClose={() => setChatbotOpen(false)}
       />
     </div>

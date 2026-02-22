@@ -110,7 +110,8 @@ def serialize_student(student: dict) -> dict:
         "created_at": student.get("created_at", datetime.utcnow()).isoformat() if student.get("created_at") else None,
         "last_login": student.get("last_login").isoformat() if student.get("last_login") else None,
         "tests_completed": student.get("tests_completed", 0),
-        "avg_score": student.get("avg_score", 0.0)
+        "avg_score": student.get("avg_score", 0.0),
+        "feature_overrides": student.get("feature_overrides", {})
     }
 
 @router.get("/dashboard-stats")
@@ -1106,6 +1107,7 @@ async def get_groups():
                 "student_ids": g.get("student_ids", []),
                 "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
                 "student_count": len(g.get("student_ids", [])),
+                "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True}, **g.get("feature_flags", {})},
                 "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
             })
         
@@ -1276,6 +1278,78 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
         raise
     except Exception as e:
         logger.error(f"Error updating group students: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Feature Flags ──────────────────────────────────────────────────────────────
+
+DEFAULT_FEATURE_FLAGS = {
+    "ai_chatbot": False,
+    "test_center": False,
+    "my_grades": False,
+    "book_to_bot": True,  # Unlocked by default; admin/group can lock it
+}
+
+class FeatureFlagsUpdate(BaseModel):
+    ai_chatbot: Optional[bool] = None
+    test_center: Optional[bool] = None
+    my_grades: Optional[bool] = None
+    book_to_bot: Optional[bool] = None
+
+
+@router.patch("/groups/{group_id}/features")
+async def update_group_features(group_id: str, flags: FeatureFlagsUpdate):
+    """Update feature flags for a group. All students in this group inherit these unless overridden."""
+    try:
+        if not ObjectId.is_valid(group_id):
+            raise HTTPException(status_code=400, detail="Invalid group ID")
+        
+        updates = {f"feature_flags.{k}": v for k, v in flags.dict().items() if v is not None}
+        if not updates:
+            raise HTTPException(status_code=400, detail="No feature flags provided")
+        
+        result = db.groups.find_one_and_update(
+            {"_id": ObjectId(group_id)},
+            {"$set": {**updates, "updated_at": datetime.utcnow()}},
+            return_document=True
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Group not found")
+        
+        feature_flags = {**DEFAULT_FEATURE_FLAGS, **result.get("feature_flags", {})}
+        return {"success": True, "feature_flags": feature_flags}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating group features: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/students/{student_id}/features")
+async def update_student_features(student_id: str, flags: FeatureFlagsUpdate):
+    """Update feature overrides for an individual student. These take priority over group flags."""
+    try:
+        if not ObjectId.is_valid(student_id):
+            raise HTTPException(status_code=400, detail="Invalid student ID")
+        
+        updates = {f"feature_overrides.{k}": v for k, v in flags.dict().items() if v is not None}
+        if not updates:
+            raise HTTPException(status_code=400, detail="No feature flags provided")
+        
+        result = db.users.find_one_and_update(
+            {"_id": ObjectId(student_id), "role": "student"},
+            {"$set": {**updates, "updated_at": datetime.utcnow()}},
+            return_document=True
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        feature_overrides = result.get("feature_overrides", {})
+        return {"success": True, "feature_overrides": feature_overrides}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating student features: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

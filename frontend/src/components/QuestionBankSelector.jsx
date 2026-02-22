@@ -4,7 +4,7 @@ import useUserStore from "../stores/userStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
+const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultClass = "", defaultSubject = "" }) => {
     const [questions, setQuestions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState(preSelectedIds);
@@ -13,8 +13,8 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
 
     const [filters, setFilters] = useState({
-        subject: "",
-        class_level: "",
+        subject: defaultSubject || "",
+        class_level: defaultClass ? String(defaultClass) : "",
         type: "",
         difficulty: "",
         search: ""
@@ -113,26 +113,40 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [] }) => {
                             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
-                    <select
-                        className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
-                        value={filters.subject}
-                        onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-                    >
-                        <option value="">Subject</option>
-                        {loadingCurriculum ? (
-                            <option disabled>Loading...</option>
-                        ) : (
-                            subjectNames.map(s => <option key={s} value={s}>{s}</option>)
-                        )}
-                    </select>
-                    <select
-                        className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
-                        value={filters.class_level}
-                        onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
-                    >
-                        <option value="">Class</option>
-                        {classLevels.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    {defaultSubject ? (
+                        <div className="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white flex items-center gap-1">
+                            <span className="text-gray-400 text-xs">Subject:</span>
+                            <span className="font-medium">{defaultSubject}</span>
+                        </div>
+                    ) : (
+                        <select
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
+                            value={filters.subject}
+                            onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
+                        >
+                            <option value="">Subject</option>
+                            {loadingCurriculum ? (
+                                <option disabled>Loading...</option>
+                            ) : (
+                                subjectNames.map(s => <option key={s} value={s}>{s}</option>)
+                            )}
+                        </select>
+                    )}
+                    {defaultClass ? (
+                        <div className="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white flex items-center gap-1">
+                            <span className="text-gray-400 text-xs">Class:</span>
+                            <span className="font-medium">{defaultClass}</span>
+                        </div>
+                    ) : (
+                        <select
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
+                            value={filters.class_level}
+                            onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
+                        >
+                            <option value="">Class</option>
+                            {classLevels.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    )}
                     <select
                         className="bg-gray-800 border border-gray-700 rounded px-2 py-2 text-sm text-gray-300"
                         value={filters.type}

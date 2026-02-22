@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen } from "lucide-react";
+import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen, Shield } from "lucide-react";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -32,6 +32,55 @@ export default function GroupManagement() {
     const [studentClassFilter, setStudentClassFilter] = useState("");
 
     const [teacherSearchTerm, setTeacherSearchTerm] = useState("");
+
+    const [savingFeatures, setSavingFeatures] = useState(false);
+
+    const featureLabels = {
+        ai_chatbot: "AI Chatbot",
+        test_center: "Test Center",
+        my_grades: "My Grades",
+        book_to_bot: "Book to Bot"
+    };
+
+    const handleToggleGroupFeature = async (groupId, featureKey, newValue) => {
+        // Optimistic update
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                return { ...g, feature_flags: { ...g.feature_flags, [featureKey]: newValue } };
+            }
+            return g;
+        }));
+        if (selectedGroup?.id === groupId) {
+            setSelectedGroup(prev => ({
+                ...prev,
+                feature_flags: { ...prev.feature_flags, [featureKey]: newValue }
+            }));
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/admin/groups/${groupId}/features`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                body: JSON.stringify({ [featureKey]: newValue })
+            });
+            if (!response.ok) throw new Error("Failed to update feature");
+        } catch (err) {
+            // Revert on error
+            setGroups(prev => prev.map(g => {
+                if (g.id === groupId) {
+                    return { ...g, feature_flags: { ...g.feature_flags, [featureKey]: !newValue } };
+                }
+                return g;
+            }));
+            if (selectedGroup?.id === groupId) {
+                setSelectedGroup(prev => ({
+                    ...prev,
+                    feature_flags: { ...prev.feature_flags, [featureKey]: !newValue }
+                }));
+            }
+            alert("Error: " + err.message);
+        }
+    };
 
     const [groupForm, setGroupForm] = useState({
         teacher_ids: [],
@@ -409,6 +458,36 @@ export default function GroupManagement() {
                                 >
                                     <UserPlus className="w-4 h-4" /> Add Students
                                 </button>
+                            </div>
+
+                            {/* Feature Access */}
+                            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Shield className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-sm">Feature Access</h3>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">(applies to all students in this group)</span>
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                    {Object.entries(featureLabels).map(([key, label]) => {
+                                        const enabled = selectedGroup.feature_flags?.[key] || false;
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => handleToggleGroupFeature(selectedGroup.id, key, !enabled)}
+                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition ${
+                                                    enabled
+                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                                                        : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600"
+                                                }`}
+                                            >
+                                                <div className={`w-8 h-4 rounded-full relative transition-colors ${enabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}>
+                                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                                                </div>
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             <h3 className="font-medium text-gray-900 dark:text-white mb-4">Students ({selectedGroup.students?.length || 0})</h3>

@@ -44,6 +44,8 @@ export default function CreateTest() {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [mainFormCurriculumSubjects, setMainFormCurriculumSubjects] = useState([]); 
   const [loadingMainFormCurriculum, setLoadingMainFormCurriculum] = useState(true);
 
@@ -112,6 +114,43 @@ export default function CreateTest() {
     
     return Array.from(studentMap.values());
   }, [groupStudents, students]);
+
+  // Students not in any group (ungrouped)
+  const ungroupedStudents = React.useMemo(() => {
+    const groupedIds = new Set(groupStudents.map(s => s.id));
+    return students.filter(s => !groupedIds.has(s.id));
+  }, [groupStudents, students]);
+
+  // Search-filtered versions
+  const searchFilteredGroups = React.useMemo(() => {
+    if (!groupSearch.trim()) return filteredGroups;
+    const q = groupSearch.toLowerCase();
+    return filteredGroups.filter(g =>
+      g.name?.toLowerCase().includes(q) ||
+      g.subject?.toLowerCase().includes(q) ||
+      g.teacher_name?.toLowerCase().includes(q)
+    );
+  }, [filteredGroups, groupSearch]);
+
+  const searchFilteredGroupStudents = React.useMemo(() => {
+    if (!studentSearch.trim()) return groupStudents;
+    const q = studentSearch.toLowerCase();
+    return groupStudents.filter(s =>
+      s.name?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q) ||
+      s.user_id?.toLowerCase().includes(q)
+    );
+  }, [groupStudents, studentSearch]);
+
+  const searchFilteredUngroupedStudents = React.useMemo(() => {
+    if (!studentSearch.trim()) return ungroupedStudents;
+    const q = studentSearch.toLowerCase();
+    return ungroupedStudents.filter(s =>
+      s.name?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q) ||
+      s.user_id?.toLowerCase().includes(q)
+    );
+  }, [ungroupedStudents, studentSearch]);
 
   const [questions, setQuestions] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -450,14 +489,62 @@ export default function CreateTest() {
   };
 
   const handleSaveDraft = async () => {
+    if (!formData.title.trim()) {
+      setError("Please enter a test title before saving as draft");
+      return;
+    }
     setSaving(true);
+    setError(null);
     try {
-      
-      await new Promise(r => setTimeout(r, 500));
-      setSuccess("Draft saved successfully!");
-      setTimeout(() => setSuccess(null), 3000);
+      const startDateTime = formData.startDate && formData.startTime
+        ? `${formData.startDate}T${formData.startTime}:00`
+        : null;
+      const endDateTime = formData.endDate && formData.endTime
+        ? `${formData.endDate}T${formData.endTime}:00`
+        : null;
+
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        subject: formData.subject,
+        class_level: formData.class_level,
+        duration_minutes: formData.duration_minutes,
+        num_attempts: formData.num_attempts,
+        show_results_immediately: formData.show_results,
+        start_datetime: startDateTime,
+        end_datetime: endDateTime,
+        student_ids: selectedStudents,
+        group_ids: selectedGroups,
+        questions: questions,
+        created_by: user?.user_id || "admin",
+        evaluation_type: formData.evaluation_type,
+        status: "draft"
+      };
+
+      const url = isEditMode
+        ? `${API_URL}/api/assessments/${testId}`
+        : `${API_URL}/api/assessments`;
+      const method = isEditMode ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        const detail = err.detail;
+        const msg = typeof detail === "string" ? detail
+          : Array.isArray(detail) ? detail.map(e => e.msg || JSON.stringify(e)).join(", ")
+            : "Failed to save draft";
+        throw new Error(msg);
+      }
+
+      setSuccess("Draft saved! You can find and publish it from Test Management.");
+      setTimeout(() => navigate("/test-management"), 2000);
     } catch (err) {
-      setError("Failed to save draft");
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -503,7 +590,8 @@ export default function CreateTest() {
         group_ids: selectedGroups, 
         questions: questions,
         created_by: user?.user_id || "admin",
-        evaluation_type: formData.evaluation_type
+        evaluation_type: formData.evaluation_type,
+        status: "published"
       };
 
       const url = isEditMode
@@ -558,6 +646,71 @@ export default function CreateTest() {
   };
 
   const isTestDetailsComplete = formData.title?.trim() && formData.subject && formData.class_level && formData.startDate;
+
+  // Date/time boundary helpers — use LOCAL date/time (not UTC)
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+  const currentTimeStr = `${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`;
+
+  // Minimum start time: only lock past times when today is selected
+  const minStartTime = formData.startDate === todayStr ? currentTimeStr : undefined;
+
+  // Minimum end date: cannot be before start date (or today if no start yet)
+  const minEndDate = formData.startDate || todayStr;
+
+  // Minimum end time: if same day as start, must be after start time
+  const minEndTime = (formData.startDate && formData.endDate && formData.startDate === formData.endDate)
+    ? formData.startTime
+    : undefined;
+
+  // Helper: push a HH:MM string forward by 1 hour
+  const pushOneHour = (timeStr) => {
+    const [h, m] = timeStr.split(':').map(Number);
+    const d = new Date(2000, 0, 1, h + 1, m);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const handleStartDateChange = (val) => {
+    const updates = { startDate: val };
+
+    // If today selected and current start time is before current time, fix it
+    let effectiveStartTime = formData.startTime;
+    if (val === todayStr && formData.startTime < currentTimeStr) {
+      updates.startTime = currentTimeStr;
+      effectiveStartTime = currentTimeStr;
+    }
+
+    // If end date is now before new start date, reset end date to match
+    if (formData.endDate && val > formData.endDate) {
+      updates.endDate = val;
+    }
+
+    // If same day and end time <= effective start time, push end time 1h forward
+    const effectiveEndDate = updates.endDate || formData.endDate;
+    if (effectiveEndDate === val && formData.endTime <= effectiveStartTime) {
+      updates.endTime = pushOneHour(effectiveStartTime);
+    }
+
+    setFormData({ ...formData, ...updates });
+  };
+
+  const handleEndDateChange = (val) => {
+    const updates = { endDate: val };
+    // If same day and end time <= start time, push end time 1h forward
+    if (val === formData.startDate && formData.endTime <= formData.startTime) {
+      updates.endTime = pushOneHour(formData.startTime);
+    }
+    setFormData({ ...formData, ...updates });
+  };
+
+  const handleStartTimeChange = (val) => {
+    const updates = { startTime: val };
+    // If same day and new start time >= end time, push end time 1h forward
+    if (formData.startDate && formData.endDate && formData.startDate === formData.endDate && val >= formData.endTime) {
+      updates.endTime = pushOneHour(val);
+    }
+    setFormData({ ...formData, ...updates });
+  };
 
   const handleSaveQuestion = () => {
     if (!questionForm.text.trim()) {
@@ -774,7 +927,8 @@ export default function CreateTest() {
                     <input
                       type="date"
                       value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      min={todayStr}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                     />
                   </div>
@@ -782,7 +936,8 @@ export default function CreateTest() {
                   <input
                     type="date"
                     value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    min={minEndDate}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
                     className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                   />
                 </div>
@@ -812,7 +967,8 @@ export default function CreateTest() {
                     <input
                       type="time"
                       value={formData.startTime}
-                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                      min={minStartTime}
+                      onChange={(e) => handleStartTimeChange(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                     />
                   </div>
@@ -825,6 +981,7 @@ export default function CreateTest() {
                       <input
                         type="time"
                         value={formData.endTime}
+                        min={minEndTime}
                         onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
                       />
@@ -920,13 +1077,24 @@ export default function CreateTest() {
                     <button onClick={clearAllGroups} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
                   </div>
                 </div>
+                {/* Group search */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search groups..."
+                    value={groupSearch}
+                    onChange={e => setGroupSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                  />
+                </div>
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
                   {loadingGroups ? (
                     <div className="p-4 text-center text-gray-500 dark:text-gray-400">Loading groups...</div>
-                  ) : filteredGroups.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">No groups found for Class {formData.class_level}{formData.subject ? ` - ${formData.subject}` : ''}</div>
+                  ) : searchFilteredGroups.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">{groupSearch ? 'No groups match your search' : `No groups found for Class ${formData.class_level}${formData.subject ? ` - ${formData.subject}` : ''}`}</div>
                   ) : (
-                    filteredGroups.map(group => (
+                    searchFilteredGroups.map(group => (
                       <label
                         key={group.id}
                         className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
@@ -957,34 +1125,80 @@ export default function CreateTest() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                    Students <span className="text-gray-400 dark:text-gray-500 font-normal">(from your groups)</span>
+                    Students
                   </h3>
                   <div className="flex gap-2">
                     <button onClick={selectAllStudents} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Select All</button>
                     <button onClick={clearAllStudents} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
                   </div>
                 </div>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
-                  {displayedStudents.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">No students found</div>
-                  ) : (
-                    displayedStudents.map(student => (
-                      <label
-                        key={student.id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedStudents.includes(student.id)}
-                          onChange={() => handleStudentToggle(student.id)}
-                          className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900 dark:text-white">{student.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{student.email}</p>
-                        </div>
-                      </label>
-                    ))
+                {/* Student search */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search students..."
+                    value={studentSearch}
+                    onChange={e => setStudentSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                  />
+                </div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-64 overflow-y-auto">
+                  {/* Group students */}
+                  {searchFilteredGroupStudents.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 sticky top-0">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From Groups</span>
+                      </div>
+                      {searchFilteredGroupStudents.map(student => (
+                        <label
+                          key={student.id}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student.id)}
+                            onChange={() => handleStudentToggle(student.id)}
+                            className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900 dark:text-white">{student.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{student.email}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </>
+                  )}
+                  {/* Ungrouped students */}
+                  {searchFilteredUngroupedStudents.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 sticky top-0">
+                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wide">Not in any group</span>
+                      </div>
+                      {searchFilteredUngroupedStudents.map(student => (
+                        <label
+                          key={student.id}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student.id)}
+                            onChange={() => handleStudentToggle(student.id)}
+                            className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900 dark:text-white">{student.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{student.email}</p>
+                          </div>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">No group</span>
+                        </label>
+                      ))}
+                    </>
+                  )}
+                  {searchFilteredGroupStudents.length === 0 && searchFilteredUngroupedStudents.length === 0 && (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                      {studentSearch ? 'No students match your search' : 'No students found'}
+                    </div>
                   )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{selectedStudents.length} students selected</p>
@@ -1352,6 +1566,8 @@ export default function CreateTest() {
           onSelect={handleAddFromBank}
           onClose={() => setShowBankSelector(false)}
           preSelectedIds={questions.filter(q => q.is_bank_question).map(q => q.id)}
+          defaultClass={formData.class_level}
+          defaultSubject={formData.subject}
         />
       )}
     </AdminLayout>
