@@ -151,7 +151,7 @@ class AdvancedPDFProcessor:
             if progress_callback:
                 progress_callback(0, result.total_pages, "Starting PDF processing...")
             
-            logger.info("🖼️ Converting PDF to images...")
+            logger.info(" Converting PDF to images...")
             images = convert_from_path(
                 pdf_path,
                 dpi=self.dpi,

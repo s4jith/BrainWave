@@ -78,7 +78,7 @@ async def chat(request: ChatRequest):
 class StudentChatRequest(BaseModel):
     """Request schema for student chatbot with Quick/DeepDive modes."""
     question: str = Field(..., description="Student's question")
-    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode: quick (exam-style) or deepdive (comprehensive)")
@@ -95,8 +95,8 @@ async def student_chatbot(request: StudentChatRequest):
     - Perfect for homework help and quick concept clarification
     
     **DEEP DIVE MODE**:
-    - Searches ALL classes from fundamentals (Class 5 or earliest) to current
-    - Example: Class 10 asking about "line" → builds from Class 5 basics to Class 10
+    - Searches ALL classes from fundamentals (Class 1 or earliest) to current
+    - Example: Class 10 asking about "line" → builds from Class 1 basics to Class 10
     - Includes web content for comprehensive background
     - Starts with "What is a line?", "Why do we need it?", builds progressively
     - Perfect for thorough understanding and exam preparation
@@ -120,7 +120,8 @@ async def student_chatbot(request: StudentChatRequest):
             
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
             
-            if not source_chunks or len(source_chunks) < 2:
+            # Don't show "no content" if we got a valid answer (e.g. identity/greeting)
+            if (not source_chunks or len(source_chunks) < 2) and not answer:
                 return ChatResponse(
                     answer="No relevant content found for this topic.",
                     used_mode="quick",
@@ -157,7 +158,7 @@ import asyncio
 class StreamingChatRequest(BaseModel):
     """Request schema for streaming student chatbot."""
     question: str = Field(..., description="Student's question")
-    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode")
@@ -193,11 +194,20 @@ async def student_chatbot_stream(request: StreamingChatRequest):
     ```
     """
     import json
+    from app.services.enhanced_rag_service import detect_identity_or_greeting
     
     async def generate_stream():
         try:
             logger.info(f"Streaming chat: Class {request.class_level}, {request.subject}")
             logger.info(f"   Question: {request.question[:100]}...")
+            
+            # Identity / greeting — respond immediately as Brainwave
+            identity_response = detect_identity_or_greeting(request.question)
+            if identity_response:
+                logger.info("Identity/greeting detected in stream — returning Brainwave response")
+                yield f"data: {json.dumps({'text': identity_response})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
+                return
             
             query_embedding = enhanced_rag_service.generate_embedding(request.question)
             
@@ -220,7 +230,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             
             if llm_chunks and llm_chunks[0]['score'] >= 0.80:
                 cached_answer = llm_chunks[0]['text']
-                logger.info(f"🎯 CACHE HIT (streaming): similarity {llm_chunks[0]['score']:.3f}")
+                logger.info(f" CACHE HIT (streaming): similarity {llm_chunks[0]['score']:.3f}")
                 
                 chunk_size = 50
                 for i in range(0, len(cached_answer), chunk_size):
@@ -240,22 +250,58 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             combined_context = "\n\n".join(context_parts)
             
             if not combined_context:
-                logger.info(f"🔄 No textbook content found - generating direct answer for valid {request.subject} question")
+                logger.info(f"No textbook content found - generating direct answer for valid {request.subject} question")
                 
                 direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
 
 STUDENT QUESTION: {request.question}
+
+**IMPORTANT CONSTRAINTS:**
+- ONLY answer if the question is related to education, academics, or school subjects.
+- If the question is NOT related to studies/education, respond with EXACTLY:
+  "I can only help with education-related questions. Please ask something related to your studies."
+- Stay strictly within the scope of {request.subject}.
+- Do NOT confuse Physics and Maths concepts.
 
 Provide a clear, educational answer appropriate for Class {request.class_level} level.
 - Start with a simple definition/explanation
 - Give 1-2 examples
 - Keep it concise but informative (200-400 words)"""
 
+                fallback_full = ""
                 for chunk in gemini_service.generate_response_streaming(direct_prompt):
+                    fallback_full += chunk
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
+                
+                # Store the Gemini fallback answer in LLM cache for reuse
+                try:
+                    if enhanced_rag_service.llm_storage._should_store_answer(fallback_full):
+                        topic = enhanced_rag_service.llm_storage._extract_topic(request.question)
+                        enhanced_rag_service.llm_storage.store_answer(
+                            question=request.question,
+                            answer=fallback_full,
+                            subject=request.subject,
+                            class_level=request.class_level,
+                            topic=topic,
+                            quality_score=0.75
+                        )
+                        logger.info(f"✓ Streaming fallback answer stored in LLM cache (topic: {topic})")
+                except Exception as store_err:
+                    logger.warning(f"Failed to store streaming fallback answer: {store_err}")
                 
                 yield f"data: {json.dumps({'done': True, 'sources': [], 'fallback': True})}\n\n"
                 return
+            
+            # Subject isolation instruction for Physics / Maths confusion prevention
+            subject_isolation = ""
+            if request.subject.lower() in ("physics", "maths", "mathematics", "science"):
+                subject_isolation = (
+                    f"\n**SUBJECT ISOLATION ({request.subject}):**\n"
+                    f"- You are answering ONLY for **{request.subject}**.\n"
+                    f"- The word 'sum' or 'problem' may appear in both Physics and Mathematics — "
+                    f"interpret it STRICTLY in the context of {request.subject}.\n"
+                    f"- Never mix Physics concepts into a Maths answer or vice-versa.\n"
+                )
             
             prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
 
@@ -274,7 +320,7 @@ RULES:
 5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
 6. Do NOT describe what the reference content contains instead of answering.
 7. Keep the answer clear for Class {request.class_level} students.
-
+{subject_isolation}
 Generate your answer:"""
             
             logger.info("📡 Starting Gemini streaming...")
@@ -316,7 +362,11 @@ Generate your answer:"""
             yield f"data: {json.dumps({'done': True, 'sources': source_texts, 'total_length': len(full_response)})}\n\n"
             
             try:
-                if enhanced_rag_service.llm_storage._should_store_answer(full_response):
+                # Don't cache "not found" responses
+                not_found_markers = ["the content is not found", "not found in the book", "not found in your textbook"]
+                is_not_found = any(m in full_response.lower() for m in not_found_markers)
+                
+                if not is_not_found and enhanced_rag_service.llm_storage._should_store_answer(full_response):
                     topic = enhanced_rag_service.llm_storage._extract_topic(request.question)
                     enhanced_rag_service.llm_storage.store_answer(
                         question=request.question,
@@ -358,14 +408,14 @@ ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
 @router.post("/image", response_model=ImageChatResponse)
 async def image_chat(
     image: UploadFile = File(..., description="Image file (jpg/png, max 5MB)"),
-    class_level: int = Form(..., ge=5, le=12, description="Class level (5-12)"),
+    class_level: int = Form(..., ge=1, le=12, description="Class level (1-12)"),
     subject: str = Form(..., description="Subject name"),
     mode: str = Form("quick", description="Chat mode: quick or deepdive"),
     chapter: int = Form(1, ge=1, description="Chapter number"),
     user_query: Optional[str] = Form(None, description="Optional user text to accompany image")
 ):
     """
-    🖼️ Image-Based Chat: Extract text from student photos → Generate RAG answer
+     Image-Based Chat: Extract text from student photos → Generate RAG answer
     
     Students can upload photos of:
     - Textbook pages
@@ -382,7 +432,7 @@ async def image_chat(
     **Supported formats:** JPEG, PNG, WebP (max 5MB)
     """
     try:
-        logger.info(f"🖼️ Image chat request: Class {class_level}, {subject}, Ch. {chapter}, Mode: {mode}, Query: {user_query}")
+        logger.info(f" Image chat request: Class {class_level}, {subject}, Ch. {chapter}, Mode: {mode}, Query: {user_query}")
         
         if image.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(
@@ -607,7 +657,7 @@ async def get_user_sessions(
                 "updated_at": s.get("updated_at", "")
             })
         
-        logger.info(f"📋 Found {len(result)} sessions for user {user_id}")
+        logger.info(f" Found {len(result)} sessions for user {user_id}")
         
         return {"sessions": result, "total": len(result)}
         
@@ -633,7 +683,7 @@ async def load_chat_session(user_id: str, session_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        logger.info(f"📂 Loaded session {session_id} for user {user_id}")
+        logger.info(f" Loaded session {session_id} for user {user_id}")
         
         return {
             "id": str(session["_id"]),
@@ -670,7 +720,7 @@ async def delete_chat_session(user_id: str, session_id: str):
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        logger.info(f"🗑️ Deleted session {session_id} for user {user_id}")
+        logger.info(f" Deleted session {session_id} for user {user_id}")
         
         return {"success": True, "message": "Session deleted"}
         

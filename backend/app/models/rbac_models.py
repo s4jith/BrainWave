@@ -144,7 +144,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Model for creating a new user."""
     password: str = Field(..., min_length=6, description="Password (min 6 chars)")
-    class_level: int | None = Field(None, ge=5, le=12, description="Class level (students)")
+    class_level: int | None = Field(None, ge=1, le=12, description="Class level (students)")
     subjects: List[str] | None = Field(None, description="Subjects taught (teachers)")
 
 class UserUpdate(BaseModel):

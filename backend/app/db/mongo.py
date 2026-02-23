@@ -398,8 +398,8 @@ class PineconeLLMDB:
             from datetime import datetime
             
             metadata = {
-                "question": question[:1000],
-                "answer": answer[:2000],
+                "question": question[:2000],
+                "answer": answer[:30000],
                 "subject": subject,
                 "topic": topic.lower(),
                 "class": str(class_level),

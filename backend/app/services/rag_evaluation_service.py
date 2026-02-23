@@ -131,7 +131,7 @@ class RAGEvaluationService:
         subjective_pairs = []
         for qa in qa_pairs:
             q_type = (qa.get("question_type") or "").lower()
-            if q_type in ("mcq", "fillup", "fill_up", "fill-up", "fill_in_the_blank"):
+            if q_type in ("mcq", "fillup", "fill_up", "fill-up", "fill_in_the_blank", "true_false"):
                 if "mcq" in q_type and not qa.get("correct_option"):
                      for opt in qa.get("options", {}).values(): 
                          pass
@@ -199,12 +199,15 @@ class RAGEvaluationService:
         
         for e in all_evaluations:
             fb = e.get("feedback", "")
+            q_num = e.get("question_number", 0)
+            q_text = (e.get("question_text") or "")[:80]
+            q_snippet = f"{q_text}..." if len(e.get("question_text", "")) > 80 else q_text
             if e.get("is_correct"):
-                if len(overall_feedback["strengths"]) < 3:
-                    overall_feedback["strengths"].append(f"Q{e.get('question_number', '?')}: {fb}")
+                if len(overall_feedback["strengths"]) < 5:
+                    overall_feedback["strengths"].append(f"Q{q_num}: {q_snippet} — {fb}")
             else:
-                if len(overall_feedback["improvements"]) < 3:
-                    overall_feedback["improvements"].append(f"Q{e.get('question_number', '?')}: {fb}")
+                if len(overall_feedback["improvements"]) < 5:
+                    overall_feedback["improvements"].append(f"Q{q_num}: {q_snippet} — {fb}")
         
         wrong_topics = list(set(e.get("topic", "") for e in all_evaluations if not e.get("is_correct") and e.get("topic")))
         if wrong_topics:
@@ -308,6 +311,7 @@ class RAGEvaluationService:
                                     break
                 
                 evaluations.append({
+                    "question_number": qa.get("question_number", 0),
                     "question_id": qa["question_id"],
                     "question_text": qa["question"],
                     "student_answer": student_answer,
@@ -317,6 +321,7 @@ class RAGEvaluationService:
                     "feedback": "Correct!" if is_correct else f"Incorrect. The correct answer is: {correct_option or expected}",
                     "correct_answer": correct_option or expected,
                     "topic": qa.get("topic", ""),
+                    "question_type": "mcq",
                     "evaluation_status": "auto_evaluated"
                 })
             
@@ -342,6 +347,7 @@ class RAGEvaluationService:
                             break
                 
                 evaluations.append({
+                    "question_number": qa.get("question_number", 0),
                     "question_id": qa["question_id"],
                     "question_text": qa["question"],
                     "student_answer": student_answer,
@@ -351,6 +357,37 @@ class RAGEvaluationService:
                     "feedback": "Correct!" if is_correct else f"Incorrect. Acceptable answer(s): {answer_source}",
                     "correct_answer": answer_source,
                     "topic": qa.get("topic", ""),
+                    "question_type": "fillup",
+                    "evaluation_status": "auto_evaluated"
+                })
+
+            elif q_type == "true_false":
+                expected = (qa.get("expected_answer") or "").strip().lower()
+                correct_option = (qa.get("correct_option") or "").strip().lower()
+
+                correct_value = correct_option or expected
+                correct_bool = correct_value in ("true", "a", "yes", "1")
+
+                student_lower = student_answer.lower().strip()
+                student_bool = student_lower in ("true", "a", "yes", "1")
+
+                is_correct = False
+                if student_lower:
+                    is_correct = (student_bool == correct_bool)
+
+                correct_display = "True" if correct_bool else "False"
+                evaluations.append({
+                    "question_number": qa.get("question_number", 0),
+                    "question_id": qa["question_id"],
+                    "question_text": qa["question"],
+                    "student_answer": student_answer,
+                    "is_correct": is_correct,
+                    "score": marks if is_correct else 0,
+                    "max_score": marks,
+                    "feedback": "Correct!" if is_correct else f"Incorrect. The correct answer is: {correct_display}",
+                    "correct_answer": correct_display,
+                    "topic": qa.get("topic", ""),
+                    "question_type": "true_false",
                     "evaluation_status": "auto_evaluated"
                 })
         

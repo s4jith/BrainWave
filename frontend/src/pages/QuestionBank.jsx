@@ -317,6 +317,7 @@ const QuestionBank = () => {
                         <option value="">All Types</option>
                         <option value="mcq">MCQ</option>
                         <option value="fillup">Fill-ups</option>
+                        <option value="true_false">True / False</option>
                         <option value="short_answer">Short Answer</option>
                         <option value="long_answer">Long Answer</option>
                     </select>
@@ -371,7 +372,18 @@ const QuestionBank = () => {
                                                 </div>
                                             )}
 
-                                            {q.type !== 'mcq' && q.correct_answer && (
+                                            {q.type === 'true_false' && (
+                                                <div className="flex gap-2 mb-3">
+                                                    <span className={`px-4 py-2 rounded-lg text-sm font-medium ${q.correct_answer === 'True' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300'}`}>
+                                                        True
+                                                    </span>
+                                                    <span className={`px-4 py-2 rounded-lg text-sm font-medium ${q.correct_answer === 'False' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300'}`}>
+                                                        False
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {q.type !== 'mcq' && q.type !== 'true_false' && q.correct_answer && (
                                                 <div className="mb-3 text-sm">
                                                     <span className="font-semibold text-gray-700 dark:text-gray-300">Answer: </span>
                                                     <span className="text-gray-600 dark:text-gray-400">{q.correct_answer}</span>

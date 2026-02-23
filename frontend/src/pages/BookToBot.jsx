@@ -6,7 +6,7 @@ import UserSettingsPanel from "../components/UserSettingsPanel";
 import ChatbotPanel from "../components/dashboard/ChatbotPanel";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { SUBJECTS_WITH_RAG } from "../constants/lessons";
-import { Menu, X, Settings, MessageCircle, AlertTriangle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
+import { Menu, X, Settings, MessageCircle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
 
@@ -31,7 +31,6 @@ function BookToBot() {
 
   useEffect(() => {
     fetchAvailableSubjects();
-    // Check ai_chatbot feature flag to gate the AI Chat button
     if (user?.role === "student") {
       fetch(`${API_BASE}/api/student/my-features`, { headers: getAuthHeader() })
         .then(r => r.ok ? r.json() : null)
@@ -75,7 +74,7 @@ function BookToBot() {
         setCurrentLesson(null);
       }
     } catch (err) {
-      console.error("Failed to fetch subjects:", err);
+
       
       setLessons([]);
       setCurrentLesson(null);
@@ -108,7 +107,7 @@ function BookToBot() {
         setCurrentLesson(null);
       }
     } catch (err) {
-      console.error("Failed to fetch lessons:", err);
+
       
       setLessons([]);
       setCurrentLesson(null);
@@ -131,13 +130,11 @@ function BookToBot() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
-      {}
       <div
         className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
           } overflow-hidden border-r`}
       >
         <div className="h-full flex flex-col">
-          {}
           <div className="p-4 border-b bg-muted/30">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -178,7 +175,6 @@ function BookToBot() {
             </p>
           </div>
 
-          {}
           {loadingLessons ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -193,10 +189,7 @@ function BookToBot() {
         </div>
       </div>
 
-      {}
       <div className="flex-1 flex flex-col">
-
-        {}
         <div className="px-6 py-4 border-b bg-card flex items-center gap-4">
           <Button
             variant="ghost"
@@ -271,7 +264,6 @@ function BookToBot() {
           </div>
         </div>
 
-        {/* PDF Viewer */}
         <div className="flex-1 overflow-hidden">
           {currentLesson ? (
             <PDFViewer

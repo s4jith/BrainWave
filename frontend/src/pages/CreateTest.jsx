@@ -3,8 +3,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { ClipboardList, Calendar, Clock, Users, CheckCircle, XCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
+import { ClipboardList, Calendar, Clock, CheckCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
 import QuestionBankSelector from "../components/QuestionBankSelector";
+import QuestionPaperSelector from "../components/QuestionPaperSelector";
 import { parseCombinedValue, parseGroupName } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -14,12 +15,9 @@ export default function CreateTest() {
   const { testId } = useParams();
   const isEditMode = !!testId;
 
-  console.log("CreateTest Debug:", { testId, isEditMode });
-
   const { user, getAuthHeader } = useUserStore();
   const [activeTab, setActiveTab] = useState("details");
   const [loading, setLoading] = useState(false);
-  const [fetchingDetails, setFetchingDetails] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -50,7 +48,6 @@ export default function CreateTest() {
   const [loadingMainFormCurriculum, setLoadingMainFormCurriculum] = useState(true);
 
   const combinedOptions = React.useMemo(() => {
-    
     if (groups && groups.length > 0) {
       return groups.map(group => ({
         value: group.name,  
@@ -93,7 +90,6 @@ export default function CreateTest() {
   const groupStudents = React.useMemo(() => {
     const studentMap = new Map();
     filteredGroups.forEach(group => {
-      
       if (group.students && Array.isArray(group.students)) {
         group.students.forEach(student => {
           if (student.id && !studentMap.has(student.id)) {
@@ -115,13 +111,11 @@ export default function CreateTest() {
     return Array.from(studentMap.values());
   }, [groupStudents, students]);
 
-  // Students not in any group (ungrouped)
   const ungroupedStudents = React.useMemo(() => {
     const groupedIds = new Set(groupStudents.map(s => s.id));
     return students.filter(s => !groupedIds.has(s.id));
   }, [groupStudents, students]);
 
-  // Search-filtered versions
   const searchFilteredGroups = React.useMemo(() => {
     if (!groupSearch.trim()) return filteredGroups;
     const q = groupSearch.toLowerCase();
@@ -155,6 +149,7 @@ export default function CreateTest() {
   const [questions, setQuestions] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showBankSelector, setShowBankSelector] = useState(false);
+  const [showPaperSelector, setShowPaperSelector] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [questionForm, setQuestionForm] = useState({
     class_level: 10,
@@ -170,7 +165,7 @@ export default function CreateTest() {
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
-  const [testSubjects, setTestSubjects] = useState([]);  
+  const [testSubjects, setTestSubjects] = useState([]);
 
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [questionCurrSubject, setQuestionCurrSubject] = useState(null); 
@@ -198,7 +193,6 @@ export default function CreateTest() {
         setCurriculumSubjects(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error("Failed to fetch curriculum:", err);
     } finally {
       setLoadingCurriculum(false);
     }
@@ -215,7 +209,6 @@ export default function CreateTest() {
         setMainFormCurriculumSubjects(Array.isArray(data) ? data : []);
       }
     } catch (error) {
-      console.error("Error fetching curriculum subjects for main form:", error);
     } finally {
       setLoadingMainFormCurriculum(false);
     }
@@ -252,17 +245,9 @@ export default function CreateTest() {
   const questionTopics = questionSelectedChapter?.topics?.filter(t => t.is_active !== false) || [];
 
   const currSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
-  const currClassLevels = [...new Set(
-    curriculumSubjects
-      .filter(s => s.subject_name === questionForm.subject)
-      .map(s => s.class_level)
-  )].sort((a, b) => a - b);
-  
-  const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
   const fetchTestDetails = async () => {
-    console.log("Fetching details for:", testId);
-    setFetchingDetails(true);
+    setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/assessments/${testId}`, {
         headers: getAuthHeader()
@@ -272,15 +257,23 @@ export default function CreateTest() {
       const data = await response.json();
 
       let startDate = "", startTime = "09:00", endDate = "", endTime = "12:00";
+
+      const toLocalDateStr = (dt) => {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
       if (data.start_datetime) {
         const start = new Date(data.start_datetime);
-        startDate = start.toISOString().split('T')[0];
-        startTime = start.toTimeString().slice(0, 5);
+        startDate = toLocalDateStr(start);
+        startTime = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
       }
       if (data.end_datetime) {
         const end = new Date(data.end_datetime);
-        endDate = end.toISOString().split('T')[0];
-        endTime = end.toTimeString().slice(0, 5);
+        endDate = toLocalDateStr(end);
+        endTime = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
       }
 
       setFormData({
@@ -299,7 +292,6 @@ export default function CreateTest() {
       });
 
       const formattedQuestions = (data.questions || []).map(q => {
-        
         const optionsText = Array.isArray(q.options)
           ? q.options.map(opt => (typeof opt === 'object' ? (opt.text || "") : opt))
           : [];
@@ -329,17 +321,16 @@ export default function CreateTest() {
 
       setQuestions(formattedQuestions);
       setSelectedStudents(data.student_ids || []);
-      setSelectedGroups(data.group_ids || []); 
+      setSelectedGroups(data.group_ids || []);
 
       fetchTestSubjectsForClass(data.class_level || 10, false);
 
       fetchStudentsForClass(data.class_level || 10, false);
 
     } catch (err) {
-      console.error(err);
       setError("Failed to load test details");
     } finally {
-      setFetchingDetails(false);
+      setLoading(false);
     }
   };
 
@@ -364,7 +355,6 @@ export default function CreateTest() {
         setAvailableSubjects(currSubjectNames);
       }
     } catch (err) {
-      console.error("Failed to fetch subjects:", err);
       setAvailableSubjects(currSubjectNames);
     } finally {
       setLoadingSubjects(false);
@@ -394,7 +384,6 @@ export default function CreateTest() {
         setTestSubjects([]);
       }
     } catch (err) {
-      console.error("Failed to fetch test subjects:", err);
       setTestSubjects([]);
     }
   };
@@ -412,7 +401,6 @@ export default function CreateTest() {
         await fetchStudentsForClass(formData.class_level);
       }
     } catch (err) {
-      console.error("Error:", err);
     } finally {
       setLoadingGroups(false);
     }
@@ -430,15 +418,11 @@ export default function CreateTest() {
         }
       }
     } catch (err) {
-      console.error("Error fetching students:", err);
     }
   };
 
   const handleGroupToggle = (groupId) => {
     const group = groups.find(g => g.id === groupId);
-    console.log('Group toggled:', group);
-    console.log('Group student_ids:', group?.student_ids);
-    console.log('Group students:', group?.students);
     
     if (selectedGroups.includes(groupId)) {
       setSelectedGroups(prev => prev.filter(id => id !== groupId));
@@ -451,11 +435,9 @@ export default function CreateTest() {
       setSelectedGroups(prev => [...prev, groupId]);
       
       const studentIdsToAdd = group?.student_ids || group?.students?.map(s => s.id) || [];
-      console.log('Adding student IDs:', studentIdsToAdd);
       if (studentIdsToAdd.length > 0) {
         setSelectedStudents(prev => {
           const newSelected = [...new Set([...prev, ...studentIdsToAdd])];
-          console.log('New selected students:', newSelected);
           return newSelected;
         });
       }
@@ -568,7 +550,6 @@ export default function CreateTest() {
     setError(null);
 
     try {
-      
       const startDateTime = formData.startDate && formData.startTime
         ? `${formData.startDate}T${formData.startTime}:00`
         : null;
@@ -587,7 +568,7 @@ export default function CreateTest() {
         start_datetime: startDateTime,
         end_datetime: endDateTime,
         student_ids: selectedStudents,
-        group_ids: selectedGroups, 
+        group_ids: selectedGroups,
         questions: questions,
         created_by: user?.user_id || "admin",
         evaluation_type: formData.evaluation_type,
@@ -625,7 +606,6 @@ export default function CreateTest() {
   };
 
   const openAddQuestion = () => {
-    
     setQuestionForm({
       class_level: formData.class_level || 10,
       subject: formData.subject || "",
@@ -647,23 +627,18 @@ export default function CreateTest() {
 
   const isTestDetailsComplete = formData.title?.trim() && formData.subject && formData.class_level && formData.startDate;
 
-  // Date/time boundary helpers — use LOCAL date/time (not UTC)
   const _now = new Date();
   const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
   const currentTimeStr = `${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`;
 
-  // Minimum start time: only lock past times when today is selected
   const minStartTime = formData.startDate === todayStr ? currentTimeStr : undefined;
 
-  // Minimum end date: cannot be before start date (or today if no start yet)
   const minEndDate = formData.startDate || todayStr;
 
-  // Minimum end time: if same day as start, must be after start time
   const minEndTime = (formData.startDate && formData.endDate && formData.startDate === formData.endDate)
     ? formData.startTime
     : undefined;
 
-  // Helper: push a HH:MM string forward by 1 hour
   const pushOneHour = (timeStr) => {
     const [h, m] = timeStr.split(':').map(Number);
     const d = new Date(2000, 0, 1, h + 1, m);
@@ -673,19 +648,16 @@ export default function CreateTest() {
   const handleStartDateChange = (val) => {
     const updates = { startDate: val };
 
-    // If today selected and current start time is before current time, fix it
     let effectiveStartTime = formData.startTime;
     if (val === todayStr && formData.startTime < currentTimeStr) {
       updates.startTime = currentTimeStr;
       effectiveStartTime = currentTimeStr;
     }
 
-    // If end date is now before new start date, reset end date to match
     if (formData.endDate && val > formData.endDate) {
       updates.endDate = val;
     }
 
-    // If same day and end time <= effective start time, push end time 1h forward
     const effectiveEndDate = updates.endDate || formData.endDate;
     if (effectiveEndDate === val && formData.endTime <= effectiveStartTime) {
       updates.endTime = pushOneHour(effectiveStartTime);
@@ -696,7 +668,6 @@ export default function CreateTest() {
 
   const handleEndDateChange = (val) => {
     const updates = { endDate: val };
-    // If same day and end time <= start time, push end time 1h forward
     if (val === formData.startDate && formData.endTime <= formData.startTime) {
       updates.endTime = pushOneHour(formData.startTime);
     }
@@ -705,7 +676,6 @@ export default function CreateTest() {
 
   const handleStartTimeChange = (val) => {
     const updates = { startTime: val };
-    // If same day and new start time >= end time, push end time 1h forward
     if (formData.startDate && formData.endDate && formData.startDate === formData.endDate && val >= formData.endTime) {
       updates.endTime = pushOneHour(val);
     }
@@ -763,7 +733,6 @@ export default function CreateTest() {
   };
 
   const handleMarksChange = (marks) => {
-    
     const type = marks === 1 ? (questionForm.type === 'fillup' ? 'fillup' : 'mcq') : 'subjective';
     setQuestionForm(prev => ({ ...prev, marks, type }));
   };
@@ -783,7 +752,6 @@ export default function CreateTest() {
 
   return (
     <AdminLayout title={isEditMode ? "Update Test" : "Create Test"} icon={ClipboardList}>
-      {}
       <div className="flex justify-end gap-3 mb-6">
         <button
           onClick={() => navigate(-1)}
@@ -807,7 +775,6 @@ export default function CreateTest() {
         </button>
       </div>
 
-      {}
       {success && (
         <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -821,7 +788,6 @@ export default function CreateTest() {
         </div>
       )}
 
-      {}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
         <div className="flex border-b border-gray-200 dark:border-gray-700">
           <button
@@ -847,15 +813,12 @@ export default function CreateTest() {
         </div>
       </div>
 
-      {}
       {activeTab === "details" && (
         <div className="space-y-6">
-          {}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Test Title */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Test Title <span className="text-red-500">*</span>
@@ -869,7 +832,6 @@ export default function CreateTest() {
                 />
               </div>
 
-              {/* Class & Subject Combined */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Class & Subject <span className="text-red-500">*</span>
@@ -916,7 +878,6 @@ export default function CreateTest() {
                 </select>
               </div>
 
-              {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Test Period <span className="text-red-500">*</span>
@@ -943,7 +904,6 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Duration (minutes) <span className="text-red-500">*</span>
@@ -958,7 +918,6 @@ export default function CreateTest() {
                 />
               </div>
 
-              {/* Start/End Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-amber-600 dark:text-amber-400 mb-1.5">Start Time</label>
@@ -994,7 +953,6 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {/* Number of Attempts */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Number of Attempts <span className="text-red-500">*</span>
@@ -1010,7 +968,6 @@ export default function CreateTest() {
               </div>
             </div>
 
-            {/* Show Results Checkbox */}
             <div className="mt-4 flex items-center gap-3">
               <input
                 type="checkbox"
@@ -1024,7 +981,6 @@ export default function CreateTest() {
               </label>
             </div>
 
-            {/* Description */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
               <textarea
@@ -1036,7 +992,6 @@ export default function CreateTest() {
               />
             </div>
 
-            {/* Evaluation Type Toggle */}
             <div className="mt-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Evaluation Method</label>
               <div className="flex gap-3">
@@ -1060,7 +1015,6 @@ export default function CreateTest() {
             </div>
           </div>
 
-          {/* Student Assignment */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Student Assignment</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
@@ -1068,7 +1022,6 @@ export default function CreateTest() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Groups */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white">Groups</h3>
@@ -1077,7 +1030,6 @@ export default function CreateTest() {
                     <button onClick={clearAllGroups} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
                   </div>
                 </div>
-                {/* Group search */}
                 <div className="relative mb-2">
                   <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
                   <input
@@ -1121,7 +1073,6 @@ export default function CreateTest() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{selectedGroups.length} groups selected</p>
               </div>
 
-              {/* Students */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1132,7 +1083,6 @@ export default function CreateTest() {
                     <button onClick={clearAllStudents} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
                   </div>
                 </div>
-                {/* Student search */}
                 <div className="relative mb-2">
                   <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
                   <input
@@ -1144,7 +1094,6 @@ export default function CreateTest() {
                   />
                 </div>
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-64 overflow-y-auto">
-                  {/* Group students */}
                   {searchFilteredGroupStudents.length > 0 && (
                     <>
                       <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 sticky top-0">
@@ -1169,7 +1118,6 @@ export default function CreateTest() {
                       ))}
                     </>
                   )}
-                  {/* Ungrouped students */}
                   {searchFilteredUngroupedStudents.length > 0 && (
                     <>
                       <div className="px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 sticky top-0">
@@ -1206,7 +1154,6 @@ export default function CreateTest() {
             </div>
           </div>
 
-          {/* Next Button */}
           <div className="flex justify-end">
             <button
               onClick={() => setActiveTab("questions")}
@@ -1218,7 +1165,6 @@ export default function CreateTest() {
         </div>
       )}
 
-      {/* Questions Tab */}
       {activeTab === "questions" && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-6">
@@ -1232,6 +1178,12 @@ export default function CreateTest() {
                 className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition font-medium flex items-center gap-2"
               >
                 <Search className="w-4 h-4" /> Select from Bank
+              </button>
+              <button
+                onClick={() => setShowPaperSelector(true)}
+                className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition font-medium flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> Select from Papers
               </button>
               <button
                 onClick={openAddQuestion}
@@ -1306,11 +1258,9 @@ export default function CreateTest() {
         </div>
       )}
 
-      {/* Question Modal */}
       {showQuestionModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {editingIndex !== null ? 'Edit Question' : 'Add New Question'}
@@ -1320,9 +1270,7 @@ export default function CreateTest() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-4 space-y-4">
-              {/* Subject and Class - Display Only (from Test Details) */}
               <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subject</label>
@@ -1334,7 +1282,6 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {/* Chapter and Topic */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chapter <span className="text-red-500">*</span></label>
@@ -1389,7 +1336,6 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {/* Marks */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Question Marks</label>
                 <div className="flex gap-2">
@@ -1405,7 +1351,6 @@ export default function CreateTest() {
                 </div>
               </div>
 
-              {/* Question Type (only for 1 mark) */}
               {questionForm.marks === 1 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Question Type</label>
@@ -1426,7 +1371,6 @@ export default function CreateTest() {
                 </div>
               )}
 
-              {/* Question Text */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Question Text</label>
                 <textarea
@@ -1438,7 +1382,6 @@ export default function CreateTest() {
                 />
               </div>
 
-              {/* MCQ Options */}
               {questionForm.type === 'mcq' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1491,7 +1434,6 @@ export default function CreateTest() {
                 </div>
               )}
 
-              {/* Fill-up answer field */}
               {questionForm.type === 'fillup' && (
                 <div>
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
@@ -1517,7 +1459,6 @@ export default function CreateTest() {
                 </div>
               )}
 
-              {/* Subjective answer field */}
               {questionForm.type === 'subjective' && formData.evaluation_type === "ai" && (
                 <div>
                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-3">
@@ -1542,7 +1483,6 @@ export default function CreateTest() {
               )}
             </div>
 
-            {/* Modal Footer */}
             <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setShowQuestionModal(false)}
@@ -1560,12 +1500,20 @@ export default function CreateTest() {
           </div>
         </div>
       )}
-      {/* Bank Selector Modal */}
       {showBankSelector && (
         <QuestionBankSelector
           onSelect={handleAddFromBank}
           onClose={() => setShowBankSelector(false)}
           preSelectedIds={questions.filter(q => q.is_bank_question).map(q => q.id)}
+          defaultClass={formData.class_level}
+          defaultSubject={formData.subject}
+        />
+      )}
+      {showPaperSelector && (
+        <QuestionPaperSelector
+          onSelect={handleAddFromBank}
+          onClose={() => setShowPaperSelector(false)}
+          preSelectedIds={questions.filter(q => q.from_paper).map(q => q.id)}
           defaultClass={formData.class_level}
           defaultSubject={formData.subject}
         />

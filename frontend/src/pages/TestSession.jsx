@@ -418,11 +418,13 @@ export default function TestSession() {
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${currentQuestion?.question_type === 'mcq' ? 'bg-purple-100 text-purple-700' :
                 currentQuestion?.question_type === 'fillup' ? 'bg-blue-100 text-blue-700' :
-                  'bg-green-100 text-green-700'
+                  currentQuestion?.question_type === 'true_false' ? 'bg-teal-100 text-teal-700' :
+                    'bg-green-100 text-green-700'
                 }`}>
                 {currentQuestion?.question_type === 'mcq' ? 'Multiple Choice' :
                   currentQuestion?.question_type === 'fillup' ? 'Fill in the Blank' :
-                    'Short Answer'}
+                    currentQuestion?.question_type === 'true_false' ? 'True / False' :
+                      'Short Answer'}
               </span>
             </div>
             <p className="text-lg text-gray-800 leading-relaxed">
@@ -457,6 +459,32 @@ export default function TestSession() {
                         <span className="text-gray-800">{value}</span>
                       </button>
                     ))}
+                  </div>
+                </>
+              ) : currentQuestion?.question_type === 'true_false' ? (
+                <>
+                  <label className="text-sm font-medium text-gray-700">Select True or False:</label>
+                  <div className="flex gap-4 mt-2">
+                    <button
+                      onClick={() => !testBlocked && setCurrentAnswer('A')}
+                      disabled={testBlocked}
+                      className={`flex-1 p-5 rounded-xl border-2 text-center font-semibold text-lg transition-all ${currentAnswer === 'A'
+                        ? 'border-green-500 bg-green-50 ring-1 ring-green-500 text-green-700'
+                        : 'border-gray-200 hover:border-green-300 hover:bg-green-50/50 text-gray-700'
+                        } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      True
+                    </button>
+                    <button
+                      onClick={() => !testBlocked && setCurrentAnswer('B')}
+                      disabled={testBlocked}
+                      className={`flex-1 p-5 rounded-xl border-2 text-center font-semibold text-lg transition-all ${currentAnswer === 'B'
+                        ? 'border-red-500 bg-red-50 ring-1 ring-red-500 text-red-700'
+                        : 'border-gray-200 hover:border-red-300 hover:bg-red-50/50 text-gray-700'
+                        } ${testBlocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      False
+                    </button>
                   </div>
                 </>
               ) : currentQuestion?.question_type === 'fillup' ? (
@@ -704,6 +732,7 @@ export default function TestSession() {
           {/* Question type legend */}
           <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> MCQ</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" /> T/F</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Fill-up</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> Short Answer</span>
           </div>
@@ -713,7 +742,8 @@ export default function TestSession() {
               const isAnswered = !!answers[q.question_id] || (index === currentQuestionIndex && currentAnswer.trim());
               const isCurrent = index === currentQuestionIndex;
               const typeColor = q.question_type === 'mcq' ? 'border-purple-300' :
-                q.question_type === 'fillup' ? 'border-blue-300' : 'border-green-300';
+                q.question_type === 'true_false' ? 'border-teal-300' :
+                  q.question_type === 'fillup' ? 'border-blue-300' : 'border-green-300';
 
               return (
                 <button

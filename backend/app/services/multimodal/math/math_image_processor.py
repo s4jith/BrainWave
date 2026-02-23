@@ -61,7 +61,7 @@ class ImageProcessor:
             device: Device to run on ('cuda', 'cpu', or None for auto)
         """
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
-        logger.info(f"🖼️  Initializing Image Processor on device: {self.device}")
+        logger.info(f"  Initializing Image Processor on device: {self.device}")
         
         try:
             self.model = CLIPModel.from_pretrained(model_name).to(self.device)
@@ -278,7 +278,7 @@ class ImageProcessor:
     def load_projector(self, path: str):
         """Load projection layer weights."""
         self.projector.load_state_dict(torch.load(path, map_location=self.device))
-        logger.info(f"📂 Loaded projector weights from: {path}")
+        logger.info(f" Loaded projector weights from: {path}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

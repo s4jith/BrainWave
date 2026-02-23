@@ -74,7 +74,7 @@ class OrchestratorService:
         Returns:
             Tuple of (answer, source_chunks)
         """
-        logger.info(f"🎯 [{self.config.component_name}] Processing query: {question[:50]}...")
+        logger.info(f" [{self.config.component_name}] Processing query: {question[:50]}...")
         logger.info(f"   Subject: {subject}, Class: {student_class}, Mode: {mode}")
         
         with LatencyContext("orchestrator_retrieval"):
@@ -93,7 +93,7 @@ class OrchestratorService:
         
         if llm_chunks and llm_chunks[0]['score'] >= self.config.cache_similarity_threshold:
             cached_answer = llm_chunks[0]['text']
-            logger.info(f"🎯 [{self.config.component_name}] CACHE HIT (score: {llm_chunks[0]['score']:.3f})")
+            logger.info(f" [{self.config.component_name}] CACHE HIT (score: {llm_chunks[0]['score']:.3f})")
             return cached_answer, textbook_chunks + llm_chunks
         
         with LatencyContext("orchestrator_generation"):

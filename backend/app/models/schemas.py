@@ -9,7 +9,7 @@ from datetime import datetime
 
 class ChatRequest(BaseModel):
     """Request schema for RAG-based chat."""
-    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name (e.g., Geography, History)")
     chapter: int = Field(..., ge=1, description="Chapter number")
     highlight_text: str = Field(..., min_length=1, description="Text highlighted by student")
@@ -34,7 +34,7 @@ class MCQ(BaseModel):
 
 class MCQGenerationRequest(BaseModel):
     """Request schema for generating MCQs."""
-    class_level: int = Field(..., ge=5, le=12, description="Class level (5-12)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     num_questions: int = Field(5, ge=1, le=20, description="Number of MCQs to generate")
@@ -56,7 +56,7 @@ class MCQAnswer(BaseModel):
 class EvaluationRequest(BaseModel):
     """Request schema for evaluating MCQ answers."""
     student_id: Optional[str] = Field(None, description="Student identifier (optional)")
-    class_level: int = Field(..., ge=5, le=12, description="Class level")
+    class_level: int = Field(..., ge=1, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     mcqs: List[MCQ] = Field(..., description="Original MCQs")
@@ -79,7 +79,7 @@ class EvaluationResponse(BaseModel):
 class NoteCreateRequest(BaseModel):
     """Request schema for creating a note."""
     student_id: str = Field(..., description="Student identifier")
-    class_level: int = Field(..., ge=5, le=12, description="Class level")
+    class_level: int = Field(..., ge=1, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     page_number: int = Field(..., ge=1, description="Page number where note was created")
@@ -119,7 +119,7 @@ class SuccessResponse(BaseModel):
 class AnnotationHistoryCreateRequest(BaseModel):
     """Request schema for saving an AI annotation."""
     student_id: str = Field(..., description="Student identifier")
-    class_level: int = Field(..., ge=5, le=12, description="Class level")
+    class_level: int = Field(..., ge=1, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(None, ge=1, description="Chapter number (optional)")
     page_number: int = Field(..., ge=1, description="Page number")

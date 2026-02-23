@@ -43,10 +43,10 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         class_level: savedDefaults.class_level || 10,
         chapter: savedDefaults.chapter || 1,
         difficulty_dist: {
-            easy: { mcq: 2, fillup: 0, short_answer: 0, long_answer: 0 },
-            medium: { mcq: 0, fillup: 0, short_answer: 0, long_answer: 0 },
-            hard: { mcq: 0, fillup: 0, short_answer: 0, long_answer: 0 },
-            advanced: { mcq: 0, fillup: 0, short_answer: 0, long_answer: 0 }
+            easy: { mcq: 2, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
+            medium: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
+            hard: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
+            advanced: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 }
         }
     });
 
@@ -165,6 +165,12 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             if (formData.type === 'fillup') {
                 const answers = (formData.correct_answer || "").split("|").filter(Boolean);
                 if (answers.length === 0) throw new Error("At least one correct answer is required for fill-in-the-blanks");
+            }
+
+            if (formData.type === 'true_false') {
+                if (!formData.correct_answer || !['True', 'False'].includes(formData.correct_answer)) {
+                    throw new Error("Select True or False as the correct answer");
+                }
             }
 
             const payload = { ...formData, status: formData.status || 'approved' };
@@ -408,6 +414,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     >
                                         <option value="mcq">MCQ</option>
                                         <option value="fillup">Fill-in-the-blanks</option>
+                                        <option value="true_false">True / False</option>
                                         <option value="short_answer">Short Answer</option>
                                         <option value="long_answer">Long Answer</option>
                                     </select>
@@ -541,7 +548,33 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </div>
                             )}
 
-                            {formData.type !== 'mcq' && formData.type !== 'fillup' && (
+                            {formData.type === 'true_false' && (
+                                <div className="space-y-2">
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400">Correct Answer</label>
+                                    <div className="flex gap-4">
+                                        <label className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center font-medium transition-all ${
+                                            formData.correct_answer === 'True'
+                                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                                                : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-green-300'
+                                        }`}>
+                                            <input type="radio" name="tf_answer" value="True" checked={formData.correct_answer === 'True'}
+                                                onChange={() => setFormData({ ...formData, correct_answer: 'True' })} className="sr-only" />
+                                            True
+                                        </label>
+                                        <label className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center font-medium transition-all ${
+                                            formData.correct_answer === 'False'
+                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                                : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-red-300'
+                                        }`}>
+                                            <input type="radio" name="tf_answer" value="False" checked={formData.correct_answer === 'False'}
+                                                onChange={() => setFormData({ ...formData, correct_answer: 'False' })} className="sr-only" />
+                                            False
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.type !== 'mcq' && formData.type !== 'fillup' && formData.type !== 'true_false' && (
                                 <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Correct Answer / Key Points</label>
                                     <textarea
@@ -641,8 +674,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                     }`}></span>
                                                 <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{diff}</span>
                                             </div>
-                                            <div className="grid grid-cols-4 gap-4">
-                                                {['mcq', 'fillup', 'short_answer', 'long_answer'].map(type => (
+                                            <div className="grid grid-cols-5 gap-4">
+                                                {['mcq', 'fillup', 'true_false', 'short_answer', 'long_answer'].map(type => (
                                                     <div key={type}>
                                                         <label className="text-xs text-gray-500 block mb-1 capitalize">{type.replace('_', ' ')}</label>
                                                         <input

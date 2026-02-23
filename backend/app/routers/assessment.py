@@ -20,14 +20,14 @@ router = APIRouter(
 
 class QuestionRequest(BaseModel):
     """Request schema for generating assessment questions."""
-    class_level: int = Field(..., ge=5, le=10, description="Class level (5-10)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     num_questions: int = Field(3, ge=1, le=5, description="Number of questions (1-5)")
 
 class EnhancedQuestionRequest(BaseModel):
     """Request for 15-question assessment (10-page interval)."""
-    class_level: int = Field(..., ge=5, le=10, description="Class level (5-10)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     lesson_name: str = Field(..., description="Lesson/chapter name")
@@ -49,7 +49,7 @@ class Answer(BaseModel):
 
 class EvaluationRequest(BaseModel):
     """Request schema for evaluating answers."""
-    class_level: int = Field(..., ge=5, le=10, description="Class level (5-10)")
+    class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., ge=1, description="Chapter number")
     answers: List[Answer] = Field(..., description="List of Q&A pairs to evaluate")

@@ -58,7 +58,7 @@ async def list_courses(
     page_size: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
     difficulty: Optional[str] = None,
-    class_level: Optional[int] = Query(None, ge=5, le=12),
+    class_level: Optional[int] = Query(None, ge=1, le=12),
     instructor_id: Optional[str] = None,
     enrolled_only: bool = False,
     current_user: Optional[TokenData] = Depends(get_current_user)

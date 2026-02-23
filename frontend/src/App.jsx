@@ -38,6 +38,7 @@ import AdminReports from "./pages/AdminReports";
 import AdminSuggestions from "./pages/AdminSuggestions";
 import TeacherGroups from "./pages/TeacherGroups";
 import QuestionBank from "./pages/QuestionBank";
+import QuestionPapers from "./pages/QuestionPapers";
 import TeacherTests from "./pages/TeacherTests";
 import TeacherReports from "./pages/TeacherReports";
 import TeacherSettings from "./pages/TeacherSettings";
@@ -90,7 +91,7 @@ function ProtectedRoute({ children }) {
 
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -104,7 +105,7 @@ function ProtectedRoute({ children }) {
       "/staff-tests", "/teacher-dashboard", "/teacher-tests", "/course-builder",
       "/courses/", "/create-test",
       "/assessment-builder", "/assessments/", "/question-bank", "/teacher-groups",
-      "/teacher-reports", "/teacher-settings"
+      "/teacher-reports", "/teacher-settings", "/question-papers"
     ];
     const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
     if (!isTeacherRoute) {
@@ -507,6 +508,14 @@ function App() {
           element={
             <StaffRoute>
               <QuestionBank />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/question-papers"
+          element={
+            <StaffRoute>
+              <QuestionPapers />
             </StaffRoute>
           }
         />

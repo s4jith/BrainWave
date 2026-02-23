@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User,
-  GraduationCap,
   Palette,
   Calendar,
   Shield,
@@ -380,7 +379,6 @@ export default function Settings() {
       case 'avatar':
         return (
           <div className="space-y-6">
-            {}
             <div className="flex justify-center">
               <div className="relative">
                 <img
@@ -398,7 +396,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Style Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Choose a style
@@ -435,9 +432,7 @@ export default function Settings() {
       case 'calendar':
         return (
           <div className="space-y-6">
-            {}
 
-            {}
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 Manage your exam dates and reminders
@@ -455,9 +450,7 @@ export default function Settings() {
               </Button>
             </div>
 
-            {}
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-              {}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h3 className="text-xl font-semibold text-gray-800">
                   {MONTHS[currentMonth]} {currentYear}
@@ -478,7 +471,6 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Weekday Headers */}
               <div className="grid grid-cols-7 border-b border-gray-100">
                 {WEEKDAYS.map((day, index) => (
                   <div
@@ -491,7 +483,6 @@ export default function Settings() {
                 ))}
               </div>
 
-              {}
               <div className="grid grid-cols-7">
                 {calendarDays.map((day, index) => {
                   const isLastInRow = (index + 1) % 7 === 0;
@@ -519,7 +510,6 @@ export default function Settings() {
                       className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
                         } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                     >
-                      {}
                       <div className="flex items-start justify-between mb-1">
                         <span
                           className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${isToday
@@ -531,10 +521,8 @@ export default function Settings() {
                         </span>
                       </div>
 
-                      {}
                       <div className="space-y-1">
                         {dayExams.slice(0, 3).map((exam, examIndex) => {
-                          
                           const colors = [
                             { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-l-emerald-500' },
                             { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-l-pink-500' },
@@ -566,11 +554,9 @@ export default function Settings() {
               </div>
             </div>
 
-            {}
             {showAddExam && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                  {}
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-lg font-semibold text-gray-800">Add Event</h4>
                     <button
@@ -622,7 +608,6 @@ export default function Settings() {
               </div>
             )}
 
-            {/* Upcoming Events List */}
             {exams.length > 0 && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-3">All Events</h4>
@@ -642,8 +627,6 @@ export default function Settings() {
                         key={exam.id}
                         className={`flex items-center justify-between p-4 ${color.bg} border-l-4 ${color.border} rounded-lg`}
                       >
-                        {/* 
-                         */}
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full ${color.icon}`} />
                           <div>
@@ -731,7 +714,6 @@ export default function Settings() {
               {pwdLoading ? 'Changing...' : 'Change Password'}
             </Button>
 
-            {/* User ID Section */}
             <div className="border-t border-gray-200 pt-6 space-y-4">
               <p className="text-sm text-gray-500">
                 Change your login User ID. The new ID must be unique across all students.
@@ -770,7 +752,6 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
@@ -788,10 +769,8 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex gap-8">
-          {}
           <div className="w-56 flex-shrink-0">
             <nav className="space-y-1 sticky top-8">
               {TABS.map((tab) => {
@@ -815,7 +794,6 @@ export default function Settings() {
             </nav>
           </div>
 
-          {}
           <div className="flex-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">

@@ -171,7 +171,7 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
               </p>
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-blue-800 dark:text-blue-300">
-                  📋 The extracted curriculum is now in the <strong>Pending Review</strong> section.
+                   The extracted curriculum is now in the <strong>Pending Review</strong> section.
                   Please review and approve it to add it to the system.
                 </p>
               </div>

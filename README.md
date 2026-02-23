@@ -1,6 +1,6 @@
 # NCERT AI Learning Platform - Production Ready 🚀
 
-## 🎯 Features
+##  Features
 
 ### Fully Integrated RAG Chatbot
 - **AI Explanations**: 5 modes (Simple, Meaning, Story, Example, Summary)
@@ -257,7 +257,7 @@ VITE_API_BASE_URL=http://localhost:8000/api
 
 ---
 
-## 🎯 Next Steps
+##  Next Steps
 
 - [ ] Add authentication (JWT)
 - [ ] Deploy to production (Vercel + Railway)

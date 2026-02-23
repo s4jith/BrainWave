@@ -20,6 +20,127 @@ from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDD
 
 logger = logging.getLogger(__name__)
 
+# ── Identity / Greeting Detection ──────────────────────────────────────────
+# Comprehensive tuple of phrases that indicate the user is asking about the AI
+# itself, its identity, or simply greeting it.  Easy to extend — just append
+# a new phrase.  All matching is case-insensitive.
+#
+# Categories covered:
+#   • Name / identity questions
+#   • "What AI is this" / app-identity questions
+#   • Capability questions ("what can you do")
+#   • Greetings / small-talk
+
+_IDENTITY_PHRASES: tuple = (
+    # ── Name / identity ─────────────────────────────────────────
+    "what is your name",
+    "what's your name",
+    "whats your name",
+    "who are you",
+    "what are you",
+    "your name",
+    "tell me your name",
+    "tell me about yourself",
+    "introduce yourself",
+    "what should i call you",
+    "how can i call you",
+    "how do i call you",
+    "how should i call you",
+    "what do i call you",
+    "what to call you",
+    "may i know your name",
+    "can i know your name",
+    "do you have a name",
+    "you have a name",
+    "what is this ai",
+    "which ai is this",
+    "which ai are you",
+    "what ai is this",
+    "what ai are you",
+    "are you a bot",
+    "are you ai",
+    "are you an ai",
+    "are you a robot",
+    "are you chatgpt",
+    "are you gemini",
+    "are you gpt",
+    "are you human",
+    "are you real",
+    "what model are you",
+    "what llm are you",
+    "who made you",
+    "who created you",
+    "who built you",
+    "who developed you",
+    "what is brainwave",
+    "what's brainwave",
+    "what is this app",
+    "what is this chatbot",
+    "what is this bot",
+    # ── Capability / purpose questions ──────────────────────────
+    "what can you do",
+    "what do you do",
+    "how can you help me",
+    "how can you help",
+    "what are your capabilities",
+    "what are you capable of",
+)
+
+_GREETING_PHRASES: tuple = (
+    "hi",
+    "hello",
+    "hey",
+    "hola",
+    "namaste",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "good night",
+    "howdy",
+    "sup",
+    "wassup",
+    "whats up",
+    "what's up",
+)
+
+BRAINWAVE_IDENTITY_RESPONSE = (
+    "Hello! My name is **Brainwave** 🧠\n\n"
+    "I'm your AI-powered NCERT learning assistant. "
+    "I can help you understand concepts from your textbooks, "
+    "answer questions, and guide you through topics across all subjects and classes.\n\n"
+    "Feel free to ask me anything related to your studies!"
+)
+
+BRAINWAVE_GREETING_RESPONSE = (
+    "Hello! 👋 I'm **Brainwave**, your AI learning assistant.\n\n"
+    "How can I help you today? Ask me any question related to your studies!"
+)
+
+
+def _normalise(text: str) -> str:
+    """Lower-case, collapse whitespace, strip punctuation for matching."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s]", "", text)   # drop punctuation
+    text = re.sub(r"\s+", " ", text)       # collapse spaces
+    return text
+
+
+def detect_identity_or_greeting(question: str) -> Optional[str]:
+    """Return a canned response if the question is an identity/greeting query, else None."""
+    normalised = _normalise(question)
+
+    # Check identity phrases — substring match so "hey what is your name?" also works
+    for phrase in _IDENTITY_PHRASES:
+        if phrase in normalised:
+            return BRAINWAVE_IDENTITY_RESPONSE
+
+    # Greetings — only match if the entire message IS a greeting (not embedded in a real question)
+    for phrase in _GREETING_PHRASES:
+        if normalised == phrase or normalised == phrase + " brainwave":
+            return BRAINWAVE_GREETING_RESPONSE
+
+    return None
+
 class EnhancedRAGService:
     """
     Enhanced RAG service with multi-index progressive learning.
@@ -58,17 +179,20 @@ class EnhancedRAGService:
         }
         
         self.subject_class_ranges = {
-            "Mathematics": list(range(5, 13)),
-            "Physics": list(range(11, 13)),
-            "Chemistry": list(range(11, 13)),
-            "Biology": list(range(11, 13)),
-            "Social Science": list(range(5, 11)),
-            "History": list(range(5, 13)),
-            "Geography": list(range(5, 13)),
-            "Civics": list(range(5, 11)),
-            "Economics": list(range(9, 13)),
-            "English": list(range(5, 13)),
-            "Hindi": list(range(5, 13))
+            "Mathematics": list(range(1, 13)),
+            "Physics": list(range(1, 13)),
+            "Chemistry": list(range(1, 13)),
+            "Biology": list(range(1, 13)),
+            "Social Science": list(range(1, 13)),
+            "History": list(range(1, 13)),
+            "Geography": list(range(1, 13)),
+            "Civics": list(range(1, 13)),
+            "Economics": list(range(1, 13)),
+            "English": list(range(1, 13)),
+            "Hindi": list(range(1, 13)),
+            "Science": list(range(1, 13)),
+            "Arts": list(range(1, 13)),
+            "EVS": list(range(1, 13)),
         }
 
     def generate_embedding(self, text: str) -> List[float]:
@@ -103,22 +227,32 @@ class EnhancedRAGService:
         """
         Get list of classes to search based on mode.
         
+        Deep dive: searches from Class 1 up to the student's current class.
+                   Never goes BEYOND the student's class (e.g. Class 6 student
+                   searches 1-6 only). Advanced content is only provided if
+                   the student explicitly asks for it.
+        Quick:     searches the student's current class only.
+        
         Args:
             subject: Subject name
-            student_class: Student's current class
-            mode: "basic" (current + recent lower) or "deepdive" (all from fundamentals)
+            student_class: Student's current class (1-12)
+            mode: "basic"/"quick" or "deepdive"
         
         Returns:
             List of class numbers to search, ordered from earliest to current
         """
-        available_classes = self.subject_class_ranges.get(subject, list(range(5, 13)))
+        # Default range 1-12 for any subject
+        available_classes = self.subject_class_ranges.get(subject, list(range(1, 13)))
+        # NEVER go beyond the student's current class
         available_classes = [c for c in available_classes if c <= student_class]
         
         if mode in ("basic", "quick"):
+            # Quick mode: current class only
             return [student_class] if student_class in available_classes else available_classes[-1:]
         
         else:
-            return available_classes
+            # Deep dive: all classes from 1 up to student's class
+            return available_classes if available_classes else [student_class]
     
     def query_multi_class(
         self,
@@ -632,6 +766,19 @@ Generate a thorough, well-structured deep dive explanation:"""
         
         mode_description = "COMPREHENSIVE" if mode == "deepdive" else "FOCUSED"
         
+        # ── Subject isolation instruction (avoids Physics ↔ Maths confusion) ──
+        subject_isolation = ""
+        if subject.lower() in ("physics", "maths", "mathematics", "science"):
+            subject_isolation = (
+                f"\n**SUBJECT ISOLATION ({subject}):**\n"
+                f"- You are answering ONLY for the subject **{subject}**.\n"
+                f"- The word 'sum' or 'problem' may appear in both Physics and Mathematics — "
+                f"interpret it STRICTLY in the context of {subject}.\n"
+                f"- If the subject is Physics, focus on physical laws, forces, energy, motion, etc.\n"
+                f"- If the subject is Mathematics/Maths, focus on numbers, algebra, geometry, equations, etc.\n"
+                f"- Never mix Physics concepts into a Maths answer or vice-versa.\n"
+            )
+
         prompt = f"""You are an NCERT tutor for Class {student_class} {subject}. 
 
 **RULES:**
@@ -643,7 +790,7 @@ Generate a thorough, well-structured deep dive explanation:"""
 4. Do NOT make up facts, formulas, or examples not present in the content.
 5. Do NOT describe what the textbook content contains instead of answering.
 6. If you can partially answer, answer what you can from the textbook.
-
+{subject_isolation}
 **STUDENT QUESTION:** {question}
 
 **TEXTBOOK CONTENT:**
@@ -685,6 +832,12 @@ Generate your answer:"""
         """
         logger.info(f"BASIC MODE (Triple-Index): Class {student_class} {subject}")
         logger.info(f"   Question: {question[:100]}...")
+        
+        # Identity / greeting detection — bypass RAG entirely
+        identity_response = detect_identity_or_greeting(question)
+        if identity_response:
+            logger.info("Identity/greeting detected — returning Brainwave response")
+            return identity_response, []
         
         try:
             async def gen_embedding_async():
@@ -746,7 +899,7 @@ Generate your answer:"""
         
         if llm_chunks and llm_chunks[0]['score'] >= 0.80:
             cached_answer = llm_chunks[0]['text']
-            logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
+            logger.info(f" CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
             
             source_chunks = textbook_chunks + llm_chunks
@@ -780,6 +933,14 @@ Generate your answer:"""
             direct_prompt = f"""You are a {subject} tutor helping a Class {student_class} student.
 
 STUDENT QUESTION: {question}
+
+**IMPORTANT CONSTRAINTS:**
+- ONLY answer if the question is related to education, academics, or school subjects.
+- If the question is about entertainment, social media, celebrities, violence, or anything
+  NOT related to studies/education, respond with EXACTLY:
+  "I can only help with education-related questions. Please ask something related to your studies."
+- Stay strictly within the scope of {subject} for Class {student_class}.
+- Do NOT mix Physics and Maths concepts — answer only for {subject}.
 
 Provide a clear, educational answer appropriate for Class {student_class} level.
 
@@ -872,7 +1033,7 @@ Keep it concise but informative (200-400 words)."""
         
         if llm_chunks and llm_chunks[0]['score'] >= 0.80:
             cached_answer = llm_chunks[0]['text']
-            logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
+            logger.info(f" CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
             
             source_chunks = textbook_chunks + llm_chunks
@@ -883,7 +1044,7 @@ Keep it concise but informative (200-400 words)."""
         if not textbook_chunks and not llm_chunks:
             logger.warning(f" EDGE CASE: No content found for '{question[:50]}...' in Class {student_class}")
             prev_class = student_class - 1
-            if prev_class >= 5:
+            if prev_class >= 1:
                 logger.info(f"🔄 Searching Class {prev_class} (one-step fallback)...")
                 prev_chunks, prev_dist = self.query_multi_class(
                     query_text=question,
@@ -952,6 +1113,12 @@ Keep it concise but informative (200-400 words)."""
         Returns:
             Tuple of (answer, combined_source_chunks)
         """
+        # Identity / greeting detection — bypass RAG entirely
+        identity_response = detect_identity_or_greeting(question)
+        if identity_response:
+            logger.info("Identity/greeting detected — returning Brainwave response")
+            return identity_response, []
+        
         try:
             validation = await subject_classifier.classify(question)
             detected_subject = validation.get("detected_subject", "Unknown")
@@ -1008,7 +1175,7 @@ Keep it concise but informative (200-400 words)."""
         
         if llm_chunks and llm_chunks[0]['score'] >= 0.80:
             cached_answer = llm_chunks[0]['text']
-            logger.info(f"🎯 CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
+            logger.info(f" CACHE HIT! Using cached answer (similarity: {llm_chunks[0]['score']:.3f}, topic: {llm_chunks[0].get('topic', 'N/A')})")
             logger.info(f"   Saved 1 Gemini API call (answer length: {len(cached_answer)} chars)")
             
             source_chunks = textbook_chunks + llm_chunks
@@ -1042,6 +1209,15 @@ Keep it concise but informative (200-400 words)."""
             direct_prompt = f"""You are an expert {subject} tutor helping a Class {student_class} student.
 
 STUDENT QUESTION: {question}
+
+**IMPORTANT CONSTRAINTS:**
+- ONLY answer if the question is related to education, academics, or school subjects.
+- If the question is about entertainment, social media, celebrities, violence, or anything
+  NOT related to studies/education, respond with EXACTLY:
+  "I can only help with education-related questions. Please ask something related to your studies."
+- Stay strictly within the scope of {subject} for Class {student_class}.
+- Do NOT confuse Physics and Maths — 'sum' in Physics means numerical problem on physical concepts,
+  'sum' in Maths means arithmetic/algebraic operations. Answer only for {subject}.
 
 Since this is a valid {subject} question, provide a COMPREHENSIVE educational answer.
 

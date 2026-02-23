@@ -34,7 +34,7 @@ class TestCreate(BaseModel):
     """Model for creating a test."""
     title: str = Field(..., min_length=2, max_length=200)
     description: Optional[str] = None
-    class_level: int = Field(..., ge=5, le=12)
+    class_level: int = Field(..., ge=1, le=12)
     subject: str = Field(...)
     is_timed: bool = Field(default=False)
     start_datetime: Optional[datetime] = None

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Filter, Search, Plus, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Plus, Check } from "lucide-react";
 import useUserStore from "../stores/userStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -37,7 +37,6 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
                     setCurriculumSubjects(Array.isArray(data) ? data : []);
                 }
             } catch (err) {
-                console.error("Failed to fetch curriculum:", err);
             } finally {
                 setLoadingCurriculum(false);
             }
@@ -69,7 +68,6 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
             setQuestions(data.questions);
             setPagination(prev => ({ ...prev, total: data.total, pages: data.pages }));
         } catch (error) {
-            console.error("Error fetching questions:", error);
         } finally {
             setLoading(false);
         }

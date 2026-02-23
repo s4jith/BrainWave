@@ -9,7 +9,6 @@ import {
   GraduationCap,
   FileText,
   Clock,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Calendar,
@@ -60,7 +59,6 @@ export default function StudentGroups() {
         setGroups(data.groups || []);
       }
     } catch (err) {
-      console.error("Error fetching groups:", err);
     }
   };
 
@@ -74,7 +72,6 @@ export default function StudentGroups() {
         setUpcomingTests(data.tests || []);
       }
     } catch (err) {
-      console.error("Error fetching tests:", err);
     }
   };
 
@@ -88,7 +85,6 @@ export default function StudentGroups() {
         setSubjects(data.subjects || []);
       }
     } catch (err) {
-      console.error("Error fetching subjects:", err);
     }
   };
 
@@ -111,7 +107,6 @@ export default function StudentGroups() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">My Groups</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -119,7 +114,6 @@ export default function StudentGroups() {
           </p>
         </div>
 
-        {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -152,7 +146,6 @@ export default function StudentGroups() {
           </div>
         </div>
 
-        {}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           {tabs.map(tab => (
             <button
@@ -177,7 +170,6 @@ export default function StudentGroups() {
           ))}
         </div>
 
-        {/* Tab Content */}
         {activeTab === "groups" && (
           <div className="space-y-4">
             {groups.length === 0 ? (
@@ -241,7 +233,6 @@ export default function StudentGroups() {
                   {expandedGroup === group.id && (
                     <div className="px-6 pb-4 pt-2 border-t border-gray-50">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {}
                         <div className="bg-gray-50 rounded-lg p-4">
                           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Teacher</h4>
                           {group.teacher ? (
@@ -259,7 +250,6 @@ export default function StudentGroups() {
                           )}
                         </div>
 
-                        {/* Group Details */}
                         <div className="bg-gray-50 rounded-lg p-4">
                           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Details</h4>
                           <div className="space-y-2 text-sm">
@@ -280,7 +270,6 @@ export default function StudentGroups() {
                         </div>
                       </div>
 
-                      {}
                       <div className="flex gap-3 mt-4">
                         <button
                           onClick={() => navigate("/my-tests")}
@@ -395,7 +384,6 @@ export default function StudentGroups() {
               />
             ) : (
               <>
-                {/* Pending Tests */}
                 {upcomingTests.filter(t => t.status === "pending").length > 0 && (
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -454,7 +442,6 @@ export default function StudentGroups() {
                   </div>
                 )}
 
-                {/* Submitted Tests */}
                 {upcomingTests.filter(t => t.status === "submitted").length > 0 && (
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">

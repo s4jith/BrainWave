@@ -125,16 +125,33 @@ class AssessmentService:
                     for sid in group.get("student_ids", []):
                         student_ids.add(sid)
             
+            # Fallback: if no specific students assigned, notify all students in the class
+            if not student_ids:
+                class_level = assessment.get("class_level")
+                query = {"role": "student"}
+                if class_level:
+                    query["$or"] = [
+                        {"class_level": class_level},
+                        {"class_level": str(class_level)},
+                        {"classLevel": class_level},
+                        {"classLevel": str(class_level)},
+                    ]
+                all_students = await mongodb.db.users.find(query, {"user_id": 1}).to_list(length=500)
+                for s in all_students:
+                    if s.get("user_id"):
+                        student_ids.add(s["user_id"])
+            
             for sid in student_ids:
                 notifications.append({
                     "title": f"New Test: {title}",
                     "message": f"A new test '{title}' is available for you.",
                     "type": "test_assigned",
-                    "recipient_id": sid,
+                    "user_id": sid,
                     "role": "student",
                     "link": f"/assessments/{assessment_id}",
                     "created_at": created_at,
-                    "is_read": False
+                    "read": False,
+                    "saved": False
                 })
             
             teacher_ids_set = set()
@@ -161,11 +178,12 @@ class AssessmentService:
                             "title": f"New Test Assigned: {title}",
                             "message": f"A new test '{title}' has been assigned to your group. You can now edit and manage questions.",
                             "type": "test_assigned",
-                            "recipient_id": teacher_user["user_id"],
+                            "user_id": teacher_user["user_id"],
                             "role": "teacher",
                             "link": f"/teacher-tests",
                             "created_at": created_at,
-                            "is_read": False
+                            "read": False,
+                            "saved": False
                         })
                 
             creator_id = assessment.get("created_by", assessment.get("instructor_id"))
@@ -179,11 +197,12 @@ class AssessmentService:
                         "title": f"New Test Created: {title}",
                         "message": f"Teacher {creator.get('name', creator_id)} created a new test.",
                         "type": "info",
-                        "recipient_id": admin["user_id"],
+                        "user_id": admin["user_id"],
                         "role": "admin",
                         "link": "/test-management",
                         "created_at": created_at,
-                        "is_read": False
+                        "read": False,
+                        "saved": False
                     })
 
             if notifications:

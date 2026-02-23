@@ -32,7 +32,7 @@ async def main():
         print(f"     teacher_ids: {g.get('teacher_ids')} (type: {type(g.get('teacher_ids'))})")
     
     # Check what teacher3's actual _id is
-    print("\n📋 Checking all teacher users...")
+    print("\n Checking all teacher users...")
     all_teachers = await db.users.find({"role": "teacher"}).to_list(length=100)
     print(f"   Found {len(all_teachers)} teachers:")
     for t in all_teachers:

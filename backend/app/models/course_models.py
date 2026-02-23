@@ -67,7 +67,7 @@ class CourseCreateRequest(BaseModel):
     category: str = Field(..., description="Subject category")
     difficulty: DifficultyLevel = DifficultyLevel.BEGINNER
     thumbnail_url: Optional[str] = None
-    class_level: int = Field(..., ge=5, le=12, description="Target class level")
+    class_level: int = Field(..., ge=1, le=12, description="Target class level")
 
 class CourseUpdateRequest(BaseModel):
     """Request model for updating a course."""
@@ -76,7 +76,7 @@ class CourseUpdateRequest(BaseModel):
     category: Optional[str] = None
     difficulty: Optional[DifficultyLevel] = None
     thumbnail_url: Optional[str] = None
-    class_level: Optional[int] = Field(None, ge=5, le=12)
+    class_level: Optional[int] = Field(None, ge=1, le=12)
     status: Optional[CourseStatus] = None
 
 class ModuleCreateRequest(BaseModel):

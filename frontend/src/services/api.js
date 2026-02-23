@@ -548,6 +548,7 @@ export const testService = {
           difficulty: params.difficulty,
           mcq_count: params.mcq_count || 0,
           fillup_count: params.fillup_count || 0,
+          true_false_count: params.true_false_count || 0,
           short_answer_count: params.short_answer_count || 0,
           long_answer_count: params.long_answer_count || 0,
           time_limit_minutes: params.time_limit_minutes || null

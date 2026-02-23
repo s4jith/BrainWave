@@ -27,8 +27,8 @@ router = APIRouter(prefix="/api/admin", tags=["Admin Dashboard"])
 class StudentCreate(BaseModel):
     """Model for creating a new student."""
     name: str = Field(..., min_length=2, max_length=100)
-    age: int = Field(..., ge=5, le=25)
-    class_level: int = Field(..., ge=5, le=12)
+    age: int = Field(..., ge=1, le=25)
+    class_level: int = Field(..., ge=1, le=12)
     email: str = Field(..., description="Gmail address")
     mobile: str = Field(..., min_length=10, max_length=15)
 

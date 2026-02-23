@@ -149,7 +149,7 @@ class RAGService:
                     logger.info(f"📝 Broad query detected - using lower threshold: {score_threshold}")
                 else:
                     score_threshold = 0.50
-                    logger.info(f"🎯 Specific query - using medium threshold: {score_threshold}")
+                    logger.info(f" Specific query - using medium threshold: {score_threshold}")
             
             if mode == "quick":
                 if self.is_broad_query(query_text):

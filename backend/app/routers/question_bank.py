@@ -21,7 +21,7 @@ class QuestionCreate(BaseModel):
     class_level: int
     chapter: int
     topic: Optional[str] = None
-    type: str = Field(..., pattern="^(mcq|fillup|short_answer|long_answer)$")
+    type: str = Field(..., pattern="^(mcq|fillup|true_false|short_answer|long_answer)$")
     difficulty: str = Field(..., pattern="^(easy|medium|hard|advanced)$")
     marks: int
     options: List[str] = []

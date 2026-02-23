@@ -1,16 +1,16 @@
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, Search, ExternalLink } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function TestManagement() {
   const navigate = useNavigate();
-  const { user, getAuthHeader } = useUserStore();
+  const { getAuthHeader } = useUserStore();
   const [tests, setTests] = useState([]);
   const [selectedTest, setSelectedTest] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -79,7 +79,6 @@ export default function TestManagement() {
         setTeacherClassLevels(classes.sort((a, b) => a - b));
       }
     } catch (err) {
-      console.error("Failed to fetch teacher groups:", err);
     } finally {
       setLoadingGroups(false);
     }
@@ -96,7 +95,6 @@ export default function TestManagement() {
         setCurriculumSubjects(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error("Failed to fetch curriculum subjects:", err);
     } finally {
       setLoadingCurriculum(false);
     }
@@ -126,7 +124,6 @@ export default function TestManagement() {
       setTests(testsData);
       calculateStats(testsData);
     } catch (err) {
-      console.error(err);
       setTests([]);
       setStats({ total_tests: 0, active_tests: 0, total_submissions: 0, pending_review: 0 });
     } finally {
@@ -140,7 +137,6 @@ export default function TestManagement() {
       return;
     }
 
-    const now = new Date();
     let active_tests = 0;
     let total_submissions = 0;
 
@@ -171,7 +167,6 @@ export default function TestManagement() {
       const data = await response.json();
       setSubmissions(data.submissions || []);
     } catch (err) {
-      console.error(err);
       setSubmissions([]);
     } finally {
       setLoadingSubmissions(false);
@@ -246,7 +241,6 @@ export default function TestManagement() {
       const data = await response.json();
       setSubmissionDetail(data);
     } catch (err) {
-      console.error(err);
       alert("Error loading submission details");
       setShowDetailModal(false);
     } finally {
@@ -255,17 +249,26 @@ export default function TestManagement() {
   };
 
   const getTestStatus = (test) => {
-    if (!test.start_datetime || !test.end_datetime) {
+    const now = new Date();
+
+    // Check start_datetime first — if in the future, always upcoming
+    if (test.start_datetime) {
+      const start = new Date(test.start_datetime.replace(' ', 'T'));
+      if (!isNaN(start.valueOf()) && now < start) return 'upcoming';
+    }
+
+    // Check end_datetime — if past, completed
+    if (test.end_datetime) {
+      const end = new Date(test.end_datetime.replace(' ', 'T'));
+      if (!isNaN(end.valueOf()) && now > end) return 'completed';
+    }
+
+    // Fallback to stored status
+    if (!test.start_datetime && !test.end_datetime) {
       return test.status === 'published' ? 'active' : test.status;
     }
-    
-    const now = new Date();
-    const start = new Date(test.start_datetime);
-    const end = new Date(test.end_datetime);
-    
-    if (now < start) return 'upcoming';
-    if (now > end) return 'completed';
-    return 'active';
+
+    return test.status === 'published' ? 'active' : (test.status || 'active');
   };
 
   const getStatusBadge = (testStatus) => {
@@ -311,7 +314,6 @@ export default function TestManagement() {
 
   return (
     <AdminLayout title="Test Management" icon={ClipboardList}>
-      {/* Stats */}
       {stats && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -329,7 +331,6 @@ export default function TestManagement() {
         </div>
       )}
 
-      {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
         <div className="flex flex-wrap gap-4 justify-between items-center">
           <div className="flex flex-wrap gap-3">
@@ -370,7 +371,6 @@ export default function TestManagement() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Test List */}
         <div className="lg:col-span-1 space-y-3">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">Tests ({displayedTests.length}{filterStatus ? ` of ${tests.length}` : ""})</h2>
           {loading ? (
@@ -426,7 +426,6 @@ export default function TestManagement() {
           )}
         </div>
 
-        {/* Submissions Panel */}
         <div className="lg:col-span-2">
           {selectedTest ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
@@ -481,7 +480,6 @@ export default function TestManagement() {
         </div>
       </div>
 
-      {/* Comment Modal */}
       {showCommentModal && selectedSubmission && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700">
@@ -501,7 +499,6 @@ export default function TestManagement() {
         </div>
       )}
 
-      {/* Submission Detail Modal */}
       {showDetailModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-3xl mx-auto border dark:border-gray-700 my-8">
@@ -526,7 +523,6 @@ export default function TestManagement() {
               </div>
             ) : submissionDetail ? (
               <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
-                {/* Summary */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
                     <p className="text-lg font-bold text-gray-900 dark:text-white">{submissionDetail.percentage}%</p>
@@ -546,14 +542,12 @@ export default function TestManagement() {
                   </div>
                 </div>
 
-                {/* Admin comment */}
                 {submissionDetail.admin_comment && (
                   <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-sm text-green-800 dark:text-green-300"><strong>Feedback:</strong> {submissionDetail.admin_comment}</p>
                   </div>
                 )}
 
-                {/* Questions & Answers */}
                 <h3 className="text-base font-semibold text-gray-900 dark:text-white mt-4">Questions & Answers</h3>
                 {submissionDetail.questions.map((q, idx) => {
                   const answer = submissionDetail.answers[q.id] || {};
@@ -579,7 +573,6 @@ export default function TestManagement() {
                         </span>
                       </div>
                       
-                      {/* MCQ options */}
                       {q.type === "mcq" && q.options && (
                         <div className="space-y-1 mt-2">
                           {q.options.map((opt, oi) => {
@@ -599,7 +592,6 @@ export default function TestManagement() {
                         </div>
                       )}
                       
-                      {/* Text answers */}
                       {(q.type === "short_answer" || q.type === "essay") && (
                         <div className="mt-2">
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Student's Answer:</p>
@@ -609,14 +601,12 @@ export default function TestManagement() {
                         </div>
                       )}
                       
-                      {/* True/False */}
                       {q.type === "true_false" && (
                         <p className="text-sm mt-1 text-gray-700 dark:text-gray-300">
                           Answer: <strong>{answer.bool_answer !== undefined ? String(answer.bool_answer) : "N/A"}</strong>
                         </p>
                       )}
                       
-                      {/* Evaluation feedback */}
                       {(evalDetail?.feedback || answer.feedback) && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                           {evalDetail?.feedback || answer.feedback}

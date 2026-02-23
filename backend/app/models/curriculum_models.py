@@ -78,7 +78,7 @@ class SubjectDocument(BaseModel):
 class CreateSubjectRequest(BaseModel):
     """Request to create a new subject"""
     subject_name: str = Field(..., min_length=1, max_length=100)
-    class_level: int = Field(..., ge=5, le=12)
+    class_level: int = Field(..., ge=1, le=12)
     board: str = Field(default="CBSE")
     description: Optional[str] = ""
     icon: Optional[str] = "📚"
@@ -200,7 +200,7 @@ class PendingCurriculumItem(BaseModel):
 class UploadCurriculumRequest(BaseModel):
     """Request to upload PDF/image for curriculum extraction"""
     subject_name: str = Field(..., min_length=1, max_length=100)
-    class_level: int = Field(..., ge=5, le=12)
+    class_level: int = Field(..., ge=1, le=12)
     board: str = Field(default="CBSE")
 
 class ApprovePendingItemRequest(BaseModel):

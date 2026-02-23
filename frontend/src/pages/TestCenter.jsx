@@ -71,10 +71,23 @@ export default function TestCenter() {
     { id: "staff", label: "Staff Tests", icon: FileText },
   ];
 
+  const now = new Date();
+  const parseDate = (s) => {
+    if (!s) return null;
+    const d = new Date(s.replace(' ', 'T'));
+    return isNaN(d.valueOf()) ? null : d;
+  };
+  const availableTests = staffTests.filter((t) => {
+    const start = parseDate(t.start_date);
+    const due = parseDate(t.due_date);
+    const isActive = (!start || now >= start) && (!due || now <= due);
+    return isActive && !t.has_attempted;
+  }).length;
+
   const stats = [
     { label: "Tests Taken", value: analytics?.total_tests_taken || "0", icon: CheckCircle2 },
     { label: "Avg. Score", value: `${analytics?.overall_average || 0}%`, icon: TrendingUp },
-    { label: "This Week", value: analytics?.tests_this_week || "0", icon: Clock },
+    { label: "Available Tests", value: availableTests, icon: ClipboardList },
   ];
 
   return (
@@ -235,9 +248,8 @@ export default function TestCenter() {
                 ) : (
                   <div className="space-y-4">
                     {staffTests.map((test) => {
-                      const now = new Date();
-                      const startDate = test.start_date ? new Date(test.start_date) : null;
-                      const dueDate = test.due_date ? new Date(test.due_date) : null;
+                      const startDate = parseDate(test.start_date);
+                      const dueDate = parseDate(test.due_date);
                       const isBeforeStart = startDate && now < startDate;
                       const isAfterDue = dueDate && now > dueDate;
                       const isActive = !isBeforeStart && !isAfterDue;
@@ -245,18 +257,30 @@ export default function TestCenter() {
                       return (
                         <div
                           key={test.id}
-                          className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow"
+                          className={`bg-white dark:bg-gray-800 rounded-2xl p-6 border transition-shadow hover:shadow-md ${
+                            isActive && !test.has_attempted
+                              ? "border-orange-200 dark:border-orange-800/50"
+                              : test.has_attempted
+                              ? "border-green-100 dark:border-green-900/30"
+                              : "border-gray-100 dark:border-gray-700"
+                          }`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{test.title}</h3>
-                                {test.has_attempted && (
+                                {test.has_attempted ? (
                                   <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium flex items-center gap-1">
                                     <CheckCircle2 className="w-3 h-3" />
-                                    Attempted
+                                    Completed
+                                    {test.best_score != null && ` · ${test.best_score}%`}
                                   </span>
-                                )}
+                                ) : isActive ? (
+                                  <span className="text-xs px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium flex items-center gap-1">
+                                    <Play className="w-3 h-3" />
+                                    Available
+                                  </span>
+                                ) : null}
                                 {isBeforeStart && (
                                   <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
                                     Upcoming
@@ -303,13 +327,15 @@ export default function TestCenter() {
                                   </span>
                                 )}
                               </div>
-                              {test.has_attempted && test.best_score != null && (
-                                <div className="mt-3">
-                                  <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                                    Best Score: {test.best_score}%
-                                  </span>
+                              {test.has_attempted && (
+                                <div className="mt-3 flex items-center gap-3">
+                                  {test.best_score != null && (
+                                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                                      Best Score: {test.best_score}%
+                                    </span>
+                                  )}
                                   {test.attempts_remaining != null && test.attempts_remaining > 0 && (
-                                    <span className="text-xs text-gray-400 ml-3">
+                                    <span className="text-xs text-gray-400">
                                       {test.attempts_remaining} attempt{test.attempts_remaining !== 1 ? 's' : ''} remaining
                                     </span>
                                   )}

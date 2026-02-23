@@ -51,7 +51,7 @@ class AnnotationRequest(BaseModel):
     """Request schema for annotation AI actions."""
     selected_text: str = Field(..., description="Text selected by user for annotation")
     action: Literal["define", "elaborate", "stick_flow", "summarize_page", "summarize_chapter"] = Field(..., description="AI action to perform")
-    class_level: int = Field(..., ge=5, le=12, description="Student's class level")
+    class_level: int = Field(..., ge=1, le=12, description="Student's class level")
     subject: str = Field(..., description="Subject name (Mathematics, Physics, etc.)")
     chapter: int | None = Field(None, ge=1, description="Optional chapter number")
     image_data: str | None = Field(None, description="Optional base64 image data for screenshot doubts")
@@ -655,7 +655,7 @@ Please verify the chapter number and try again."""
 @router.post("/quick-define")
 async def quick_define(
     text: str = Query(..., description="Text to define"),
-    class_level: int = Query(..., ge=5, le=12),
+    class_level: int = Query(..., ge=1, le=12),
     subject: str = Query(..., description="Subject name")
 ):
     """

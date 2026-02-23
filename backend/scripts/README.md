@@ -1,4 +1,4 @@
-# 📂 Backend Scripts
+#  Backend Scripts
 
 This folder contains production utility scripts for data processing and system setup.
 
@@ -74,7 +74,7 @@ python scripts/upload_pdfs_to_pinecone.py
 
 ---
 
-## 📋 Prerequisites
+##  Prerequisites
 
 All scripts require:
 - Active virtual environment

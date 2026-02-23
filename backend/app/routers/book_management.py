@@ -1577,7 +1577,7 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         if vectors_to_delete == 0:
             raise HTTPException(status_code=404, detail=f"No vectors found in namespace '{namespace}'")
         
-        logger.info(f"🗑️ Deleting namespace '{namespace}' with {vectors_to_delete} vectors...")
+        logger.info(f" Deleting namespace '{namespace}' with {vectors_to_delete} vectors...")
         index.delete(delete_all=True, namespace=namespace)
         
         books_to_delete = list(db.books.find({"subject": {"$regex": f"^{subject}$", "$options": "i"}}))
@@ -1678,7 +1678,7 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
                 detail=f"No vectors found for Class {class_level} in {subject}"
             )
         
-        logger.info(f"🗑️ Deleting {vectors_to_delete} vectors for {subject} Class {class_level}...")
+        logger.info(f" Deleting {vectors_to_delete} vectors for {subject} Class {class_level}...")
         
         for i in range(0, len(all_vector_ids), 1000):
             batch = all_vector_ids[i:i+1000]
@@ -1798,7 +1798,7 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
                 detail=f"No vectors found for {subject} Class {class_level} Chapter {chapter_number}"
             )
         
-        logger.info(f"🗑️ Deleting {vectors_to_delete} vectors for {subject} Class {class_level} Chapter {chapter_number}...")
+        logger.info(f" Deleting {vectors_to_delete} vectors for {subject} Class {class_level} Chapter {chapter_number}...")
         
         for i in range(0, len(all_vector_ids), 1000):
             batch = all_vector_ids[i:i+1000]

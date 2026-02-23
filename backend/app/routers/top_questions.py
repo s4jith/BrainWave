@@ -55,7 +55,7 @@ async def get_top_questions(request: GetTopQuestionsRequest):
     ```
     """
     try:
-        logger.info(f"📋 Getting top questions: {request.subject} class {request.class_level} ({request.mode})")
+        logger.info(f" Getting top questions: {request.subject} class {request.class_level} ({request.mode})")
         
         questions = top_question_service.get_top_questions(
             subject=request.subject,
@@ -99,7 +99,7 @@ async def get_recommendations(request: GetRecommendationsRequest):
     ```
     """
     try:
-        logger.info(f"🎯 Getting recommendations for user {request.user_id}: {request.subject} class {request.class_level}")
+        logger.info(f" Getting recommendations for user {request.user_id}: {request.subject} class {request.class_level}")
         
         recommendations = top_question_service.get_recommendations(
             user_id=request.user_id,

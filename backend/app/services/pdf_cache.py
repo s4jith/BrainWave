@@ -75,7 +75,7 @@ def cleanup_cache():
                 file_age = time.time() - os.path.getmtime(filepath)
                 if file_age > CACHE_EXPIRY:
                     os.remove(filepath)
-                    logger.info(f"🗑️ Cleaned up expired cache: {filename}")
+                    logger.info(f" Cleaned up expired cache: {filename}")
     except Exception as e:
         logger.warning(f"Cache cleanup failed: {e}")
 
@@ -86,6 +86,6 @@ def clear_cache():
             filepath = os.path.join(CACHE_DIR, filename)
             if os.path.isfile(filepath):
                 os.remove(filepath)
-        logger.info("🗑️ PDF cache cleared")
+        logger.info(" PDF cache cleared")
     except Exception as e:
         logger.warning(f"Cache clear failed: {e}")

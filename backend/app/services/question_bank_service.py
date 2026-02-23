@@ -246,7 +246,7 @@ class QuestionBankService:
             
             deleted_count = result.deleted_count
             if deleted_count > 0:
-                logger.info(f"🗑️ Cleaned up {deleted_count} expired pending questions")
+                logger.info(f" Cleaned up {deleted_count} expired pending questions")
             
             return deleted_count
         except Exception as e:

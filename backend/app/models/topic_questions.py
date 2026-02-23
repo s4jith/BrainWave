@@ -48,7 +48,7 @@ class Topic(BaseModel):
 
 class ChapterQuestionBank(BaseModel):
     """Complete question bank for a chapter with all topics."""
-    class_level: int = Field(..., ge=5, le=12, description="Class level")
+    class_level: int = Field(..., ge=1, le=12, description="Class level")
     subject: str = Field(..., description="Subject name")
     chapter_number: int = Field(..., ge=1, description="Chapter number")
     chapter_name: str = Field(..., description="Chapter name")

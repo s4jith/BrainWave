@@ -437,7 +437,7 @@ class TopQuestionService:
                                 difficulty=doc.get("difficulty", "medium")
                             ))
             
-            logger.info(f"🎯 Generated {len(recommendations)} recommendations for user {user_id}")
+            logger.info(f" Generated {len(recommendations)} recommendations for user {user_id}")
             return recommendations
             
         except Exception as e:

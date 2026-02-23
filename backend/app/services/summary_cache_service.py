@@ -176,7 +176,7 @@ class SummaryCacheService:
             deleted_count = result.deleted_count
             
             if deleted_count > 0:
-                logger.info(f"🗑️ Deleted {deleted_count} cached summaries for {subject} Class {class_level} Chapter {chapter}")
+                logger.info(f" Deleted {deleted_count} cached summaries for {subject} Class {class_level} Chapter {chapter}")
             else:
                 logger.info(f"ℹ️ No cached summaries found for {subject} Class {class_level} Chapter {chapter}")
             

@@ -31,7 +31,7 @@ PENDING_CURRICULUM_COLLECTION = "pending_curriculum"
 
 @router.get("/subjects", response_model=List[SubjectSummary])
 async def get_all_subjects(
-    class_level: Optional[int] = Query(None, ge=5, le=12),
+    class_level: Optional[int] = Query(None, ge=1, le=12),
     is_active: Optional[bool] = Query(True)
 ):
     """
@@ -91,18 +91,26 @@ async def get_subject_details(subject_id: str):
     """
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
-        subject = await collection.find_one({"subject_id": subject_id})
+        # Match same is_active filter as list endpoint to avoid returning wrong document
+        # when duplicates exist (e.g. after re-approval creates a new doc)
+        subject = await collection.find_one({"subject_id": subject_id, "is_active": {"$ne": False}})
+        
+        if not subject:
+            # Fallback: try without is_active filter
+            subject = await collection.find_one({"subject_id": subject_id})
         
         if not subject:
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        active_chapters = []
+        # For admin management: include ALL chapters (even inactive) so admins can see/restore them
+        all_chapters = []
         for chapter in subject.get("chapters", []):
-            if chapter.get("is_active", True) != False:
-                chapter_copy = chapter.copy()
-                active_topics = [t for t in chapter_copy.get("topics", []) if t.get("is_active", True) != False]
-                chapter_copy["topics"] = active_topics
-                active_chapters.append(chapter_copy)
+            chapter_copy = chapter.copy()
+            # Include all topics too (admin needs full visibility)
+            chapter_copy["topics"] = chapter_copy.get("topics", [])
+            all_chapters.append(chapter_copy)
+        
+        active_chapter_count = len([ch for ch in all_chapters if ch.get("is_active", True) != False])
         
         subject_data = {
             "subject_id": subject["subject_id"],
@@ -112,9 +120,9 @@ async def get_subject_details(subject_id: str):
             "description": subject.get("description", ""),
             "icon": subject.get("icon", "📚"),
             "color": subject.get("color", "#3B82F6"),
-            "chapters": active_chapters,
-            "total_topics": sum(len(ch.get("topics", [])) for ch in active_chapters),
-            "total_chapters": len(active_chapters),
+            "chapters": all_chapters,
+            "total_topics": sum(len(ch.get("topics", [])) for ch in all_chapters),
+            "total_chapters": active_chapter_count,
             "is_active": subject.get("is_active", True),
             "created_at": subject.get("created_at", datetime.utcnow()),
             "updated_at": subject.get("updated_at", datetime.utcnow())
@@ -294,7 +302,7 @@ async def delete_subject(subject_id: str):
             logger.warning(f" Subject not found: {subject_id}")
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        logger.info(f"🗑️ Deleted subject: {subject_id}, is_active now: {result.get('is_active', 'NOT SET')}")
+        logger.info(f" Deleted subject: {subject_id}, is_active now: {result.get('is_active', 'NOT SET')}")
         return {"success": True, "message": "Subject deleted successfully"}
         
     except HTTPException:
@@ -473,7 +481,7 @@ async def delete_chapter(subject_id: str, chapter_id: str):
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Chapter not found")
         
-        logger.info(f"🗑️ Deleted chapter: {chapter_id}")
+        logger.info(f" Deleted chapter: {chapter_id}")
         return {"success": True, "message": "Chapter deleted successfully"}
         
     except HTTPException:
@@ -791,7 +799,7 @@ async def delete_topic(subject_id: str, chapter_id: str, topic_id: str):
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Topic not found")
         
-        logger.info(f"🗑️ Deleted topic: {topic_id}")
+        logger.info(f" Deleted topic: {topic_id}")
         return {"success": True, "message": "Topic deleted successfully"}
         
     except HTTPException:
@@ -864,7 +872,7 @@ async def get_available_books():
 async def extract_curriculum_from_upload(
     file: UploadFile = File(...),
     subject_name: str = Form(...),
-    class_level: int = Form(..., ge=5, le=12),
+    class_level: int = Form(..., ge=1, le=12),
     board: str = Form(default="CBSE"),
     uploaded_by: str = Form(...),
 ):
@@ -975,7 +983,7 @@ async def get_pending_curriculum_items(
         
         pending_items = [PendingCurriculumItem(**item) for item in items]
         
-        logger.info(f"📋 Retrieved {len(pending_items)} pending curriculum items")
+        logger.info(f" Retrieved {len(pending_items)} pending curriculum items")
         return pending_items
         
     except Exception as e:
@@ -1327,7 +1335,7 @@ async def delete_pending_item(pending_id: str):
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Pending item not found")
         
-        logger.info(f"🗑️ Deleted pending item: {pending_id}")
+        logger.info(f" Deleted pending item: {pending_id}")
         return {"success": True, "message": "Pending item deleted"}
         
     except HTTPException:

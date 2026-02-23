@@ -127,6 +127,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/subjects-management", label: "Subjects", icon: Layers },
         { path: "/book-management", label: "Books", icon: BookOpen },
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
+        { path: "/question-papers", label: "Question Papers", icon: FileText },
         { path: "/test-management", label: "Tests", icon: ClipboardList },
         { path: "/admin-reports", label: "Reports", icon: BarChart3 },
         { path: "/admin-suggestions", label: "Suggestions", icon: MessageCircle },
@@ -137,6 +138,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/teacher-dashboard", label: "Dashboard", icon: LayoutDashboard },
         { path: "/teacher-groups", label: "Student Groups", icon: Users },
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
+        { path: "/question-papers", label: "Question Papers", icon: FileText },
         { path: "/teacher-tests", label: "Tests", icon: ClipboardList },
         { path: "/teacher-reports", label: "Reports", icon: BarChart3 },
     ];

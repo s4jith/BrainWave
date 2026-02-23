@@ -532,7 +532,8 @@ Requirements:
 {requirements_str}
 Question formats:
 - MCQ: Include "options" array and "correct_answer" string. marks=1
-- FILLUP: Use _______ for blank in text. marks=1  
+- FILLUP: Use _______ for blank in text. marks=1
+- TRUE_FALSE: Statement that is true or false. Set "correct_answer" to "True" or "False". marks=1
 - SHORT_ANSWER: 2-3 line answer. marks=2
 - LONG_ANSWER: Detailed answer. marks=5
 
@@ -541,7 +542,7 @@ Context:
 
 Return ONLY a valid JSON array. No markdown, no extra text.
 Example format:
-[{{"text":"Question?","type":"mcq","difficulty":"easy","marks":1,"options":["A","B","C","D"],"correct_answer":"A"}}]
+[{{"text":"Question?","type":"mcq","difficulty":"easy","marks":1,"options":["A","B","C","D"],"correct_answer":"A"}},{{"text":"The sun is a star.","type":"true_false","difficulty":"easy","marks":1,"options":[],"correct_answer":"True"}}]
 
 JSON:"""
 

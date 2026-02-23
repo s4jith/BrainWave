@@ -232,7 +232,7 @@ class PineconeUploader:
         Args:
             namespace: Namespace to delete
         """
-        logger.warning(f"🗑️  Deleting all vectors in namespace: {namespace}")
+        logger.warning(f"  Deleting all vectors in namespace: {namespace}")
         
         try:
             self.index.delete(delete_all=True, namespace=namespace)

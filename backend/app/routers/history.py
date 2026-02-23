@@ -27,7 +27,7 @@ async def save_history(request: AnnotationHistoryCreateRequest):
 @router.get("/{student_id}", response_model=AnnotationHistoryListResponse)
 async def get_history(
     student_id: str,
-    class_level: Optional[int] = Query(None, ge=5, le=12),
+    class_level: Optional[int] = Query(None, ge=1, le=12),
     subject: Optional[str] = Query(None),
     chapter: Optional[int] = Query(None, ge=1),
     limit: int = 50

@@ -31,7 +31,7 @@ async def initialize_database():
         logger.info("🔌 Connected to MongoDB Atlas")
         
         # ==================== USERS COLLECTION ====================
-        logger.info("📋 Creating 'users' collection...")
+        logger.info(" Creating 'users' collection...")
         
         users_col = db["users"]
         
@@ -44,7 +44,7 @@ async def initialize_database():
         logger.info("   - email")
         
         # ==================== USER ACTIVITIES COLLECTION ====================
-        logger.info("📋 Creating 'user_activities' collection...")
+        logger.info(" Creating 'user_activities' collection...")
         
         activities_col = db["user_activities"]
         
@@ -57,7 +57,7 @@ async def initialize_database():
         logger.info("   - date")
         
         # ==================== NOTES COLLECTION (enhance existing) ====================
-        logger.info("📋 Enhancing 'notes' collection...")
+        logger.info(" Enhancing 'notes' collection...")
         
         notes_col = db["notes"]
         
@@ -72,7 +72,7 @@ async def initialize_database():
         logger.info("   - student_id + created_at (for recent notes)")
         
         # ==================== EVALUATIONS COLLECTION (enhance existing) ====================
-        logger.info("📋 Enhancing 'evaluations' collection...")
+        logger.info(" Enhancing 'evaluations' collection...")
         
         eval_col = db["evaluations"]
         

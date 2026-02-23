@@ -5,10 +5,6 @@ import {
   BookOpen,
   Brain,
   Target,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  Star,
   Lightbulb,
   CheckCircle,
   Loader2,
@@ -17,7 +13,6 @@ import {
   Award,
   Flame,
   Clock,
-  Settings,
   Plus,
   Minus
 } from "lucide-react";
@@ -32,7 +27,6 @@ export default function TopicSelector({
 }) {
   const [step, setStep] = useState(1); 
   const [loading, setLoading] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
 
   const [subjects, setSubjects] = useState([]);
   const [chapters, setChapters] = useState([]);
@@ -45,13 +39,14 @@ export default function TopicSelector({
   const [testConfig, setTestConfig] = useState({
     mcq: 5,
     fillup: 5,
+    true_false: 0,
     short: 5,
     timer: false,
     timeLimit: 40
   });
 
-  const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.short || 0);
-  const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.short || 0) * 2;
+  const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.true_false || 0) + (testConfig.short || 0);
+  const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.true_false || 0) * 1 + (testConfig.short || 0) * 2;
 
   useEffect(() => {
     fetchSubjects();
@@ -60,20 +55,14 @@ export default function TopicSelector({
   const fetchSubjects = async () => {
     setLoading(true);
     try {
-      console.log("Fetching QB subjects for class:", classLevel);
       const data = await testService.getQBSubjects(classLevel);
-      console.log("QB Subjects API response:", data);
 
       if (Array.isArray(data) && data.length > 0) {
         setSubjects(data);
       } else {
-        
-        console.log("No subjects found for class", classLevel);
         setSubjects([]);
       }
     } catch (error) {
-      console.error("Failed to fetch subjects:", error);
-      
       setSubjects([]);
     } finally {
       setLoading(false);
@@ -84,17 +73,13 @@ export default function TopicSelector({
     setSelectedSubject(subject);
     setLoading(true);
     try {
-      console.log("Fetching QB chapters for:", { classLevel, subject: subject.subject });
       const chapterData = await testService.getQBChapters(classLevel, subject.subject);
-
-      console.log("QB Chapters received:", chapterData);
 
       setChapters(Array.isArray(chapterData) ? chapterData : []);
       
       setRecommendations([]);
       setStep(2);
     } catch (error) {
-      console.error("Failed to fetch chapters:", error);
       setChapters([]);
     } finally {
       setLoading(false);
@@ -103,7 +88,6 @@ export default function TopicSelector({
 
   const handleSelectChapter = (chapter) => {
     setSelectedChapter(chapter);
-    
     setStep(3);
   };
 
@@ -114,11 +98,13 @@ export default function TopicSelector({
       const diffSuffix = difficulty ? `_${difficulty}` : '';
       const maxMcq = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
       const maxFill = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
+      const maxTF = selectedChapter[`true_false${diffSuffix}`] || selectedChapter.true_false_count || 0;
       const maxShort = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
       setTestConfig(prev => ({
         ...prev,
         mcq: Math.min(5, maxMcq),
         fillup: Math.min(5, maxFill),
+        true_false: Math.min(5, maxTF),
         short: Math.min(5, maxShort)
       }));
     }
@@ -137,6 +123,7 @@ export default function TopicSelector({
 
       mcq_count: testConfig.mcq,
       fillup_count: testConfig.fillup,
+      true_false_count: testConfig.true_false,
       short_answer_count: testConfig.short,
       long_answer_count: 0,
 
@@ -154,6 +141,7 @@ export default function TopicSelector({
       const diffSuffix = selectedDifficulty ? `_${selectedDifficulty}` : '';
       if (type === 'mcq') max = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
       if (type === 'fillup') max = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
+      if (type === 'true_false') max = selectedChapter[`true_false${diffSuffix}`] || selectedChapter.true_false_count || 0;
       if (type === 'short') max = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
     }
 
@@ -185,15 +173,6 @@ export default function TopicSelector({
       setChapters([]);
     } else if (step === 4) {
       setStep(3);
-      
-    }
-  };
-
-  const getTrendIcon = (trend) => {
-    switch (trend) {
-      case "improving": return <TrendingUp className="w-4 h-4 text-green-500" />;
-      case "declining": return <TrendingDown className="w-4 h-4 text-red-500" />;
-      default: return null;
     }
   };
 
@@ -207,7 +186,6 @@ export default function TopicSelector({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        {}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -225,7 +203,6 @@ export default function TopicSelector({
             <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
           </div>
 
-          {/* Progress Steps - 4 steps */}
           <div className="flex items-center gap-2">
             {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex items-center gap-2">
@@ -241,7 +218,6 @@ export default function TopicSelector({
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -249,7 +225,6 @@ export default function TopicSelector({
             </div>
           ) : (
             <>
-              {/* Step 1: Subject Selection */}
               {step === 1 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {subjects.length === 0 ? (
@@ -284,10 +259,8 @@ export default function TopicSelector({
                 </div>
               )}
 
-              {/* Step 2: Chapter Selection */}
               {step === 2 && (
                 <div className="space-y-6">
-                  {}
                   {recommendations.length > 0 && (
                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
                       <div className="flex items-center gap-2 mb-3">
@@ -316,7 +289,6 @@ export default function TopicSelector({
                     </div>
                   )}
 
-                  {}
                   <div className="space-y-2">
                     {chapters.map((chapter) => (
                       <button
@@ -344,10 +316,8 @@ export default function TopicSelector({
                 </div>
               )}
 
-              {/* Step 3: Difficulty Selection */}
               {step === 3 && selectedChapter && (
                 <div className="space-y-6">
-                  {}
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 font-bold text-lg">
@@ -360,11 +330,9 @@ export default function TopicSelector({
                     </div>
                   </div>
 
-                  {}
                   <div className="space-y-3">
                     <h4 className="font-medium text-gray-700 mb-4">Choose your difficulty level:</h4>
 
-                    {/* Easy */}
                     <button
                       onClick={() => handleSelectDifficulty("easy")}
                       className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "easy"
@@ -387,7 +355,6 @@ export default function TopicSelector({
                       </div>
                     </button>
 
-                    {}
                     <button
                       onClick={() => handleSelectDifficulty("medium")}
                       className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "medium"
@@ -410,7 +377,6 @@ export default function TopicSelector({
                       </div>
                     </button>
 
-                    {}
                     <button
                       onClick={() => handleSelectDifficulty("hard")}
                       className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "hard"
@@ -434,7 +400,6 @@ export default function TopicSelector({
                     </button>
                   </div>
 
-                  {/* Test Info */}
                   <div className="bg-blue-50/50 rounded-xl p-4 mt-6 border border-blue-100">
                     <p className="text-sm text-blue-800 flex items-center gap-2">
                       <Sparkles className="w-4 h-4" />
@@ -444,10 +409,8 @@ export default function TopicSelector({
                 </div>
               )}
 
-              {/* Step 4: Question Config (NEW) */}
               {step === 4 && selectedChapter && (
                 <div className="space-y-6">
-                  {}
                   <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100">
                     <div>
                       <h3 className="font-semibold text-gray-800">{selectedChapter.chapter_name}</h3>
@@ -460,14 +423,13 @@ export default function TopicSelector({
                       <div className="flex gap-3 mt-1 text-sm font-medium text-gray-600">
                         <span>MCQ: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}</span>
                         <span>Fill: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}</span>
+                        <span>T/F: {selectedChapter[`true_false_${selectedDifficulty}`] || 0}</span>
                         <span>Short: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}</span>
                       </div>
                     </div>
                   </div>
 
-                  {}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {}
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
@@ -501,7 +463,6 @@ export default function TopicSelector({
                       </div>
                     </div>
 
-                    {/* Fillup Config */}
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
@@ -535,7 +496,39 @@ export default function TopicSelector({
                       </div>
                     </div>
 
-                    {/* Short Answer Config */}
+                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-teal-500" />
+                          <div>
+                            <h4 className="font-medium text-gray-700">True / False</h4>
+                            <p className="text-xs text-gray-400">1 mark each</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
+                          Max: {selectedChapter[`true_false_${selectedDifficulty}`] || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('true_false', (testConfig.true_false || 0) - 1)}
+                          disabled={(testConfig.true_false || 0) <= 0}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xl font-bold w-12 text-center">{testConfig.true_false || 0}</span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleConfigChange('true_false', (testConfig.true_false || 0) + 1)}
+                          disabled={(testConfig.true_false || 0) >= (selectedChapter[`true_false_${selectedDifficulty}`] || 0)}
+                          title={(testConfig.true_false || 0) >= (selectedChapter[`true_false_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
@@ -571,7 +564,6 @@ export default function TopicSelector({
 
                   </div>
 
-                  {}
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
@@ -603,7 +595,6 @@ export default function TopicSelector({
                     )}
                   </div>
 
-                  {/* Total Summary */}
                   <div className="flex items-center justify-between p-4 bg-orange-50 rounded-xl border border-orange-100">
                     <div className="text-center">
                       <span className="block text-2xl font-bold text-gray-800">{totalQuestions}</span>
@@ -621,7 +612,6 @@ export default function TopicSelector({
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-gray-100 flex justify-between">
           <Button variant="outline" onClick={onCancel}>
             Cancel

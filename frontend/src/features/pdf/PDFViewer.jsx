@@ -273,8 +273,8 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setSummaryData(null);
     try {
       const subject = currentLesson.subject || currentLesson.book_subject || "";
-      const classLevel = currentLesson.class_level || currentLesson.book_class || 0;
-      const chapterNumber = currentLesson.chapter_number || currentLesson.number || 1;
+      const classLevel = currentLesson.classLevel || currentLesson.class_level || currentLesson.book_class || 0;
+      const chapterNumber = currentLesson.chapter_number || currentLesson.chapterNumber || currentLesson.number || 1;
       const res = await fetch(
         `${API_BASE}/api/curriculum/chapter-summary-by-book?subject_name=${encodeURIComponent(subject)}&class_level=${classLevel}&chapter_number=${chapterNumber}`
       );

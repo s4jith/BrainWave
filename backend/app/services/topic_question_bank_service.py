@@ -1520,7 +1520,7 @@ Output ONLY the JSON object."""
         Structure: {easy: 10 variants, medium: 10 variants, hard: 10 variants}
         Total: 30 variants × 15 = 450 questions stored.
         """
-        logger.info(f"🎯 Generating chapter test pool (10 variants per difficulty) for {subject} Ch.{chapter_number}...")
+        logger.info(f" Generating chapter test pool (10 variants per difficulty) for {subject} Ch.{chapter_number}...")
         
         collection = mongodb.db[self.CHAPTER_TEST_COLLECTION]
         
@@ -1996,7 +1996,7 @@ OUTPUT JSON ONLY (no markdown):
             fillup_pool = variant.get("fillup_pool", [])
             two_mark_pool = variant.get("two_mark_pool", [])
             
-            logger.info(f"🎯 Using {difficulty.upper()} variant {variant_index + 1}/{len(difficulty_variants)} for student {student_id}")
+            logger.info(f" Using {difficulty.upper()} variant {variant_index + 1}/{len(difficulty_variants)} for student {student_id}")
             
             formatted_questions = []
             q_num = 1

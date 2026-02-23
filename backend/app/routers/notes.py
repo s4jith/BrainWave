@@ -40,7 +40,7 @@ async def create_note(request: NoteCreateRequest):
 @router.get("/{student_id}", response_model=NotesListResponse)
 async def get_notes(
     student_id: str,
-    class_level: Optional[int] = Query(None, ge=5, le=12),
+    class_level: Optional[int] = Query(None, ge=1, le=12),
     subject: Optional[str] = Query(None),
     chapter: Optional[int] = Query(None, ge=1),
     page_number: Optional[int] = Query(None, ge=1)

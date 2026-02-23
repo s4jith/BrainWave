@@ -70,17 +70,22 @@ QUESTION: "{question}"
 VALID SUBJECTS: {', '.join(self.valid_subjects)}
 
 CRITERIA:
-- Physics: Forces, motion, energy, electricity, optics, units, Newton's laws, gravitation, thermodynamics (physical aspect)
-- Chemistry: Elements, reactions, atomic structure, periodic table, bonding, thermodynamics (chemical aspect), stoichiometry
-- Mathematics: Algebra, geometry, calculus, numbers, probability, equations (y=mx+c), trigonometry
-- Biology: Living organisms, cells, genetics, human body, plants
+- Physics: Forces, motion, energy, electricity, optics, units, Newton's laws, gravitation, thermodynamics (physical aspect), speed, velocity, acceleration, waves, sound, light, magnetism, pressure, work-energy theorem
+- Chemistry: Elements, reactions, atomic structure, periodic table, bonding, thermodynamics (chemical aspect), stoichiometry, acids, bases, salts, carbon compounds
+- Mathematics: Algebra, geometry, calculus, numbers, probability, equations (y=mx+c), trigonometry, arithmetic, fractions, percentages, profit-loss, area, volume, statistics, polynomials, quadratic equations
+- Biology: Living organisms, cells, genetics, human body, plants, ecology, classification, reproduction
 - English: Grammar, literature, comprehension, poetry
 - Hindi: Grammar, literature, poems (in Hindi/Devanagari)
 - Social Science: History, geography, civics, economics
 
-IMPORTANT:
+IMPORTANT DISAMBIGUATION RULES:
 - "Newton's Laws" is PHYSICS.
 - "y = mx + c" is MATHEMATICS.
+- The word "sum" or "solve this sum" is AMBIGUOUS — it can mean:
+  * A Physics numerical problem (if context mentions force, motion, energy, current, etc.)
+  * A Mathematics arithmetic/algebra problem (if context mentions numbers, equations, area, etc.)
+  Use surrounding keywords to decide. Do NOT default to one subject.
+- "problem" and "question" are generic — classify by the TOPIC, not the word "problem".
 - Be precise. Do not use generic "Science" if a specific subject applies.
 
 Return ONLY a JSON object:

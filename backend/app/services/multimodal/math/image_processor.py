@@ -40,7 +40,7 @@ class ImageProcessor:
         self._clip_model = None
         self._clip_processor = None
         self._projection = None
-        logger.info(f"🖼️ Initializing Image Processor on device: {device}")
+        logger.info(f" Initializing Image Processor on device: {device}")
     
     def _load_clip(self):
         """Lazy load CLIP model and projection layer."""

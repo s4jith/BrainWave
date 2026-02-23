@@ -328,7 +328,7 @@ async def start_chapter_test(request: StartChapterTestRequest):
         )
         
         if not pool_status.get("exists"):
-            logger.info(f"🎯 First student for {request.subject} Ch.{request.chapter_number} - Generating questions...")
+            logger.info(f" First student for {request.subject} Ch.{request.chapter_number} - Generating questions...")
             is_first_time = True
             
             gen_result = await topic_question_bank_service.generate_chapter_test_pool(
@@ -863,7 +863,7 @@ async def start_ai_test_with_topics(request: StartAITestRequest):
         )
         
         if not pool_status.get("exists"):
-            logger.info(f"🎯 First test for {request.subject} Ch.{request.chapter_number} - Generating variants for all difficulties...")
+            logger.info(f" First test for {request.subject} Ch.{request.chapter_number} - Generating variants for all difficulties...")
             gen_result = await topic_question_bank_service.generate_chapter_test_pool(
                 class_level=request.class_level,
                 subject=request.subject,
@@ -987,6 +987,7 @@ class StartQBTestRequest(BaseModel):
     difficulty: str = Field(default="medium", description="Difficulty level (easy, medium, hard)")
     mcq_count: int = Field(default=0, ge=0, le=50, description="Number of MCQ questions")
     fillup_count: int = Field(default=0, ge=0, le=50, description="Number of fill-up questions")
+    true_false_count: int = Field(default=0, ge=0, le=50, description="Number of true/false questions")
     short_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 2-mark questions")
     long_answer_count: int = Field(default=0, ge=0, le=50, description="Number of 5-mark questions")
     time_limit_minutes: Optional[int] = Field(default=None, ge=1, le=300, description="Optional timer in minutes (null = no timer)")
@@ -1060,9 +1061,10 @@ async def get_qb_chapters(class_level: int, subject: str):
         chapters = []
         for r in results:
             counts = {
-                "mcq": 0, "fillup": 0, "short_answer": 0, "long_answer": 0,
+                "mcq": 0, "fillup": 0, "true_false": 0, "short_answer": 0, "long_answer": 0,
                 "mcq_easy": 0, "mcq_medium": 0, "mcq_hard": 0,
                 "fillup_easy": 0, "fillup_medium": 0, "fillup_hard": 0,
+                "true_false_easy": 0, "true_false_medium": 0, "true_false_hard": 0,
                 "short_answer_easy": 0, "short_answer_medium": 0, "short_answer_hard": 0,
                 "long_answer_easy": 0, "long_answer_medium": 0, "long_answer_hard": 0,
             }
@@ -1072,7 +1074,7 @@ async def get_qb_chapters(class_level: int, subject: str):
                 difficulty = item.get("difficulty", "medium").lower()
                 count = item.get("count", 0)
 
-                if q_type in ["mcq", "fillup", "short_answer", "long_answer"]:
+                if q_type in ["mcq", "fillup", "true_false", "short_answer", "long_answer"]:
                     counts[q_type] += count
                     key = f"{q_type}_{difficulty}"
                     if key in counts:
@@ -1084,6 +1086,7 @@ async def get_qb_chapters(class_level: int, subject: str):
                 "total_questions": r.get("total_questions", 0),
                 "mcq_count": counts["mcq"],
                 "fillup_count": counts["fillup"],
+                "true_false_count": counts["true_false"],
                 "short_answer_count": counts["short_answer"],
                 "long_answer_count": counts["long_answer"],
                 "mcq_easy": counts["mcq_easy"],
@@ -1092,6 +1095,9 @@ async def get_qb_chapters(class_level: int, subject: str):
                 "fillup_easy": counts["fillup_easy"],
                 "fillup_medium": counts["fillup_medium"],
                 "fillup_hard": counts["fillup_hard"],
+                "true_false_easy": counts["true_false_easy"],
+                "true_false_medium": counts["true_false_medium"],
+                "true_false_hard": counts["true_false_hard"],
                 "short_answer_easy": counts["short_answer_easy"],
                 "short_answer_medium": counts["short_answer_medium"],
                 "short_answer_hard": counts["short_answer_hard"],
@@ -1117,7 +1123,7 @@ async def start_qb_test(request: StartQBTestRequest):
     """
     import random
 
-    total_requested = request.mcq_count + request.fillup_count + request.short_answer_count + request.long_answer_count
+    total_requested = request.mcq_count + request.fillup_count + request.true_false_count + request.short_answer_count + request.long_answer_count
     if total_requested == 0:
         raise HTTPException(status_code=400, detail="Please select at least one question")
 
@@ -1138,6 +1144,7 @@ async def start_qb_test(request: StartQBTestRequest):
         type_configs = [
             ("mcq", request.mcq_count, 1),
             ("fillup", request.fillup_count, 1),
+            ("true_false", request.true_false_count, 1),
             ("short_answer", request.short_answer_count, 2),
             ("long_answer", request.long_answer_count, 5),
         ]
@@ -1157,7 +1164,7 @@ async def start_qb_test(request: StartQBTestRequest):
                 selected = random.sample(available, requested_count)
 
             for i, q in enumerate(selected):
-                all_questions.append({
+                question_data = {
                     "question_number": 0,
                     "question_id": str(q["_id"]),
                     "question_text": q.get("text", ""),
@@ -1172,7 +1179,12 @@ async def start_qb_test(request: StartQBTestRequest):
                     "topic_name": q.get("topic", ""),
                     "chapter_name": q.get("chapter_name", f"Chapter {request.chapter}"),
                     "keywords": []
-                })
+                }
+                if q_type == "true_false":
+                    question_data["options"] = {"A": "True", "B": "False"}
+                    correct = q.get("correct_answer", "").strip().lower()
+                    question_data["correct_option"] = "A" if correct in ("true", "a") else "B"
+                all_questions.append(question_data)
 
         if not all_questions:
             raise HTTPException(
@@ -1223,7 +1235,7 @@ async def start_qb_test(request: StartQBTestRequest):
                 "question_type": q["question_type"],
                 "marks": q["marks"],
                 "time_estimate": q["time_estimate"],
-                "options": q.get("options") if q["question_type"] == "mcq" else None
+                "options": q.get("options") if q["question_type"] in ("mcq", "true_false") else None
             }
             for q in all_questions
         ]

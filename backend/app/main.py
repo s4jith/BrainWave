@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         from app.services.question_bank_service import question_bank_service
         deleted = await question_bank_service.cleanup_expired_pending_questions()
         if deleted > 0:
-            logger.info(f"🗑️ Cleaned up {deleted} expired pending questions")
+            logger.info(f" Cleaned up {deleted} expired pending questions")
         
         logger.info("All systems initialized successfully")
     except Exception as e:
@@ -121,8 +121,9 @@ app.include_router(student.router)
 app.include_router(multilingual_chat.router)
 app.include_router(optimized_chat.router, prefix="/api")
 
-from app.routers import question_bank
+from app.routers import question_bank, question_papers
 app.include_router(question_bank.router)
+app.include_router(question_papers.router)
 
 from app.routers import top_questions
 app.include_router(top_questions.router)

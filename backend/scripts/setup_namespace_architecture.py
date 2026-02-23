@@ -58,7 +58,7 @@ def setup_namespace_architecture():
         
         # Check existing indexes
         existing_indexes = [index.name for index in pc.list_indexes()]
-        logger.info(f"\n📋 Current indexes: {len(existing_indexes)}")
+        logger.info(f"\n Current indexes: {len(existing_indexes)}")
         for idx in existing_indexes:
             logger.info(f"   - {idx}")
         
@@ -134,7 +134,7 @@ def setup_namespace_architecture():
         logger.info(f"   Namespaces: {len(SUBJECT_NAMESPACES)} subjects")
         logger.info(f"   Approach: One index + namespaces (optimal!)")
         
-        logger.info(f"\n🎯 Next Steps:")
+        logger.info(f"\n Next Steps:")
         logger.info("   1. Run data migration script to populate namespaces")
         logger.info("   2. Update backend to use namespace queries")
         logger.info("   3. Test cross-class learning")
