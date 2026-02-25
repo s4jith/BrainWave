@@ -123,6 +123,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/admin-dashboard", label: "Dashboard", icon: LayoutDashboard },
         { path: "/student-management", label: "Students", icon: Users },
         { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
+        { path: "/head-management", label: "Heads", icon: BookMarked },
         { path: "/group-management", label: "Student Groups", icon: FolderKanban },
         { path: "/subjects-management", label: "Subjects", icon: Layers },
         { path: "/book-management", label: "Books", icon: BookOpen },
@@ -144,7 +145,19 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/teacher-reports", label: "Reports", icon: BarChart3 },
     ];
 
-    const navItems = user?.role === "teacher" ? teacherNavItems : adminNavItems;
+    const headNavItems = [
+        { path: "/head-dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { path: "/head-groups", label: "Groups", icon: FolderKanban },
+        { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
+        { path: "/question-papers", label: "Question Papers", icon: FileText },
+        { path: "/head-reports", label: "Reports", icon: BarChart3 },
+    ];
+
+    const navItems = user?.role === "teacher"
+        ? teacherNavItems
+        : user?.role === "head"
+            ? headNavItems
+            : adminNavItems;
 
     const themeOptions = [
         { value: 'light', label: 'Light', icon: Sun },

@@ -12,7 +12,7 @@ const useUserStore = create(
         name: "",
         email: "",
         classLevel: 10,
-        preferredSubject: "Mathematics",
+        preferredSubject: "Maths",
         role: null, 
         subjects: [], 
         isOnboarded: false,
@@ -102,7 +102,7 @@ const useUserStore = create(
             name: "",
             email: "",
             classLevel: 6,
-            preferredSubject: "Mathematics",
+            preferredSubject: "Maths",
             role: null,
             subjects: [],
             isOnboarded: false,
@@ -130,6 +130,7 @@ const useUserStore = create(
       isAdmin: () => get().user.role === "admin",
       isTeacher: () => get().user.role === "teacher",
       isStudent: () => get().user.role === "student",
+      isHead: () => get().user.role === "head",
 
       hasPermission: (permission) => {
         const { permissions } = get().user;

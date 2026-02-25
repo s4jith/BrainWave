@@ -12,6 +12,7 @@ from datetime import datetime
 class UserRole(str, Enum):
     """User role enumeration."""
     ADMIN = "admin"
+    HEAD = "head"
     TEACHER = "teacher"
     STUDENT = "student"
 
@@ -87,6 +88,29 @@ ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
         Permission.MODERATE_CONTENT,
     },
     
+    UserRole.HEAD: {
+        Permission.VIEW_ALL_USERS,
+        Permission.CREATE_COURSE,
+        Permission.UPDATE_COURSE,
+        Permission.DELETE_COURSE,
+        Permission.PUBLISH_COURSE,
+        Permission.VIEW_ALL_COURSES,
+        Permission.CREATE_MODULE,
+        Permission.UPDATE_MODULE,
+        Permission.DELETE_MODULE,
+        Permission.UPLOAD_CONTENT,
+        Permission.CREATE_ASSESSMENT,
+        Permission.UPDATE_ASSESSMENT,
+        Permission.DELETE_ASSESSMENT,
+        Permission.GRADE_SUBMISSION,
+        Permission.VIEW_QUESTION_BANK,
+        Permission.MANAGE_QUESTION_BANK,
+        Permission.VIEW_CLASS_ANALYTICS,
+        Permission.VIEW_STUDENT_ANALYTICS,
+        Permission.EXPORT_DATA,
+        Permission.MODERATE_CONTENT,
+    },
+
     UserRole.TEACHER: {
         Permission.CREATE_COURSE,
         Permission.UPDATE_COURSE,

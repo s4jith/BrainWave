@@ -53,6 +53,7 @@ const STATUS_COLORS = {
 export default function QuestionPapers() {
   const { getAuthHeader, user } = useUserStore();
   const isAdmin = user?.role === "admin";
+  const isTeacher = user?.role === "teacher";
   const [papers, setPapers] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -226,7 +227,7 @@ export default function QuestionPapers() {
   return (
     <AdminLayout title="Question Papers" icon={FileText}>
       <div className="p-6 space-y-6">
-        {pendingCount > 0 && (
+        {pendingCount > 0 && !isTeacher && (
           <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -314,7 +315,7 @@ export default function QuestionPapers() {
           >
             <option value="">All Status</option>
             <option value="approved">Approved</option>
-            <option value="pending">Pending</option>
+            {!isTeacher && <option value="pending">Pending</option>}
             <option value="rejected">Rejected</option>
           </select>
         </div>
@@ -543,14 +544,12 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
     }
   }, [metadata.subjects, isAdmin]);
 
-  // Auto-select class when the selected subject has only one class level
+  // Auto-select subject when the selected class has only one matching subject
   useEffect(() => {
-    if (!subject) return;
-    const match = metadata.subjects?.find(s => s.subject === subject);
-    if (match && match.class_levels && match.class_levels.length === 1) {
-      setClassLevel(String(match.class_levels[0]));
-    }
-  }, [subject, metadata.subjects]);
+    if (!classLevel) return;
+    const filtered = (metadata.subjects || []).filter(s => (s.class_levels || []).includes(Number(classLevel)));
+    if (filtered.length === 1) setSubject(filtered[0].subject);
+  }, [classLevel, metadata.subjects]);
 
   const effectivePaperType = paperType === "other" ? customPaperType.trim() : paperType;
 
@@ -751,17 +750,32 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
               )}
             </div>
             <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class <span className="text-red-500">*</span></label>
+              <select
+                value={classLevel}
+                onChange={(e) => { setClassLevel(e.target.value); setSubject(""); }}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+              >
+                <option value="">Select class</option>
+                {[...new Set((metadata.subjects || []).flatMap(s => s.class_levels || []))].sort((a, b) => a - b).map(cl => (
+                  <option key={cl} value={cl}>Class {cl}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Subject <span className="text-red-500">*</span></label>
               {metadata.subjects && metadata.subjects.length > 0 ? (
                 <select
                   value={subject}
-                  onChange={(e) => { setSubject(e.target.value); setClassLevel(""); }}
+                  onChange={(e) => setSubject(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
                 >
                   <option value="">Select subject</option>
-                  {metadata.subjects.map(s => (
-                    <option key={s.subject} value={s.subject}>{s.subject}</option>
-                  ))}
+                  {(metadata.subjects || [])
+                    .filter(s => !classLevel || (s.class_levels || []).includes(Number(classLevel)))
+                    .map(s => (
+                      <option key={s.subject} value={s.subject}>{s.subject}</option>
+                    ))}
                 </select>
               ) : (
                 <input
@@ -771,23 +785,6 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                   className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
                 />
               )}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class <span className="text-red-500">*</span></label>
-              <select
-                value={classLevel}
-                onChange={(e) => setClassLevel(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-              >
-                <option value="">Select class</option>
-                {(() => {
-                  const match = metadata.subjects?.find(s => s.subject === subject);
-                  const levels = match ? match.class_levels : (isAdmin ? [1,2,3,4,5,6,7,8,9,10,11,12] : []);
-                  return levels.map(cl => (
-                    <option key={cl} value={cl}>Class {cl}</option>
-                  ));
-                })()}
-              </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Year <span className="text-red-500">*</span></label>
@@ -1150,17 +1147,32 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
               )}
             </div>
             <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class</label>
+              <select
+                value={classLevel}
+                onChange={(e) => { setClassLevel(e.target.value); setSubject(""); }}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+              >
+                <option value="">Select class</option>
+                {[...new Set((metadata.subjects || []).flatMap(s => s.class_levels || []))].sort((a, b) => a - b).map(cl => (
+                  <option key={cl} value={cl}>Class {cl}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Subject</label>
               {metadata.subjects && metadata.subjects.length > 0 ? (
                 <select
                   value={subject}
-                  onChange={(e) => { setSubject(e.target.value); setClassLevel(""); }}
+                  onChange={(e) => setSubject(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
                 >
                   <option value="">Select subject</option>
-                  {metadata.subjects.map(s => (
-                    <option key={s.subject} value={s.subject}>{s.subject}</option>
-                  ))}
+                  {(metadata.subjects || [])
+                    .filter(s => !classLevel || (s.class_levels || []).includes(Number(classLevel)))
+                    .map(s => (
+                      <option key={s.subject} value={s.subject}>{s.subject}</option>
+                    ))}
                 </select>
               ) : (
                 <input
@@ -1170,23 +1182,6 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                   className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
                 />
               )}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class</label>
-              <select
-                value={classLevel}
-                onChange={(e) => setClassLevel(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-              >
-                <option value="">Select class</option>
-                {(() => {
-                  const match = metadata.subjects?.find(s => s.subject === subject);
-                  const levels = match ? match.class_levels : (isAdmin ? [1,2,3,4,5,6,7,8,9,10,11,12] : []);
-                  return levels.map(cl => (
-                    <option key={cl} value={cl}>Class {cl}</option>
-                  ));
-                })()}
-              </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Year</label>

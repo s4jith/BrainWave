@@ -206,6 +206,10 @@ async def login(request: LoginRequest):
                 clean_name = user.get("name", "").lower().replace(" ", "").replace(".", "")
                 default_password = f"{clean_name}@123"
                 is_first_login = request.password == default_password
+            elif user["role"] == "head":
+                clean_name = user.get("name", "").lower().replace(" ", "").replace(".", "")
+                default_password = f"{clean_name}@head123"
+                is_first_login = request.password == default_password
             elif user["role"] == "student":
                 clean_name = user.get("name", "").lower().replace(" ", "").replace(".", "")
                 age = user.get("age", "")

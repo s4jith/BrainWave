@@ -32,7 +32,7 @@ export default function BookManagement() {
 
   const [uploadForm, setUploadForm] = useState({
     title: "",
-    classSubject: "6-Mathematics",  
+    classSubject: "6-Maths",  
     chapter_number: 1,
     description: "",
     pdf_file: null
@@ -112,7 +112,7 @@ export default function BookManagement() {
         setUploadProgress({ stage: "complete", message: "Done!", percent: 100 });
         alert("Chapter uploaded successfully!");
         setShowUploadModal(false);
-        setUploadForm({ title: "", classSubject: "6-Mathematics", chapter_number: 1, description: "", pdf_file: null });
+        setUploadForm({ title: "", classSubject: "6-Maths", chapter_number: 1, description: "", pdf_file: null });
         setUploadProgress(null);
         fetchHierarchicalStructure();
         fetchPineconeStats();

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Edit, Trash2, Plus, Search, BookOpen } from "lucide-react";
+import { Edit, Trash2, Plus, Search, BookOpen, Loader2, X } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import QuestionModal from "../components/QuestionModal";
@@ -10,6 +10,7 @@ import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
     const isTeacher = user.role === "teacher";
+    const isHead = user.role === "head";
 
     const [activeTab, setActiveTab] = useState("bank"); 
     const [questions, setQuestions] = useState([]);
@@ -21,6 +22,20 @@ const QuestionBank = () => {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
+
+    // Head subjects (from assignment)
+    const [headSubjects, setHeadSubjects] = useState([]);
+
+    // Teacher: request-deletion confirm modal
+    const [showRequestModal, setShowRequestModal] = useState(false);
+    const [requestQuestion, setRequestQuestion] = useState(null);
+    const [requestNote, setRequestNote] = useState("");
+    const [requestSubmitting, setRequestSubmitting] = useState(false);
+
+    // Head: delete requests tab
+    const [deleteRequests, setDeleteRequests] = useState([]);
+    const [drLoading, setDrLoading] = useState(false);
+    const [drActionId, setDrActionId] = useState(null); // request id being processed
 
     const combinedOptions = React.useMemo(() => {
         if (isTeacher && groups.length > 0) {
@@ -35,7 +50,7 @@ const QuestionBank = () => {
                 return a.subject.localeCompare(b.subject);
             });
         }
-        
+        if (isHead) return []; // head uses headSubjects dropdown instead
         return curriculumSubjects.map(subj => ({
             value: `${subj.class_level}-${subj.subject_name}`,
             label: `Class ${subj.class_level} - ${subj.subject_name}`,
@@ -45,10 +60,11 @@ const QuestionBank = () => {
             if (a.class !== b.class) return a.class - b.class;
             return a.subject.localeCompare(b.subject);
         });
-    }, [isTeacher, groups, curriculumSubjects]);
+    }, [isTeacher, isHead, groups, curriculumSubjects]);
 
     const [filters, setFilters] = useState({
         groupName: "",  
+        subject: "", // head subject filter
         type: "",
         difficulty: "",
         search: ""
@@ -69,11 +85,20 @@ const QuestionBank = () => {
         if (isTeacher) {
             fetchGroups();
         }
+        if (isHead) {
+            fetchHeadSubjects();
+        }
     }, []);
 
     useEffect(() => {
         fetchQuestions();
     }, [pagination.page, filters, activeTab]);
+
+    useEffect(() => {
+        if (activeTab === "delete-requests" && isHead) {
+            loadDeleteRequests();
+        }
+    }, [activeTab]);
 
     const fetchGroups = async () => {
         setLoadingGroups(true);
@@ -123,7 +148,39 @@ const QuestionBank = () => {
         }
     };
 
+    const fetchHeadSubjects = async () => {
+        try {
+            const res = await fetch(`${apiUrl}/api/head/my-assignment`, {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setHeadSubjects(data.head_subjects || []);
+            }
+        } catch (e) {
+            console.error("Error fetching head subjects:", e);
+        }
+    };
+
+    const loadDeleteRequests = async () => {
+        setDrLoading(true);
+        try {
+            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests?status=pending`, {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setDeleteRequests(data.requests || []);
+            }
+        } catch (e) {
+            console.error("Error loading delete requests:", e);
+        } finally {
+            setDrLoading(false);
+        }
+    };
+
     const fetchQuestions = async () => {
+        if (activeTab === "delete-requests") return; // handled separately
         setLoading(true);
         try {
             const status = activeTab === "approvals" ? "pending" : "approved";
@@ -131,14 +188,15 @@ const QuestionBank = () => {
             let classLevel = null;
             let subject = null;
             
-            if (filters.groupName) {
+            if (isHead) {
+                // Head uses subject-only filter
+                if (filters.subject) subject = filters.subject;
+            } else if (filters.groupName) {
                 if (isTeacher && groups.length > 0) {
-                    
                     const parsed = parseGroupName(filters.groupName);
                     classLevel = parsed.class;
                     subject = parsed.subject;
                 } else {
-                    
                     const parsed = parseCombinedValue(filters.groupName);
                     classLevel = parsed.class;
                     subject = parsed.subject;
@@ -175,15 +233,21 @@ const QuestionBank = () => {
         }
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = async (question) => {
+        if (isTeacher) {
+            // Teacher: open request-deletion confirmation modal
+            setRequestQuestion(question);
+            setRequestNote("");
+            setShowRequestModal(true);
+            return;
+        }
+        // Head / Admin: direct delete with confirmation
         if (!window.confirm("Are you sure you want to delete this question?")) return;
-
         try {
-            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}`, {
+            const response = await fetch(`${apiUrl}/api/question-bank/questions/${question.id}`, {
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
-
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.detail || "Failed to delete");
@@ -191,6 +255,61 @@ const QuestionBank = () => {
             fetchQuestions();
         } catch (err) {
             alert(err.message);
+        }
+    };
+
+    const handleSendDeleteRequest = async () => {
+        if (!requestQuestion) return;
+        setRequestSubmitting(true);
+        try {
+            const res = await fetch(`${apiUrl}/api/question-bank/questions/${requestQuestion.id}/request-delete`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason: requestNote })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Failed to send request");
+            }
+            setShowRequestModal(false);
+            alert("Delete request sent to head.");
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setRequestSubmitting(false);
+        }
+    };
+
+    const handleApproveRequest = async (reqId) => {
+        setDrActionId(reqId);
+        try {
+            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/approve`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || "Failed");
+            loadDeleteRequests();
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setDrActionId(null);
+        }
+    };
+
+    const handleRejectRequest = async (reqId) => {
+        setDrActionId(reqId);
+        try {
+            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/reject`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason: "" })
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || "Failed");
+            loadDeleteRequests();
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setDrActionId(null);
         }
     };
 
@@ -259,6 +378,7 @@ const QuestionBank = () => {
                     >
                         Question Bank
                     </button>
+                    {!isTeacher && (
                     <button
                         onClick={() => setActiveTab("approvals")}
                         className={`px-4 py-2.5 font-medium border-b-2 transition-colors flex items-center gap-2 text-sm ${activeTab === "approvals"
@@ -268,9 +388,23 @@ const QuestionBank = () => {
                     >
                         Pending Approvals
                     </button>
+                    )}
+                    {isHead && (
+                    <button
+                        onClick={() => setActiveTab("delete-requests")}
+                        className={`px-4 py-2.5 font-medium border-b-2 transition-colors flex items-center gap-2 text-sm ${activeTab === "delete-requests"
+                            ? "border-red-600 dark:border-red-400 text-red-600 dark:text-red-400"
+                            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
+                            }`}
+                    >
+                        <Trash2 size={14} />
+                        Delete Requests
+                    </button>
+                    )}
                 </div>
 
-                {/* Filters */}
+                {/* Filters — hidden on delete-requests tab */}
+                {activeTab !== "delete-requests" && (
                 <div className="flex flex-wrap gap-3 mb-6">
                     <div className="relative flex-1 min-w-48">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
@@ -282,22 +416,38 @@ const QuestionBank = () => {
                             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
-                    <select
-                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
-                        value={filters.groupName}
-                        onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
-                    >
-                        <option value="">All Classes & Subjects</option>
-                        {(isTeacher ? loadingGroups : loadingCurriculum) ? (
-                            <option disabled>Loading...</option>
-                        ) : combinedOptions.length === 0 ? (
-                            <option disabled>{isTeacher ? "No groups assigned" : "No subjects found"}</option>
-                        ) : (
-                            combinedOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))
-                        )}
-                    </select>
+                    {/* Subject filter: head gets subject-only dropdown from assignment; others get combined */}
+                    {isHead ? (
+                        <select
+                            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
+                            value={filters.subject}
+                            onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
+                        >
+                            <option value="">All Subjects</option>
+                            {headSubjects.length === 0 ? (
+                                <option disabled>No subjects assigned</option>
+                            ) : headSubjects.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <select
+                            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
+                            value={filters.groupName}
+                            onChange={(e) => setFilters({ ...filters, groupName: e.target.value })}
+                        >
+                            <option value="">All Classes &amp; Subjects</option>
+                            {(isTeacher ? loadingGroups : loadingCurriculum) ? (
+                                <option disabled>Loading...</option>
+                            ) : combinedOptions.length === 0 ? (
+                                <option disabled>{isTeacher ? "No groups assigned" : "No subjects found"}</option>
+                            ) : (
+                                combinedOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))
+                            )}
+                        </select>
+                    )}
                     <select
                         className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
                         value={filters.difficulty}
@@ -322,8 +472,52 @@ const QuestionBank = () => {
                         <option value="long_answer">Long Answer</option>
                     </select>
                 </div>
+                )}
+
+                {/* Head: Delete Requests Tab */}
+                {activeTab === "delete-requests" && isHead && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        {drLoading ? (
+                            <div className="p-12 text-center"><LoadingSpinner size="lg" text="Loading delete requests…" /></div>
+                        ) : deleteRequests.length === 0 ? (
+                            <div className="p-12 text-center text-gray-500 dark:text-gray-400">No pending delete requests from teachers.</div>
+                        ) : (
+                            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {deleteRequests.map(req => (
+                                    <div key={req.id} className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap gap-2 mb-1">
+                                                <span className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 px-2.5 py-0.5 rounded-full text-xs font-semibold">Delete Request</span>
+                                                <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-full text-xs">{req.question_subject} • Class {req.question_class_level}</span>
+                                            </div>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-1 leading-snug">{req.question_text}</p>
+                                            <p className="text-xs text-gray-400 dark:text-gray-500">Requested by <span className="font-medium text-gray-600 dark:text-gray-300">{req.teacher_name}</span>{req.reason ? ` · Reason: ${req.reason}` : ""} · {req.created_at ? new Date(req.created_at).toLocaleDateString("en-GB") : ""}</p>
+                                        </div>
+                                        <div className="flex gap-2 flex-shrink-0">
+                                            <button
+                                                onClick={() => handleApproveRequest(req.id)}
+                                                disabled={drActionId === req.id}
+                                                className="px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 border border-green-200 dark:border-green-700 rounded-lg text-xs font-medium transition disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                                {drActionId === req.id ? <Loader2 size={12} className="animate-spin" /> : null} Approve &amp; Delete
+                                            </button>
+                                            <button
+                                                onClick={() => handleRejectRequest(req.id)}
+                                                disabled={drActionId === req.id}
+                                                className="px-3 py-1.5 bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium transition disabled:opacity-50"
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Questions List */}
+                {activeTab !== "delete-requests" && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {loading ? (
                         <div className="p-12 text-center">
@@ -436,7 +630,7 @@ const QuestionBank = () => {
                                                 <Edit size={17} />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(q.id)}
+                                                onClick={() => handleDelete(q)}
                                                 className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition"
                                                 title="Delete"
                                             >
@@ -471,6 +665,7 @@ const QuestionBank = () => {
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
             {showModal && (
@@ -480,7 +675,53 @@ const QuestionBank = () => {
                     isTeacher={isTeacher}
                     userSubjects={user.subjects || []}
                     availableSubjects={subjects}
+                    groups={isTeacher ? groups : []}
                 />
+            )}
+
+            {/* Teacher: Send Delete Request Modal */}
+            {showRequestModal && requestQuestion && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md border border-gray-200 dark:border-gray-700 shadow-2xl">
+                        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Request Question Deletion</h2>
+                            <button onClick={() => setShowRequestModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={20} /></button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Your request will be sent to the head for approval. The question will only be deleted after the head approves.</p>
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{requestQuestion.subject} • Class {requestQuestion.class_level}</p>
+                                <p className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-snug">{requestQuestion.text?.slice(0, 120)}{(requestQuestion.text?.length || 0) > 120 ? "..." : ""}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason <span className="text-gray-400 font-normal">(optional)</span></label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Why should this question be deleted?"
+                                    value={requestNote}
+                                    onChange={e => setRequestNote(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-gray-400"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowRequestModal(false)}
+                                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSendDeleteRequest}
+                                disabled={requestSubmitting}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {requestSubmitting && <Loader2 size={14} className="animate-spin" />}
+                                Send Delete Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </AdminLayout>
     );

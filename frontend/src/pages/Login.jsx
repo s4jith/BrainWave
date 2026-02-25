@@ -66,6 +66,8 @@ export default function Login() {
           navigate("/admin-dashboard");
         } else if (userRole === "teacher") {
           navigate("/teacher-dashboard");
+        } else if (userRole === "head") {
+          navigate("/head-dashboard");
         } else {
           
           if (data.user.is_onboarded) {

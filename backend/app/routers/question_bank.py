@@ -9,6 +9,7 @@ from app.services.question_bank_service import question_bank_service
 from app.core.permissions import get_current_user, require_role
 from app.models.rbac_models import UserRole, TokenData
 from pydantic import BaseModel, Field
+from bson import ObjectId
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,13 +48,16 @@ class GenerateRequest(BaseModel):
     chapter: int
     config: Dict[str, Dict[str, int]]
 
+class DeleteRequestBody(BaseModel):
+    reason: Optional[str] = None
+
 @router.get("/subjects")
 async def get_subjects(
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     """
     Get available subjects.
-    - Admin: All unique subjects in DB (Questions + Books) + defaults.
+    - Admin/Head: All unique subjects in DB (Questions + Books) + defaults.
     - Teacher: Only assigned subjects.
     """
 
@@ -112,11 +116,11 @@ async def get_questions(
     status: Optional[str] = "approved",
     limit: int = 50,
     offset: int = 0,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     """
     Get questions from bank.
-    - Admins: See all.
+    - Admins/Heads: See all.
     - Teachers: See only questions matching their assigned groups' subject/class.
     """
     try:
@@ -211,11 +215,19 @@ async def create_question(
 
         question_data = question.model_dump()
         
+        # Teachers: questions go to pending for head approval
+        if current_user.role == UserRole.TEACHER:
+            question_data["status"] = "pending"
+            question_data["teacher_id"] = current_user.user_id
+
         id = await question_bank_service.create_question(
             question_data, 
             current_user.user_id, 
             current_user.role.value
         )
+        
+        if current_user.role == UserRole.TEACHER:
+            return {"success": True, "id": id, "message": "Question submitted for approval"}
         return {"success": True, "id": id, "message": "Question created"}
     except HTTPException:
         raise
@@ -251,9 +263,9 @@ async def update_question(
 @router.put("/questions/{question_id}/approve")
 async def approve_question(
     question_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    """Approve a pending question."""
+    """Approve a pending question. Only Head and Admin can approve."""
     try:
         
         success, msg = await question_bank_service.update_question(
@@ -271,9 +283,9 @@ async def approve_question(
 @router.put("/questions/{question_id}/reject")
 async def reject_question(
     question_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    """Reject (delete) a pending question."""
+    """Reject (delete) a pending question. Only Head and Admin can reject."""
     try:
         
         success, msg = await question_bank_service.delete_question(
@@ -290,9 +302,9 @@ async def reject_question(
 @router.delete("/questions/{question_id}")
 async def delete_question(
     question_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
-    """Delete a question."""
+    """Delete a question. Admin and Head can hard-delete; teachers use /archive instead."""
     try:
         success, msg = await question_bank_service.delete_question(
             question_id, 
@@ -307,6 +319,224 @@ async def delete_question(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/questions/{question_id}/archive")
+async def archive_question(
+    question_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.TEACHER]))
+):
+    """Soft-delete (archive) a question. Teachers use this instead of hard-delete."""
+    try:
+        success, msg = await question_bank_service.archive_question(
+            question_id,
+            current_user.user_id
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail=msg)
+        return {"success": True, "message": msg}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/questions/{question_id}/request-delete")
+async def request_question_delete(
+    question_id: str,
+    body: DeleteRequestBody = Body(default_factory=DeleteRequestBody),
+    current_user: TokenData = Depends(require_role([UserRole.TEACHER]))
+):
+    """Teacher sends a deletion request to the head for a specific question."""
+    from app.db.mongo import db
+    from datetime import datetime
+    if not ObjectId.is_valid(question_id):
+        raise HTTPException(status_code=400, detail="Invalid question ID")
+
+    question = db.questions.find_one({"_id": ObjectId(question_id)})
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    existing = db.question_delete_requests.find_one({"question_id": question_id, "status": "pending"})
+    if existing:
+        raise HTTPException(status_code=400, detail="A pending delete request already exists for this question")
+
+    teacher_doc = db.users.find_one({"user_id": current_user.user_id})
+    teacher_name = (teacher_doc.get("full_name") or teacher_doc.get("name") or current_user.user_id) if teacher_doc else current_user.user_id
+
+    now = datetime.utcnow()
+    req = {
+        "question_id": question_id,
+        "question_text": question.get("text", "")[:200],
+        "question_subject": question.get("subject", ""),
+        "question_class_level": question.get("class_level"),
+        "teacher_id": current_user.user_id,
+        "teacher_name": teacher_name,
+        "reason": body.reason or "",
+        "status": "pending",
+        "created_at": now
+    }
+    res = db.question_delete_requests.insert_one(req)
+    request_id = str(res.inserted_id)
+
+    q_subject = question.get("subject", "")
+    q_class = question.get("class_level")
+
+    all_heads = list(db.users.find({"role": "head", "is_active": True},
+        {"user_id": 1, "full_name": 1, "name": 1, "assigned_subjects": 1, "assigned_classes": 1, "assignment_type": 1}
+    ))
+    target_heads = []
+    for h in all_heads:
+        a_type = h.get("assignment_type", "class")
+        if a_type == "subject":
+            if q_subject.lower() in [s.lower() for s in h.get("assigned_subjects", [])]:
+                target_heads.append(h)
+        else:
+            if q_class in h.get("assigned_classes", []):
+                target_heads.append(h)
+    if not target_heads:
+        target_heads = all_heads
+
+    for h in target_heads:
+        h_uid = h.get("user_id")
+        if not h_uid:
+            continue
+        db.notifications.insert_one({
+            "title": "Question Deletion Request",
+            "message": f"{teacher_name} requested deletion of: \"{question.get('text', '')[:80]}...\"",
+            "type": "warning",
+            "category": "delete_request",
+            "role": "head",
+            "user_id": h_uid,
+            "target_user_id": h_uid,
+            "request_id": request_id,
+            "teacher_id": current_user.user_id,
+            "question_id": question_id,
+            "read": False,
+            "saved": False,
+            "created_at": now
+        })
+
+    return {"success": True, "message": "Delete request sent to head", "request_id": request_id}
+
+
+@router.get("/delete-requests")
+async def get_delete_requests(
+    status: Optional[str] = Query("pending"),
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """Head views delete requests from teachers."""
+    from app.db.mongo import db
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+
+    raw = list(db.question_delete_requests.find(query).sort("created_at", -1).limit(100))
+    result = []
+    for r in raw:
+        result.append({
+            "id": str(r["_id"]),
+            "question_id": r.get("question_id"),
+            "question_text": r.get("question_text", ""),
+            "question_subject": r.get("question_subject", ""),
+            "question_class_level": r.get("question_class_level"),
+            "teacher_id": r.get("teacher_id"),
+            "teacher_name": r.get("teacher_name", ""),
+            "reason": r.get("reason", ""),
+            "status": r.get("status", "pending"),
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            "resolved_at": r["resolved_at"].isoformat() if r.get("resolved_at") else None,
+        })
+    return {"requests": result, "total": len(result)}
+
+
+@router.post("/delete-requests/{request_id}/approve")
+async def approve_delete_request(
+    request_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """Head approves a delete request — actually deletes the question and notifies the teacher."""
+    from app.db.mongo import db
+    from datetime import datetime
+    if not ObjectId.is_valid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+
+    req = db.question_delete_requests.find_one({"_id": ObjectId(request_id), "status": "pending"})
+    if not req:
+        raise HTTPException(status_code=404, detail="Pending request not found")
+
+    question_id = req.get("question_id")
+    if question_id and ObjectId.is_valid(question_id):
+        db.questions.delete_one({"_id": ObjectId(question_id)})
+
+    now = datetime.utcnow()
+    db.question_delete_requests.update_one(
+        {"_id": ObjectId(request_id)},
+        {"$set": {"status": "approved", "resolved_by": current_user.user_id, "resolved_at": now}}
+    )
+
+    teacher_id = req.get("teacher_id")
+    if teacher_id:
+        head_doc = db.users.find_one({"user_id": current_user.user_id})
+        head_name = (head_doc.get("full_name") or head_doc.get("name") or current_user.user_id) if head_doc else current_user.user_id
+        db.notifications.insert_one({
+            "title": "Delete Request Approved ✓",
+            "message": f"Your question deletion request was approved by {head_name}. The question has been removed.",
+            "type": "success",
+            "category": "delete_request",
+            "role": "teacher",
+            "user_id": teacher_id,
+            "target_user_id": teacher_id,
+            "read": False,
+            "saved": False,
+            "created_at": now
+        })
+
+    return {"success": True, "message": "Question deleted and teacher notified"}
+
+
+@router.post("/delete-requests/{request_id}/reject")
+async def reject_delete_request(
+    request_id: str,
+    body: DeleteRequestBody = Body(default_factory=DeleteRequestBody),
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """Head rejects a delete request — question stays and teacher is notified."""
+    from app.db.mongo import db
+    from datetime import datetime
+    if not ObjectId.is_valid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+
+    req = db.question_delete_requests.find_one({"_id": ObjectId(request_id), "status": "pending"})
+    if not req:
+        raise HTTPException(status_code=404, detail="Pending request not found")
+
+    now = datetime.utcnow()
+    db.question_delete_requests.update_one(
+        {"_id": ObjectId(request_id)},
+        {"$set": {"status": "rejected", "resolved_by": current_user.user_id, "resolved_at": now, "head_note": body.reason or ""}}
+    )
+
+    teacher_id = req.get("teacher_id")
+    if teacher_id:
+        head_doc = db.users.find_one({"user_id": current_user.user_id})
+        head_name = (head_doc.get("full_name") or head_doc.get("name") or current_user.user_id) if head_doc else current_user.user_id
+        note = f" Reason: {body.reason}" if body.reason else ""
+        db.notifications.insert_one({
+            "title": "Delete Request Rejected",
+            "message": f"Your question deletion request was rejected by {head_name}.{note} The question remains in the bank.",
+            "type": "error",
+            "category": "delete_request",
+            "role": "teacher",
+            "user_id": teacher_id,
+            "target_user_id": teacher_id,
+            "read": False,
+            "saved": False,
+            "created_at": now
+        })
+
+    return {"success": True, "message": "Request rejected and teacher notified"}
+
 
 @router.post("/generate")
 async def generate_questions(
@@ -356,6 +586,12 @@ async def generate_questions(
             current_user.user_id,
             current_user.role.value
         )
+        
+        # AI-generated questions already have status "pending" in the service
+        # Add teacher context info to response
+        if current_user.role == UserRole.TEACHER and result.get("success"):
+            result["message"] = f"Successfully generated {result.get('count', 0)} questions. They are now pending head approval."
+        
         return result
     except HTTPException:
         raise

@@ -222,6 +222,12 @@ export default function GroupManagement() {
 
     const [showEditGroup, setShowEditGroup] = useState(false);
     const [editGroupForm, setEditGroupForm] = useState({ id: "", name: "", teacher_ids: [] });
+    const [editTeacherSearch, setEditTeacherSearch] = useState("");
+    const [editStudentSearch, setEditStudentSearch] = useState("");
+    const [editStudentClassFilter, setEditStudentClassFilter] = useState("");
+    const [editPendingAddStudentIds, setEditPendingAddStudentIds] = useState([]);
+    const [editGroupStudents, setEditGroupStudents] = useState([]);
+    const [editRemovedStudentIds, setEditRemovedStudentIds] = useState([]);
 
     const handleEditClick = (group, e) => {
         e.stopPropagation();
@@ -230,6 +236,12 @@ export default function GroupManagement() {
             name: group.name,
             teacher_ids: group.teacher_ids || (group.teacher_id ? [group.teacher_id] : [])
         });
+        setEditGroupStudents(group.students || []);
+        setEditTeacherSearch("");
+        setEditStudentSearch("");
+        setEditStudentClassFilter("");
+        setEditPendingAddStudentIds([]);
+        setEditRemovedStudentIds([]);
         setShowEditGroup(true);
     };
 
@@ -245,15 +257,35 @@ export default function GroupManagement() {
                     teacher_ids: editGroupForm.teacher_ids
                 })
             });
-
             if (!response.ok) throw new Error("Failed to update group");
-
             const updatedGroup = await response.json();
-            setGroups(groups.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
-            if (selectedGroup?.id === updatedGroup.id) {
-                setSelectedGroup(prev => ({ ...prev, ...updatedGroup }));
+
+            // Remove students
+            for (const sid of editRemovedStudentIds) {
+                await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students/${sid}`, {
+                    method: "DELETE", headers: getAuthHeader()
+                });
+            }
+            // Add students
+            if (editPendingAddStudentIds.length > 0) {
+                await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                    body: JSON.stringify({ student_ids: editPendingAddStudentIds })
+                });
             }
 
+            const finalStudents = [
+                ...editGroupStudents.filter(s => !editRemovedStudentIds.includes(s.id)),
+                ...availableStudents.filter(s => editPendingAddStudentIds.includes(s.id))
+            ];
+
+            setGroups(groups.map(g => g.id === updatedGroup.id ? {
+                ...g, ...updatedGroup, students: finalStudents, student_count: finalStudents.length
+            } : g));
+            if (selectedGroup?.id === updatedGroup.id) {
+                setSelectedGroup(prev => ({ ...prev, ...updatedGroup, students: finalStudents }));
+            }
             setShowEditGroup(false);
         } catch (err) {
             alert("Error: " + err.message);
@@ -458,36 +490,6 @@ export default function GroupManagement() {
                                 >
                                     <UserPlus className="w-4 h-4" /> Add Students
                                 </button>
-                            </div>
-
-                            {/* Feature Access */}
-                            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Shield className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                                    <h3 className="font-medium text-gray-900 dark:text-white text-sm">Feature Access</h3>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">(applies to all students in this group)</span>
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                    {Object.entries(featureLabels).map(([key, label]) => {
-                                        const enabled = selectedGroup.feature_flags?.[key] || false;
-                                        return (
-                                            <button
-                                                key={key}
-                                                onClick={() => handleToggleGroupFeature(selectedGroup.id, key, !enabled)}
-                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition ${
-                                                    enabled
-                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-                                                        : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600"
-                                                }`}
-                                            >
-                                                <div className={`w-8 h-4 rounded-full relative transition-colors ${enabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}>
-                                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`} />
-                                                </div>
-                                                {label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
                             </div>
 
                             <h3 className="font-medium text-gray-900 dark:text-white mb-4">Students ({selectedGroup.students?.length || 0})</h3>
@@ -726,76 +728,249 @@ export default function GroupManagement() {
                     </div>
                 </div>
             )}
-            {/* Edit Group Modal */}
-            {showEditGroup && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700 shadow-xl">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Group</h2>
-                            <button onClick={() => setShowEditGroup(false)} className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <form onSubmit={handleUpdateGroup} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editGroupForm.name}
-                                    onChange={(e) => setEditGroupForm({ ...editGroupForm, name: e.target.value })}
-                                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
-                                    placeholder="e.g. Class 10 - Mathematics"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Teachers</label>
-                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto p-2">
-                                    {teachers.length === 0 ? (
-                                        <div className="text-center text-gray-500 dark:text-gray-400 py-2">No teachers found</div>
-                                    ) : (
-                                        teachers.map(teacher => (
-                                            <label key={teacher.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer rounded">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={editGroupForm.teacher_ids.includes(teacher.id)}
-                                                    onChange={() => {
-                                                        const newIds = editGroupForm.teacher_ids.includes(teacher.id)
-                                                            ? editGroupForm.teacher_ids.filter(id => id !== teacher.id)
-                                                            : [...editGroupForm.teacher_ids, teacher.id];
-                                                        setEditGroupForm({ ...editGroupForm, teacher_ids: newIds });
-                                                    }}
-                                                    className="w-4 h-4 text-gray-900 rounded border-gray-300"
-                                                />
-                                                <span className="text-gray-900 dark:text-white">{teacher.name} ({teacher.user_id})</span>
-                                            </label>
-                                        ))
-                                    )}
+            {/* Edit Group Modal — wide two-panel */}
+            {showEditGroup && (() => {
+                const editFilteredTeachers = teachers.filter(t =>
+                    t.name?.toLowerCase().includes(editTeacherSearch.toLowerCase()) ||
+                    t.user_id?.toLowerCase().includes(editTeacherSearch.toLowerCase()) ||
+                    t.email?.toLowerCase().includes(editTeacherSearch.toLowerCase())
+                );
+                const currentEditStudents = editGroupStudents.filter(s => !editRemovedStudentIds.includes(s.id));
+                const currentEditStudentIds = currentEditStudents.map(s => s.id);
+                const editAvailableToAdd = availableStudents.filter(s => {
+                    const notInGroup = !currentEditStudentIds.includes(s.id);
+                    const matchSearch = !editStudentSearch ||
+                        s.name?.toLowerCase().includes(editStudentSearch.toLowerCase()) ||
+                        s.email?.toLowerCase().includes(editStudentSearch.toLowerCase());
+                    const matchClass = !editStudentClassFilter || s.class_level?.toString() === editStudentClassFilter;
+                    return notInGroup && matchSearch && matchClass;
+                });
+                const editAvailableClassLevels = [...new Set(availableStudents.map(s => s.class_level).filter(Boolean))].sort((a,b) => a-b);
+                return (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col border dark:border-gray-700 shadow-2xl">
+                            {/* Header */}
+                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Group</h2>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage teachers and students for this group</p>
                                 </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{editGroupForm.teacher_ids.length} teachers selected</p>
+                                <button onClick={() => setShowEditGroup(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                                    <X className="w-5 h-5" />
+                                </button>
                             </div>
 
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEditGroup(false)}
-                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition disabled:opacity-50 font-medium"
-                                >
-                                    {saving ? "Saving..." : "Save Changes"}
-                                </button>
-                            </div>
-                        </form>
+                            {/* Body — two columns */}
+                            <form onSubmit={handleUpdateGroup} className="flex flex-col flex-1 min-h-0">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-gray-700">
+
+                                    {/* LEFT — Group info + Teachers */}
+                                    <div className="flex flex-col p-6 gap-5 overflow-y-auto">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Group Name</label>
+                                            <input
+                                                type="text" required
+                                                value={editGroupForm.name}
+                                                onChange={(e) => setEditGroupForm({ ...editGroupForm, name: e.target.value })}
+                                                className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
+                                                placeholder="e.g. Maths_Class10_2026"
+                                            />
+                                        </div>
+
+                                        {/* Feature Access */}
+                                        {(() => {
+                                            const editingGroup = groups.find(g => g.id === editGroupForm.id);
+                                            return (
+                                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <Shield className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Feature Access</span>
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500">(all students in group)</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {Object.entries(featureLabels).map(([key, label]) => {
+                                                            const enabled = editingGroup?.feature_flags?.[key] || false;
+                                                            return (
+                                                                <button
+                                                                    key={key}
+                                                                    type="button"
+                                                                    onClick={() => handleToggleGroupFeature(editGroupForm.id, key, !enabled)}
+                                                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition ${
+                                                                        enabled
+                                                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                                                                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600"
+                                                                    }`}
+                                                                >
+                                                                    <div className={`w-8 h-4 rounded-full relative transition-colors shrink-0 ${enabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}>
+                                                                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                                                                    </div>
+                                                                    {label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div className="flex flex-col flex-1 min-h-0">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned Teachers</label>
+                                                <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">{editGroupForm.teacher_ids.length} selected</span>
+                                            </div>
+                                            <div className="relative mb-2">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text" placeholder="Search teachers..."
+                                                    value={editTeacherSearch}
+                                                    onChange={(e) => setEditTeacherSearch(e.target.value)}
+                                                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white outline-none"
+                                                />
+                                            </div>
+                                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-y-auto flex-1" style={{minHeight: '200px', maxHeight: '320px'}}>
+                                                {editFilteredTeachers.length === 0 ? (
+                                                    <div className="text-center text-gray-400 dark:text-gray-500 py-8 text-sm">
+                                                        {editTeacherSearch ? "No teachers match your search" : "No teachers available"}
+                                                    </div>
+                                                ) : editFilteredTeachers.map(teacher => {
+                                                    const selected = editGroupForm.teacher_ids.includes(teacher.id);
+                                                    return (
+                                                        <label key={teacher.id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition ${
+                                                            selected ? "bg-gray-50 dark:bg-gray-700/50" : "hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                                                        }`}>
+                                                            <input
+                                                                type="checkbox" checked={selected}
+                                                                onChange={() => {
+                                                                    const newIds = selected
+                                                                        ? editGroupForm.teacher_ids.filter(id => id !== teacher.id)
+                                                                        : [...editGroupForm.teacher_ids, teacher.id];
+                                                                    setEditGroupForm({ ...editGroupForm, teacher_ids: newIds });
+                                                                }}
+                                                                className="w-4 h-4 rounded border-gray-300 accent-gray-900"
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{teacher.name}</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.user_id}{teacher.email ? ` · ${teacher.email}` : ""}</p>
+                                                            </div>
+                                                            {selected && <Check className="w-4 h-4 text-green-500 shrink-0" />}
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* RIGHT — Students */}
+                                    <div className="flex flex-col p-6 gap-4 overflow-y-auto">
+                                        {/* Current students */}
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Students</label>
+                                                <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">{currentEditStudents.length}</span>
+                                            </div>
+                                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-y-auto" style={{maxHeight: '200px'}}>
+                                                {currentEditStudents.length === 0 ? (
+                                                    <div className="text-center text-gray-400 dark:text-gray-500 py-6 text-sm">No students in this group</div>
+                                                ) : currentEditStudents.map(student => (
+                                                    <div key={student.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{student.name}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Class {student.class_level} · {student.email}</p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditRemovedStudentIds(prev => [...prev, student.id])}
+                                                            className="ml-2 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition shrink-0"
+                                                            title="Remove from group"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {editRemovedStudentIds.length > 0 && (
+                                                <p className="text-xs text-red-500 mt-1">{editRemovedStudentIds.length} student(s) will be removed on save</p>
+                                            )}
+                                        </div>
+
+                                        {/* Add students */}
+                                        <div className="flex flex-col flex-1 min-h-0">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Add Students</label>
+                                                {editPendingAddStudentIds.length > 0 && (
+                                                    <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">+{editPendingAddStudentIds.length} to add</span>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 mb-2">
+                                                <div className="relative flex-1">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                    <input
+                                                        type="text" placeholder="Search students..."
+                                                        value={editStudentSearch}
+                                                        onChange={(e) => setEditStudentSearch(e.target.value)}
+                                                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white outline-none"
+                                                    />
+                                                </div>
+                                                <select
+                                                    value={editStudentClassFilter}
+                                                    onChange={(e) => setEditStudentClassFilter(e.target.value)}
+                                                    className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white outline-none"
+                                                >
+                                                    <option value="">All Classes</option>
+                                                    {editAvailableClassLevels.map(c => <option key={c} value={c}>Class {c}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-y-auto flex-1" style={{minHeight: '150px', maxHeight: '220px'}}>
+                                                {editAvailableToAdd.length === 0 ? (
+                                                    <div className="text-center text-gray-400 dark:text-gray-500 py-8 text-sm">
+                                                        {editStudentSearch || editStudentClassFilter ? "No students match your filters" : "All students already in group"}
+                                                    </div>
+                                                ) : editAvailableToAdd.slice(0, 60).map(student => {
+                                                    const pending = editPendingAddStudentIds.includes(student.id);
+                                                    return (
+                                                        <label key={student.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition ${
+                                                            pending ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                                                        }`}>
+                                                            <input
+                                                                type="checkbox" checked={pending}
+                                                                onChange={() => setEditPendingAddStudentIds(prev =>
+                                                                    pending ? prev.filter(id => id !== student.id) : [...prev, student.id]
+                                                                )}
+                                                                className="w-4 h-4 rounded border-gray-300 accent-gray-900"
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{student.name}</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Class {student.class_level} · {student.email}</p>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 rounded-b-2xl shrink-0">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {editGroupForm.teacher_ids.length} teacher(s) · {currentEditStudents.length + editPendingAddStudentIds.length} student(s)
+                                    </p>
+                                    <div className="flex gap-3">
+                                        <button type="button" onClick={() => setShowEditGroup(false)}
+                                            className="px-5 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition text-sm">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" disabled={saving}
+                                            className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition disabled:opacity-50 font-medium text-sm">
+                                            {saving ? "Saving..." : "Save Changes"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </AdminLayout>
     );
 }

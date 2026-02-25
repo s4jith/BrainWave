@@ -1418,3 +1418,276 @@ async def get_maintenance_status():
     except Exception as e:
         logger.error(f"Error fetching maintenance status: {e}")
         return {"maintenance_mode": False, "platform_name": "NCERT Learning Platform"}
+
+
+# ──────────── Head Management (CRUD) ────────────
+
+class HeadCreate(BaseModel):
+    """Model for creating a new head user."""
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., description="Email address")
+    mobile: Optional[str] = None
+    age: Optional[int] = Field(None, ge=18, le=100)
+    subjects: List[str] = []
+    assignment_type: str = Field("class", description="Assignment type: 'class' or 'subject'")
+    assigned_classes: List[int] = Field(default=[], description="Class levels assigned (when type=class)")
+    assigned_subjects: List[str] = Field(default=[], description="Subjects assigned (when type=subject)")
+
+class HeadUpdate(BaseModel):
+    """Model for updating a head user."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    mobile: Optional[str] = None
+    age: Optional[int] = None
+    subjects: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    assignment_type: Optional[str] = None
+    assigned_classes: Optional[List[int]] = None
+    assigned_subjects: Optional[List[str]] = None
+
+def generate_head_id(name: str) -> str:
+    """Generate unique head ID in format: head_{number}_{name}"""
+    try:
+        counter = db.head_counters.find_one_and_update(
+            {"_id": "head_count"},
+            {"$inc": {"count": 1}},
+            upsert=True,
+            return_document=True
+        )
+        head_number = counter.get("count", 1)
+        clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
+        return f"head_{head_number}_{clean_name}"
+    except Exception as e:
+        logger.error(f"Error generating head ID: {e}")
+        import time
+        clean_name = name.lower().replace(" ", "")[:10]
+        return f"head_{int(time.time()) % 10000}_{clean_name}"
+
+def generate_head_password(name: str) -> str:
+    """Generate default head password."""
+    clean_name = name.lower().replace(" ", "").replace(".", "")
+    return f"{clean_name}@head123"
+
+@router.get("/heads")
+async def get_heads(
+    limit: int = Query(100, ge=1, le=500),
+    is_active: Optional[bool] = None,
+    search: Optional[str] = None,
+):
+    """Get list of all head users."""
+    try:
+        filter_query = {"role": "head"}
+
+        if is_active is not None:
+            filter_query["is_active"] = is_active
+
+        if search:
+            filter_query["$or"] = [
+                {"name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+                {"user_id": {"$regex": search, "$options": "i"}}
+            ]
+
+        cursor = db.users.find(filter_query).limit(limit).sort("created_at", -1)
+        heads = []
+
+        for h in cursor:
+            heads.append({
+                "id": str(h["_id"]),
+                "user_id": h.get("user_id", ""),
+                "name": h.get("name", ""),
+                "email": h.get("email", ""),
+                "mobile": h.get("mobile", ""),
+                "subjects": h.get("subjects", []),
+                "assignment_type": h.get("assignment_type", "class"),
+                "assigned_classes": h.get("assigned_classes", []),
+                "assigned_subjects": h.get("assigned_subjects", []),
+                "is_active": h.get("is_active", True),
+                "created_at": h.get("created_at", datetime.utcnow()).isoformat() if h.get("created_at") else None,
+                "last_login": h.get("last_login").isoformat() if h.get("last_login") else None
+            })
+
+        return heads
+
+    except Exception as e:
+        logger.error(f"Error fetching heads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/heads")
+async def create_head(head: HeadCreate):
+    """Create a new head account."""
+    try:
+        existing = db.users.find_one({"email": head.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        user_id = generate_head_id(head.name)
+        password = generate_head_password(head.name)
+        hashed_password = hash_password(password)
+
+        head_doc = {
+            "user_id": user_id,
+            "name": head.name,
+            "email": head.email,
+            "mobile": head.mobile or "",
+            "age": head.age,
+            "subjects": head.subjects,
+            "assignment_type": head.assignment_type,
+            "assigned_classes": head.assigned_classes,
+            "assigned_subjects": head.assigned_subjects,
+            "password": hashed_password,
+            "role": "head",
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "created_by": "admin",
+            "last_login": None
+        }
+
+        result = db.users.insert_one(head_doc)
+        head_doc["_id"] = result.inserted_id
+
+        response = {
+            "id": str(head_doc["_id"]),
+            "user_id": user_id,
+            "name": head.name,
+            "email": head.email,
+            "mobile": head.mobile or "",
+            "subjects": head.subjects,
+            "assignment_type": head.assignment_type,
+            "assigned_classes": head.assigned_classes,
+            "assigned_subjects": head.assigned_subjects,
+            "is_active": True,
+            "generated_credentials": {
+                "user_id": user_id,
+                "password": password,
+                "note": "Share these credentials with the head."
+            }
+        }
+
+        email_sent = send_credentials_email(head.email, user_id, password, head.name)
+        if email_sent:
+            response["generated_credentials"]["email_status"] = "sent"
+        else:
+            response["generated_credentials"]["email_status"] = "failed"
+            logger.warning(f"Failed to send email to {head.email}")
+
+        logger.info(f"Created head: {user_id} ({head.name})")
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating head: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/heads/{head_id}")
+async def update_head(head_id: str, head: HeadUpdate):
+    """Update a head user's information."""
+    try:
+        update_doc = {}
+        if head.name is not None:
+            update_doc["name"] = head.name
+        if head.email is not None:
+            update_doc["email"] = head.email
+        if head.mobile is not None:
+            update_doc["mobile"] = head.mobile
+        if head.age is not None:
+            update_doc["age"] = head.age
+        if head.subjects is not None:
+            update_doc["subjects"] = head.subjects
+        if head.is_active is not None:
+            update_doc["is_active"] = head.is_active
+        if head.assignment_type is not None:
+            update_doc["assignment_type"] = head.assignment_type
+        if head.assigned_classes is not None:
+            update_doc["assigned_classes"] = head.assigned_classes
+        if head.assigned_subjects is not None:
+            update_doc["assigned_subjects"] = head.assigned_subjects
+
+        if not update_doc:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        update_doc["updated_at"] = datetime.utcnow()
+
+        query = {"_id": ObjectId(head_id), "role": "head"} if ObjectId.is_valid(head_id) else {"user_id": head_id, "role": "head"}
+        result = db.users.find_one_and_update(
+            query,
+            {"$set": update_doc},
+            return_document=True
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Head not found")
+
+        logger.info(f"Updated head: {head_id}")
+        return {
+            "id": str(result["_id"]),
+            "user_id": result.get("user_id", ""),
+            "name": result.get("name", ""),
+            "email": result.get("email", ""),
+            "mobile": result.get("mobile", ""),
+            "subjects": result.get("subjects", []),
+            "assignment_type": result.get("assignment_type", "class"),
+            "assigned_classes": result.get("assigned_classes", []),
+            "assigned_subjects": result.get("assigned_subjects", []),
+            "is_active": result.get("is_active", True)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating head: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/heads/{head_id}")
+async def delete_head(head_id: str):
+    """Delete a head user."""
+    try:
+        query = {"_id": ObjectId(head_id), "role": "head"} if ObjectId.is_valid(head_id) else {"user_id": head_id, "role": "head"}
+
+        head = db.users.find_one(query)
+        if not head:
+            raise HTTPException(status_code=404, detail="Head not found")
+
+        db.users.delete_one({"_id": head["_id"]})
+
+        logger.info(f"Deleted head: {head_id}")
+        return {"success": True, "message": "Head deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting head: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/heads/{head_id}/reset-password")
+async def reset_head_password(head_id: str):
+    """Reset a head user's password."""
+    try:
+        query = {"_id": ObjectId(head_id), "role": "head"} if ObjectId.is_valid(head_id) else {"user_id": head_id, "role": "head"}
+        head = db.users.find_one(query)
+
+        if not head:
+            raise HTTPException(status_code=404, detail="Head not found")
+
+        new_password = generate_head_password(head.get("name", "head"))
+        hashed_password = hash_password(new_password)
+
+        db.users.update_one(
+            {"_id": head["_id"]},
+            {"$set": {"password": hashed_password, "password_changed_at": None}}
+        )
+
+        logger.info(f"Reset password for head: {head_id}")
+        return {
+            "success": True,
+            "message": "Password reset successfully",
+            "new_password": new_password,
+            "note": "Share this password with the head"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting password: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

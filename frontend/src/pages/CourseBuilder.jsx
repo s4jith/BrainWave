@@ -61,7 +61,7 @@ export default function CourseBuilder() {
     const [courseData, setCourseData] = useState({
         title: "",
         description: "",
-        category: "Mathematics",
+        category: "Maths",
         difficulty: "beginner",
         class_level: 10,
         thumbnail_url: ""

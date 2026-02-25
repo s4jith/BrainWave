@@ -283,6 +283,13 @@ async def get_notifications(
                     {"role": "teacher", "target_user_id": current_user.user_id}
                 ]
             }
+        elif current_user.role == UserRole.HEAD:
+            query = {
+                "$or": [
+                    {"user_id": current_user.user_id},
+                    {"role": "head", "target_user_id": current_user.user_id}
+                ]
+            }
         else:
             query = {"user_id": current_user.user_id}
 
@@ -477,6 +484,14 @@ async def mark_all_notifications_read(
                 "$or": [
                     {"user_id": current_user.user_id},
                     {"role": "teacher", "target_user_id": current_user.user_id}
+                ],
+                "read": False
+            }
+        elif current_user.role == UserRole.HEAD:
+            query = {
+                "$or": [
+                    {"user_id": current_user.user_id},
+                    {"role": "head", "target_user_id": current_user.user_id}
                 ],
                 "read": False
             }

@@ -126,6 +126,9 @@ app.include_router(question_bank.router)
 app.include_router(queries.router)
 app.include_router(question_papers.router)
 
+from app.routers import head_approval
+app.include_router(head_approval.router)
+
 from app.routers import top_questions
 app.include_router(top_questions.router)
 

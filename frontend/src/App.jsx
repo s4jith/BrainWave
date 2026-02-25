@@ -44,6 +44,10 @@ import QuestionPapers from "./pages/QuestionPapers";
 import TeacherTests from "./pages/TeacherTests";
 import TeacherReports from "./pages/TeacherReports";
 import TeacherSettings from "./pages/TeacherSettings";
+import HeadDashboard from "./pages/HeadDashboard";
+import HeadManagement from "./pages/HeadManagement";
+import HeadGroups from "./pages/HeadGroups";
+import HeadReports from "./pages/HeadReports";
 import MaintenancePage from "./pages/MaintenancePage";
 import CurriculumManagement from "./pages/CurriculumManagement";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -93,11 +97,21 @@ function ProtectedRoute({ children }) {
 
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries", "/head-management"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
       return <Navigate to="/admin-dashboard" replace />;
+    }
+  }
+
+  if (user.role === "head") {
+    const path = window.location.pathname;
+    const headRoutes = ["/head-dashboard", "/question-bank", "/question-papers", "/head-groups", "/head-reports"];
+    const isHeadRoute = headRoutes.some(route => path.startsWith(route));
+    if (!isHeadRoute) {
+      console.log("Head trying to access non-head route, redirecting to /head-dashboard");
+      return <Navigate to="/head-dashboard" replace />;
     }
   }
 
@@ -131,6 +145,11 @@ function PublicRoute({ children }) {
       return <Navigate to="/admin-dashboard" replace />;
     }
 
+    if (user.role === "head") {
+      console.log("Head logged in, redirecting to /head-dashboard");
+      return <Navigate to="/head-dashboard" replace />;
+    }
+
     if (user.role === "teacher") {
       console.log("Teacher logged in, redirecting to /teacher-dashboard");
       return <Navigate to="/teacher-dashboard" replace />;
@@ -154,8 +173,8 @@ function StaffRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
-  if (user.role !== "admin" && user.role !== "teacher") {
-    console.log("Not admin/teacher, redirecting to /dashboard");
+  if (user.role !== "admin" && user.role !== "teacher" && user.role !== "head") {
+    console.log("Not admin/teacher/head, redirecting to /dashboard");
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -503,6 +522,14 @@ function App() {
             </StaffRoute>
           }
         />
+        <Route
+          path="/head-management"
+          element={
+            <StaffRoute>
+              <HeadManagement />
+            </StaffRoute>
+          }
+        />
 
         {}
         <Route
@@ -510,6 +537,32 @@ function App() {
           element={
             <StaffRoute>
               <TeacherDashboard />
+            </StaffRoute>
+          }
+        />
+
+        {}
+        <Route
+          path="/head-dashboard"
+          element={
+            <StaffRoute>
+              <HeadDashboard />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/head-groups"
+          element={
+            <StaffRoute>
+              <HeadGroups />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/head-reports"
+          element={
+            <StaffRoute>
+              <HeadReports />
             </StaffRoute>
           }
         />

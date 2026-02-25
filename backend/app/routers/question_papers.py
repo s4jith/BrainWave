@@ -47,9 +47,29 @@ class UpdatePaperData(BaseModel):
 
 @router.get("/metadata")
 async def get_metadata(
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     from app.db.mongo import db
+
+    def normalize_subject(s):
+        return "Maths" if s.lower() == "mathematics" else s
+
+    def build_subjects_data(subject_class_map):
+        result = []
+        for subj in sorted(subject_class_map.keys()):
+            result.append({
+                "subject": normalize_subject(subj),
+                "class_levels": sorted(list(subject_class_map[subj]))
+            })
+        return result
+
+    def get_years_and_types():
+        try:
+            years = list(db.question_papers.distinct("year"))
+            types = list(db.question_papers.distinct("paper_type"))
+        except Exception:
+            years, types = [], []
+        return sorted([y for y in years if y], reverse=True), sorted([t for t in types if t])
 
     if current_user.role == UserRole.TEACHER:
         teacher_user = db.users.find_one({"user_id": current_user.user_id})
@@ -77,17 +97,54 @@ async def get_metadata(
                     subject_class_map[subj] = set()
                 subject_class_map[subj].add(cl)
 
+        years, types = get_years_and_types()
+        return {"subjects": build_subjects_data(subject_class_map), "years": years, "paper_types": types}
+
+    if current_user.role == UserRole.HEAD:
+        head_user = db.users.find_one({"user_id": current_user.user_id})
+        assignment_type = head_user.get("assignment_type", "class") if head_user else "class"
+        assigned_classes = head_user.get("assigned_classes", []) if head_user else []
+        assigned_subjects = head_user.get("assigned_subjects", []) if head_user else []
+
+        q_pipeline = list(db.questions.aggregate([
+            {"$group": {"_id": {"subject": "$subject", "class_level": "$class_level"}}},
+        ]))
+        b_pipeline = list(db.books.aggregate([
+            {"$group": {"_id": {"subject": "$subject", "class_level": "$class_level"}}},
+        ]))
+
+        subject_class_map = {}
+        for item in q_pipeline + b_pipeline:
+            subj = item["_id"].get("subject")
+            cl = item["_id"].get("class_level")
+            if subj and cl:
+                if subj not in subject_class_map:
+                    subject_class_map[subj] = set()
+                subject_class_map[subj].add(cl)
+
         subjects_data = []
         for subj in sorted(subject_class_map.keys()):
-            subjects_data.append({
-                "subject": subj,
-                "class_levels": sorted(list(subject_class_map[subj]))
-            })
+            normalized = normalize_subject(subj)
+            all_levels = sorted(list(subject_class_map[subj]))
+            if assignment_type == "subject":
+                # Filter to assigned subjects (check both raw and normalized name)
+                if assigned_subjects and subj not in assigned_subjects and normalized not in assigned_subjects:
+                    continue
+                subjects_data.append({"subject": normalized, "class_levels": all_levels})
+            else:
+                # Filter class_levels to assigned ones
+                if assigned_classes:
+                    filtered_levels = [cl for cl in all_levels if cl in assigned_classes]
+                    if not filtered_levels:
+                        continue
+                    subjects_data.append({"subject": normalized, "class_levels": filtered_levels})
+                else:
+                    subjects_data.append({"subject": normalized, "class_levels": all_levels})
 
-        paper_years = db.question_papers.distinct("year") if hasattr(db, "question_papers") else []
-        paper_types = db.question_papers.distinct("paper_type") if hasattr(db, "question_papers") else []
-        return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True), "paper_types": sorted([t for t in paper_types if t])}
+        years, types = get_years_and_types()
+        return {"subjects": subjects_data, "years": years, "paper_types": types}
 
+    # Admin: all subjects from questions + books
     q_pipeline = list(db.questions.aggregate([
         {"$group": {"_id": {"subject": "$subject", "class_level": "$class_level"}}},
     ]))
@@ -100,9 +157,10 @@ async def get_metadata(
         subj = item["_id"].get("subject")
         cl = item["_id"].get("class_level")
         if subj and cl:
-            if subj not in subject_class_map:
-                subject_class_map[subj] = set()
-            subject_class_map[subj].add(cl)
+            normalized = normalize_subject(subj)
+            if normalized not in subject_class_map:
+                subject_class_map[normalized] = set()
+            subject_class_map[normalized].add(cl)
 
     subjects_data = []
     for subj in sorted(subject_class_map.keys()):
@@ -111,13 +169,9 @@ async def get_metadata(
             "class_levels": sorted(list(subject_class_map[subj]))
         })
 
-    try:
-        paper_years = list(db.question_papers.distinct("year"))
-        paper_types = list(db.question_papers.distinct("paper_type"))
-    except Exception:
-        paper_years = []
-        paper_types = []
-    return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True), "paper_types": sorted([t for t in paper_types if t])}
+    years, types = get_years_and_types()
+    return {"subjects": subjects_data, "years": years, "paper_types": types}
+
 
 
 @router.get("")
@@ -129,7 +183,7 @@ async def list_papers(
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     # Build explicit filters (applied on top of visibility)
     filter_conditions = {}
@@ -146,11 +200,23 @@ async def list_papers(
 
     if current_user.role == UserRole.TEACHER:
         # Teacher sees: only papers (own or others) matching their assigned groups' class+subject
+        # Look up teacher's mongo _id too — teacher_ids may store either user_id or mongo _id
+        from app.db.mongo import db as sync_db
+        teacher_doc = sync_db.users.find_one({"user_id": current_user.user_id})
+        teacher_mongo_id = str(teacher_doc["_id"]) if teacher_doc else None
+
+        group_or_conditions = [
+            {"teacher_id": current_user.user_id},
+            {"teacher_ids": current_user.user_id},
+        ]
+        if teacher_mongo_id and teacher_mongo_id != current_user.user_id:
+            group_or_conditions.extend([
+                {"teacher_id": teacher_mongo_id},
+                {"teacher_ids": teacher_mongo_id},
+            ])
+
         teacher_groups = await mongodb.db.groups.find(
-            {"$or": [
-                {"teacher_id": current_user.user_id},
-                {"teacher_ids": current_user.user_id}
-            ]},
+            {"$or": group_or_conditions},
             {"subject": 1, "class_level": 1}
         ).to_list(None)
 
@@ -214,7 +280,7 @@ async def list_papers(
 @router.get("/{paper_id}")
 async def get_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
@@ -263,12 +329,16 @@ async def create_paper_manual(
         "year": data.year,
         "questions": questions,
         "source": "manual",
-        "status": "approved",
+        "status": "approved" if current_user.role in (UserRole.ADMIN, UserRole.HEAD) else "pending",
+        "teacher_id": current_user.user_id if current_user.role == UserRole.TEACHER else None,
         "created_by": current_user.user_id,
         "created_at": datetime.utcnow().isoformat(),
     }
 
     result = await mongodb.db.question_papers.insert_one(doc)
+    
+    if current_user.role == UserRole.TEACHER:
+        return {"id": str(result.inserted_id), "message": "Question paper submitted for approval"}
     return {"id": str(result.inserted_id), "message": "Question paper created successfully"}
 
 
@@ -387,7 +457,8 @@ JSON:"""
             "year": year,
             "questions": cleaned_questions,
             "source": "pdf_extracted",
-            "status": "approved" if current_user.role == UserRole.ADMIN else "pending",
+            "status": "approved" if current_user.role in (UserRole.ADMIN, UserRole.HEAD) else "pending",
+            "teacher_id": current_user.user_id if current_user.role == UserRole.TEACHER else None,
             "original_filename": pdf_file.filename,
             "created_by": current_user.user_id,
             "created_at": datetime.utcnow().isoformat(),
@@ -395,10 +466,10 @@ JSON:"""
 
         result = await mongodb.db.question_papers.insert_one(doc)
 
-        if current_user.role == UserRole.ADMIN:
+        if current_user.role in (UserRole.ADMIN, UserRole.HEAD):
             msg = f"Extracted {len(cleaned_questions)} questions. Paper saved and approved."
         else:
-            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for admin approval."
+            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for head approval."
 
         return {
             "id": str(result.inserted_id),
@@ -420,15 +491,9 @@ JSON:"""
 @router.post("/{paper_id}/approve")
 async def approve_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    # Teachers can only approve their own papers
-    if current_user.role == UserRole.TEACHER:
-        doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Paper not found")
-        if doc.get("created_by") != current_user.user_id:
-            raise HTTPException(status_code=403, detail="Teachers can only approve their own papers")
+    # Only Head and Admin can approve papers
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
@@ -445,15 +510,9 @@ async def approve_paper(
 @router.post("/{paper_id}/reject")
 async def reject_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    # Teachers can only reject their own papers
-    if current_user.role == UserRole.TEACHER:
-        doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Paper not found")
-        if doc.get("created_by") != current_user.user_id:
-            raise HTTPException(status_code=403, detail="Teachers can only reject their own papers")
+    # Only Head and Admin can reject papers
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 

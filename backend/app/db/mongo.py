@@ -127,7 +127,12 @@ class SyncMongoDB:
     def questions(self):
         """Get questions collection for question bank."""
         return self.db.questions
-    
+
+    @property
+    def question_delete_requests(self):
+        """Get question delete requests collection."""
+        return self.db.question_delete_requests
+
     @property
     def assessments(self):
         """Get assessments collection."""
@@ -152,6 +157,11 @@ class SyncMongoDB:
     def queries(self):
         """Get queries collection for student-teacher queries."""
         return self.db.queries
+
+    @property
+    def head_counters(self):
+        """Get head counters collection for ID generation."""
+        return self.db.head_counters
     
     def get_collection(self, name: str):
         """Get a collection by name."""

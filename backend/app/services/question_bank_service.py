@@ -154,6 +154,26 @@ class QuestionBankService:
             
         return True, "Deleted successfully"
 
+    async def archive_question(self, question_id: str, user_id: str):
+        """Soft-delete a question by marking it archived. Used by teachers."""
+        if not ObjectId.is_valid(question_id):
+            return False, "Invalid ID"
+
+        result = self.collection.find_one_and_update(
+            {"_id": ObjectId(question_id)},
+            {"$set": {
+                "status": "archived",
+                "archived_by": user_id,
+                "archived_at": __import__("datetime").datetime.utcnow().isoformat()
+            }},
+            return_document=True
+        )
+
+        if not result:
+            return False, "Question not found"
+
+        return True, "Question archived successfully"
+
     async def generate_questions(
         self,
         class_level: int,
@@ -209,6 +229,7 @@ class QuestionBankService:
                     "created_role": "system",
                     "triggered_by": user_id,
                     "triggered_by_role": user_role,
+                    "teacher_id": user_id if user_role == "teacher" else None,
                     "created_at": now.isoformat(),
                     "is_ai_generated": True,
                     "status": "pending",
