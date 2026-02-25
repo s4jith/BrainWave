@@ -252,7 +252,33 @@ async def student_chatbot_stream(request: StreamingChatRequest):
             if not combined_context:
                 logger.info(f"No textbook content found - generating direct answer for valid {request.subject} question")
                 
-                direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
+                # Detect practice request even in fallback path
+                practice_keywords_fb = ["give me", "provide", "list", "show me", "practice", "practise", "sums", "questions", "problems", "exercises", "sample questions", "important questions"]
+                question_lower_fb = request.question.lower()
+                is_practice_fb = sum(1 for kw in practice_keywords_fb if kw in question_lower_fb) >= 2 or \
+                    any(phrase in question_lower_fb for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions"])
+
+                if is_practice_fb:
+                    direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
+
+STUDENT REQUEST: {request.question}
+
+The student wants PRACTICE QUESTIONS. Follow these rules:
+1. Do NOT explain the topic or chapter. No theory. No introductions.
+2. Go straight to giving questions.
+3. Label book-style questions as:
+   ** Book-Style Questions:**
+4. Label additional questions as:
+   ** Additional Practice Questions:**
+5. Give MINIMUM 10 book-style questions and MINIMUM 10 additional questions (total 20+). More is better.
+6. For Maths/Science: include numerical, word problems, and application-based questions.
+   For other subjects: include short answer, long answer, and value-based questions.
+7. Cover a good variety of concepts from the chapter.
+8. Just questions, no answers unless asked.
+
+Generate practice questions now:"""
+                else:
+                    direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
 
 STUDENT QUESTION: {request.question}
 
@@ -269,7 +295,8 @@ Provide a clear, educational answer appropriate for Class {request.class_level} 
 - Keep it concise but informative (200-400 words)"""
 
                 fallback_full = ""
-                for chunk in gemini_service.generate_response_streaming(direct_prompt):
+                streaming_tokens = 4000 if is_practice_fb else 1500
+                for chunk in gemini_service.generate_response_streaming(direct_prompt, max_output_tokens=streaming_tokens):
                     fallback_full += chunk
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
                 
@@ -303,7 +330,40 @@ Provide a clear, educational answer appropriate for Class {request.class_level} 
                     f"- Never mix Physics concepts into a Maths answer or vice-versa.\n"
                 )
             
-            prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
+            # Detect if the student is asking for practice questions / sums
+            practice_keywords = ["give me", "provide", "list", "show me", "practice", "practise", "sums", "questions", "problems", "exercises", "solve", "worksheet", "sample questions", "important questions", "previous year", "pyq"]
+            question_lower = request.question.lower()
+            is_practice_request = sum(1 for kw in practice_keywords if kw in question_lower) >= 2 or \
+                any(phrase in question_lower for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions", "sample questions", "important questions", "previous year"])
+
+            if is_practice_request:
+                prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
+
+STUDENT REQUEST: {request.question}
+
+REFERENCE CONTENT FROM TEXTBOOK:
+{combined_context}
+
+The student is asking for PRACTICE QUESTIONS. Follow these rules:
+
+1. Do NOT explain the topic or chapter. Do NOT give theory or concept summaries. No introductions.
+2. Go STRAIGHT to giving questions.
+3. First, give questions from the NCERT textbook (from the REFERENCE CONTENT). Label them:
+   **Book Questions (NCERT):**
+   Number each question.
+4. Then give additional practice questions of similar difficulty. Label them:
+   **Additional Practice Questions:**
+   Number each question continuing from the book questions.
+5. For Maths/Science: include numerical problems, word problems, and application-based questions.
+   For other subjects: include short answer, long answer, and value-based questions.
+6. Give MINIMUM 10 book questions and MINIMUM 10 additional questions (total 20+). More is better.
+7. Cover different exercises and sections from the chapter — pick a good variety.
+8. Additional questions should test the same concepts but with different numbers/scenarios.
+9. Keep it clean and well-formatted. Just questions, no answers unless the student asked for solutions.
+{subject_isolation}
+Generate the practice questions now:"""
+            else:
+                prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
 
 STUDENT QUESTION: {request.question}
 
@@ -323,7 +383,7 @@ RULES:
 {subject_isolation}
 Generate your answer:"""
             
-            logger.info("📡 Starting Gemini streaming...")
+            logger.info(" Starting Gemini streaming...")
             full_response = ""
             
             import queue
@@ -333,7 +393,8 @@ Generate your answer:"""
             
             def _stream_worker():
                 try:
-                    for chunk in gemini_service.generate_response_streaming(prompt):
+                    stream_tokens = 4000 if is_practice_request else 1500
+                    for chunk in gemini_service.generate_response_streaming(prompt, max_output_tokens=stream_tokens):
                         chunk_queue.put(("chunk", chunk))
                     chunk_queue.put(("done", None))
                 except Exception as e:
@@ -609,7 +670,7 @@ async def save_chat_session(request: SaveSessionRequest):
         
         result = sessions_col.insert_one(session_doc)
         
-        logger.info(f"💾 Saved chat session for user {request.user_id}: {title}")
+        logger.info(f"Saved chat session for user {request.user_id}: {title}")
         
         return {
             "success": True,

@@ -18,12 +18,13 @@ class GeminiService:
         
         self.embedding_model = 'models/gemini-embedding-001'
     
-    def _get_model_with_available_key(self, retry_count: int = 0):
+    def _get_model_with_available_key(self, retry_count: int = 0, max_output_tokens: int = 1500):
         """
         Get a GenerativeModel instance with an available API key.
         
         Args:
             retry_count: Number of retries attempted (for recursive retry logic)
+            max_output_tokens: Maximum tokens for response (default: 1500)
         
         Returns:
             Tuple of (model, key_info) for error handling
@@ -47,7 +48,7 @@ class GeminiService:
         genai.configure(api_key=api_key)
         
         generation_config = {
-            "max_output_tokens": 1500,
+            "max_output_tokens": max_output_tokens,
             "temperature": 0.7,
             "top_p": 0.9,
             "top_k": 40,
@@ -192,7 +193,7 @@ class GeminiService:
             logger.error(f" Gemini generation failed: {e}")
             raise
     
-    def generate_response_streaming(self, prompt: str, retry_count: int = 0):
+    def generate_response_streaming(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500):
         """
         Generate a streaming text response from Gemini.
         Yields text chunks as they are generated for reduced perceived latency.
@@ -200,12 +201,13 @@ class GeminiService:
         Args:
             prompt: Input prompt
             retry_count: Number of retries attempted (internal use)
+            max_output_tokens: Maximum tokens for response
         
         Yields:
             Text chunks as they are generated
         """
         try:
-            model, key_index = self._get_model_with_available_key(retry_count)
+            model, key_index = self._get_model_with_available_key(retry_count, max_output_tokens)
             
             response = model.generate_content(prompt, stream=True)
             
@@ -235,7 +237,7 @@ class GeminiService:
                     logger.warning(f" 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 
-                yield from self.generate_response_streaming(prompt, retry_count + 1)
+                yield from self.generate_response_streaming(prompt, retry_count + 1, max_output_tokens)
             else:
                 logger.error(f" Gemini streaming failed: {e}")
                 raise

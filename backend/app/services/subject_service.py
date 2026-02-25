@@ -47,6 +47,19 @@ class SubjectService:
         try:
             available_subjects = set()
             
+            # Normalize aliases so duplicates like "mathematics"/"math"/"maths" collapse into one
+            _alias_map = {
+                "mathematics": "maths",
+                "math": "maths",
+                "social science": "social-science",
+                "socialscience": "social-science",
+                "social_science": "social-science",
+            }
+
+            def _normalize(s: str) -> str:
+                s = s.lower().strip()
+                return _alias_map.get(s, s)
+
             database = db.db
             
             books_collection = database["books"]
@@ -54,7 +67,7 @@ class SubjectService:
                 "subject",
                 {"class_level": class_level}
             )
-            available_subjects.update(s.lower() for s in subjects_from_books if s)
+            available_subjects.update(_normalize(s) for s in subjects_from_books if s)
             logger.info(f"Found {len(subjects_from_books)} subjects in books for class {class_level}: {subjects_from_books}")
             
             topic_bank_collection = database["topic_question_bank"]
@@ -62,21 +75,21 @@ class SubjectService:
                 "subject",
                 {"class_level": class_level, "is_active": True}
             )
-            available_subjects.update(s.lower() for s in subjects_from_bank if s)
+            available_subjects.update(_normalize(s) for s in subjects_from_bank if s)
             
             top_questions_collection = database["top_questions"]
             subjects_from_questions = top_questions_collection.distinct(
                 "subject",
                 {"class_level": class_level}
             )
-            available_subjects.update(s.lower() for s in subjects_from_questions if s)
+            available_subjects.update(_normalize(s) for s in subjects_from_questions if s)
             
             qa_collection = database["question_answer_pairs"]
             subjects_from_qa = qa_collection.distinct(
                 "subject",
                 {"class_level": class_level}
             )
-            available_subjects.update(s.lower() for s in subjects_from_qa if s)
+            available_subjects.update(_normalize(s) for s in subjects_from_qa if s)
             
             try:
                 from app.db.mongo import pinecone_index
@@ -91,7 +104,7 @@ class SubjectService:
                                 ns_class = int(parts[1])
                                 if ns_class == class_level:
                                     subject = '_'.join(parts[2:])
-                                    available_subjects.add(subject)
+                                    available_subjects.add(_normalize(subject))
                             except ValueError:
                                 continue
             except Exception as e:

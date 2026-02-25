@@ -574,7 +574,42 @@ class EnhancedRAGService:
         except Exception as e:
             logger.debug(f"Language detection skipped: {e}")
         
-        prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
+        # Detect if the student is asking for practice questions / sums
+        practice_keywords = ["give me", "provide", "list", "show me", "practice", "practise", "sums", "questions", "problems", "exercises", "solve", "worksheet", "sample questions", "important questions", "previous year", "pyq"]
+        question_lower = question.lower()
+        is_practice_request = sum(1 for kw in practice_keywords if kw in question_lower) >= 2 or \
+            any(phrase in question_lower for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions", "sample questions", "important questions", "previous year"])
+
+        if is_practice_request:
+            prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
+
+STUDENT REQUEST: {question}
+
+REFERENCE CONTENT FROM TEXTBOOK:
+{combined_context}
+
+{progressive_note}
+
+The student is asking for PRACTICE QUESTIONS. Follow these rules:
+
+1. Do NOT explain the topic or chapter. Do NOT give theory or concept summaries.
+2. Go STRAIGHT to giving questions.
+3. First, give questions that appear in the NCERT textbook (from the REFERENCE CONTENT). Label them:
+   **📖 Book Questions (NCERT):**
+   Number each question.
+4. Then give additional practice questions of similar difficulty. Label them:
+   **📝 Additional Practice Questions:**
+   Number each question continuing from the book questions.
+5. For Maths/Science: include numerical problems, word problems, and application-based questions.
+   For other subjects: include short answer, long answer, and value-based questions.
+6. Give MINIMUM 10 book questions and MINIMUM 10 additional questions (total 20+). More is better.
+7. Cover different exercises and sections from the chapter — pick a good variety.
+8. Additional questions should test the same concepts but with different numbers/scenarios.
+9. Keep it clean and well-formatted. Just questions, no answers (unless the student specifically asked for solutions).{lang_instruction}
+
+Generate the practice questions now:"""
+        else:
+            prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
 
 STUDENT QUESTION: {question}
 
@@ -596,7 +631,8 @@ INSTRUCTIONS:
 
 Generate a clear, direct answer:"""
         
-        answer = self.gemini.generate_response(prompt)
+        response_tokens = 4000 if is_practice_request else 1500
+        answer = self.gemini.generate_response(prompt, max_output_tokens=response_tokens)
         logger.info(f"✓ Basic answer generated ({len(answer)} chars)")
         
         return answer
