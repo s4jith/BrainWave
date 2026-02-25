@@ -16,6 +16,7 @@ export default function CreateTest() {
   const isEditMode = !!testId;
 
   const { user, getAuthHeader } = useUserStore();
+  const isAdmin = user?.role === "admin";
   const [activeTab, setActiveTab] = useState("details");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -60,6 +61,9 @@ export default function CreateTest() {
       });
     }
     
+    // Teachers without groups should see an empty dropdown, not all curriculum subjects
+    if (!isAdmin) return [];
+
     return mainFormCurriculumSubjects.map(subj => ({
       value: `${subj.class_level}-${subj.subject_name}`,
       label: `Class ${subj.class_level} - ${subj.subject_name}`,
@@ -69,7 +73,7 @@ export default function CreateTest() {
       if (a.class !== b.class) return a.class - b.class;
       return a.subject.localeCompare(b.subject);
     });
-  }, [groups, mainFormCurriculumSubjects]);
+  }, [groups, mainFormCurriculumSubjects, isAdmin]);
 
   const getGroupNameValue = React.useCallback((classLevel, subject) => {
     if (!classLevel || !subject) return '';
@@ -391,14 +395,19 @@ export default function CreateTest() {
   const fetchGroupsAndStudents = async () => {
     setLoadingGroups(true);
     try {
-      const groupsRes = await fetch(`${API_URL}/api/admin/groups`, { headers: getAuthHeader() });
+      // Teachers only see their own assigned groups
+      const endpoint = isAdmin
+        ? `${API_URL}/api/admin/groups`
+        : `${API_URL}/api/teacher/groups`;
+      const groupsRes = await fetch(endpoint, { headers: getAuthHeader() });
       if (groupsRes.ok) {
         const data = await groupsRes.json();
-        setGroups(data.groups || []);
-      }
-
-      if (!isEditMode) {
-        await fetchStudentsForClass(formData.class_level);
+        const fetchedGroups = data.groups || [];
+        setGroups(fetchedGroups);
+        // Pass fetched groups directly to avoid React state timing issues
+        if (!isEditMode) {
+          await fetchStudentsForClass(formData.class_level, true, fetchedGroups);
+        }
       }
     } catch (err) {
     } finally {
@@ -406,8 +415,28 @@ export default function CreateTest() {
     }
   };
 
-  const fetchStudentsForClass = async (classLevel, clearSelection = true) => {
-    if (!classLevel) return; 
+  const fetchStudentsForClass = async (classLevel, clearSelection = true, groupsOverride = null) => {
+    if (!classLevel) return;
+    // For teachers, extract students from their assigned groups instead of calling admin API
+    if (!isAdmin) {
+      const groupsToUse = groupsOverride !== null ? groupsOverride : groups;
+      const seen = new Set();
+      const filtered = [];
+      groupsToUse
+        .filter(g => g.class_level == classLevel)
+        .forEach(g => {
+          (g.students || []).forEach(s => {
+            if (!seen.has(s.id)) {
+              seen.add(s.id);
+              filtered.push(s);
+            }
+          });
+        });
+      setStudents(filtered);
+      if (clearSelection) setSelectedStudents([]);
+      return;
+    }
+    // Admin path: fetch all students for the class via admin API
     try {
       const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
       if (studentsRes.ok) {

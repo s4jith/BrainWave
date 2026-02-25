@@ -263,12 +263,13 @@ export default function TestManagement() {
       if (!isNaN(end.valueOf()) && now > end) return 'completed';
     }
 
-    // Fallback to stored status
+    // No datetime fields at all → fall back to stored status
     if (!test.start_datetime && !test.end_datetime) {
-      return test.status === 'published' ? 'active' : test.status;
+      return test.status === 'published' ? 'active' : (test.status || 'draft');
     }
 
-    return test.status === 'published' ? 'active' : (test.status || 'active');
+    // Has datetime(s) and we're in the window → active
+    return 'active';
   };
 
   const getStatusBadge = (testStatus) => {

@@ -105,48 +105,88 @@ async def get_student_groups(current_user: TokenData = Depends(require_role([Use
 
 @router.get("/upcoming-tests")
 async def get_upcoming_tests(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
-    """Get upcoming/pending tests for the student."""
+    """Get upcoming/pending tests for the student (from both assessments and tests collections)."""
     try:
         student_ids = _get_student_id_variants(current_user)
-        groups = list(db.groups.find({
-            "student_ids": {"$in": student_ids}
-        }))
+        groups = list(db.groups.find({"student_ids": {"$in": student_ids}}))
         group_ids = [str(g["_id"]) for g in groups]
-        
-        if not group_ids:
-            return {"tests": [], "total": 0}
-        
-        now = datetime.utcnow()
-        tests = list(db.tests.find({
-            "$or": [
-                {"group_id": {"$in": group_ids}},
-                {"group_ids": {"$elemMatch": {"$in": group_ids}}}
-            ],
-            "status": {"$in": ["active", "published", "upcoming"]}
-        }).sort("created_at", -1).limit(20))
-        
+
         result = []
-        for t in tests:
-            submission = db.test_submissions.find_one({
-                "test_id": str(t["_id"]),
+
+        # ── 1. Query the `assessments` collection (created via CreateTest.jsx) ──
+        assessment_query = {
+            "$or": (
+                [{"student_ids": {"$in": student_ids}}] +
+                ([{"group_ids": {"$in": group_ids}}] if group_ids else [])
+            ),
+            "status": {"$in": ["published", "active"]}
+        }
+        assessments = list(db.assessments.find(assessment_query).sort("created_at", -1).limit(20))
+        for a in assessments:
+            submission = db.submissions.find_one({
+                "assessment_id": str(a["_id"]),
                 "student_id": {"$in": student_ids}
-            }) if hasattr(db, 'test_submissions') and db.test_submissions is not None else None
-            
+            }) if db.submissions is not None else None
+
             result.append({
-                "id": str(t["_id"]),
-                "title": t.get("title", "Untitled Test"),
-                "subject": t.get("subject", ""),
-                "class_level": t.get("class_level"),
-                "total_marks": t.get("total_marks", 0),
-                "duration_minutes": t.get("duration_minutes", 60),
-                "deadline": t.get("end_date").isoformat() if t.get("end_date") else None,
+                "id": str(a["_id"]),
+                "title": a.get("title", "Untitled Test"),
+                "subject": a.get("subject", ""),
+                "class_level": a.get("class_level"),
+                "total_marks": a.get("total_points", 0),
+                "duration_minutes": a.get("duration_minutes", 60),
+                "deadline": a.get("end_datetime").isoformat() if a.get("end_datetime") else (
+                    a.get("due_date").isoformat() if a.get("due_date") else None
+                ),
+                "start_datetime": a.get("start_datetime").isoformat() if a.get("start_datetime") else None,
                 "status": "submitted" if submission else "pending",
                 "score": submission.get("score") if submission else None,
-                "created_at": t.get("created_at").isoformat() if t.get("created_at") else None
+                "source": "assessment",
+                "created_at": a.get("created_at").isoformat() if a.get("created_at") else None
             })
-        
+
+        # ── 2. Query the legacy `tests` collection ──
+        if group_ids:
+            tests_query = {
+                "$or": [
+                    {"group_id": {"$in": group_ids}},
+                    {"group_ids": {"$elemMatch": {"$in": group_ids}}},
+                    {"student_ids": {"$in": student_ids}}
+                ],
+                "status": {"$in": ["active", "published", "upcoming"]}
+            }
+            existing_ids = {r["id"] for r in result}
+            tests = list(db.tests.find(tests_query).sort("created_at", -1).limit(20))
+            for t in tests:
+                tid = str(t["_id"])
+                if tid in existing_ids:
+                    continue
+                submission = db.test_submissions.find_one({
+                    "test_id": tid,
+                    "student_id": {"$in": student_ids}
+                }) if db.test_submissions is not None else None
+
+                result.append({
+                    "id": tid,
+                    "title": t.get("title", "Untitled Test"),
+                    "subject": t.get("subject", ""),
+                    "class_level": t.get("class_level"),
+                    "total_marks": t.get("total_marks", 0),
+                    "duration_minutes": t.get("duration_minutes", 60),
+                    "deadline": t.get("end_date").isoformat() if t.get("end_date") else None,
+                    "start_datetime": None,
+                    "status": "submitted" if submission else "pending",
+                    "score": submission.get("score") if submission else None,
+                    "source": "test",
+                    "created_at": t.get("created_at").isoformat() if t.get("created_at") else None
+                })
+
+        # Sort all results by created_at descending
+        result.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
         return {"tests": result, "total": len(result)}
     except Exception as e:
+        logger.error(f"get_upcoming_tests error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/my-features")

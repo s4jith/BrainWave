@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
 import AIExtractionModal from "../components/AIExtractionModal";
 import PendingCurriculumReview from "../components/PendingCurriculumReview";
+import SubjectIcon from "../components/SubjectIcon";
 import {
   BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight,
   Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle, Sparkles, Clock
@@ -167,7 +168,7 @@ export default function SubjectsManagement() {
           subject_name: "",
           class_level: 10,
           description: "",
-          icon: "📚",
+          icon: "book",
           color: "#3B82F6"
         });
         fetchSubjects();
@@ -559,7 +560,9 @@ export default function SubjectsManagement() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="text-4xl">{subject.icon}</div>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: subject.color ? subject.color + "22" : "#3B82F622" }}>
+                    <SubjectIcon name={subject.subject_name} size="w-6 h-6" className="" style={{ color: subject.color || "#3B82F6" }} />
+                  </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {subject.subject_name}
@@ -684,7 +687,9 @@ export default function SubjectsManagement() {
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 rounded-t-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="text-3xl">{selectedSubject.icon}</div>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: selectedSubject.color ? selectedSubject.color + "22" : "#3B82F622" }}>
+                    <SubjectIcon name={selectedSubject.subject_name} size="w-6 h-6" />
+                  </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                       {selectedSubject.subject_name}

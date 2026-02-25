@@ -25,7 +25,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
     action: "approve",
     rejection_reason: "",
     subject_name_override: "",
-    icon: "📚",
+    icon: "book",
     color: "#3B82F6"
   });
 
@@ -372,8 +372,8 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                       <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                         {editingItem === item.pending_id ? editForm.extracted_chapters?.length : item.extracted_chapters?.length || 0} Chapters
                       </span>
-                      <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                        📝 {editingItem === item.pending_id 
+                      <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5" /> {editingItem === item.pending_id 
                           ? editForm.extracted_chapters?.reduce((sum, ch) => sum + (ch.topics?.length || 0), 0)
                           : item.extracted_chapters?.reduce((sum, ch) => sum + (ch.topics?.length || 0), 0) || 0} Topics
                       </span>

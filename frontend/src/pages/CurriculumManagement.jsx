@@ -5,6 +5,7 @@ import {
     ArrowLeft, Loader2, BookMarked, FileText, AlertCircle
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+import SubjectIcon from "../components/SubjectIcon";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -170,10 +171,10 @@ export default function CurriculumManagement() {
                                 >
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                                            className="w-10 h-10 rounded-lg flex items-center justify-center"
                                             style={{ backgroundColor: subject.color + "20" }}
                                         >
-                                            {subject.icon}
+                                            <SubjectIcon name={subject.subject_name} size="w-5 h-5" />
                                         </div>
                                         <div className="text-left">
                                             <p className="font-semibold text-gray-900 dark:text-white">{subject.subject_name}</p>

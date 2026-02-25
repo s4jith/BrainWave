@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
-    MessageCircle, BookMarked
+    MessageCircle, BookMarked, MessageSquare
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -140,6 +140,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/question-papers", label: "Question Papers", icon: FileText },
         { path: "/teacher-tests", label: "Tests", icon: ClipboardList },
+        { path: "/teacher-queries", label: "Student Queries", icon: MessageSquare },
         { path: "/teacher-reports", label: "Reports", icon: BarChart3 },
     ];
 

@@ -16,6 +16,8 @@ import ReportCard from "./pages/ReportCard";
 import AdminDashboard from "./pages/AdminDashboard";
 import StaffTests from "./pages/StaffTests";
 import SupportTickets from "./pages/SupportTickets";
+import StudentQueries from "./pages/StudentQueries";
+import TeacherQueries from "./pages/TeacherQueries";
 import StudentManagement from "./pages/StudentManagement";
 import CreateTest from "./pages/CreateTest";
 import TestManagement from "./pages/TestManagement";
@@ -91,7 +93,7 @@ function ProtectedRoute({ children }) {
 
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -385,6 +387,22 @@ function App() {
             <ProtectedRoute>
               <SupportTickets />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-queries"
+          element={
+            <ProtectedRoute>
+              <StudentQueries />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/teacher-queries"
+          element={
+            <StaffRoute>
+              <TeacherQueries />
+            </StaffRoute>
           }
         />
 

@@ -216,6 +216,9 @@ export default function QuestionPapers() {
   const getPaperTypeLabel = (val) => PAPER_TYPES.find(p => p.value === val)?.label || val;
   const getTypeLabel = (val) => QUESTION_TYPES.find(t => t.value === val)?.label || val;
 
+  const pendingCount = papers.filter(p => p.status === "pending").length;
+  const myUserId = user?.user_id || user?.id;
+
   const allClassLevels = [...new Set(papers.map(p => p.class_level).filter(Boolean))].sort((a, b) => a - b);
   const filterSubjectNames = [...new Set(papers.map(p => p.subject).filter(Boolean))].sort();
   const filterYears = [...new Set(papers.map(p => p.year).filter(Boolean))].sort((a, b) => b - a);
@@ -223,6 +226,21 @@ export default function QuestionPapers() {
   return (
     <AdminLayout title="Question Papers" icon={FileText}>
       <div className="p-6 space-y-6">
+        {pendingCount > 0 && (
+          <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              {pendingCount} paper{pendingCount !== 1 ? "s" : ""} pending {isAdmin ? "your approval" : "approval"}
+            </span>
+            <button
+              onClick={() => setFilters(f => ({ ...f, status: "pending" }))}
+              className="ml-auto text-xs font-medium text-amber-700 dark:text-amber-300 hover:underline"
+            >
+              View pending →
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -267,9 +285,15 @@ export default function QuestionPapers() {
             className="px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
           >
             <option value="">All Types</option>
-            {PAPER_TYPES.map(p => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
+            {(metadata.paper_types && metadata.paper_types.length > 0
+              ? metadata.paper_types.map(t => {
+                  const found = PAPER_TYPES.find(p => p.value === t);
+                  return <option key={t} value={t}>{found ? found.label : t}</option>;
+                })
+              : PAPER_TYPES.map(p => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))
+            )}
           </select>
 
           <select
@@ -317,7 +341,15 @@ export default function QuestionPapers() {
                       <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{paper.title}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{paper.title}</h3>
+                        {paper.created_by === myUserId
+                          ? <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex-shrink-0">Your paper</span>
+                          : isAdmin
+                            ? <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-zinc-700 dark:text-gray-400 flex-shrink-0" title={paper.created_by}>By teacher</span>
+                            : <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 flex-shrink-0">By admin</span>
+                        }
+                      </div>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                           <GraduationCap className="w-3 h-3" /> Class {paper.class_level}
@@ -345,21 +377,19 @@ export default function QuestionPapers() {
                     {paper.source === "pdf_extracted" && (
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">AI</span>
                     )}
-                    {isAdmin && paper.status === "pending" && (
+                    {paper.status === "pending" && (isAdmin || paper.created_by === myUserId) && (
                       <>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleApprove(paper.id); }}
-                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                          title="Approve"
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 rounded-lg transition-colors"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5" /> Approve
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReject(paper.id); }}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title="Reject"
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 rounded-lg transition-colors"
                         >
-                          <Ban className="w-4 h-4" />
+                          <Ban className="w-3.5 h-3.5" /> Reject
                         </button>
                       </>
                     )}
@@ -485,7 +515,8 @@ export default function QuestionPapers() {
 
 
 function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateMode }) {
-  const { getAuthHeader } = useUserStore();
+  const { getAuthHeader, user } = useUserStore();
+  const isAdmin = user?.role === "admin";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -504,6 +535,22 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
   ]);
 
   const [extractedQuestions, setExtractedQuestions] = useState(null);
+
+  // Auto-select subject when teacher has only one assigned subject
+  useEffect(() => {
+    if (!isAdmin && metadata.subjects && metadata.subjects.length === 1 && !subject) {
+      setSubject(metadata.subjects[0].subject);
+    }
+  }, [metadata.subjects, isAdmin]);
+
+  // Auto-select class when the selected subject has only one class level
+  useEffect(() => {
+    if (!subject) return;
+    const match = metadata.subjects?.find(s => s.subject === subject);
+    if (match && match.class_levels && match.class_levels.length === 1) {
+      setClassLevel(String(match.class_levels[0]));
+    }
+  }, [subject, metadata.subjects]);
 
   const effectivePaperType = paperType === "other" ? customPaperType.trim() : paperType;
 
@@ -705,12 +752,25 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Subject <span className="text-red-500">*</span></label>
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Maths, Physics, English"
-                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-              />
+              {metadata.subjects && metadata.subjects.length > 0 ? (
+                <select
+                  value={subject}
+                  onChange={(e) => { setSubject(e.target.value); setClassLevel(""); }}
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select subject</option>
+                  {metadata.subjects.map(s => (
+                    <option key={s.subject} value={s.subject}>{s.subject}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. Maths, Physics, English"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                />
+              )}
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class <span className="text-red-500">*</span></label>
@@ -720,9 +780,13 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                 className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
               >
                 <option value="">Select class</option>
-                {[1,2,3,4,5,6,7,8,9,10,11,12].map(cl => (
-                  <option key={cl} value={cl}>Class {cl}</option>
-                ))}
+                {(() => {
+                  const match = metadata.subjects?.find(s => s.subject === subject);
+                  const levels = match ? match.class_levels : (isAdmin ? [1,2,3,4,5,6,7,8,9,10,11,12] : []);
+                  return levels.map(cl => (
+                    <option key={cl} value={cl}>Class {cl}</option>
+                  ));
+                })()}
               </select>
             </div>
             <div>
@@ -960,7 +1024,8 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
 
 
 function EditPaperModal({ paper, metadata, onClose, onSaved }) {
-  const { getAuthHeader } = useUserStore();
+  const { getAuthHeader, user } = useUserStore();
+  const isAdmin = user?.role === "admin";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1086,12 +1151,25 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Subject</label>
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Maths, Physics, English"
-                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-              />
+              {metadata.subjects && metadata.subjects.length > 0 ? (
+                <select
+                  value={subject}
+                  onChange={(e) => { setSubject(e.target.value); setClassLevel(""); }}
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select subject</option>
+                  {metadata.subjects.map(s => (
+                    <option key={s.subject} value={s.subject}>{s.subject}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. Maths, Physics, English"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                />
+              )}
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Class</label>
@@ -1101,9 +1179,13 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                 className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
               >
                 <option value="">Select class</option>
-                {[1,2,3,4,5,6,7,8,9,10,11,12].map(cl => (
-                  <option key={cl} value={cl}>Class {cl}</option>
-                ))}
+                {(() => {
+                  const match = metadata.subjects?.find(s => s.subject === subject);
+                  const levels = match ? match.class_levels : (isAdmin ? [1,2,3,4,5,6,7,8,9,10,11,12] : []);
+                  return levels.map(cl => (
+                    <option key={cl} value={cl}>Class {cl}</option>
+                  ));
+                })()}
               </select>
             </div>
             <div>

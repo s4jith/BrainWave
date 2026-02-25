@@ -147,6 +147,11 @@ class SyncMongoDB:
     def platform_settings(self):
         """Get platform_settings collection for admin settings."""
         return self.db.platform_settings
+
+    @property
+    def queries(self):
+        """Get queries collection for student-teacher queries."""
+        return self.db.queries
     
     def get_collection(self, name: str):
         """Get a collection by name."""

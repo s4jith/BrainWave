@@ -11,6 +11,7 @@ from app.services.gemini_key_manager import gemini_key_manager
 import json
 import re
 import logging
+import fitz  # PyMuPDF
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,8 @@ async def get_metadata(
             })
 
         paper_years = db.question_papers.distinct("year") if hasattr(db, "question_papers") else []
-        return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True)}
+        paper_types = db.question_papers.distinct("paper_type") if hasattr(db, "question_papers") else []
+        return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True), "paper_types": sorted([t for t in paper_types if t])}
 
     q_pipeline = list(db.questions.aggregate([
         {"$group": {"_id": {"subject": "$subject", "class_level": "$class_level"}}},
@@ -111,9 +113,11 @@ async def get_metadata(
 
     try:
         paper_years = list(db.question_papers.distinct("year"))
+        paper_types = list(db.question_papers.distinct("paper_type"))
     except Exception:
         paper_years = []
-    return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True)}
+        paper_types = []
+    return {"subjects": subjects_data, "years": sorted([y for y in paper_years if y], reverse=True), "paper_types": sorted([t for t in paper_types if t])}
 
 
 @router.get("")
@@ -127,18 +131,60 @@ async def list_papers(
     offset: int = Query(0, ge=0),
     current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
 ):
-    query = {}
+    # Build explicit filters (applied on top of visibility)
+    filter_conditions = {}
     if class_level:
-        query["class_level"] = class_level
+        filter_conditions["class_level"] = class_level
     if subject:
-        query["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
+        filter_conditions["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
     if paper_type:
-        query["paper_type"] = paper_type
+        filter_conditions["paper_type"] = paper_type
     if year:
-        query["year"] = year
+        filter_conditions["year"] = year
     if status:
-        query["status"] = status
+        filter_conditions["status"] = status
 
+    if current_user.role == UserRole.TEACHER:
+        # Teacher sees: only papers (own or others) matching their assigned groups' class+subject
+        teacher_groups = await mongodb.db.groups.find(
+            {"$or": [
+                {"teacher_id": current_user.user_id},
+                {"teacher_ids": current_user.user_id}
+            ]},
+            {"subject": 1, "class_level": 1}
+        ).to_list(None)
+
+        visibility_or = []
+        for g in teacher_groups:
+            subj = g.get("subject")
+            cl = g.get("class_level")
+            if subj and cl:
+                # Own papers (any status) only for their assigned class+subject
+                visibility_or.append({
+                    "created_by": current_user.user_id,
+                    "subject": subj,
+                    "class_level": cl
+                })
+                # Other approved papers for their assigned class+subject
+                visibility_or.append({
+                    "status": "approved",
+                    "subject": subj,
+                    "class_level": cl
+                })
+
+        if not visibility_or:
+            # Teacher has no group assignments — return nothing
+            return {"papers": [], "total": 0, "page": 1, "pages": 0}
+
+        if filter_conditions:
+            query = {"$and": [filter_conditions, {"$or": visibility_or}]}
+        else:
+            query = {"$or": visibility_or}
+    else:
+        # Admin sees everything
+        query = filter_conditions
+
+    logger.info(f"list_papers query for {current_user.user_id} (role={current_user.role}): {query}")
     total = await mongodb.db.question_papers.count_documents(query)
     cursor = mongodb.db.question_papers.find(query).sort("created_at", -1).skip(offset).limit(limit)
     papers = []
@@ -250,13 +296,24 @@ async def extract_from_pdf(
 
         genai.configure(api_key=api_key)
 
-        uploaded_file = genai.upload_file(
-            data=content,
-            mime_type="application/pdf",
-            display_name=pdf_file.filename
-        )
+        # Extract text locally with PyMuPDF — much faster than sending
+        # binary PDF to Gemini, and avoids 504 timeouts.
+        try:
+            doc = fitz.open(stream=content, filetype="pdf")
+            pdf_text = "\n".join(page.get_text() for page in doc)
+            doc.close()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
 
-        prompt = f"""Analyze this question paper PDF for Class {class_level} {subject}.
+        if not pdf_text.strip():
+            raise HTTPException(status_code=400, detail="PDF appears to be scanned/image-only. Please use a text-based PDF.")
+
+        prompt = f"""Analyze this question paper text for Class {class_level} {subject}.
+
+QUESTION PAPER TEXT:
+{pdf_text[:15000]}
+
+---
 
 Extract ALL questions from the paper and organize them into a structured JSON array.
 
@@ -281,9 +338,9 @@ Example: [{{"text":"What is photosynthesis?","type":"short_answer","marks":2,"op
 
 JSON:"""
 
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(
-            [uploaded_file, prompt],
+            prompt,
             generation_config={"temperature": 0.2, "max_output_tokens": 16384}
         )
 
@@ -322,11 +379,6 @@ JSON:"""
                 "section": q.get("section", ""),
             })
 
-        try:
-            genai.delete_file(uploaded_file.name)
-        except Exception:
-            pass
-
         doc = {
             "title": title,
             "paper_type": paper_type,
@@ -335,7 +387,7 @@ JSON:"""
             "year": year,
             "questions": cleaned_questions,
             "source": "pdf_extracted",
-            "status": "pending",
+            "status": "approved" if current_user.role == UserRole.ADMIN else "pending",
             "original_filename": pdf_file.filename,
             "created_by": current_user.user_id,
             "created_at": datetime.utcnow().isoformat(),
@@ -343,11 +395,16 @@ JSON:"""
 
         result = await mongodb.db.question_papers.insert_one(doc)
 
+        if current_user.role == UserRole.ADMIN:
+            msg = f"Extracted {len(cleaned_questions)} questions. Paper saved and approved."
+        else:
+            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for admin approval."
+
         return {
             "id": str(result.inserted_id),
             "question_count": len(cleaned_questions),
             "questions": cleaned_questions,
-            "message": f"Extracted {len(cleaned_questions)} questions from PDF. Paper is pending admin approval."
+            "message": msg
         }
 
     except json.JSONDecodeError as e:
@@ -363,8 +420,15 @@ JSON:"""
 @router.post("/{paper_id}/approve")
 async def approve_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
 ):
+    # Teachers can only approve their own papers
+    if current_user.role == UserRole.TEACHER:
+        doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        if doc.get("created_by") != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Teachers can only approve their own papers")
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
@@ -381,8 +445,15 @@ async def approve_paper(
 @router.post("/{paper_id}/reject")
 async def reject_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
 ):
+    # Teachers can only reject their own papers
+    if current_user.role == UserRole.TEACHER:
+        doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        if doc.get("created_by") != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Teachers can only reject their own papers")
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 

@@ -49,15 +49,25 @@ export default function TeacherTests() {
     };
 
     const getTestStatus = (test) => {
-        if (!test.start_datetime || !test.end_datetime) {
-            return test.status === 'published' ? 'active' : test.status;
-        }
         const now = new Date();
-        const start = new Date(test.start_datetime);
-        const end = new Date(test.end_datetime);
-        if (now < start) return 'upcoming';
-        if (now > end) return 'completed';
-        return 'active';
+
+        // If start_datetime is in the future → upcoming (check independent of end)
+        if (test.start_datetime) {
+            const start = new Date(test.start_datetime);
+            if (!isNaN(start.valueOf()) && now < start) return 'upcoming';
+        }
+
+        // If end_datetime is in the past → completed (check independent of start)
+        if (test.end_datetime) {
+            const end = new Date(test.end_datetime);
+            if (!isNaN(end.valueOf()) && now > end) return 'completed';
+        }
+
+        // Has date field(s) and we're in the window → active
+        if (test.start_datetime || test.end_datetime) return 'active';
+
+        // No dates set → fall back to stored status
+        return test.status === 'published' ? 'active' : (test.status || 'draft');
     };
 
     const getStatusBadge = (testStatus) => {
@@ -189,7 +199,7 @@ export default function TeacherTests() {
                                 <th className="px-6 py-4 font-medium text-sm">Subject</th>
                                 <th className="px-6 py-4 font-medium text-sm">Questions</th>
                                 <th className="px-6 py-4 font-medium text-sm">Status</th>
-                                <th className="px-6 py-4 font-medium text-sm">Date</th>
+                                <th className="px-6 py-4 font-medium text-sm">Start Date</th>
                                 <th className="px-6 py-4 font-medium text-sm text-right">Actions</th>
                             </tr>
                         </thead>
@@ -208,7 +218,16 @@ export default function TeacherTests() {
                                     <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
                                         <div className="flex items-center gap-1.5 text-sm">
                                             <Calendar className="w-3.5 h-3.5" />
-                                            {test.created_at ? new Date(test.created_at).toLocaleDateString() : '-'}
+                                            {test.start_datetime
+                                                ? new Date(test.start_datetime).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                : test.created_at
+                                                    ? new Date(test.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                    : '—'}
+                                            {test.start_datetime && (
+                                                <span className="text-xs text-gray-400">
+                                                    {new Date(test.start_datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
