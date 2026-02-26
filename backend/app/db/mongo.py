@@ -265,92 +265,6 @@ class PineconeDB:
 
 pinecone_db = PineconeDB()
 
-class PineconeWebDB:
-    """Pinecone Vector Database for web-scraped content (DeepDive mode)."""
-    
-    def __init__(self):
-        self.pc = None
-        self.index = None
-    
-    def connect(self):
-        """Initialize Pinecone web content connection."""
-        try:
-            self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-            
-            self.index = self.pc.Index(
-                name=settings.PINECONE_WEB_INDEX,
-                host=settings.PINECONE_WEB_HOST
-            )
-            
-            stats = self.index.describe_index_stats()
-            logger.info(f"Connected to Pinecone Web Content DB successfully")
-            logger.info(f"Index: {settings.PINECONE_WEB_INDEX}")
-            logger.info(f"Total web vectors: {stats.get('total_vector_count', 0)}")
-            
-        except Exception as e:
-            logger.error(f"Failed to connect to Pinecone Web DB: {e}")
-            logger.warning("Web content DB connection failed - DeepDive mode will use textbook only")
-    
-    def query(self, vector: list[float], top_k: int = 5, filter: dict = None):
-        """
-        Query Pinecone web content index with a vector.
-        
-        Args:
-            vector: Query embedding vector
-            top_k: Number of results to return
-            filter: Metadata filter
-        
-        Returns:
-            Query results from Pinecone
-        """
-        try:
-            if not self.index:
-                logger.warning("Pinecone web index not connected, attempting to reconnect...")
-                self.connect()
-                if not self.index:
-                    raise Exception("Failed to reconnect to Pinecone Web DB")
-            
-            results = self.index.query(
-                vector=vector,
-                top_k=top_k,
-                filter=filter,
-                include_metadata=True
-            )
-            return results
-        except Exception as e:
-            logger.error(f"Pinecone web query failed: {e}")
-            try:
-                logger.info("Attempting to reconnect to Pinecone Web DB...")
-                self.connect()
-                if self.index:
-                    results = self.index.query(
-                        vector=vector,
-                        top_k=top_k,
-                        filter=filter,
-                        include_metadata=True
-                    )
-                    logger.info("Web DB reconnection successful, query completed")
-                    return results
-            except Exception as reconnect_error:
-                logger.error(f"Web DB reconnection failed: {reconnect_error}")
-            raise
-    
-    def upsert(self, vectors: list[tuple]):
-        """
-        Upsert vectors into Pinecone web content index.
-        
-        Args:
-            vectors: List of (id, vector, metadata) tuples
-        """
-        try:
-            self.index.upsert(vectors=vectors)
-            logger.info(f"Upserted {len(vectors)} vectors to Pinecone Web Content DB")
-        except Exception as e:
-            logger.error(f"Pinecone web content upsert failed: {e}")
-            raise
-
-pinecone_web_db = PineconeWebDB()
-
 class PineconeLLMDB:
     """Pinecone Vector Database for storing LLM-generated answers."""
     
@@ -763,8 +677,6 @@ async def init_databases():
     await mongodb.connect()
     
     pinecone_db.connect()
-    
-    pinecone_web_db.connect()
     
     pinecone_llm_db.connect()
     

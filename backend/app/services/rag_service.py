@@ -464,32 +464,7 @@ class RAGService:
             except Exception as textbook_error:
                 logger.error(f"Textbook DB query failed: {textbook_error}")
             
-            web_chunks = []
-            try:
-                from app.db.mongo import pinecone_web_db
-                if pinecone_web_db and pinecone_web_db.index:
-                    logger.info(f"Querying web content DB...")
-                    web_filter = {
-                        "class": str(class_level),
-                        "subject": subject
-                    }
-                    web_results = pinecone_web_db.query(
-                        vector=query_embedding,
-                        top_k=top_k,
-                        filter=web_filter
-                    )
-                    
-                    for match in web_results.get('matches', []):
-                        if match.get('score', 0) >= 0.5 and 'metadata' in match and 'text' in match['metadata']:
-                            web_chunks.append(match['metadata']['text'])
-                    
-                    logger.info(f"✓ Found {len(web_chunks)} web content chunks")
-                else:
-                    logger.info("ℹ️ Web content DB not available yet")
-            except Exception as web_error:
-                logger.warning(f"Web content query failed: {web_error}")
-            
-            if not textbook_chunks and not web_chunks:
+            if not textbook_chunks:
                 logger.warning("No relevant content found in either database")
                 return "I couldn't find enough information to answer this comprehensively. Try asking about specific topics from your chapter!", []
             
@@ -500,10 +475,6 @@ class RAGService:
                 else:
                     combined_context += "**FROM YOUR TEXTBOOK:**\n\n"
                 combined_context += "\n\n---\n\n".join(textbook_chunks)
-            if web_chunks:
-                if combined_context:
-                    combined_context += "\n\n\n**ADDITIONAL CONTEXT (Background Information):**\n\n"
-                combined_context += "\n\n---\n\n".join(web_chunks)
             
             progressive_note = ""
             if len(classes_found) > 1:

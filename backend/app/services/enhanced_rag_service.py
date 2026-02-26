@@ -8,9 +8,8 @@ Implements intelligent cross-index retrieval:
 """
 
 from app.services.gemini_service import gemini_service
-from app.db.mongo import pinecone_db, pinecone_web_db, pinecone_llm_db
+from app.db.mongo import pinecone_db, pinecone_llm_db
 from app.services.llm_storage_service import llm_storage_service
-from app.services.web_scraper_service import web_scraper_service
 from app.services.subject_classifier import subject_classifier
 import logging
 import re
@@ -154,15 +153,13 @@ class EnhancedRAGService:
     def __init__(self):
         self.gemini = gemini_service
         self.textbook_db = pinecone_db
-        self.web_db = pinecone_web_db
         self.llm_db = pinecone_llm_db
         
         self.llm_storage = llm_storage_service
-        self.web_scraper = web_scraper_service
         
         self.embedding_model_name = EMBEDDING_MODEL
         logger.info("RAG Service: Using Gemini gemini-embedding-001 for embeddings")
-        logger.info("Triple-Index System: Textbook + Web + LLM content")
+        logger.info("Dual-Index System: Textbook + LLM content")
         
         self.subject_namespaces = {
             "Mathematics": "maths",
@@ -346,6 +343,42 @@ class EnhancedRAGService:
                     matches = results.get('matches', [])
                     logger.info(f"   🔄 Fallback: {len(matches)} matches without filter")
                 
+                # If we have matches but best score is low (wrong chapter),
+                # retry without chapter filter to search all chapters
+                if matches and chapter is not None:
+                    best_score = max((m.get('score', 0) for m in matches), default=0)
+                    if best_score < 0.3:
+                        logger.info(f"   ⚠️ Best score {best_score:.3f} < 0.3 with chapter={chapter} filter — retrying across ALL chapters...")
+                        no_chapter_filter = {"class_level": {"$in": class_filter_int}}
+                        try:
+                            results2 = self.textbook_db.index.query(
+                                namespace=namespace,
+                                vector=query_embedding,
+                                top_k=10,
+                                include_metadata=True,
+                                filter=no_chapter_filter
+                            )
+                            matches2 = results2.get('matches', [])
+                        except Exception:
+                            matches2 = []
+                        if not matches2:
+                            try:
+                                results2 = self.textbook_db.index.query(
+                                    namespace=namespace,
+                                    vector=query_embedding,
+                                    top_k=10,
+                                    include_metadata=True,
+                                    filter={"class": {"$in": class_filter_str}}
+                                )
+                                matches2 = results2.get('matches', [])
+                            except Exception:
+                                matches2 = []
+                        if matches2:
+                            best2 = max((m.get('score', 0) for m in matches2), default=0)
+                            if best2 > best_score:
+                                logger.info(f"   ✅ All-chapter search found better matches (best score: {best2:.3f})")
+                                matches = matches2
+
                 threshold = 0.03
                 
                 for match in matches:
@@ -390,69 +423,12 @@ class EnhancedRAGService:
             logger.error(f" Multi-class query failed: {e}")
             return [], {}
     
-    def query_web_content(
-        self,
-        query_text: str,
-        subject: str,
-        student_class: int,
-        top_k: int = 10,
-        query_embedding: Optional[List[float]] = None
-    ) -> List[Dict]:
-        """
-        Query web content index for additional context (DeepDive mode).
-        
-        Args:
-            query_text: Student's question
-            subject: Subject name
-            student_class: Current class level
-            top_k: Number of results
-        
-        Returns:
-            List of web content chunks
-        """
-        try:
-            if not self.web_db or not self.web_db.index:
-                logger.info("ℹ️ Web content DB not available")
-                return []
-            
-            if query_embedding is None:
-                query_embedding = self.generate_embedding(query_text)
-            
-            metadata_filter = {
-                "subject": subject,
-            }
-            
-            results = self.web_db.query(
-                vector=query_embedding,
-                top_k=top_k,
-                filter=metadata_filter
-            )
-            
-            web_chunks = []
-            for match in results.get('matches', []):
-                if match.get('score', 0) >= 0.5:
-                    metadata = match.get('metadata', {})
-                    chunk_data = {
-                        'text': metadata.get('text', ''),
-                        'source': 'web',
-                        'score': match.get('score', 0),
-                        'url': metadata.get('url', 'N/A')
-                    }
-                    web_chunks.append(chunk_data)
-            
-            logger.info(f"🌐 Web content: {len(web_chunks)} chunks retrieved")
-            return web_chunks
-            
-        except Exception as e:
-            logger.warning(f"Web content query failed: {e}")
-            return []
-    
     def query_llm_content(
         self,
         query_text: str,
         subject: str,
         top_k: int = 3,
-        similarity_threshold: float = 0.75,
+        similarity_threshold: float = 0.65,
         query_embedding: Optional[List[float]] = None
     ) -> List[Dict]:
         """
@@ -619,19 +595,17 @@ REFERENCE CONTENT:
 {progressive_note}
 
 INSTRUCTIONS:
-1. Answer the question using the REFERENCE CONTENT above as your primary source.
-2. If the reference content is directly about the topic asked, give a clear answer from it.
-3. If the reference content is from the same subject but covers a different specific topic, respond with EXACTLY:
-   "The content is not found in the book, ask some other questions related to your subject."
-4. If the student asks about something completely unrelated to {subject}, respond with EXACTLY:
-   "The content is not found in the book, ask some other questions related to your subject."
+1. Answer the question using the REFERENCE CONTENT above as your primary source whenever it is relevant.
+2. If the reference content directly covers the topic, use it to give a clear, detailed answer.
+3. If the reference content does NOT directly cover the topic asked, but the question IS related to {subject} (e.g., a historical figure, a concept, a definition within the subject), answer from your own knowledge as an expert {subject} tutor. Do NOT say the content is not found — just answer.
+4. ONLY respond with "The content is not found in the book, ask some other questions related to your subject." if the question is completely unrelated to {subject}.
 5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
 6. Do NOT describe what the reference content contains instead of answering.
 7. Keep the answer clear for Class {student_class} students{lang_instruction}
 
 Generate a clear, direct answer:"""
         
-        response_tokens = 4000 if is_practice_request else 1500
+        response_tokens = 16384 if is_practice_request else 8192
         answer = self.gemini.generate_response(prompt, max_output_tokens=response_tokens)
         logger.info(f"✓ Basic answer generated ({len(answer)} chars)")
         
@@ -727,7 +701,7 @@ DEEP DIVE MODE INSTRUCTIONS:
 
 Generate a thorough, well-structured deep dive explanation:"""
         
-        answer = self.gemini.generate_response(prompt)
+        answer = self.gemini.generate_response(prompt, max_output_tokens=16384)
         logger.info(f"✓ Deep dive answer generated ({len(answer)} chars)")
         
         return answer
@@ -839,7 +813,7 @@ Generate a thorough, well-structured deep dive explanation:"""
 
 Generate your answer:"""
         
-        answer = self.gemini.generate_response(prompt)
+        answer = self.gemini.generate_response(prompt, max_output_tokens=16384 if mode == 'deepdive' else 8192)
         
         sources_summary = f"Textbook: {len(textbook_chunks)}, LLM: {len(llm_chunks)}, Web: {len(web_chunks)}"
         logger.info(f"Answer generated ({len(answer)} chars) from {sources_summary}")

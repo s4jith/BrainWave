@@ -80,7 +80,7 @@ class StudentChatRequest(BaseModel):
     question: str = Field(..., description="Student's question")
     class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
-    chapter: int = Field(..., ge=1, description="Chapter number")
+    chapter: Optional[int] = Field(None, ge=1, description="Chapter number (unused for search — all chapters are always searched)")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode: quick (exam-style) or deepdive (comprehensive)")
 
 @router.post("/student", response_model=ChatResponse)
@@ -115,7 +115,7 @@ async def student_chatbot(request: StudentChatRequest):
                 question=request.question,
                 subject=request.subject,
                 student_class=request.class_level,
-                chapter=request.chapter
+                chapter=None  # Always search all chapters — embeddings find the right one
             )
             
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
@@ -133,7 +133,7 @@ async def student_chatbot(request: StudentChatRequest):
                 question=request.question,
                 subject=request.subject,
                 student_class=request.class_level,
-                chapter=request.chapter
+                chapter=None  # Always search all chapters
             )
             
             source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
@@ -160,7 +160,7 @@ class StreamingChatRequest(BaseModel):
     question: str = Field(..., description="Student's question")
     class_level: int = Field(..., ge=1, le=12, description="Class level (1-12)")
     subject: str = Field(..., description="Subject name")
-    chapter: int = Field(..., ge=1, description="Chapter number")
+    chapter: Optional[int] = Field(None, ge=1, description="Chapter number (unused for search — all chapters are always searched)")
     mode: Literal["quick", "deepdive"] = Field("quick", description="Chat mode")
 
 @router.post("/student/stream")
@@ -215,7 +215,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 query_text=request.question,
                 subject=request.subject,
                 student_class=request.class_level,
-                chapter=request.chapter,
+                chapter=None,  # Always search all chapters — embeddings find the right one
                 mode=request.mode,
                 chunks_per_class=3,
                 query_embedding=query_embedding
@@ -228,7 +228,7 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                 query_embedding=query_embedding
             )
             
-            if llm_chunks and llm_chunks[0]['score'] >= 0.80:
+            if llm_chunks and llm_chunks[0]['score'] >= 0.70:
                 cached_answer = llm_chunks[0]['text']
                 logger.info(f" CACHE HIT (streaming): similarity {llm_chunks[0]['score']:.3f}")
                 
@@ -295,7 +295,7 @@ Provide a clear, educational answer appropriate for Class {request.class_level} 
 - Keep it concise but informative (200-400 words)"""
 
                 fallback_full = ""
-                streaming_tokens = 4000 if is_practice_fb else 1500
+                streaming_tokens = 16384 if is_practice_fb else 8192
                 for chunk in gemini_service.generate_response_streaming(direct_prompt, max_output_tokens=streaming_tokens):
                     fallback_full += chunk
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -371,12 +371,10 @@ REFERENCE CONTENT FROM TEXTBOOK:
 {combined_context}
 
 RULES:
-1. Answer the question using the REFERENCE CONTENT above as your primary source.
-2. If the reference content is directly about the topic asked, give a clear answer from it.
-3. If the reference content is from the same subject but covers a different specific topic (e.g., student asks about irrational numbers but content is about prime factorization), respond with EXACTLY:
-   "The content is not found in the book, ask some other questions related to your subject."
-4. If the student asks about something completely unrelated to {request.subject} (e.g., asking about animals in a math class), respond with EXACTLY:
-   "The content is not found in the book, ask some other questions related to your subject."
+1. Answer the question using the REFERENCE CONTENT above as your primary source whenever it is relevant.
+2. If the reference content directly covers the topic, use it to give a clear, detailed answer.
+3. If the reference content does NOT directly cover the topic asked, but the question IS related to {request.subject} (e.g., a historical fact, a concept, a definition within the subject), answer from your own knowledge as an expert {request.subject} tutor. Do NOT say the content is not found — just answer.
+4. ONLY respond with "The content is not found in the book, ask some other questions related to your subject." if the question is completely unrelated to {request.subject} (e.g., asking about a movie, sports, or a completely different subject).
 5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
 6. Do NOT describe what the reference content contains instead of answering.
 7. Keep the answer clear for Class {request.class_level} students.
@@ -393,7 +391,7 @@ Generate your answer:"""
             
             def _stream_worker():
                 try:
-                    stream_tokens = 4000 if is_practice_request else 1500
+                    stream_tokens = 16384 if is_practice_request else 8192
                     for chunk in gemini_service.generate_response_streaming(prompt, max_output_tokens=stream_tokens):
                         chunk_queue.put(("chunk", chunk))
                     chunk_queue.put(("done", None))

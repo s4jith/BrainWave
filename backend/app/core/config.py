@@ -43,9 +43,6 @@ class Settings(BaseSettings):
     PINECONE_HINDI_INDEX: str
     PINECONE_HINDI_HOST: str
     
-    PINECONE_WEB_INDEX: str
-    PINECONE_WEB_HOST: str
-    
     PINECONE_LLM_INDEX: str = "ncert-llm"
     PINECONE_LLM_HOST: Optional[str] = None
     

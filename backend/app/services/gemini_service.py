@@ -14,17 +14,17 @@ class GeminiService:
     def __init__(self):
         self.model_name = 'models/gemini-2.5-flash'
         logger.info(f"Gemini Service initialized with model: {self.model_name}")
-        logger.info(f"🔑 Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
+        logger.info(f"Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
         
         self.embedding_model = 'models/gemini-embedding-001'
     
-    def _get_model_with_available_key(self, retry_count: int = 0, max_output_tokens: int = 1500):
+    def _get_model_with_available_key(self, retry_count: int = 0, max_output_tokens: int = 8192):
         """
         Get a GenerativeModel instance with an available API key.
         
         Args:
             retry_count: Number of retries attempted (for recursive retry logic)
-            max_output_tokens: Maximum tokens for response (default: 1500)
+            max_output_tokens: Maximum tokens for response (default: 8192)
         
         Returns:
             Tuple of (model, key_info) for error handling
@@ -128,14 +128,14 @@ class GeminiService:
             logger.error(f" Gemini explanation failed: {e}")
             raise
     
-    def generate_response(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500, model_name: str = None) -> str:
+    def generate_response(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 8192, model_name: str = None) -> str:
         """
         Generate a simple text response from Gemini with automatic retry on 429 and expired key errors.
         
         Args:
             prompt: Input prompt
             retry_count: Number of retries attempted (internal use)
-            max_output_tokens: Maximum tokens for response (default: 1500)
+            max_output_tokens: Maximum tokens for response (default: 8192)
             model_name: Optional model to use (default: self.model_name). 
                         Use 'models/gemini-2.5-pro' for complex tasks requiring large outputs.
         
@@ -175,7 +175,9 @@ class GeminiService:
                 "API key not valid" in error_str
             )
             
-            should_rotate = "429" in error_str or is_expired_key
+            is_timeout = "504" in error_str or "Deadline Exceeded" in error_str
+            
+            should_rotate = "429" in error_str or is_expired_key or is_timeout
             
             if should_rotate and retry_count < len(gemini_key_manager.keys):
                 current_key_id = gemini_key_manager.get_current_key_id()
@@ -184,6 +186,9 @@ class GeminiService:
                     if current_key_id:
                         gemini_key_manager.mark_key_invalid(current_key_id)
                     logger.warning(f" API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
+                elif is_timeout:
+                    logger.warning(f" 504 Deadline Exceeded. Retrying with next key (retry {retry_count + 1})...")
+                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 else:
                     logger.warning(f" 429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -193,7 +198,7 @@ class GeminiService:
             logger.error(f" Gemini generation failed: {e}")
             raise
     
-    def generate_response_streaming(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 1500):
+    def generate_response_streaming(self, prompt: str, retry_count: int = 0, max_output_tokens: int = 8192):
         """
         Generate a streaming text response from Gemini.
         Yields text chunks as they are generated for reduced perceived latency.
@@ -224,7 +229,9 @@ class GeminiService:
                 "API key not valid" in error_str
             )
             
-            should_rotate = "429" in error_str or is_expired_key
+            is_timeout = "504" in error_str or "Deadline Exceeded" in error_str
+            
+            should_rotate = "429" in error_str or is_expired_key or is_timeout
             
             if should_rotate and retry_count < len(gemini_key_manager.keys):
                 current_key_id = gemini_key_manager.get_current_key_id()
@@ -233,6 +240,9 @@ class GeminiService:
                     if current_key_id:
                         gemini_key_manager.mark_key_invalid(current_key_id)
                     logger.warning(f" API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
+                elif is_timeout:
+                    logger.warning(f" 504 Deadline Exceeded in stream. Retrying with next key (retry {retry_count + 1})...")
+                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 else:
                     logger.warning(f" 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
@@ -248,7 +258,7 @@ class GeminiService:
         image_bytes: bytes, 
         mime_type: str = "image/png",
         retry_count: int = 0,
-        max_output_tokens: int = 1500
+        max_output_tokens: int = 8192
     ) -> str:
         """
         Generate response from Gemini using both text and image input (Vision).
@@ -259,7 +269,7 @@ class GeminiService:
             image_bytes: Raw image bytes
             mime_type: Image MIME type (default: image/png)
             retry_count: Number of retries attempted (internal use)
-            max_output_tokens: Maximum tokens for response (default: 1500)
+            max_output_tokens: Maximum tokens for response (default: 8192)
         
         Returns:
             Generated text response

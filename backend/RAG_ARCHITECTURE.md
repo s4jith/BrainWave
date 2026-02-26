@@ -20,11 +20,11 @@ Student Question
        ▼
 ┌──────────────────────────────────────┐
 │     Triple-Index Pinecone Query      │
-│  ┌────────────┐ ┌──────┐ ┌───────┐  │
-│  │  Textbook  │ │ LLM  │ │  Web  │  │
-│  │   Index    │ │Cache │ │Content│  │
-│  └────────────┘ └──────┘ └───────┘  │
-└──────────────┬───────────────────────┘
+│  ┌────────────┐ ┌──────┐  │
+│  │  Textbook  │ │ LLM  │  │
+│  │   Index    │ │Cache │  │
+│  └────────────┘ └──────┘  │
+└──────────────┬─────────────┘
                │
                ▼
 ┌──────────────────────────┐
@@ -118,7 +118,7 @@ payload = {
 |----------|-------|
 | **Purpose** | Supplementary web-scraped content |
 | **Usage** | Deep Dive mode only |
-| **Status** | Currently disabled to save API calls |
+| **Status** | Disabled — web scraping removed |
 
 ---
 
@@ -127,7 +127,7 @@ payload = {
 ### 4.1 Model Configuration
 | Property | Value |
 |----------|-------|
-| **Model** | `gemini-2.5-flash` |
+| **Model** | `gemini-3.0-flash` |
 | **API Keys** | 9 keys with rotation (20 req/key/day = 180 total) |
 | **Key Rotation** | Automatic on 429 rate limit or invalid key |
 | **File** | `backend/app/services/gemini_service.py` |
@@ -144,7 +144,7 @@ payload = {
 ### 4.3 Non-Streaming (Regular) Response
 ```python
 # Used for: annotation, assessment, non-chat endpoints
-model = genai.GenerativeModel('models/gemini-2.5-flash')
+model = genai.GenerativeModel('models/gemini-3.0-flash')
 response = model.generate_content(prompt)
 return response.text
 ```
@@ -371,8 +371,6 @@ PINECONE_MASTER_INDEX=ncert-all-subjects      # Textbook content
 PINECONE_MASTER_HOST=https://ncert-all-subjects-xxx.pinecone.io
 PINECONE_LLM_INDEX=ncert-llm                  # LLM answer cache
 PINECONE_LLM_HOST=https://ncert-llm-xxx.pinecone.io
-PINECONE_WEB_INDEX=ncert-web-content           # Web content (deep dive)
-PINECONE_WEB_HOST=https://ncert-web-content-xxx.pinecone.io
 ```
 
 ---

@@ -114,12 +114,9 @@ app.include_router(teacher.router)
 from app.routers import notifications
 app.include_router(notifications.router)
 
-from app.routers import voice_chat, student_level, multilingual_chat, optimized_chat, student
-app.include_router(voice_chat.router)
+from app.routers import student_level, student
 app.include_router(student_level.router)
 app.include_router(student.router)
-app.include_router(multilingual_chat.router)
-app.include_router(optimized_chat.router, prefix="/api")
 
 from app.routers import question_bank, question_papers, queries
 app.include_router(question_bank.router)
