@@ -54,6 +54,8 @@ export default function QuestionPapers() {
   const { getAuthHeader, user } = useUserStore();
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
+  const isHead = user?.role === "head";
+  const [headAssignment, setHeadAssignment] = useState(null);
   const [papers, setPapers] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -106,6 +108,15 @@ export default function QuestionPapers() {
   }, [getAuthHeader]);
 
   useEffect(() => {
+    if (isHead) {
+      fetch(`${API_URL}/api/head/my-assignment`, { headers: getAuthHeader() })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setHeadAssignment(d); })
+        .catch(() => {});
+    }
+  }, [isHead]);
+
+  useEffect(() => {
     fetchPapers();
     fetchMetadata();
   }, [fetchPapers, fetchMetadata]);
@@ -133,18 +144,26 @@ export default function QuestionPapers() {
   };
 
   const handleDelete = async (paperId) => {
-    if (!confirm("Delete this question paper?")) return;
+    const msg = isTeacher
+      ? "Request deletion of this paper? It will need admin/head approval."
+      : "Delete this question paper?";
+    if (!confirm(msg)) return;
     try {
       const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
         method: "DELETE",
         headers: getAuthHeader(),
       });
       if (res.ok) {
+        const data = await res.json();
+        if (isTeacher && data.message) alert(data.message);
         fetchPapers();
         if (expandedPaper === paperId) {
           setExpandedPaper(null);
           setExpandedQuestions([]);
         }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || "Failed to delete paper");
       }
     } catch (err) {
       //
@@ -200,6 +219,35 @@ export default function QuestionPapers() {
     }
   };
 
+  const handleApproveDelete = async (paperId) => {
+    if (!confirm("Approve deletion? The paper will be permanently deleted.")) return;
+    try {
+      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/approve-delete`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+      if (res.ok) {
+        fetchPapers();
+      }
+    } catch (err) {
+      //
+    }
+  };
+
+  const handleRejectDelete = async (paperId) => {
+    try {
+      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/reject-delete`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+      if (res.ok) {
+        fetchPapers();
+      }
+    } catch (err) {
+      //
+    }
+  };
+
   const handleEdit = async (paperId) => {
     try {
       const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
@@ -218,7 +266,9 @@ export default function QuestionPapers() {
   const getTypeLabel = (val) => QUESTION_TYPES.find(t => t.value === val)?.label || val;
 
   const pendingCount = papers.filter(p => p.status === "pending").length;
+  const deleteRequestedCount = papers.filter(p => p.delete_requested).length;
   const myUserId = user?.user_id || user?.id;
+  const canApprove = isAdmin || isHead;
 
   const allClassLevels = [...new Set(papers.map(p => p.class_level).filter(Boolean))].sort((a, b) => a - b);
   const filterSubjectNames = [...new Set(papers.map(p => p.subject).filter(Boolean))].sort();
@@ -227,18 +277,22 @@ export default function QuestionPapers() {
   return (
     <AdminLayout title="Question Papers" icon={FileText}>
       <div className="p-6 space-y-6">
-        {pendingCount > 0 && !isTeacher && (
+        {(pendingCount > 0 || deleteRequestedCount > 0) && canApprove && (
           <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              {pendingCount} paper{pendingCount !== 1 ? "s" : ""} pending {isAdmin ? "your approval" : "approval"}
+              {pendingCount > 0 && `${pendingCount} paper${pendingCount !== 1 ? "s" : ""} pending approval`}
+              {pendingCount > 0 && deleteRequestedCount > 0 && " · "}
+              {deleteRequestedCount > 0 && `${deleteRequestedCount} delete request${deleteRequestedCount !== 1 ? "s" : ""}`}
             </span>
-            <button
-              onClick={() => setFilters(f => ({ ...f, status: "pending" }))}
-              className="ml-auto text-xs font-medium text-amber-700 dark:text-amber-300 hover:underline"
-            >
-              View pending →
-            </button>
+            {pendingCount > 0 && (
+              <button
+                onClick={() => setFilters(f => ({ ...f, status: "pending" }))}
+                className="ml-auto text-xs font-medium text-amber-700 dark:text-amber-300 hover:underline"
+              >
+                View pending →
+              </button>
+            )}
           </div>
         )}
 
@@ -258,6 +312,7 @@ export default function QuestionPapers() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          {(!isHead || headAssignment?.assignment_type === "subject") && (
           <select
             value={filters.class_level}
             onChange={(e) => setFilters(f => ({ ...f, class_level: e.target.value }))}
@@ -268,7 +323,9 @@ export default function QuestionPapers() {
               <option key={cl} value={cl}>Class {cl}</option>
             ))}
           </select>
+          )}
 
+          {(!isHead || headAssignment?.assignment_type === "class") && (
           <select
             value={filters.subject}
             onChange={(e) => setFilters(f => ({ ...f, subject: e.target.value }))}
@@ -279,6 +336,7 @@ export default function QuestionPapers() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          )}
 
           <select
             value={filters.paper_type}
@@ -346,9 +404,7 @@ export default function QuestionPapers() {
                         <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{paper.title}</h3>
                         {paper.created_by === myUserId
                           ? <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex-shrink-0">Your paper</span>
-                          : isAdmin
-                            ? <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-zinc-700 dark:text-gray-400 flex-shrink-0" title={paper.created_by}>By teacher</span>
-                            : <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 flex-shrink-0">By admin</span>
+                          : <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-zinc-700 dark:text-gray-400 flex-shrink-0" title={paper.created_by}>By {paper.created_by?.includes("@") ? paper.created_by.split("@")[0] : "staff"}</span>
                         }
                       </div>
                       <div className="flex items-center gap-3 mt-1">
@@ -375,10 +431,17 @@ export default function QuestionPapers() {
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[paper.status] || STATUS_COLORS.approved}`}>
                       {paper.status || "approved"}
                     </span>
+                    {paper.delete_requested && (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse">
+                        Delete Requested
+                      </span>
+                    )}
                     {paper.source === "pdf_extracted" && (
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">AI</span>
                     )}
-                    {paper.status === "pending" && (isAdmin || paper.created_by === myUserId) && (
+
+                    {/* Approve/Reject for pending papers — admin & head only */}
+                    {paper.status === "pending" && canApprove && (
                       <>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleApprove(paper.id); }}
@@ -394,7 +457,26 @@ export default function QuestionPapers() {
                         </button>
                       </>
                     )}
-                    {paper.status === "approved" && (
+
+                    {/* Approve/Reject delete request — admin & head only */}
+                    {paper.delete_requested && canApprove && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleApproveDelete(paper.id); }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 rounded-lg transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Approve Delete
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRejectDelete(paper.id); }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50 rounded-lg transition-colors"
+                        >
+                          <Ban className="w-3.5 h-3.5" /> Reject Delete
+                        </button>
+                      </>
+                    )}
+
+                    {paper.status === "approved" && !paper.delete_requested && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleAddToBank(paper.id); }}
                         disabled={addingToBank === paper.id}
@@ -407,17 +489,19 @@ export default function QuestionPapers() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEdit(paper.id); }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                      title="Edit"
+                      title={isTeacher ? "Edit (requires approval)" : "Edit"}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(paper.id); }}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!(isTeacher && paper.delete_requested) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(paper.id); }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title={isTeacher ? "Request Delete" : "Delete"}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {loadingDetail === paper.id ? (
                       <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                     ) : expandedPaper === paper.id ? (
@@ -452,10 +536,22 @@ export default function QuestionPapers() {
                                       <p className="text-sm text-gray-800 dark:text-gray-200">{q.text}</p>
                                       {q.type === "mcq" && q.options?.length > 0 && (
                                         <div className="mt-2 grid grid-cols-2 gap-1">
-                                          {q.options.map((opt, oi) => (
-                                            <span key={oi} className={`text-xs px-2 py-1 rounded ${q.correct_answer === opt ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium" : "bg-white dark:bg-zinc-700 text-gray-600 dark:text-gray-300"}`}>
-                                              {String.fromCharCode(65 + oi)}. {opt}
-                                            </span>
+                                          {q.options.map((opt, oi) => {
+                                            const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+                                            const isCorrect = correctAnswers.includes(opt);
+                                            return (
+                                              <span key={oi} className={`text-xs px-2 py-1 rounded ${isCorrect ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium" : "bg-white dark:bg-zinc-700 text-gray-600 dark:text-gray-300"}`}>
+                                                {String.fromCharCode(65 + oi)}. {opt}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      {q.type === "fillup" && q.correct_answer && (
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          <span className="text-xs text-gray-500">Answer(s):</span>
+                                          {q.correct_answer.split("|").filter(Boolean).map((ans, ai) => (
+                                            <span key={ai} className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded font-medium">{ans}</span>
                                           ))}
                                         </div>
                                       )}
@@ -464,7 +560,7 @@ export default function QuestionPapers() {
                                           Answer: <span className={q.correct_answer.toLowerCase() === "true" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{q.correct_answer}</span>
                                         </p>
                                       )}
-                                      {q.type !== "mcq" && q.type !== "true_false" && q.correct_answer && (
+                                      {q.type !== "mcq" && q.type !== "true_false" && q.type !== "fillup" && q.correct_answer && (
                                         <p className="text-xs mt-1 text-gray-500">Answer: {q.correct_answer}</p>
                                       )}
                                     </div>
@@ -518,6 +614,7 @@ export default function QuestionPapers() {
 function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateMode }) {
   const { getAuthHeader, user } = useUserStore();
   const isAdmin = user?.role === "admin";
+  const isTeacher = user?.role === "teacher";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -621,6 +718,23 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
 
     const validQuestions = questions.filter(q => q.text.trim());
     if (validQuestions.length === 0) { setError("Add at least one question"); return; }
+
+    // Validate answers for 1-mark objective questions
+    for (let i = 0; i < validQuestions.length; i++) {
+      const q = validQuestions[i];
+      const qLabel = `Question ${i + 1}`;
+      if (q.type === "mcq") {
+        const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+        if (correctAnswers.length === 0) { setError(`${qLabel}: Select at least one correct answer for MCQ`); return; }
+      } else if (q.type === "fillup") {
+        const answers = (q.correct_answer || "").split("|").filter(Boolean);
+        if (answers.length === 0) { setError(`${qLabel}: Enter at least one correct answer for Fill-in-the-blank`); return; }
+      } else if (q.type === "true_false") {
+        if (!q.correct_answer || (q.correct_answer !== "True" && q.correct_answer !== "False")) {
+          setError(`${qLabel}: Select True or False as the correct answer`); return;
+        }
+      }
+    }
 
     setLoading(true);
     setError("");
@@ -929,25 +1043,99 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                   </div>
 
                   {q.type === "mcq" && (
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-500 block">Options</label>
-                      {(q.options || []).map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-gray-400 w-5">{String.fromCharCode(65 + oi)}.</span>
-                          <input
-                            value={opt}
-                            onChange={(e) => updateOption(idx, oi, e.target.value)}
-                            placeholder={`Option ${String.fromCharCode(65 + oi)}`}
-                            className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                      ))}
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-500 block">Options <span className="text-red-500">*</span></label>
+                      {(q.options || []).map((opt, oi) => {
+                        const letter = String.fromCharCode(65 + oi);
+                        const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+                        const isCorrect = opt.trim() !== "" && correctAnswers.includes(opt);
+                        return (
+                          <div key={oi} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${
+                            isCorrect ? "border-green-400 bg-green-50 dark:bg-green-900/20" : "border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                          }`}>
+                            <span className="text-xs font-medium text-gray-400 w-4 shrink-0">{letter}</span>
+                            <input
+                              value={opt}
+                              onChange={(e) => {
+                                const correctAns = (q.correct_answer || "").split("|").filter(Boolean);
+                                const wasCorrect = correctAns.includes(opt);
+                                updateOption(idx, oi, e.target.value);
+                                if (wasCorrect && e.target.value) {
+                                  const updated = correctAns.filter(a => a !== opt).concat(e.target.value);
+                                  updateQuestion(idx, "correct_answer", updated.join("|"));
+                                } else if (wasCorrect) {
+                                  updateQuestion(idx, "correct_answer", correctAns.filter(a => a !== opt).join("|"));
+                                }
+                              }}
+                              placeholder={`Option ${letter}`}
+                              className="flex-1 text-xs bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
+                            />
+                            <input
+                              type="checkbox"
+                              checked={isCorrect}
+                              onChange={() => {
+                                const correctAns = (q.correct_answer || "").split("|").filter(Boolean);
+                                const updated = isCorrect
+                                  ? correctAns.filter(a => a !== opt)
+                                  : [...correctAns, opt];
+                                updateQuestion(idx, "correct_answer", updated.join("|"));
+                              }}
+                              className="w-4 h-4 rounded accent-green-500 shrink-0 cursor-pointer"
+                              title="Mark as correct answer"
+                            />
+                          </div>
+                        );
+                      })}
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Select one or more checkboxes for correct answer(s).</p>
+                      {!(q.correct_answer || "").split("|").filter(Boolean).length && (
+                        <p className="text-xs text-red-500 mt-1">⚠ Please select at least one correct answer</p>
+                      )}
+                    </div>
+                  )}
+
+                  {q.type === "fillup" && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-500 block">Acceptable Answers <span className="text-red-500">*</span></label>
+                      <p className="text-xs text-gray-400 mb-1">Add all acceptable answers (case-insensitive match).</p>
+                      {(() => {
+                        const answers = (q.correct_answer || "").split("|");
+                        const display = answers.length === 1 && answers[0] === "" ? [""] : [...answers, ""];
+                        return display.slice(0, 10).map((ans, ai) => (
+                          <div key={ai} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-4 shrink-0">{ai + 1}.</span>
+                            <input
+                              value={ans}
+                              onChange={(e) => {
+                                const newAnswers = [...answers];
+                                while (newAnswers.length <= ai) newAnswers.push("");
+                                newAnswers[ai] = e.target.value;
+                                updateQuestion(idx, "correct_answer", newAnswers.filter(Boolean).join("|"));
+                              }}
+                              placeholder={ai === 0 ? "Primary answer (required)" : `Alternative answer ${ai + 1}`}
+                              className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                            />
+                            {ai > 0 && ans && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newAnswers = answers.filter((_, i) => i !== ai);
+                                  updateQuestion(idx, "correct_answer", newAnswers.filter(Boolean).join("|"));
+                                }}
+                                className="p-1 text-red-400 hover:text-red-600"
+                              ><X className="w-3 h-3" /></button>
+                            )}
+                          </div>
+                        ));
+                      })()}
+                      {!(q.correct_answer || "").split("|").filter(Boolean).length && (
+                        <p className="text-xs text-red-500 mt-1">⚠ Please enter at least one answer</p>
+                      )}
                     </div>
                   )}
 
                   {q.type === "true_false" ? (
                     <div>
-                      <label className="text-xs text-gray-500 mb-2 block">Correct Answer</label>
+                      <label className="text-xs text-gray-500 mb-2 block">Correct Answer <span className="text-red-500">*</span></label>
                       <div className="flex gap-3">
                         <button
                           type="button"
@@ -964,18 +1152,22 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                           False
                         </button>
                       </div>
+                      {!q.correct_answer && (
+                        <p className="text-xs text-red-500 mt-1">⚠ Please select True or False</p>
+                      )}
                     </div>
-                  ) : (
+                  ) : q.type !== "mcq" && q.type !== "fillup" ? (
                     <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Correct Answer</label>
-                      <input
+                      <label className="text-xs text-gray-500 mb-1 block">Answer / Key Points</label>
+                      <textarea
                         value={q.correct_answer}
                         onChange={(e) => updateQuestion(idx, "correct_answer", e.target.value)}
-                        placeholder={q.type === "mcq" ? "e.g. Option A text" : "Enter the correct answer"}
-                        className="w-full px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                        placeholder="Enter the answer or key points"
+                        rows={2}
+                        className="w-full px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none"
                       />
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -983,8 +1175,11 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
         </div>
 
         <div className="p-6 border-t border-gray-100 dark:border-zinc-800">
-          {!isFormValid && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">Please fill in all required fields (marked with *) before proceeding.</p>
+          {isTeacher && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              Your paper will be submitted for admin/head approval before it becomes active.
+            </p>
           )}
           <div className="flex justify-end gap-3">
             <button
@@ -1009,7 +1204,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                 className="flex items-center gap-2 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                {loading ? "Creating..." : "Create Paper"}
+                {loading ? "Creating..." : isTeacher ? "Submit for Approval" : "Create Paper"}
               </button>
             )}
           </div>
@@ -1023,6 +1218,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
 function EditPaperModal({ paper, metadata, onClose, onSaved }) {
   const { getAuthHeader, user } = useUserStore();
   const isAdmin = user?.role === "admin";
+  const isTeacher = user?.role === "teacher";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1072,10 +1268,28 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!title.trim()) { setError("Title is required"); return; }
+
+    // Validate answers for 1-mark objective questions
+    const validQuestions = questions.filter(q => q.text.trim());
+    for (let i = 0; i < validQuestions.length; i++) {
+      const q = validQuestions[i];
+      const qLabel = `Question ${i + 1}`;
+      if (q.type === "mcq") {
+        const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+        if (correctAnswers.length === 0) { setError(`${qLabel}: Select at least one correct answer for MCQ`); return; }
+      } else if (q.type === "fillup") {
+        const answers = (q.correct_answer || "").split("|").filter(Boolean);
+        if (answers.length === 0) { setError(`${qLabel}: Enter at least one correct answer for Fill-in-the-blank`); return; }
+      } else if (q.type === "true_false") {
+        if (!q.correct_answer || (q.correct_answer !== "True" && q.correct_answer !== "False")) {
+          setError(`${qLabel}: Select True or False as the correct answer`); return;
+        }
+      }
+    }
+
     setLoading(true);
     setError("");
     try {
-      const validQuestions = questions.filter(q => q.text.trim());
       const res = await fetch(`${API_URL}/api/question-papers/${paper.id}`, {
         method: "PUT",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
@@ -1270,25 +1484,99 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                 </div>
 
                 {q.type === "mcq" && (
-                  <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Options</label>
-                    {(q.options || []).map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-400 w-5">{String.fromCharCode(65 + oi)}.</span>
-                        <input
-                          value={opt}
-                          onChange={(e) => updateOption(idx, oi, e.target.value)}
-                          placeholder={`Option ${String.fromCharCode(65 + oi)}`}
-                          className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                    ))}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-gray-500 block">Options <span className="text-red-500">*</span></label>
+                    {(q.options || []).map((opt, oi) => {
+                      const letter = String.fromCharCode(65 + oi);
+                      const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+                      const isCorrect = opt.trim() !== "" && correctAnswers.includes(opt);
+                      return (
+                        <div key={oi} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${
+                          isCorrect ? "border-green-400 bg-green-50 dark:bg-green-900/20" : "border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                        }`}>
+                          <span className="text-xs font-medium text-gray-400 w-4 shrink-0">{letter}</span>
+                          <input
+                            value={opt}
+                            onChange={(e) => {
+                              const correctAns = (q.correct_answer || "").split("|").filter(Boolean);
+                              const wasCorrect = correctAns.includes(opt);
+                              updateOption(idx, oi, e.target.value);
+                              if (wasCorrect && e.target.value) {
+                                const updated = correctAns.filter(a => a !== opt).concat(e.target.value);
+                                updateQuestion(idx, "correct_answer", updated.join("|"));
+                              } else if (wasCorrect) {
+                                updateQuestion(idx, "correct_answer", correctAns.filter(a => a !== opt).join("|"));
+                              }
+                            }}
+                            placeholder={`Option ${letter}`}
+                            className="flex-1 text-xs bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
+                          />
+                          <input
+                            type="checkbox"
+                            checked={isCorrect}
+                            onChange={() => {
+                              const correctAns = (q.correct_answer || "").split("|").filter(Boolean);
+                              const updated = isCorrect
+                                ? correctAns.filter(a => a !== opt)
+                                : [...correctAns, opt];
+                              updateQuestion(idx, "correct_answer", updated.join("|"));
+                            }}
+                            className="w-4 h-4 rounded accent-green-500 shrink-0 cursor-pointer"
+                            title="Mark as correct answer"
+                          />
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Select one or more checkboxes for correct answer(s).</p>
+                    {!(q.correct_answer || "").split("|").filter(Boolean).length && (
+                      <p className="text-xs text-red-500 mt-1">⚠ Please select at least one correct answer</p>
+                    )}
+                  </div>
+                )}
+
+                {q.type === "fillup" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-gray-500 block">Acceptable Answers <span className="text-red-500">*</span></label>
+                    <p className="text-xs text-gray-400 mb-1">Add all acceptable answers (case-insensitive match).</p>
+                    {(() => {
+                      const answers = (q.correct_answer || "").split("|");
+                      const display = answers.length === 1 && answers[0] === "" ? [""] : [...answers, ""];
+                      return display.slice(0, 10).map((ans, ai) => (
+                        <div key={ai} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-4 shrink-0">{ai + 1}.</span>
+                          <input
+                            value={ans}
+                            onChange={(e) => {
+                              const newAnswers = [...answers];
+                              while (newAnswers.length <= ai) newAnswers.push("");
+                              newAnswers[ai] = e.target.value;
+                              updateQuestion(idx, "correct_answer", newAnswers.filter(Boolean).join("|"));
+                            }}
+                            placeholder={ai === 0 ? "Primary answer (required)" : `Alternative answer ${ai + 1}`}
+                            className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                          />
+                          {ai > 0 && ans && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newAnswers = answers.filter((_, i) => i !== ai);
+                                updateQuestion(idx, "correct_answer", newAnswers.filter(Boolean).join("|"));
+                              }}
+                              className="p-1 text-red-400 hover:text-red-600"
+                            ><X className="w-3 h-3" /></button>
+                          )}
+                        </div>
+                      ));
+                    })()}
+                    {!(q.correct_answer || "").split("|").filter(Boolean).length && (
+                      <p className="text-xs text-red-500 mt-1">⚠ Please enter at least one answer</p>
+                    )}
                   </div>
                 )}
 
                 {q.type === "true_false" ? (
                   <div>
-                    <label className="text-xs text-gray-500 mb-2 block">Correct Answer</label>
+                    <label className="text-xs text-gray-500 mb-2 block">Correct Answer <span className="text-red-500">*</span></label>
                     <div className="flex gap-3">
                       <button
                         type="button"
@@ -1305,24 +1593,35 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                         False
                       </button>
                     </div>
+                    {!q.correct_answer && (
+                      <p className="text-xs text-red-500 mt-1">⚠ Please select True or False</p>
+                    )}
                   </div>
-                ) : (
+                ) : q.type !== "mcq" && q.type !== "fillup" ? (
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Correct Answer</label>
-                    <input
+                    <label className="text-xs text-gray-500 mb-1 block">Answer / Key Points</label>
+                    <textarea
                       value={q.correct_answer}
                       onChange={(e) => updateQuestion(idx, "correct_answer", e.target.value)}
-                      placeholder={q.type === "mcq" ? "e.g. Option A text" : "Enter the correct answer"}
-                      className="w-full px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
+                      placeholder="Enter the answer or key points"
+                      rows={2}
+                      className="w-full px-2 py-1.5 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none"
                     />
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-100 dark:border-zinc-800 flex justify-end gap-3">
+        <div className="p-6 border-t border-gray-100 dark:border-zinc-800">
+          {isTeacher && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              Your changes will be submitted for admin/head approval.
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
@@ -1335,8 +1634,9 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
             className="flex items-center gap-2 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {loading ? "Saving..." : "Save Changes"}
+            {loading ? "Saving..." : isTeacher ? "Submit for Approval" : "Save Changes"}
           </button>
+          </div>
         </div>
       </div>
     </div>

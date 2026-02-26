@@ -55,26 +55,40 @@ async def list_assessments(
     List assessments.
     Admins see all assessments.
     Teachers see their own assessments.
+    Head sees assessments scoped to their assigned classes/subjects.
     Students see published assessments for enrolled courses.
     """
     try:
         instructor_id = None
         student_id = None
-        
         teacher_id = None
-        
+        head_classes = None
+        head_subjects = None
+
         if current_user.role == UserRole.ADMIN:
             pass
         elif current_user.role == UserRole.TEACHER:
             teacher_id = current_user.user_id
+        elif current_user.role == UserRole.HEAD:
+            # Fetch HEAD's assignment to build scope filter
+            from app.db.mongo import db as sync_db
+            head_user = sync_db.users.find_one({"user_id": current_user.user_id})
+            if head_user:
+                assignment_type = head_user.get("assignment_type", "class")
+                if assignment_type == "subject":
+                    head_subjects = head_user.get("assigned_subjects", [])
+                else:
+                    head_classes = [int(c) for c in head_user.get("assigned_classes", [])]
         else:
             student_id = current_user.user_id
-        
+
         return await assessment_service.list_assessments(
             course_id=course_id,
             instructor_id=instructor_id,
             student_id=student_id,
-            teacher_id=teacher_id
+            teacher_id=teacher_id,
+            head_classes=head_classes,
+            head_subjects=head_subjects
         )
     except Exception as e:
         logger.error(f"List assessments error: {e}")
@@ -457,12 +471,14 @@ async def get_submission_detail(
             for q in assessment.get("questions", []):
                 questions.append({
                     "id": q.get("id"),
-                    "text": q.get("text", ""),
+                    "text": q.get("text", q.get("question_text", "")),
+                    "question_text": q.get("question_text", q.get("text", "")),
                     "type": q.get("type", ""),
-                    "points": q.get("points", 0),
+                    "points": q.get("points", q.get("marks", 0)),
                     "options": q.get("options", []),
-                    "correct_answer_text": q.get("correct_answer_text", ""),
+                    "correct_answer_text": q.get("correct_answer_text", q.get("fillup_answers", q.get("answer_text", ""))),
                     "answer_text": q.get("answer_text", ""),
+                    "correct_answer_bool": q.get("correct_answer_bool"),
                 })
         
         answers_map = {}
@@ -477,6 +493,8 @@ async def get_submission_detail(
             "assessment_title": assessment.get("title", "Unknown") if assessment else "Unknown",
             "status": submission.get("status"),
             "total_score": submission.get("total_score", 0),
+            "auto_score": submission.get("auto_score", 0),
+            "manual_score": submission.get("manual_score", 0),
             "max_score": submission.get("max_score", 0),
             "percentage": submission.get("percentage", 0),
             "passed": submission.get("passed", False),
@@ -484,6 +502,7 @@ async def get_submission_detail(
             "time_spent_seconds": submission.get("time_spent_seconds", 0),
             "admin_comment": submission.get("admin_comment", ""),
             "is_reviewed": submission.get("is_reviewed", False),
+            "evaluation_type": assessment.get("evaluation_type", "manual") if assessment else "manual",
             "questions": questions,
             "answers": answers_map,
             "evaluation_details": submission.get("evaluation_details", []),

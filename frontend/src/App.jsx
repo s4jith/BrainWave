@@ -48,6 +48,7 @@ import HeadDashboard from "./pages/HeadDashboard";
 import HeadManagement from "./pages/HeadManagement";
 import HeadGroups from "./pages/HeadGroups";
 import HeadReports from "./pages/HeadReports";
+import HeadTests from "./pages/HeadTests";
 import MaintenancePage from "./pages/MaintenancePage";
 import CurriculumManagement from "./pages/CurriculumManagement";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -107,7 +108,7 @@ function ProtectedRoute({ children }) {
 
   if (user.role === "head") {
     const path = window.location.pathname;
-    const headRoutes = ["/head-dashboard", "/question-bank", "/question-papers", "/head-groups", "/head-reports"];
+    const headRoutes = ["/head-dashboard", "/question-bank", "/question-papers", "/head-groups", "/head-reports", "/head-tests"];
     const isHeadRoute = headRoutes.some(route => path.startsWith(route));
     if (!isHeadRoute) {
       console.log("Head trying to access non-head route, redirecting to /head-dashboard");
@@ -563,6 +564,14 @@ function App() {
           element={
             <StaffRoute>
               <HeadReports />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/head-tests"
+          element={
+            <StaffRoute>
+              <HeadTests />
             </StaffRoute>
           }
         />

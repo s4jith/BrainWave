@@ -287,7 +287,8 @@ async def get_notifications(
             query = {
                 "$or": [
                     {"user_id": current_user.user_id},
-                    {"role": "head", "target_user_id": current_user.user_id}
+                    {"role": "head", "target_user_id": current_user.user_id},
+                    {"role": "head", "target_user_id": {"$exists": False}},
                 ]
             }
         else:

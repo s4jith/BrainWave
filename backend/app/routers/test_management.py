@@ -8,7 +8,7 @@ Test Management Router
 - Admin feedback/comments
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
@@ -17,6 +17,9 @@ import os
 import uuid
 import logging
 import shutil
+
+from app.core.permissions import require_role
+from app.models.rbac_models import UserRole, TokenData
 
 from app.db.mongo import db
 
@@ -260,6 +263,66 @@ async def get_admin_tests(
     except Exception as e:
         logger.error(f"Error fetching admin tests: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/head")
+async def get_head_tests(
+    class_level: Optional[int] = None,
+    subject: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """
+    Get tests filtered by HEAD's assigned classes/subjects (JWT-authenticated).
+    - Class-type HEAD: returns all tests for assigned classes; subject filter optional.
+    - Subject-type HEAD: returns all tests for assigned subjects; class filter optional.
+    """
+    try:
+        head_user = db.users.find_one({"user_id": current_user.user_id})
+        if not head_user:
+            raise HTTPException(status_code=404, detail="Head user not found")
+
+        assignment_type = head_user.get("assignment_type", "class")
+        assigned_classes = head_user.get("assigned_classes", [])
+        assigned_subjects = head_user.get("assigned_subjects", [])
+
+        # Base scope filter (assignment boundary)
+        base_query: dict = {}
+        if assignment_type == "subject" and assigned_subjects:
+            base_query["subject"] = {"$in": assigned_subjects}
+        elif assigned_classes:
+            base_query["class_level"] = {"$in": [int(c) for c in assigned_classes]}
+
+        # Secondary filter (user-selected from dropdown)
+        if class_level:
+            # For class-type heads, class_level filter must be within their assigned classes
+            if assignment_type == "class" and assigned_classes:
+                if class_level not in [int(c) for c in assigned_classes]:
+                    return []  # requested class is outside assignment scope
+            base_query["class_level"] = class_level
+        if subject:
+            base_query["subject"] = subject
+
+        tests = list(db.tests.find(base_query).sort("created_at", -1).skip(skip).limit(limit))
+        result = [serialize_test(t) for t in tests]
+
+        if status:
+            result = [t for t in result if t["status"] == status]
+
+        return {
+            "tests": result,
+            "assignment_type": assignment_type,
+            "assigned_classes": assigned_classes,
+            "assigned_subjects": assigned_subjects
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching head tests: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/student/{student_id}")
 async def get_student_tests(

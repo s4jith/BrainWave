@@ -4,7 +4,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, BookOpen, GraduationCap } from "lucide-react";
-import { SUBJECTS, CLASSES } from "../constants/academicConstants";
+import { CLASSES } from "../constants/academicConstants";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -30,6 +30,22 @@ export default function HeadManagement() {
         assigned_classes: [],
         assigned_subjects: [],
     });
+
+    // Load available subjects from curriculum API (exact names matching DB)
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+    useEffect(() => {
+        fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, { headers: getAuthHeader() })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => {
+                const subjects = [...new Set(
+                    (Array.isArray(data) ? data : (data.subjects || []))
+                        .map(s => s.subject_name || s.name || s)
+                        .filter(Boolean)
+                )].sort();
+                setAvailableSubjects(subjects.length > 0 ? subjects : ["Maths", "English", "Hindi", "Science", "Social Science"]);
+            })
+            .catch(() => setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]));
+    }, []);
 
     useEffect(() => {
         fetchHeads();
@@ -456,7 +472,7 @@ export default function HeadManagement() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Subjects</label>
                                     <div className="flex flex-wrap gap-2">
-                                        {SUBJECTS.map(s => (
+                                        {availableSubjects.map(s => (
                                             <button
                                                 key={s}
                                                 type="button"
@@ -597,7 +613,7 @@ export default function HeadManagement() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Subjects</label>
                                     <div className="flex flex-wrap gap-2">
-                                        {SUBJECTS.map(s => (
+                                        {availableSubjects.map(s => (
                                             <button
                                                 key={s}
                                                 type="button"

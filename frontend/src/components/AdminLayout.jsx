@@ -150,6 +150,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/head-groups", label: "Groups", icon: FolderKanban },
         { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
         { path: "/question-papers", label: "Question Papers", icon: FileText },
+        { path: "/head-tests", label: "Tests", icon: ClipboardList },
         { path: "/head-reports", label: "Reports", icon: BarChart3 },
     ];
 

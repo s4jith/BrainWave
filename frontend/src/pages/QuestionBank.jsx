@@ -23,8 +23,10 @@ const QuestionBank = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-    // Head subjects (from assignment)
+    // Head assignment (from /api/head/my-assignment)
     const [headSubjects, setHeadSubjects] = useState([]);
+    const [headAssignment, setHeadAssignment] = useState(null);
+    const [headClassOptions, setHeadClassOptions] = useState([]);
 
     // Teacher: request-deletion confirm modal
     const [showRequestModal, setShowRequestModal] = useState(false);
@@ -64,7 +66,8 @@ const QuestionBank = () => {
 
     const [filters, setFilters] = useState({
         groupName: "",  
-        subject: "", // head subject filter
+        subject: "", // head subject filter (class-assigned HEAD)
+        class_level: "", // head class filter (subject-assigned HEAD)
         type: "",
         difficulty: "",
         search: ""
@@ -92,7 +95,7 @@ const QuestionBank = () => {
 
     useEffect(() => {
         fetchQuestions();
-    }, [pagination.page, filters, activeTab]);
+    }, [pagination.page, filters, activeTab, headAssignment]);
 
     useEffect(() => {
         if (activeTab === "delete-requests" && isHead) {
@@ -155,7 +158,10 @@ const QuestionBank = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                setHeadSubjects(data.head_subjects || []);
+                setHeadAssignment(data);
+                if (data.assignment_type === "class") {
+                    setHeadSubjects(data.head_subjects || []);
+                }
             }
         } catch (e) {
             console.error("Error fetching head subjects:", e);
@@ -189,8 +195,13 @@ const QuestionBank = () => {
             let subject = null;
             
             if (isHead) {
-                // Head uses subject-only filter
-                if (filters.subject) subject = filters.subject;
+                if (headAssignment?.assignment_type === "subject") {
+                    // Subject-assigned HEAD: can filter by class
+                    if (filters.class_level) classLevel = parseInt(filters.class_level);
+                } else {
+                    // Class-assigned HEAD: can filter by subject
+                    if (filters.subject) subject = filters.subject;
+                }
             } else if (filters.groupName) {
                 if (isTeacher && groups.length > 0) {
                     const parsed = parseGroupName(filters.groupName);
@@ -226,6 +237,10 @@ const QuestionBank = () => {
             const data = await response.json();
             setQuestions(data.questions);
             setPagination(prev => ({ ...prev, total: data.total, pages: data.pages }));
+            if (isHead && headAssignment?.assignment_type === "subject") {
+                const cls = [...new Set((data.questions || []).map(q => q.class_level).filter(Boolean))].sort((a, b) => a - b);
+                setHeadClassOptions(cls);
+            }
         } catch (error) {
             console.error("Error fetching questions:", error);
         } finally {
@@ -416,20 +431,35 @@ const QuestionBank = () => {
                             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
-                    {/* Subject filter: head gets subject-only dropdown from assignment; others get combined */}
+                    {/* Filter dropdown: class-assigned HEAD gets subject filter; subject-assigned HEAD gets class filter; others get combined */}
                     {isHead ? (
-                        <select
-                            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
-                            value={filters.subject}
-                            onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-                        >
-                            <option value="">All Subjects</option>
-                            {headSubjects.length === 0 ? (
-                                <option disabled>No subjects assigned</option>
-                            ) : headSubjects.map(s => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
+                        headAssignment?.assignment_type === "subject" ? (
+                            <select
+                                className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
+                                value={filters.class_level}
+                                onChange={(e) => setFilters({ ...filters, class_level: e.target.value })}
+                            >
+                                <option value="">All Classes</option>
+                                {headClassOptions.length === 0 ? (
+                                    <option disabled>No classes found</option>
+                                ) : headClassOptions.map(c => (
+                                    <option key={c} value={c}>Class {c}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <select
+                                className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
+                                value={filters.subject}
+                                onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
+                            >
+                                <option value="">All Subjects</option>
+                                {headSubjects.length === 0 ? (
+                                    <option disabled>No subjects assigned</option>
+                                ) : headSubjects.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                        )
                     ) : (
                         <select
                             className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"

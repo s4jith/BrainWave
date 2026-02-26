@@ -29,6 +29,32 @@ def get_head_user(user_id: str):
     return head
 
 
+# Common subject name aliases — maps any variant to its regex pattern group
+_SUBJECT_ALIAS_GROUPS = [
+    ["mathematics", "maths", "math"],
+    ["science"],
+    ["social science", "social studies", "sst"],
+    ["computer science", "computers", "computer"],
+    ["english"],
+    ["hindi"],
+    ["physics"],
+    ["chemistry"],
+    ["biology"],
+]
+
+def _subject_regex_pattern(name: str) -> str:
+    """Return a regex that matches the subject name AND its common aliases."""
+    lower = name.strip().lower()
+    for group in _SUBJECT_ALIAS_GROUPS:
+        if lower in group:
+            # Escape and join all aliases as an alternation
+            escaped = [g.replace(" ", r"\s+") for g in group]
+            return "^(" + "|".join(escaped) + ")$"
+    # No alias group found — just match the name as-is
+    escaped = name.strip().replace(" ", r"\s+")
+    return f"^{escaped}$"
+
+
 def build_assignment_filter(head_doc: dict, base_query: dict = None) -> dict:
     """
     Build a MongoDB query filter based on head's assignment.
@@ -53,8 +79,8 @@ def build_assignment_filter(head_doc: dict, base_query: dict = None) -> dict:
             query["_id"] = {"$exists": False}
     elif a_type == "subject":
         if a_subjects:
-            # Case-insensitive match for subjects — use $and to avoid $or conflicts
-            subject_patterns = [{"subject": {"$regex": f"^{s}$", "$options": "i"}} for s in a_subjects]
+            # Case-insensitive match for subjects including common aliases (e.g. Mathematics ↔ Maths)
+            subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
             if "$and" not in query:
                 query["$and"] = [{"$or": subject_patterns}]
             else:
@@ -84,7 +110,7 @@ def build_assignment_filter_groups(head_doc: dict) -> dict:
             query["_id"] = {"$exists": False}
     elif a_type == "subject":
         if a_subjects:
-            subject_patterns = [{"subject": {"$regex": f"^{s}$", "$options": "i"}} for s in a_subjects]
+            subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
             query["$or"] = subject_patterns
         else:
             # No subjects assigned — head sees no groups

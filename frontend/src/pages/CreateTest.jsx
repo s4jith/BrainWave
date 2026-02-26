@@ -721,19 +721,25 @@ export default function CreateTest() {
       return;
     }
     
-    if (formData.evaluation_type === "ai") {
-      if (questionForm.type === "mcq" && (!questionForm.correct_answers || questionForm.correct_answers.length === 0)) {
+    // Compulsory answer validation for ALL question types (both manual and AI evaluation)
+    if (questionForm.type === "mcq" && (!questionForm.correct_answers || questionForm.correct_answers.length === 0)) {
+      const hasLegacyCorrect = questionForm.correct_answer !== undefined && questionForm.correct_answer !== null && questionForm.correct_answer !== "";
+      if (!hasLegacyCorrect) {
         setError("Please select at least one correct answer for MCQ");
         return;
       }
-      if (questionForm.type === "fillup" && !questionForm.fillup_answers?.trim()) {
-        setError("Please enter the correct answer(s) for fill in the blank");
-        return;
-      }
-      if (questionForm.type === "subjective" && !questionForm.answer_text?.trim()) {
-        setError("Please enter the model answer for subjective question");
-        return;
-      }
+    }
+    if (questionForm.type === "fillup" && !questionForm.fillup_answers?.trim()) {
+      setError("Please enter the correct answer(s) for fill in the blank");
+      return;
+    }
+    if (questionForm.type === "true_false" && questionForm.correct_answer === undefined && questionForm.correct_answer === null) {
+      setError("Please select the correct answer (True or False)");
+      return;
+    }
+    if (questionForm.type === "subjective" && !questionForm.answer_text?.trim()) {
+      setError("Please enter the model answer for subjective question");
+      return;
     }
 
     const newQuestion = {
@@ -1465,34 +1471,34 @@ export default function CreateTest() {
 
               {questionForm.type === 'fillup' && (
                 <div>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
-                    <p className="text-sm text-blue-700 dark:text-blue-400">
-                      <strong>Fill in the Blank:</strong> Use ___ in your question to indicate where the blank is.
-                    </p>
-                  </div>
                   {formData.evaluation_type === "ai" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Accepted Answer(s) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={questionForm.fillup_answers || ""}
-                        onChange={(e) => setQuestionForm(prev => ({ ...prev, fillup_answers: e.target.value }))}
-                        placeholder='Enter answers separated by commas (e.g., "photosynthesis, photo synthesis")'
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple accepted answers with commas</p>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        <strong>Fill in the Blank:</strong> Use ___ in your question to indicate where the blank is.
+                      </p>
                     </div>
                   )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Accepted Answer(s) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={questionForm.fillup_answers || ""}
+                      onChange={(e) => setQuestionForm(prev => ({ ...prev, fillup_answers: e.target.value }))}
+                      placeholder='Enter answers separated by commas (e.g., "photosynthesis, photo synthesis")'
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple accepted answers with commas</p>
+                  </div>
                 </div>
               )}
 
-              {questionForm.type === 'subjective' && formData.evaluation_type === "ai" && (
+              {questionForm.type === 'subjective' && (
                 <div>
                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-3">
                     <p className="text-sm text-amber-700 dark:text-amber-400">
-                      <strong>Subjective Question ({questionForm.marks} Marks):</strong> AI will evaluate based on the model answer below.
+                      <strong>Subjective Question ({questionForm.marks} Marks):</strong> {formData.evaluation_type === "ai" ? "AI will evaluate based on the model answer below." : "Provide a model answer for reference during manual evaluation."}
                     </p>
                   </div>
                   <div>
@@ -1502,11 +1508,15 @@ export default function CreateTest() {
                     <textarea
                       value={questionForm.answer_text || ""}
                       onChange={(e) => setQuestionForm(prev => ({ ...prev, answer_text: e.target.value }))}
-                      placeholder="Enter the expected/model answer for AI evaluation..."
+                      placeholder="Enter the expected/model answer..."
                       rows={4}
                       className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This answer will be used by AI to evaluate student responses</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {formData.evaluation_type === "ai" 
+                        ? "This answer will be used by AI to evaluate student responses" 
+                        : "This answer will be shown to the evaluator as a reference"}
+                    </p>
                   </div>
                 </div>
               )}

@@ -211,6 +211,163 @@ class AssessmentService:
         except Exception as e:
             logger.error(f"Failed to send notifications: {e}")
     
+    async def _notify_submission(
+        self,
+        assessment: dict,
+        submission: dict,
+        student_id: str,
+        needs_manual: bool,
+        auto_score: int,
+        max_score: int
+    ):
+        """Send notifications to teacher(s) and head(s) when a student submits a test."""
+        try:
+            notifications = []
+            created_at = datetime.utcnow()
+            title = assessment.get("title", "Test")
+            assessment_id = str(assessment.get("_id", assessment.get("id", "")))
+            student_name = submission.get("student_name", student_id)
+            evaluation_type = assessment.get("evaluation_type", "manual")
+            
+            msg_suffix = ""
+            if needs_manual and evaluation_type == "manual":
+                msg_suffix = " Pending manual evaluation for 2/5-mark questions."
+            
+            # 1. Notify teacher(s) assigned to the assessment's groups
+            teacher_ids_set = set()
+            group_ids = assessment.get("group_ids", [])
+            if group_ids:
+                groups = await mongodb.db.groups.find({
+                    "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}
+                }).to_list(length=100)
+                
+                for group in groups:
+                    if group.get("teacher_id"):
+                        teacher_ids_set.add(group["teacher_id"])
+                    for tid in group.get("teacher_ids", []):
+                        teacher_ids_set.add(tid)
+            
+            # Also include assessment creator if they're a teacher
+            instructor_id = assessment.get("instructor_id")
+            if instructor_id:
+                instructor = await mongodb.db.users.find_one({"user_id": instructor_id})
+                if instructor and instructor.get("role") == "teacher":
+                    teacher_ids_set.add(instructor_id)
+            
+            for tid in teacher_ids_set:
+                teacher_user = await mongodb.db.users.find_one({
+                    "$or": [{"user_id": tid}, {"_id": ObjectId(tid) if ObjectId.is_valid(tid) else "dummy"}]
+                })
+                if teacher_user:
+                    notifications.append({
+                        "title": f"Test Submitted: {title}",
+                        "message": f"{student_name} submitted '{title}'. Auto-score: {auto_score}/{max_score}.{msg_suffix}",
+                        "type": "test_submission",
+                        "user_id": teacher_user["user_id"],
+                        "role": "teacher",
+                        "link": f"/test-management",
+                        "assessment_id": assessment_id,
+                        "created_at": created_at,
+                        "read": False,
+                        "saved": False
+                    })
+            
+            # 2. Notify head(s) assigned to the same class/subject
+            class_level = assessment.get("class_level")
+            subject = assessment.get("subject", "")
+            
+            SUBJECT_ALIASES = {
+                "maths": ["mathematics", "math"],
+                "mathematics": ["maths", "math"],
+                "math": ["maths", "mathematics"],
+                "science": ["general science"],
+                "general science": ["science"],
+                "english": ["english language"],
+                "english language": ["english"],
+            }
+            
+            subject_lower = subject.lower() if subject else ""
+            subject_variants = [subject_lower] + SUBJECT_ALIASES.get(subject_lower, [])
+            
+            # Find heads assigned to this class/subject
+            head_query = {"role": "head"}
+            heads = await mongodb.db.users.find(head_query).to_list(length=50)
+            
+            for head in heads:
+                head_assignment = None
+                # Check head_assignments collection
+                if head.get("user_id"):
+                    head_assignment = await mongodb.db.head_assignments.find_one({
+                        "head_id": head["user_id"]
+                    })
+                
+                if not head_assignment:
+                    # Heads without assignments see everything
+                    notifications.append({
+                        "title": f"Test Submitted: {title}",
+                        "message": f"{student_name} submitted '{title}'. Auto-score: {auto_score}/{max_score}.{msg_suffix}",
+                        "type": "test_submission",
+                        "user_id": head["user_id"],
+                        "role": "head",
+                        "link": f"/head-tests",
+                        "assessment_id": assessment_id,
+                        "created_at": created_at,
+                        "read": False,
+                        "saved": False
+                    })
+                    continue
+                
+                assignment_type = head_assignment.get("assignment_type", "")
+                assigned_classes = head_assignment.get("classes", [])
+                assigned_subjects = [s.lower() for s in head_assignment.get("subjects", [])]
+                
+                matches = False
+                if assignment_type == "class":
+                    # Class-assigned head: check if class matches
+                    if class_level and class_level in assigned_classes:
+                        matches = True
+                elif assignment_type == "subject":
+                    # Subject-assigned head: check if subject matches
+                    if any(sv in assigned_subjects for sv in subject_variants):
+                        matches = True
+                
+                if matches:
+                    notifications.append({
+                        "title": f"Test Submitted: {title}",
+                        "message": f"{student_name} submitted '{title}'. Auto-score: {auto_score}/{max_score}.{msg_suffix}",
+                        "type": "test_submission",
+                        "user_id": head["user_id"],
+                        "role": "head",
+                        "link": f"/head-tests",
+                        "assessment_id": assessment_id,
+                        "created_at": created_at,
+                        "read": False,
+                        "saved": False
+                    })
+            
+            # 3. Notify all admins (admin can see all tests)
+            admins = mongodb.db.users.find({"role": "admin"})
+            async for admin in admins:
+                notifications.append({
+                    "title": f"Test Submitted: {title}",
+                    "message": f"{student_name} submitted '{title}'. Auto-score: {auto_score}/{max_score}.{msg_suffix}",
+                    "type": "test_submission",
+                    "user_id": admin["user_id"],
+                    "role": "admin",
+                    "link": f"/test-management",
+                    "assessment_id": assessment_id,
+                    "created_at": created_at,
+                    "read": False,
+                    "saved": False
+                })
+            
+            if notifications:
+                await mongodb.db.notifications.insert_many(notifications)
+                logger.info(f"Sent {len(notifications)} submission notifications for '{title}' by {student_name}")
+                
+        except Exception as e:
+            logger.error(f"Failed to send submission notifications: {e}")
+
     async def _save_new_questions_to_bank(
         self, 
         questions_list: list, 
@@ -284,7 +441,9 @@ class AssessmentService:
         instructor_id: str = None,
         status: str = None,
         student_id: str = None,
-        teacher_id: str = None
+        teacher_id: str = None,
+        head_classes: list = None,
+        head_subjects: list = None
     ) -> AssessmentListResponse:
         """List assessments with filters."""
         try:
@@ -403,6 +562,33 @@ class AssessmentService:
                 
                 if not student_or:
                     logger.warning(f"   - No matching conditions for student {student_id}, returning empty")
+                    return AssessmentListResponse(assessments=[], total=0)
+
+            if (head_classes is not None or head_subjects is not None) and not instructor_id and not teacher_id and not student_id:
+                head_or = []
+                if head_classes:
+                    head_or.append({"class_level": {"$in": head_classes}})
+                if head_subjects:
+                    for subj in head_subjects:
+                        # Match the subject AND common aliases (e.g. Mathematics ↔ Maths)
+                        aliases = {
+                            "mathematics": ["mathematics", "maths", "math"],
+                            "maths": ["mathematics", "maths", "math"],
+                            "math": ["mathematics", "maths", "math"],
+                            "social science": ["social science", "social studies", "sst"],
+                            "computer science": ["computer science", "computers", "computer"],
+                        }
+                        group = aliases.get(subj.strip().lower())
+                        if group:
+                            pattern = "^(" + "|".join(g.replace(" ", r"\s+") for g in group) + ")$"
+                        else:
+                            pattern = f"^{subj.strip()}$"
+                        head_or.append({"subject": {"$regex": pattern, "$options": "i"}})
+                if head_or:
+                    query["$or"] = head_or
+                    logger.info(f"HEAD filter: classes={head_classes}, subjects={head_subjects}, query={query}")
+                else:
+                    logger.warning("HEAD has no assigned classes or subjects — returning empty")
                     return AssessmentListResponse(assessments=[], total=0)
 
             if status:
@@ -703,6 +889,22 @@ class AssessmentService:
             
             if not is_instructor and not is_assigned_teacher:
                 return None
+            
+            # Enforce compulsory answers for all question types
+            q_type = request.type.value
+            if q_type in [QuestionType.MCQ.value, QuestionType.MCQ_MULTI.value]:
+                has_correct = any(opt.is_correct for opt in request.options)
+                if not has_correct:
+                    raise ValueError("MCQ questions must have at least one correct answer marked")
+            elif q_type == QuestionType.TRUE_FALSE.value:
+                if request.correct_answer_bool is None:
+                    raise ValueError("True/False questions must have a correct answer (True or False)")
+            elif q_type in [QuestionType.SHORT_ANSWER.value, QuestionType.FILL_BLANK.value]:
+                if not request.correct_answer_text or not request.correct_answer_text.strip():
+                    raise ValueError("Short answer / Fill-in-the-blank questions must have a correct answer")
+            elif q_type == QuestionType.MATCHING.value:
+                if not request.matching_pairs:
+                    raise ValueError("Matching questions must have matching pairs defined")
             
             question_id = str(uuid.uuid4())
             order = len(assessment.get("questions", []))
@@ -1057,6 +1259,7 @@ class AssessmentService:
             auto_score = 0
             needs_manual = False
             questions_map = {q["id"]: q for q in assessment.get("questions", [])}
+            evaluation_type = assessment.get("evaluation_type", "manual")
             
             for answer in request.answers:
                 question = questions_map.get(answer.question_id)
@@ -1065,6 +1268,12 @@ class AssessmentService:
                 
                 q_type = question.get("type")
                 points = question.get("points", 0)
+                
+                # 1-mark questions: auto-grade by code
+                # 2+ mark questions: needs manual grading (or AI if evaluation_type == "ai")
+                if points > 1 and evaluation_type == "manual":
+                    needs_manual = True
+                    continue
                 
                 if q_type == QuestionType.MCQ.value:
                     correct_ids = [
@@ -1109,6 +1318,17 @@ class AssessmentService:
                         auto_score += points
                     else:
                         auto_score += int(points * correct_count / max(len(correct_pairs), 1))
+                
+                elif q_type == QuestionType.FILL_BLANK.value:
+                    correct = question.get("correct_answer_text", "").strip().lower()
+                    given = (answer.answer_text or "").strip().lower()
+                    if correct and given == correct:
+                        auto_score += points
+                    elif correct and "|" in correct:
+                        # Support pipe-separated multiple acceptable answers
+                        acceptable = [a.strip().lower() for a in correct.split("|")]
+                        if given in acceptable:
+                            auto_score += points
             
             max_score = assessment.get("total_points", 0)
             total_score = auto_score
@@ -1133,7 +1353,6 @@ class AssessmentService:
                 "time_spent_seconds": time_spent
             }
             
-            evaluation_type = assessment.get("evaluation_type", "manual")
             if evaluation_type == "ai":
                 try:
                     from app.services.rag_evaluation_service import rag_evaluation_service
@@ -1226,6 +1445,16 @@ class AssessmentService:
                 {"$set": update_data}
             )
             
+            # Send notification to respective teacher(s) and head(s) about submission
+            await self._notify_submission(
+                assessment=assessment,
+                submission=submission,
+                student_id=student_id,
+                needs_manual=needs_manual,
+                auto_score=auto_score,
+                max_score=max_score
+            )
+            
             updated = await self.submissions.find_one({"_id": ObjectId(submission_id)})
             return self._submission_to_detail_response(updated)
             
@@ -1239,7 +1468,7 @@ class AssessmentService:
         request: GradeSubmissionRequest,
         instructor_id: str
     ) -> Optional[SubmissionDetailResponse]:
-        """Manually grade a submission."""
+        """Manually grade a submission. Allows instructor, assigned teacher, head, or admin."""
         try:
             submission = await self.submissions.find_one({"_id": ObjectId(submission_id)})
             if not submission:
@@ -1252,10 +1481,42 @@ class AssessmentService:
             
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
+            is_head_or_admin = False
             
-            if not is_instructor:
-                teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
-                teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
+            grader_user = await mongodb.db.users.find_one({"user_id": instructor_id})
+            grader_role = grader_user.get("role") if grader_user else None
+            
+            # Admin can grade all submissions
+            if grader_role == "admin":
+                is_head_or_admin = True
+            
+            # Head can grade submissions matching their assigned class/subject
+            elif grader_role == "head":
+                head_assignment = await mongodb.db.head_assignments.find_one({"head_id": instructor_id})
+                if not head_assignment:
+                    is_head_or_admin = True  # Unassigned heads can grade anything
+                else:
+                    assignment_type = head_assignment.get("assignment_type", "")
+                    assigned_classes = head_assignment.get("classes", [])
+                    assigned_subjects = [s.lower() for s in head_assignment.get("subjects", [])]
+                    
+                    class_level = assessment.get("class_level")
+                    subject = (assessment.get("subject") or "").lower()
+                    
+                    SUBJECT_ALIASES = {
+                        "maths": ["mathematics", "math"],
+                        "mathematics": ["maths", "math"],
+                        "math": ["maths", "mathematics"],
+                    }
+                    subject_variants = [subject] + SUBJECT_ALIASES.get(subject, [])
+                    
+                    if assignment_type == "class" and class_level in assigned_classes:
+                        is_head_or_admin = True
+                    elif assignment_type == "subject" and any(sv in assigned_subjects for sv in subject_variants):
+                        is_head_or_admin = True
+            
+            if not is_instructor and not is_head_or_admin:
+                grader_mongo_id = str(grader_user["_id"]) if grader_user else None
                 
                 group_ids = assessment.get("group_ids", [])
                 if group_ids:
@@ -1263,10 +1524,10 @@ class AssessmentService:
                         {"teacher_ids": instructor_id},
                         {"teacher_id": instructor_id}
                     ]
-                    if teacher_mongo_id and teacher_mongo_id != instructor_id:
+                    if grader_mongo_id and grader_mongo_id != instructor_id:
                         teacher_match.extend([
-                            {"teacher_ids": teacher_mongo_id},
-                            {"teacher_id": teacher_mongo_id}
+                            {"teacher_ids": grader_mongo_id},
+                            {"teacher_id": grader_mongo_id}
                         ])
                     
                     teacher_groups = await mongodb.db.groups.find({
@@ -1275,7 +1536,7 @@ class AssessmentService:
                     }).to_list(length=100)
                     is_assigned_teacher = len(teacher_groups) > 0
             
-            if not is_instructor and not is_assigned_teacher:
+            if not is_instructor and not is_assigned_teacher and not is_head_or_admin:
                 return None
             
             manual_score = sum(request.question_grades.values())
@@ -1329,10 +1590,32 @@ class AssessmentService:
                     
                     is_instructor = assessment.get("instructor_id") == instructor_id
                     is_assigned_teacher = False
+                    is_head_or_admin = False
                     
-                    if not is_instructor:
-                        teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
-                        teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
+                    viewer_user = await mongodb.db.users.find_one({"user_id": instructor_id})
+                    viewer_role = viewer_user.get("role") if viewer_user else None
+                    
+                    if viewer_role == "admin":
+                        is_head_or_admin = True
+                    elif viewer_role == "head":
+                        head_assignment = await mongodb.db.head_assignments.find_one({"head_id": instructor_id})
+                        if not head_assignment:
+                            is_head_or_admin = True
+                        else:
+                            assignment_type = head_assignment.get("assignment_type", "")
+                            assigned_classes = head_assignment.get("classes", [])
+                            assigned_subjects = [s.lower() for s in head_assignment.get("subjects", [])]
+                            class_level = assessment.get("class_level")
+                            subject = (assessment.get("subject") or "").lower()
+                            SUBJECT_ALIASES = {"maths": ["mathematics", "math"], "mathematics": ["maths", "math"], "math": ["maths", "mathematics"]}
+                            subject_variants = [subject] + SUBJECT_ALIASES.get(subject, [])
+                            if assignment_type == "class" and class_level in assigned_classes:
+                                is_head_or_admin = True
+                            elif assignment_type == "subject" and any(sv in assigned_subjects for sv in subject_variants):
+                                is_head_or_admin = True
+                    
+                    if not is_instructor and not is_head_or_admin:
+                        viewer_mongo_id = str(viewer_user["_id"]) if viewer_user else None
                         
                         group_ids = assessment.get("group_ids", [])
                         if group_ids:
@@ -1340,10 +1623,10 @@ class AssessmentService:
                                 {"teacher_ids": instructor_id},
                                 {"teacher_id": instructor_id}
                             ]
-                            if teacher_mongo_id and teacher_mongo_id != instructor_id:
+                            if viewer_mongo_id and viewer_mongo_id != instructor_id:
                                 teacher_match.extend([
-                                    {"teacher_ids": teacher_mongo_id},
-                                    {"teacher_id": teacher_mongo_id}
+                                    {"teacher_ids": viewer_mongo_id},
+                                    {"teacher_id": viewer_mongo_id}
                                 ])
                             
                             teacher_groups = await mongodb.db.groups.find({
@@ -1352,7 +1635,7 @@ class AssessmentService:
                             }).to_list(length=100)
                             is_assigned_teacher = len(teacher_groups) > 0
                     
-                    if not is_instructor and not is_assigned_teacher:
+                    if not is_instructor and not is_assigned_teacher and not is_head_or_admin:
                         return SubmissionListResponse(submissions=[], total=0)
             
             if student_id:
@@ -1395,7 +1678,8 @@ class AssessmentService:
             start_datetime=doc.get("start_datetime"),
             end_datetime=doc.get("end_datetime"),
             submission_count=submission_count,
-            created_at=doc.get("created_at", datetime.utcnow())
+            created_at=doc.get("created_at", datetime.utcnow()),
+            evaluation_type=doc.get("evaluation_type", "manual")
         )
     
     def _to_detail_response(self, doc: dict) -> AssessmentDetailResponse:
@@ -1490,6 +1774,25 @@ class AssessmentService:
                 q["points"] = int(q.get("marks", 1))
             except (ValueError, TypeError):
                 q["points"] = 1
+        
+        # Preserve answer fields for evaluation
+        # fillup_answers → correct_answer_text (pipe-separated)
+        if q.get("fillup_answers") and not q.get("correct_answer_text"):
+            q["correct_answer_text"] = q["fillup_answers"]
+        
+        # answer_text for subjective/short answer → correct_answer_text
+        if q.get("answer_text") and not q.get("correct_answer_text"):
+            q["correct_answer_text"] = q["answer_text"]
+        
+        # true_false: correct_answer → correct_answer_bool
+        if q_type == "true_false" and q.get("correct_answer") is not None and q.get("correct_answer_bool") is None:
+            ca = q["correct_answer"]
+            if isinstance(ca, bool):
+                q["correct_answer_bool"] = ca
+            elif isinstance(ca, str):
+                q["correct_answer_bool"] = ca.lower() in ["true", "1", "yes"]
+            elif isinstance(ca, (int, float)):
+                q["correct_answer_bool"] = bool(ca)
 
         return q
     

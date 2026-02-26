@@ -231,6 +231,7 @@ class AssessmentResponse(BaseModel):
     end_datetime: Optional[str] = None
     submission_count: int = 0
     created_at: datetime
+    evaluation_type: Optional[str] = "manual"
     
     has_attempted: bool = False
     best_score: Optional[float] = None

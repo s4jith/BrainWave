@@ -18,6 +18,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/question-papers", tags=["question-papers"])
 
 
+async def create_approval_notification(action: str, paper_title: str, teacher_id: str, paper_id: str, subject: str = "", class_level: int = 0):
+    """Create notifications for admin and head when a teacher requests an action on a question paper."""
+    now = datetime.utcnow()
+    action_labels = {
+        "create": "submitted a new question paper for approval",
+        "edit": "submitted an edit to a question paper for approval",
+        "delete": "requested deletion of a question paper",
+    }
+    desc = action_labels.get(action, action)
+    message = f"Teacher ({teacher_id}) {desc}: '{paper_title}'"
+    if subject and class_level:
+        message += f" (Class {class_level} {subject})"
+
+    notifs = [
+        {
+            "title": f"Question Paper {action.title()} Request",
+            "message": message,
+            "type": "warning",
+            "category": "approval",
+            "role": role,
+            "read": False,
+            "saved": False,
+            "created_at": now,
+            "paper_id": paper_id,
+            "action_type": action,
+        }
+        for role in ("admin", "head")
+    ]
+    try:
+        await mongodb.db.notifications.insert_many(notifs)
+    except Exception as e:
+        logger.error(f"Failed to create approval notifications: {e}")
+
+
 class ManualQuestion(BaseModel):
     text: str
     type: str = Field(..., pattern="^(mcq|fillup|true_false|short_answer|long_answer)$")
@@ -267,6 +301,8 @@ async def list_papers(
             "created_at": doc.get("created_at"),
             "source": doc.get("source", "manual"),
             "status": doc.get("status", "approved"),
+            "delete_requested": doc.get("delete_requested", False),
+            "delete_requested_by": doc.get("delete_requested_by"),
         })
 
     return {
@@ -301,13 +337,15 @@ async def get_paper(
         "created_at": doc.get("created_at"),
         "source": doc.get("source", "manual"),
         "status": doc.get("status", "approved"),
+        "delete_requested": doc.get("delete_requested", False),
+        "delete_requested_by": doc.get("delete_requested_by"),
     }
 
 
 @router.post("")
 async def create_paper_manual(
     data: CreatePaperManual,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     questions = []
     for i, q in enumerate(data.questions):
@@ -336,8 +374,12 @@ async def create_paper_manual(
     }
 
     result = await mongodb.db.question_papers.insert_one(doc)
-    
+
     if current_user.role == UserRole.TEACHER:
+        await create_approval_notification(
+            "create", data.title, current_user.user_id,
+            str(result.inserted_id), data.subject, data.class_level
+        )
         return {"id": str(result.inserted_id), "message": "Question paper submitted for approval"}
     return {"id": str(result.inserted_id), "message": "Question paper created successfully"}
 
@@ -350,7 +392,7 @@ async def extract_from_pdf(
     class_level: int = Form(...),
     subject: str = Form(...),
     year: int = Form(...),
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     if not pdf_file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -466,10 +508,14 @@ JSON:"""
 
         result = await mongodb.db.question_papers.insert_one(doc)
 
-        if current_user.role in (UserRole.ADMIN, UserRole.HEAD):
-            msg = f"Extracted {len(cleaned_questions)} questions. Paper saved and approved."
+        if current_user.role == UserRole.TEACHER:
+            await create_approval_notification(
+                "create", title, current_user.user_id,
+                str(result.inserted_id), subject, class_level
+            )
+            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for approval."
         else:
-            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for head approval."
+            msg = f"Extracted {len(cleaned_questions)} questions. Paper saved and approved."
 
         return {
             "id": str(result.inserted_id),
@@ -493,16 +539,34 @@ async def approve_paper(
     paper_id: str,
     current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    # Only Head and Admin can approve papers
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
-    result = await mongodb.db.question_papers.update_one(
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    await mongodb.db.question_papers.update_one(
         {"_id": ObjectId(paper_id)},
         {"$set": {"status": "approved", "approved_by": current_user.user_id, "approved_at": datetime.utcnow().isoformat()}}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Notify the teacher who submitted
+    teacher_id = doc.get("teacher_id") or doc.get("edit_requested_by") or doc.get("created_by")
+    if teacher_id and teacher_id != current_user.user_id:
+        try:
+            await mongodb.db.notifications.insert_one({
+                "title": "Question Paper Approved",
+                "message": f"Your question paper '{doc.get('title', '')}' has been approved.",
+                "type": "success",
+                "category": "approval",
+                "user_id": teacher_id,
+                "read": False,
+                "saved": False,
+                "created_at": datetime.utcnow(),
+            })
+        except Exception:
+            pass
 
     return {"message": "Paper approved successfully"}
 
@@ -512,16 +576,34 @@ async def reject_paper(
     paper_id: str,
     current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    # Only Head and Admin can reject papers
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
-    result = await mongodb.db.question_papers.update_one(
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    await mongodb.db.question_papers.update_one(
         {"_id": ObjectId(paper_id)},
         {"$set": {"status": "rejected", "rejected_by": current_user.user_id, "rejected_at": datetime.utcnow().isoformat()}}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Notify the teacher
+    teacher_id = doc.get("teacher_id") or doc.get("edit_requested_by") or doc.get("created_by")
+    if teacher_id and teacher_id != current_user.user_id:
+        try:
+            await mongodb.db.notifications.insert_one({
+                "title": "Question Paper Rejected",
+                "message": f"Your question paper '{doc.get('title', '')}' has been rejected.",
+                "type": "error",
+                "category": "approval",
+                "user_id": teacher_id,
+                "read": False,
+                "saved": False,
+                "created_at": datetime.utcnow(),
+            })
+        except Exception:
+            pass
 
     return {"message": "Paper rejected"}
 
@@ -530,7 +612,7 @@ async def reject_paper(
 async def update_paper(
     paper_id: str,
     data: UpdatePaperData,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
@@ -565,11 +647,27 @@ async def update_paper(
 
     update_fields["updated_at"] = datetime.utcnow().isoformat()
 
-    result = await mongodb.db.question_papers.update_one(
+    # Teacher edits go through approval
+    if current_user.role == UserRole.TEACHER:
+        update_fields["status"] = "pending"
+        update_fields["edit_requested_by"] = current_user.user_id
+        update_fields["edit_requested_at"] = datetime.utcnow().isoformat()
+
+    existing = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    await mongodb.db.question_papers.update_one(
         {"_id": ObjectId(paper_id)}, {"$set": update_fields}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if current_user.role == UserRole.TEACHER:
+        title = data.title or existing.get("title", "Unknown")
+        await create_approval_notification(
+            "edit", title, current_user.user_id, paper_id,
+            existing.get("subject", ""), existing.get("class_level", 0)
+        )
+        return {"message": "Edit submitted for approval"}
 
     return {"message": "Paper updated successfully"}
 
@@ -577,11 +675,32 @@ async def update_paper(
 @router.delete("/{paper_id}")
 async def delete_paper(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
+    # Teacher cannot directly delete — creates a request for admin/head approval
+    if current_user.role == UserRole.TEACHER:
+        doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Paper not found")
+
+        await mongodb.db.question_papers.update_one(
+            {"_id": ObjectId(paper_id)},
+            {"$set": {
+                "delete_requested": True,
+                "delete_requested_by": current_user.user_id,
+                "delete_requested_at": datetime.utcnow().isoformat(),
+            }}
+        )
+        await create_approval_notification(
+            "delete", doc.get("title", "Unknown"), current_user.user_id, paper_id,
+            doc.get("subject", ""), doc.get("class_level", 0)
+        )
+        return {"message": "Delete request submitted for approval"}
+
+    # Admin/Head: direct delete
     result = await mongodb.db.question_papers.delete_one({"_id": ObjectId(paper_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Paper not found")
@@ -589,10 +708,84 @@ async def delete_paper(
     return {"message": "Paper deleted successfully"}
 
 
+@router.post("/{paper_id}/approve-delete")
+async def approve_delete(
+    paper_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
+    """Admin/Head approves a teacher's delete request — actually deletes the paper."""
+    if not ObjectId.is_valid(paper_id):
+        raise HTTPException(status_code=400, detail="Invalid paper ID")
+
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not doc.get("delete_requested"):
+        raise HTTPException(status_code=400, detail="No delete request pending for this paper")
+
+    teacher_id = doc.get("delete_requested_by") or doc.get("created_by")
+    await mongodb.db.question_papers.delete_one({"_id": ObjectId(paper_id)})
+
+    # Notify teacher
+    if teacher_id and teacher_id != current_user.user_id:
+        try:
+            await mongodb.db.notifications.insert_one({
+                "title": "Delete Request Approved",
+                "message": f"Your delete request for '{doc.get('title', '')}' has been approved. The paper has been deleted.",
+                "type": "success",
+                "category": "approval",
+                "user_id": teacher_id,
+                "read": False,
+                "saved": False,
+                "created_at": datetime.utcnow(),
+            })
+        except Exception:
+            pass
+
+    return {"message": "Delete request approved. Paper deleted."}
+
+
+@router.post("/{paper_id}/reject-delete")
+async def reject_delete(
+    paper_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
+    """Admin/Head rejects a teacher's delete request."""
+    if not ObjectId.is_valid(paper_id):
+        raise HTTPException(status_code=400, detail="Invalid paper ID")
+
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    await mongodb.db.question_papers.update_one(
+        {"_id": ObjectId(paper_id)},
+        {"$unset": {"delete_requested": "", "delete_requested_by": "", "delete_requested_at": ""}}
+    )
+
+    teacher_id = doc.get("delete_requested_by") or doc.get("created_by")
+    if teacher_id and teacher_id != current_user.user_id:
+        try:
+            await mongodb.db.notifications.insert_one({
+                "title": "Delete Request Rejected",
+                "message": f"Your delete request for '{doc.get('title', '')}' has been rejected.",
+                "type": "warning",
+                "category": "approval",
+                "user_id": teacher_id,
+                "read": False,
+                "saved": False,
+                "created_at": datetime.utcnow(),
+            })
+        except Exception:
+            pass
+
+    return {"message": "Delete request rejected"}
+
+
 @router.post("/{paper_id}/add-to-bank")
 async def add_paper_questions_to_bank(
     paper_id: str,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     if not ObjectId.is_valid(paper_id):
         raise HTTPException(status_code=400, detail="Invalid paper ID")

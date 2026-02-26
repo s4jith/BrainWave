@@ -31,6 +31,10 @@ export default function TestManagement() {
   const [submissionDetail, setSubmissionDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  const [questionGrades, setQuestionGrades] = useState({});
+  const [gradingFeedback, setGradingFeedback] = useState("");
+  const [savingGrades, setSavingGrades] = useState(false);
+
   const [teacherGroups, setTeacherGroups] = useState([]);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [teacherClassLevels, setTeacherClassLevels] = useState([]);
@@ -240,11 +244,59 @@ export default function TestManagement() {
       if (!response.ok) throw new Error("Failed to load submission");
       const data = await response.json();
       setSubmissionDetail(data);
+      // Initialize grading scores for 2+ mark questions that haven't been graded
+      const grades = {};
+      (data.questions || []).forEach(q => {
+        if (q.points > 1) {
+          const existingScore = data.answers?.[q.id]?.points_awarded;
+          grades[q.id] = existingScore ?? 0;
+        }
+      });
+      setQuestionGrades(grades);
+      setGradingFeedback(data.admin_comment || "");
     } catch (err) {
       alert("Error loading submission details");
       setShowDetailModal(false);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const handleSubmitGrades = async () => {
+    if (!submissionDetail) return;
+    setSavingGrades(true);
+    try {
+      const response = await fetch(`${API_URL}/api/assessments/submissions/${submissionDetail.id}/grade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({
+          question_grades: questionGrades,
+          overall_feedback: gradingFeedback || null
+        })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Failed to submit grades");
+      }
+      alert("Grades submitted successfully!");
+      // Refresh submission detail
+      const updated = await response.json();
+      setSubmissionDetail(prev => ({
+        ...prev,
+        total_score: updated.total_score,
+        percentage: updated.percentage,
+        passed: updated.passed,
+        status: updated.status
+      }));
+      // Update submission in list
+      setSubmissions(prev => prev.map(s => s.id === submissionDetail.id
+        ? { ...s, status: "graded", total_score: updated.total_score, percentage: updated.percentage }
+        : s
+      ));
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setSavingGrades(false);
     }
   };
 
@@ -445,9 +497,28 @@ export default function TestManagement() {
                     <div key={sub.id} className="border border-gray-100 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{sub.student_name}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{sub.student_user_id}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">Submitted: {new Date(sub.submitted_at).toLocaleString()}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 dark:text-white">{sub.student_name}</p>
+                            {sub.status === "submitted" && (
+                              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                Needs Grading
+                              </span>
+                            )}
+                            {sub.status === "graded" && (
+                              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                Graded
+                              </span>
+                            )}
+                            {sub.status === "in_progress" && (
+                              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                In Progress
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Score: {sub.total_score}/{sub.max_score} ({sub.percentage}%)
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">Submitted: {sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : "—"}</p>
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => handleViewSubmission(sub)}
@@ -549,62 +620,99 @@ export default function TestManagement() {
                   </div>
                 )}
 
+                {/* Pending grading notice */}
+                {submissionDetail.status === "submitted" && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                      This submission has 2/5-mark questions pending manual evaluation. Score the questions below and submit grades.
+                    </p>
+                  </div>
+                )}
+
                 <h3 className="text-base font-semibold text-gray-900 dark:text-white mt-4">Questions & Answers</h3>
                 {submissionDetail.questions.map((q, idx) => {
                   const answer = submissionDetail.answers[q.id] || {};
                   const evalDetail = (submissionDetail.evaluation_details || []).find(e => e.question_id === q.id);
                   const isCorrect = answer.is_correct;
+                  const isHighMark = q.points > 1;
+                  const needsGrading = isHighMark && submissionDetail.status === "submitted";
                   
                   return (
                     <div key={q.id || idx} className={`border rounded-lg p-4 ${
+                      needsGrading ? "border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10" :
                       isCorrect === true ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10" :
                       isCorrect === false ? "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10" :
                       "border-gray-200 dark:border-gray-700"
                     }`}>
                       <div className="flex justify-between items-start mb-2">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          Q{idx + 1}. {q.text}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            Q{idx + 1}. {q.text || q.question_text}
+                          </p>
+                          {isHighMark && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                              {q.points} marks
+                            </span>
+                          )}
+                          {!isHighMark && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                              1 mark (auto)
+                            </span>
+                          )}
+                        </div>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded ${
                           isCorrect === true ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" :
                           isCorrect === false ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" :
                           "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                         }`}>
-                          {answer.points_awarded ?? 0}/{q.points} pts
+                          {answer.points_awarded ?? (isHighMark ? (questionGrades[q.id] || 0) : 0)}/{q.points} pts
                         </span>
                       </div>
                       
                       {q.type === "mcq" && q.options && (
                         <div className="space-y-1 mt-2">
                           {q.options.map((opt, oi) => {
-                            const isSelected = answer.selected_option === oi || answer.selected_option === opt;
-                            const isCorrectOpt = opt === q.correct_answer_text || oi === q.correct_answer_text;
+                            const optText = typeof opt === 'object' ? opt.text : opt;
+                            const optId = typeof opt === 'object' ? opt.id : oi;
+                            const isSelected = answer.selected_option === oi || answer.selected_option === opt ||
+                              (answer.selected_option_ids && answer.selected_option_ids.includes(optId));
+                            const isCorrectOpt = typeof opt === 'object' ? opt.is_correct : (opt === q.correct_answer_text);
                             return (
                               <div key={oi} className={`text-xs px-2 py-1 rounded ${
-                                isSelected && isCorrect ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200" :
-                                isSelected && !isCorrect ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200" :
+                                isSelected && isCorrectOpt ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200" :
+                                isSelected && !isCorrectOpt ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200" :
+                                isCorrectOpt ? "bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400" :
                                 "text-gray-600 dark:text-gray-400"
                               }`}>
-                                {String.fromCharCode(65 + oi)}. {typeof opt === 'object' ? opt.text : opt}
+                                {String.fromCharCode(65 + oi)}. {optText}
                                 {isSelected && " (Selected)"}
+                                {isCorrectOpt && " ✓"}
                               </div>
                             );
                           })}
                         </div>
                       )}
                       
-                      {(q.type === "short_answer" || q.type === "essay") && (
+                      {(q.type === "short_answer" || q.type === "essay" || q.type === "subjective" || q.type === "fill_blank" || q.type === "fillup") && (
                         <div className="mt-2">
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Student's Answer:</p>
                           <p className="text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
                             {answer.text_answer || answer.answer_text || "No answer provided"}
                           </p>
+                          {(q.correct_answer_text || q.answer_text) && (
+                            <div className="mt-2">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Expected Answer:</p>
+                              <p className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-2 rounded">
+                                {q.correct_answer_text || q.answer_text}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                       
                       {q.type === "true_false" && (
                         <p className="text-sm mt-1 text-gray-700 dark:text-gray-300">
-                          Answer: <strong>{answer.bool_answer !== undefined ? String(answer.bool_answer) : "N/A"}</strong>
+                          Answer: <strong>{answer.bool_answer !== undefined ? String(answer.bool_answer) : (answer.answer_bool !== undefined ? String(answer.answer_bool) : "N/A")}</strong>
                         </p>
                       )}
                       
@@ -613,9 +721,83 @@ export default function TestManagement() {
                           {evalDetail?.feedback || answer.feedback}
                         </p>
                       )}
+                      
+                      {/* Manual grading input for 2/5-mark questions */}
+                      {isHighMark && submissionDetail.status === "submitted" && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <div className="flex items-center gap-3">
+                            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              Award Score:
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={q.points}
+                              value={questionGrades[q.id] ?? 0}
+                              onChange={(e) => {
+                                const val = Math.min(Math.max(0, parseInt(e.target.value) || 0), q.points);
+                                setQuestionGrades(prev => ({ ...prev, [q.id]: val }));
+                              }}
+                              className="w-20 px-2 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white text-center"
+                            />
+                            <span className="text-xs text-gray-500 dark:text-gray-400">/ {q.points}</span>
+                            <div className="flex gap-1 ml-2">
+                              <button
+                                onClick={() => setQuestionGrades(prev => ({ ...prev, [q.id]: 0 }))}
+                                className="px-2 py-0.5 text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100"
+                              >0</button>
+                              {q.points > 2 && (
+                                <button
+                                  onClick={() => setQuestionGrades(prev => ({ ...prev, [q.id]: Math.floor(q.points / 2) }))}
+                                  className="px-2 py-0.5 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-100"
+                                >{Math.floor(q.points / 2)}</button>
+                              )}
+                              <button
+                                onClick={() => setQuestionGrades(prev => ({ ...prev, [q.id]: q.points }))}
+                                className="px-2 py-0.5 text-xs bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-100"
+                              >{q.points}</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
+
+                {/* Grading submit section */}
+                {submissionDetail.status === "submitted" && Object.keys(questionGrades).length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          Manual Score: {Object.values(questionGrades).reduce((s, v) => s + v, 0)} / {submissionDetail.questions.filter(q => q.points > 1).reduce((s, q) => s + q.points, 0)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Auto-graded (1-mark): {submissionDetail.total_score || 0} pts
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Overall Feedback (optional)
+                      </label>
+                      <textarea
+                        value={gradingFeedback}
+                        onChange={(e) => setGradingFeedback(e.target.value)}
+                        placeholder="Add overall feedback for the student..."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSubmitGrades}
+                      disabled={savingGrades}
+                      className="w-full px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
+                    >
+                      {savingGrades ? "Submitting Grades..." : "Submit Grades"}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
