@@ -10,6 +10,7 @@ from app.services.rag_service import rag_service
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
 from app.services.top_question_service import top_question_service
+from app.utils.tutor_persona import get_tutor_system_prompt
 import logging
 from PIL import Image
 import io
@@ -259,17 +260,16 @@ async def student_chatbot_stream(request: StreamingChatRequest):
                     any(phrase in question_lower_fb for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions"])
 
                 if is_practice_fb:
-                    direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
-
+                    direct_prompt = f"""{get_tutor_system_prompt(request.class_level, request.subject)}
 STUDENT REQUEST: {request.question}
 
 The student wants PRACTICE QUESTIONS. Follow these rules:
 1. Do NOT explain the topic or chapter. No theory. No introductions.
 2. Go straight to giving questions.
 3. Label book-style questions as:
-   ** Book-Style Questions:**
+   **Book-Style Questions:**
 4. Label additional questions as:
-   ** Additional Practice Questions:**
+   **Additional Practice Questions:**
 5. Give MINIMUM 10 book-style questions and MINIMUM 10 additional questions (total 20+). More is better.
 6. For Maths/Science: include numerical, word problems, and application-based questions.
    For other subjects: include short answer, long answer, and value-based questions.
@@ -278,21 +278,13 @@ The student wants PRACTICE QUESTIONS. Follow these rules:
 
 Generate practice questions now:"""
                 else:
-                    direct_prompt = f"""You are a {request.subject} tutor helping a Class {request.class_level} student.
-
+                    direct_prompt = f"""{get_tutor_system_prompt(request.class_level, request.subject)}
 STUDENT QUESTION: {request.question}
-
-**IMPORTANT CONSTRAINTS:**
-- ONLY answer if the question is related to education, academics, or school subjects.
-- If the question is NOT related to studies/education, respond with EXACTLY:
-  "I can only help with education-related questions. Please ask something related to your studies."
-- Stay strictly within the scope of {request.subject}.
-- Do NOT confuse Physics and Maths concepts.
 
 Provide a clear, educational answer appropriate for Class {request.class_level} level.
 - Start with a simple definition/explanation
 - Give 1-2 examples
-- Keep it concise but informative (200-400 words)"""
+- Keep it concise but informative"""
 
                 fallback_full = ""
                 streaming_tokens = 16384 if is_practice_fb else 8192
@@ -337,8 +329,7 @@ Provide a clear, educational answer appropriate for Class {request.class_level} 
                 any(phrase in question_lower for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions", "sample questions", "important questions", "previous year"])
 
             if is_practice_request:
-                prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
-
+                prompt = f"""{get_tutor_system_prompt(request.class_level, request.subject)}
 STUDENT REQUEST: {request.question}
 
 REFERENCE CONTENT FROM TEXTBOOK:
@@ -363,8 +354,7 @@ The student is asking for PRACTICE QUESTIONS. Follow these rules:
 {subject_isolation}
 Generate the practice questions now:"""
             else:
-                prompt = f"""You are a helpful tutor for Class {request.class_level} {request.subject} students.
-
+                prompt = f"""{get_tutor_system_prompt(request.class_level, request.subject)}
 STUDENT QUESTION: {request.question}
 
 REFERENCE CONTENT FROM TEXTBOOK:
@@ -375,9 +365,7 @@ RULES:
 2. If the reference content directly covers the topic, use it to give a clear, detailed answer.
 3. If the reference content does NOT directly cover the topic asked, but the question IS related to {request.subject} (e.g., a historical fact, a concept, a definition within the subject), answer from your own knowledge as an expert {request.subject} tutor. Do NOT say the content is not found — just answer.
 4. ONLY respond with "The content is not found in the book, ask some other questions related to your subject." if the question is completely unrelated to {request.subject} (e.g., asking about a movie, sports, or a completely different subject).
-5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
-6. Do NOT describe what the reference content contains instead of answering.
-7. Keep the answer clear for Class {request.class_level} students.
+5. Do NOT describe what the reference content contains instead of answering.
 {subject_isolation}
 Generate your answer:"""
             

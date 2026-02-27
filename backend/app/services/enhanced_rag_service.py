@@ -11,6 +11,7 @@ from app.services.gemini_service import gemini_service
 from app.db.mongo import pinecone_db, pinecone_llm_db
 from app.services.llm_storage_service import llm_storage_service
 from app.services.subject_classifier import subject_classifier
+from app.utils.tutor_persona import get_tutor_system_prompt
 import logging
 import re
 import asyncio
@@ -557,7 +558,8 @@ class EnhancedRAGService:
             any(phrase in question_lower for phrase in ["give me sums", "give me questions", "give me problems", "practice questions", "practice sums", "practise sums", "practise questions", "sample questions", "important questions", "previous year"])
 
         if is_practice_request:
-            prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
+            persona = get_tutor_system_prompt(student_class, subject)
+            prompt = f"""{persona}
 
 STUDENT REQUEST: {question}
 
@@ -585,7 +587,8 @@ The student is asking for PRACTICE QUESTIONS. Follow these rules:
 
 Generate the practice questions now:"""
         else:
-            prompt = f"""You are a helpful tutor for Class {student_class} {subject} students.
+            persona = get_tutor_system_prompt(student_class, subject)
+            prompt = f"""{persona}
 
 STUDENT QUESTION: {question}
 
@@ -600,8 +603,7 @@ INSTRUCTIONS:
 3. If the reference content does NOT directly cover the topic asked, but the question IS related to {subject} (e.g., a historical figure, a concept, a definition within the subject), answer from your own knowledge as an expert {subject} tutor. Do NOT say the content is not found — just answer.
 4. ONLY respond with "The content is not found in the book, ask some other questions related to your subject." if the question is completely unrelated to {subject}.
 5. Do NOT start with preamble like "Based on your textbook" - just give the answer directly.
-6. Do NOT describe what the reference content contains instead of answering.
-7. Keep the answer clear for Class {student_class} students{lang_instruction}
+6. Do NOT describe what the reference content contains instead of answering.{lang_instruction}
 
 Generate a clear, direct answer:"""
         
@@ -678,7 +680,10 @@ Generate a clear, direct answer:"""
         except Exception as e:
             logger.debug(f"Language detection skipped: {e}")
         
-        prompt = f"""You are an expert tutor providing a COMPREHENSIVE explanation for a Class {student_class} {subject} student in DEEP DIVE mode.
+        persona = get_tutor_system_prompt(student_class, subject)
+        prompt = f"""{persona}
+
+You are now in DEEP DIVE mode — provide a COMPREHENSIVE explanation.
 
 STUDENT QUESTION: {question}
 
@@ -696,8 +701,7 @@ DEEP DIVE MODE INSTRUCTIONS:
    - **Core Concept** (Class {student_class} level understanding)
    -  **Deep Dive** (comprehensive explanation with examples, applications, significance)
    - 💡 **Key Takeaways** (summarize main points)
-6. **Make it engaging**: Use analogies, examples, and clear explanations
-7. **Appropriate language**: Suitable for Class {student_class} students but comprehensive{lang_instruction}
+6. **Make it engaging**: Use analogies, examples, and clear explanations{lang_instruction}
 
 Generate a thorough, well-structured deep dive explanation:"""
         
@@ -789,7 +793,8 @@ Generate a thorough, well-structured deep dive explanation:"""
                 f"- Never mix Physics concepts into a Maths answer or vice-versa.\n"
             )
 
-        prompt = f"""You are an NCERT tutor for Class {student_class} {subject}. 
+        persona = get_tutor_system_prompt(student_class, subject)
+        prompt = f"""{persona}
 
 **RULES:**
 
@@ -809,7 +814,6 @@ Generate a thorough, well-structured deep dive explanation:"""
 **ANSWER FORMAT ({mode_description}):**
 {'- Start from fundamentals and build up' if mode == 'deepdive' else '- Direct and concise answer'}
 - Use headings and bullet points
-- Appropriate language for Class {student_class} students
 
 Generate your answer:"""
         
@@ -940,7 +944,8 @@ Generate your answer:"""
         if is_not_found:
             logger.info(f"🔄 RAG returned 'not found' - generating direct answer for valid {subject} question...")
             
-            direct_prompt = f"""You are a {subject} tutor helping a Class {student_class} student.
+            persona = get_tutor_system_prompt(student_class, subject)
+            direct_prompt = f"""{persona}
 
 STUDENT QUESTION: {question}
 
@@ -949,10 +954,9 @@ STUDENT QUESTION: {question}
 - If the question is about entertainment, social media, celebrities, violence, or anything
   NOT related to studies/education, respond with EXACTLY:
   "I can only help with education-related questions. Please ask something related to your studies."
-- Stay strictly within the scope of {subject} for Class {student_class}.
 - Do NOT mix Physics and Maths concepts — answer only for {subject}.
 
-Provide a clear, educational answer appropriate for Class {student_class} level.
+Provide a clear, educational answer.
 
 Structure:
 - Start with a simple definition/explanation
@@ -1216,7 +1220,10 @@ Keep it concise but informative (200-400 words)."""
             
             logger.info(f"Question IS related to {subject} - generating direct Gemini answer")
             
-            direct_prompt = f"""You are an expert {subject} tutor helping a Class {student_class} student.
+            persona = get_tutor_system_prompt(student_class, subject)
+            direct_prompt = f"""{persona}
+
+You are now in DEEP DIVE mode — provide a COMPREHENSIVE explanation.
 
 STUDENT QUESTION: {question}
 
@@ -1225,18 +1232,14 @@ STUDENT QUESTION: {question}
 - If the question is about entertainment, social media, celebrities, violence, or anything
   NOT related to studies/education, respond with EXACTLY:
   "I can only help with education-related questions. Please ask something related to your studies."
-- Stay strictly within the scope of {subject} for Class {student_class}.
 - Do NOT confuse Physics and Maths — 'sum' in Physics means numerical problem on physical concepts,
   'sum' in Maths means arithmetic/algebraic operations. Answer only for {subject}.
-
-Since this is a valid {subject} question, provide a COMPREHENSIVE educational answer.
 
 INSTRUCTIONS:
 1. Start with a clear, simple definition or explanation
 2. Provide examples to illustrate the concept
 3. Explain any related concepts or applications
-4. Keep the explanation appropriate for Class {student_class} level
-5. Use proper formatting with headers and bullet points
+4. Use proper formatting with headers and bullet points
 
 Structure your answer as:
 🌱 **Basic Understanding**: [Simple definition/explanation]

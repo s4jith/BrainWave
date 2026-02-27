@@ -61,30 +61,29 @@ def hash_password(password: str) -> str:
     """Hash password using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
 
-def generate_student_id(name: str, age: int) -> str:
+def generate_student_id(class_level: int, age: int) -> str:
     """
     Generate unique student ID.
-    Format: {name_lowercase}{age}{sequential_number}
-    Example: sajith141 (Sajith, age 14, student #1)
+    Format: {class_level}_{sequential_number:05d}_{age}
+    Example: 12_00001_16 (Class 12, student #1, age 16)
+    Counter is per class_level so each class starts from 00001.
     """
     try:
         counter = db.student_counters.find_one_and_update(
-            {"_id": "student_count"},
+            {"_id": f"student_count_{class_level}"},
             {"$inc": {"count": 1}},
             upsert=True,
             return_document=True
         )
         student_number = counter.get("count", 1)
         
-        clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
-        user_id = f"{clean_name}{age}{student_number}"
+        user_id = f"{class_level}_{student_number:05d}_{age}"
         
         return user_id
     except Exception as e:
         logger.error(f"Error generating student ID: {e}")
         import time
-        clean_name = name.lower().replace(" ", "")[:10]
-        return f"{clean_name}{age}{int(time.time()) % 10000}"
+        return f"{class_level}_{int(time.time()) % 100000:05d}_{age}"
 
 def generate_password(name: str, age: int) -> str:
     """
@@ -568,15 +567,15 @@ async def create_student(student: StudentCreate):
     Create a new student account.
     Auto-generates user_id and password based on name and age.
     
-    ID Format: {name}{age}{sequential_number} (e.g., sajith141)
-    Password: {name}{age} (e.g., sajith14)
+    ID Format: {class_level}_{sequential_number:05d}_{age} (e.g., 12_00001_16)
+    Password: {name_lowercase}{age} (e.g., sajith16)
     """
     try:
         existing = db.users.find_one({"email": student.email})
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        user_id = generate_student_id(student.name, student.age)
+        user_id = generate_student_id(student.class_level, student.age)
         password = generate_password(student.name, student.age)
         hashed_password = hash_password(password)
         

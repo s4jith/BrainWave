@@ -24,7 +24,6 @@ from bson import ObjectId
 from app.db.mongo import db
 from app.core.config import settings
 from app.services.cloudinary_service import get_cloudinary_service
-from app.services.google_drive_service import get_drive_service
 
 logger = logging.getLogger(__name__)
 
@@ -1582,21 +1581,6 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
         
         books_to_delete = list(db.books.find({"subject": {"$regex": f"^{subject}$", "$options": "i"}}))
         
-        drive_service = get_drive_service()
-        drive_deleted_count = 0
-        if drive_service.is_available():
-            for book in books_to_delete:
-                google_drive_file_id = book.get("google_drive_file_id")
-                if google_drive_file_id:
-                    try:
-                        if drive_service.delete_file(google_drive_file_id):
-                            drive_deleted_count += 1
-                    except Exception as gd_error:
-                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
-        
-        if drive_deleted_count > 0:
-            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
-        
         mongo_result = db.books.delete_many({"subject": {"$regex": f"^{subject}$", "$options": "i"}})
         books_deleted = mongo_result.deleted_count
         
@@ -1689,21 +1673,6 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
             "class_level": class_level
         }))
-        
-        drive_service = get_drive_service()
-        drive_deleted_count = 0
-        if drive_service.is_available():
-            for book in books_to_delete:
-                google_drive_file_id = book.get("google_drive_file_id")
-                if google_drive_file_id:
-                    try:
-                        if drive_service.delete_file(google_drive_file_id):
-                            drive_deleted_count += 1
-                    except Exception as gd_error:
-                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
-        
-        if drive_deleted_count > 0:
-            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
         mongo_result = db.books.delete_many({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
@@ -1809,21 +1778,6 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
             "class_level": class_level,
             "chapter_number": chapter_number
         }))
-        
-        drive_service = get_drive_service()
-        drive_deleted_count = 0
-        if drive_service.is_available():
-            for book in books_to_delete:
-                google_drive_file_id = book.get("google_drive_file_id")
-                if google_drive_file_id:
-                    try:
-                        if drive_service.delete_file(google_drive_file_id):
-                            drive_deleted_count += 1
-                    except Exception as gd_error:
-                        logger.warning(f" Could not delete {book.get('title')} from Google Drive: {gd_error}")
-        
-        if drive_deleted_count > 0:
-            logger.info(f"Deleted {drive_deleted_count} PDFs from Google Drive")
         
         mongo_result = db.books.delete_many({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},

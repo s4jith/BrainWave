@@ -37,20 +37,6 @@ const AI_ACTIONS = [
     description: "Detailed explanation with examples",
     color: "text-green-600",
   },
-  {
-    id: "summarize_page",
-    label: "Summarize Page",
-    icon: FileText,
-    description: "Summary of the current page",
-    color: "text-purple-600",
-  },
-  {
-    id: "summarize_chapter",
-    label: "Summarize Chapter",
-    icon: BookOpen,
-    description: "Overview of the entire chapter",
-    color: "text-indigo-600",
-  },
 ];
 
 export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
@@ -74,9 +60,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         define: "define",
         stickflow: "stick_flow",
         elaborate: "elaborate",
-        summarize_page: "summarize_page",
-        summarize_chapter: "summarize_chapter",
-        custom: null, 
+        custom: null,
       };
 
       const mappedAction = actionMap[preSelectedAction];
@@ -117,7 +101,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
       let queryText = selectedText?.text || "";
 
       if (selectedText?.imageData) {
-        queryText = `[Screenshot from page ${selectedText.pageNumber || pageNumber}] Please ${action.id === 'define' ? 'define and explain' : action.id === 'stick_flow' ? 'create a step-by-step breakdown of' : action.id === 'summarize_page' ? 'summarize' : action.id === 'summarize_chapter' ? 'provide a comprehensive summary of' : 'elaborate on'} the content in this selected area from the textbook.`;
+        queryText = `[Screenshot from page ${selectedText.pageNumber || pageNumber}] Please ${action.id === 'define' ? 'define and explain' : action.id === 'stick_flow' ? 'create a step-by-step breakdown of' : 'elaborate on'} the content in this selected area from the textbook.`;
       }
 
       const result = await chatService.processAnnotation(

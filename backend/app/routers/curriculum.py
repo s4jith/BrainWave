@@ -58,8 +58,22 @@ async def get_all_subjects(
         
         logger.info(f"Query: {query}, Retrieved {len(subjects)} subjects")
         
-        summaries = []
+        # Deduplicate by subject_id — keep only the most recently updated doc per subject_id
+        # (duplicates can accumulate if a subject is soft-deleted then re-approved)
+        seen_ids: dict = {}
         for subject in subjects:
+            sid = subject["subject_id"]
+            if sid not in seen_ids:
+                seen_ids[sid] = subject
+            else:
+                # Keep the doc with the more recent updated_at
+                existing_ts = seen_ids[sid].get("updated_at") or seen_ids[sid].get("created_at")
+                new_ts = subject.get("updated_at") or subject.get("created_at")
+                if new_ts and (not existing_ts or new_ts > existing_ts):
+                    seen_ids[sid] = subject
+        
+        summaries = []
+        for subject in seen_ids.values():
             active_chapters = [ch for ch in subject.get("chapters", []) if ch.get("is_active", True) != False]
             total_topics = sum(
                 len([t for t in ch.get("topics", []) if t.get("is_active", True) != False]) 
@@ -292,17 +306,18 @@ async def delete_subject(subject_id: str):
         
         logger.info(f" Attempting to delete subject: {subject_id}")
         
-        result = await collection.find_one_and_update(
+        # Use update_many to soft-delete ALL documents with this subject_id
+        # (duplicates can exist if approval workflow created a new doc after a soft-delete)
+        result = await collection.update_many(
             {"subject_id": subject_id},
-            {"$set": {"is_active": False, "updated_at": datetime.utcnow()}},
-            return_document=True
+            {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
         )
         
-        if not result:
+        if result.matched_count == 0:
             logger.warning(f" Subject not found: {subject_id}")
             raise HTTPException(status_code=404, detail="Subject not found")
         
-        logger.info(f" Deleted subject: {subject_id}, is_active now: {result.get('is_active', 'NOT SET')}")
+        logger.info(f" Deleted subject: {subject_id} ({result.matched_count} document(s) soft-deleted)")
         return {"success": True, "message": "Subject deleted successfully"}
         
     except HTTPException:
@@ -1280,9 +1295,26 @@ async def approve_or_reject_pending_item(
                         "new_chapters_added": 0
                     }
             
-            result = await subjects_collection.insert_one(subject_doc)
+            # Before inserting, check if any doc with same subject_id exists (active or inactive)
+            # (avoids creating duplicates when re-approving a previously deleted subject)
+            any_existing = await subjects_collection.find_one({"subject_id": subject_id})
             
-            if result.inserted_id:
+            if any_existing:
+                # Soft-delete all existing copies first, then reactivate one with new data
+                await subjects_collection.update_many(
+                    {"subject_id": subject_id},
+                    {"$set": {"is_active": False}}
+                )
+                await subjects_collection.update_one(
+                    {"subject_id": subject_id},
+                    {"$set": {**subject_doc}}
+                )
+                op_result = True
+            else:
+                result = await subjects_collection.insert_one(subject_doc)
+                op_result = bool(result.inserted_id)
+            
+            if op_result:
                 await pending_collection.update_one(
                     {"pending_id": pending_id},
                     {
@@ -1294,10 +1326,11 @@ async def approve_or_reject_pending_item(
                     }
                 )
                 
-                logger.info(f"Approved and created subject: {subject_id} ({len(chapters)} chapters, {subject_doc['total_topics']} topics)")
+                action_taken = "reactivated" if any_existing else "created"
+                logger.info(f"Approved and {action_taken} subject: {subject_id} ({len(chapters)} chapters, {subject_doc['total_topics']} topics)")
                 return {
                     "success": True,
-                    "message": "Pending item approved and subject created",
+                    "message": f"Pending item approved and subject {action_taken}",
                     "action": "approved",
                     "subject_id": subject_id,
                     "total_chapters": len(chapters),

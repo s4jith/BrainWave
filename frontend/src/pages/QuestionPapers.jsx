@@ -871,7 +871,10 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                 className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
               >
                 <option value="">Select class</option>
-                {[...new Set((metadata.subjects || []).flatMap(s => s.class_levels || []))].sort((a, b) => a - b).map(cl => (
+                {((metadata.subjects || []).length > 0
+                  ? [...new Set(metadata.subjects.flatMap(s => s.class_levels || []))].sort((a, b) => a - b)
+                  : Array.from({ length: 12 }, (_, i) => i + 1)
+                ).map(cl => (
                   <option key={cl} value={cl}>Class {cl}</option>
                 ))}
               </select>
@@ -1368,7 +1371,10 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                 className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
               >
                 <option value="">Select class</option>
-                {[...new Set((metadata.subjects || []).flatMap(s => s.class_levels || []))].sort((a, b) => a - b).map(cl => (
+                {((metadata.subjects || []).length > 0
+                  ? [...new Set(metadata.subjects.flatMap(s => s.class_levels || []))].sort((a, b) => a - b)
+                  : Array.from({ length: 12 }, (_, i) => i + 1)
+                ).map(cl => (
                   <option key={cl} value={cl}>Class {cl}</option>
                 ))}
               </select>

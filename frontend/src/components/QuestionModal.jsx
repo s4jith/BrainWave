@@ -26,8 +26,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [formData, setFormData] = useState({
         text: "",
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
-        class_level: savedDefaults.class_level || 10,
-        chapter: savedDefaults.chapter || 1,
+        class_level: savedDefaults.class_level || "",
+        chapter: savedDefaults.chapter || "",
         chapter_name: "",
         topic: "",
         type: savedDefaults.type || "mcq",
@@ -40,8 +40,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
     const [aiConfig, setAiConfig] = useState({
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
-        class_level: savedDefaults.class_level || 10,
-        chapter: savedDefaults.chapter || 1,
+        class_level: savedDefaults.class_level || "",
+        chapter: savedDefaults.chapter || "",
         difficulty_dist: {
             easy: { mcq: 2, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
             medium: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
@@ -353,7 +353,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     >
                                         <option value="">Select Class</option>
                                         {(getTeacherClassesForSubject(formData.subject) ?? (curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels)).map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c}>Class {c}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -638,7 +638,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value), chapter: "" })}
                                     >
                                         <option value="">Select Class</option>
-                                        {(getTeacherClassesForSubject(aiConfig.subject) ?? (curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels)).map(c => <option key={c} value={c}>{c}</option>)}
+                                        {(getTeacherClassesForSubject(aiConfig.subject) ?? (curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels)).map(c => <option key={c} value={c}>Class {c}</option>)}
                                     </select>
                                 </div>
                                 <div>
