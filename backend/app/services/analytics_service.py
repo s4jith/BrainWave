@@ -85,7 +85,70 @@ class AnalyticsService:
                 
                 score = sub.get("total_score", 0)
                 max_score = sub.get("max_score", 0)
-                
+                sub_status = sub.get("status", "submitted")
+
+                # Determine evaluation_status for the student view
+                if sub_status == "graded":
+                    eval_status = "completed"
+                else:
+                    eval_status = "pending_manual_review"
+
+                # Build per-question evaluations from answers + question data
+                evaluations = sub.get("evaluation_details", [])
+                if not evaluations and assessment:
+                    questions_map = {q.get("id"): q for q in assessment.get("questions", [])}
+                    feedback_map = sub.get("feedback", {})  # question_id → score
+                    for ans in sub.get("answers", []):
+                        qid = ans.get("question_id")
+                        q = questions_map.get(qid, {})
+                        awarded = feedback_map.get(qid)
+                        max_pts = q.get("points", 1)
+                        is_correct = None
+                        if awarded is not None:
+                            is_correct = int(awarded) >= max_pts
+                        evaluations.append({
+                            "question_id": qid,
+                            "question_text": q.get("question_text") or q.get("text", ""),
+                            "student_answer": ans.get("answer_text") or str(ans.get("answer_bool", "")) or "",
+                            "correct_answer": q.get("correct_answer_text", ""),
+                            "score": int(awarded) if awarded is not None else 0,
+                            "max_score": max_pts,
+                            "is_correct": is_correct,
+                            "evaluation_status": "completed" if awarded is not None else "pending",
+                            "topic": q.get("topic") or q.get("chapter_name", ""),
+                        })
+
+                # Build topic_analytics from submission's saved topic_analytics or derive from evaluations
+                saved_topic_analytics = sub.get("topic_analytics", {})
+                if not saved_topic_analytics and evaluations:
+                    tp: Dict[str, Any] = {}
+                    for ev in evaluations:
+                        t = ev.get("topic", "") or "General"
+                        if t not in tp:
+                            tp[t] = {"correct": 0, "total": 0, "points": 0, "max_points": 0}
+                        tp[t]["total"] += 1
+                        tp[t]["max_points"] += ev.get("max_score", 1)
+                        if ev.get("is_correct"):
+                            tp[t]["correct"] += 1
+                            tp[t]["points"] += ev.get("max_score", 1)
+                        elif ev.get("score", 0) > 0:
+                            tp[t]["points"] += ev.get("score", 0)
+                    topic_list = []
+                    strong, weak = [], []
+                    for tname, td in tp.items():
+                        pct = round(td["points"] / td["max_points"] * 100, 1) if td["max_points"] > 0 else 0
+                        status = "strong" if pct >= 70 else ("moderate" if pct >= 40 else "weak")
+                        entry = {"topic_name": tname, "score_percentage": pct, "correct_answers": td["correct"], "total_questions": td["total"], "status": status}
+                        topic_list.append(entry)
+                        if status == "strong": strong.append({"name": tname, "score": pct})
+                        elif status == "weak": weak.append({"name": tname, "score": pct})
+                    saved_topic_analytics = {
+                        "topics": topic_list,
+                        "strong_topics": strong,
+                        "weak_topics": weak,
+                        "total_topics_covered": len(topic_list),
+                    }
+
                 grades.append({
                     "id": str(sub["_id"]),
                     "source": "staff_test",
@@ -99,21 +162,33 @@ class AnalyticsService:
                     "passed": sub.get("passed", False),
                     "completed_at": sub.get("graded_at") or sub.get("submitted_at"),
                     "evaluation_type": assessment.get("evaluation_type", "manual") if assessment else "manual",
-                    "evaluations": sub.get("evaluation_details", []),
+                    "evaluation_status": eval_status,
+                    "evaluations": evaluations,
                     "feedback": sub.get("overall_feedback", ""),
                     "strengths": sub.get("strengths", []),
                     "improvements": sub.get("improvements", []),
+                    "topic_analytics": saved_topic_analytics,
                 })
                 
                 total_score += score
                 total_max += max_score
                 
+                # Feed global topic_performance from answer-level data
                 if assessment:
-                    for q in assessment.get("questions", []):
-                        topic = q.get("topic") or q.get("chapter_name", "General")
+                    questions_map = {q.get("id"): q for q in assessment.get("questions", [])}
+                    feedback_map = sub.get("feedback", {})
+                    for ans in sub.get("answers", []):
+                        qid = ans.get("question_id")
+                        q = questions_map.get(qid, {})
+                        topic = q.get("topic") or q.get("chapter_name") or assessment.get("subject", "General")
                         if topic not in topic_performance:
                             topic_performance[topic] = {"correct": 0, "total": 0, "scores": []}
                         topic_performance[topic]["total"] += 1
+                        awarded = feedback_map.get(qid)
+                        max_pts = q.get("points", 1)
+                        if awarded is not None and int(awarded) >= max_pts:
+                            topic_performance[topic]["correct"] += 1
+                        topic_performance[topic]["scores"].append(int(awarded) if awarded is not None else 0)
 
             test_sessions_collection = mongodb.db["test_sessions"]
             ai_student_ids = [student_id]

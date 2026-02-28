@@ -603,7 +603,7 @@ function App() {
           path="/teacher-tests"
           element={
             <StaffRoute>
-              <TeacherTests />
+              <TestManagement />
             </StaffRoute>
           }
         />

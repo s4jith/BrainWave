@@ -7,7 +7,7 @@ student submissions, and grading.
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 import logging
 
@@ -397,6 +397,65 @@ async def grade_submission(
 class CommentRequest(BaseModel):
     """Request body for adding a comment."""
     comment: str = Field(..., min_length=1)
+
+class TopicAnalyticsRequest(BaseModel):
+    """Topic analytics submitted by the evaluator after grading."""
+    topic_assessments: Dict[str, str]  # topic_name → "strong" | "moderate" | "weak"
+    evaluator_notes: Optional[str] = None
+
+@router.post("/submissions/{submission_id}/topic-analytics")
+async def save_topic_analytics(
+    submission_id: str,
+    request: TopicAnalyticsRequest,
+    current_user: TokenData = Depends(require_permission(Permission.GRADE_SUBMISSION))
+):
+    """Save evaluator-assessed topic analytics for a submission."""
+    try:
+        submissions_col = mongodb.get_collection("submissions")
+        submission = await submissions_col.find_one({"_id": ObjectId(submission_id)})
+        if not submission:
+            raise HTTPException(status_code=404, detail="Submission not found")
+
+        topic_list = []
+        strong_topics = []
+        weak_topics = []
+        for topic_name, level in request.topic_assessments.items():
+            level = level.lower()
+            score_pct = 85.0 if level == "strong" else (55.0 if level == "moderate" else 20.0)
+            entry = {
+                "topic_name": topic_name,
+                "score_percentage": score_pct,
+                "status": level,
+                "correct_answers": 0,
+                "total_questions": 0,
+                "evaluator_assessed": True,
+            }
+            topic_list.append(entry)
+            if level == "strong":
+                strong_topics.append({"name": topic_name, "score": score_pct})
+            elif level == "weak":
+                weak_topics.append({"name": topic_name, "score": score_pct})
+
+        topic_analytics = {
+            "topics": topic_list,
+            "strong_topics": strong_topics,
+            "weak_topics": weak_topics,
+            "total_topics_covered": len(topic_list),
+            "evaluator_id": current_user.user_id,
+            "evaluator_notes": request.evaluator_notes or "",
+        }
+
+        await submissions_col.update_one(
+            {"_id": ObjectId(submission_id)},
+            {"$set": {"topic_analytics": topic_analytics}}
+        )
+        return {"success": True, "topic_analytics": topic_analytics}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Save topic analytics error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save topic analytics")
 
 @router.post("/submissions/{submission_id}/comment")
 async def add_submission_comment(

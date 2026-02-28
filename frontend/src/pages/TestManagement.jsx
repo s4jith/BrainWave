@@ -35,6 +35,14 @@ export default function TestManagement() {
   const [gradingFeedback, setGradingFeedback] = useState("");
   const [savingGrades, setSavingGrades] = useState(false);
 
+  // Topic quiz modal state
+  const [showTopicQuiz, setShowTopicQuiz] = useState(false);
+  const [topicQuizSubmissionId, setTopicQuizSubmissionId] = useState(null);
+  const [topicQuizTopics, setTopicQuizTopics] = useState([]);  // [{name,subject}]
+  const [topicAssessments, setTopicAssessments] = useState({});  // topic → "strong"|"moderate"|"weak"
+  const [topicNotes, setTopicNotes] = useState("");
+  const [savingTopicAnalytics, setSavingTopicAnalytics] = useState(false);
+
   const [teacherGroups, setTeacherGroups] = useState([]);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [teacherClassLevels, setTeacherClassLevels] = useState([]);
@@ -278,8 +286,6 @@ export default function TestManagement() {
         const err = await response.json();
         throw new Error(err.detail || "Failed to submit grades");
       }
-      alert("Grades submitted successfully!");
-      // Refresh submission detail
       const updated = await response.json();
       setSubmissionDetail(prev => ({
         ...prev,
@@ -288,16 +294,52 @@ export default function TestManagement() {
         passed: updated.passed,
         status: updated.status
       }));
-      // Update submission in list
       setSubmissions(prev => prev.map(s => s.id === submissionDetail.id
         ? { ...s, status: "graded", total_score: updated.total_score, percentage: updated.percentage }
         : s
       ));
+
+      // Extract unique topics from questions for the topic quiz
+      const topicSet = new Set();
+      (submissionDetail.questions || []).forEach(q => {
+        const t = q.topic || q.chapter_name || q.subject || "";
+        if (t) topicSet.add(t);
+      });
+      // If no topics tagged, fall back to subject/class grouping
+      if (topicSet.size === 0 && submissionDetail.questions?.length > 0) {
+        topicSet.add(submissionDetail.assessment_title || "General");
+      }
+      if (topicSet.size > 0) {
+        setTopicQuizSubmissionId(submissionDetail.id);
+        setTopicQuizTopics(Array.from(topicSet));
+        const initAssessments = {};
+        Array.from(topicSet).forEach(t => { initAssessments[t] = "moderate"; });
+        setTopicAssessments(initAssessments);
+        setTopicNotes("");
+        setShowTopicQuiz(true);
+      } else {
+        alert("Grades submitted successfully!");
+      }
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
       setSavingGrades(false);
     }
+  };
+
+  const handleSaveTopicAnalytics = async () => {
+    if (!topicQuizSubmissionId) return;
+    setSavingTopicAnalytics(true);
+    try {
+      await fetch(`${API_URL}/api/assessments/submissions/${topicQuizSubmissionId}/topic-analytics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ topic_assessments: topicAssessments, evaluator_notes: topicNotes })
+      });
+    } catch (_) { /* non-critical */ }
+    setShowTopicQuiz(false);
+    alert("Grades and topic insights saved!");
+    setSavingTopicAnalytics(false);
   };
 
   const getTestStatus = (test) => {
@@ -366,6 +408,7 @@ export default function TestManagement() {
     : tests;
 
   return (
+    <>
     <AdminLayout title="Test Management" icon={ClipboardList}>
       {stats && (
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -693,12 +736,18 @@ export default function TestManagement() {
                         </div>
                       )}
                       
-                      {(q.type === "short_answer" || q.type === "essay" || q.type === "subjective" || q.type === "fill_blank" || q.type === "fillup") && (
+                      {(q.type === "short_answer" || q.type === "long_answer" || q.type === "essay" || q.type === "subjective" || q.type === "fill_blank" || q.type === "fillup") && (
                         <div className="mt-2">
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Student's Answer:</p>
-                          <p className="text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
-                            {answer.text_answer || answer.answer_text || "No answer provided"}
-                          </p>
+                          {(answer.answer_text || answer.text_answer) ? (
+                            <p className={`text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-2 rounded whitespace-pre-wrap ${
+                              q.type === "long_answer" || q.type === "essay" ? "min-h-[60px]" : ""
+                            }`}>
+                              {answer.answer_text || answer.text_answer}
+                            </p>
+                          ) : (
+                            <p className="text-sm italic text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">No answer provided</p>
+                          )}
                           {(q.correct_answer_text || q.answer_text) && (
                             <div className="mt-2">
                               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Expected Answer:</p>
@@ -804,5 +853,80 @@ export default function TestManagement() {
         </div>
       )}
     </AdminLayout>
+
+      {/* Topic Analytics Quiz Modal */}
+      {showTopicQuiz && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl border dark:border-gray-700 shadow-2xl">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Topic Performance Assessment</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Based on the student's answers, rate their understanding of each topic. This feeds their personal analytics.
+              </p>
+            </div>
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {topicQuizTopics.map((topic) => (
+                <div key={topic} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white mb-3">{topic}</p>
+                  <div className="flex gap-2">
+                    {["strong", "moderate", "weak"].map((level) => {
+                      const selected = topicAssessments[topic] === level;
+                      const colors = {
+                        strong: selected
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white dark:bg-gray-700 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20",
+                        moderate: selected
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-white dark:bg-gray-700 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20",
+                        weak: selected
+                          ? "bg-red-600 text-white border-red-600"
+                          : "bg-white dark:bg-gray-700 text-red-700 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20",
+                      };
+                      const labels = { strong: "✓ Strong", moderate: "~ Moderate", weak: "✗ Needs Work" };
+                      return (
+                        <button
+                          key={level}
+                          onClick={() => setTopicAssessments(prev => ({ ...prev, [topic]: level }))}
+                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${colors[level]}`}
+                        >
+                          {labels[level]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Additional Notes (optional)
+                </label>
+                <textarea
+                  value={topicNotes}
+                  onChange={(e) => setTopicNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Any overall observations about the student's understanding..."
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => { setShowTopicQuiz(false); alert("Grades submitted successfully!"); }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleSaveTopicAnalytics}
+                disabled={savingTopicAnalytics}
+                className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50"
+              >
+                {savingTopicAnalytics ? "Saving..." : "Save Topic Analytics"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
