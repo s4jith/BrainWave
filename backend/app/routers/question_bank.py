@@ -125,7 +125,14 @@ async def get_questions(
     """
     try:
         group_filters = None
-        
+        extra_filter = None
+
+        if current_user.role == UserRole.HEAD:
+            from app.db.mongo import db
+            from app.routers.head_approval import build_assignment_filter, get_head_user
+            head_doc = get_head_user(current_user.user_id)
+            extra_filter = build_assignment_filter(head_doc, {})
+
         if current_user.role == UserRole.TEACHER:
             from app.db.mongo import db
             
@@ -164,7 +171,8 @@ async def get_questions(
             offset=offset,
             group_filters=group_filters,
             user_id=current_user.user_id,
-            user_role=current_user.role.value
+            user_role=current_user.role.value,
+            extra_filter=extra_filter
         )
         return result
     except HTTPException:

@@ -541,32 +541,59 @@ export default function TestResult() {
                         </div>
 
                         {/* Answer comparison side by side */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Your answer */}
-                          <div className={`rounded-lg p-3 border ${evaluation.is_correct
-                              ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800"
-                              : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
-                            }`}>
-                            <p className={`text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1 ${evaluation.is_correct ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                              {evaluation.is_correct ? <CircleCheck className="w-3 h-3" /> : <CircleX className="w-3 h-3" />}
-                              Your Answer
-                            </p>
-                            <p className={`text-sm leading-relaxed max-h-32 overflow-y-auto ${evaluation.is_correct ? "text-emerald-800 dark:text-emerald-200" : "text-red-800 dark:text-red-200"}`}>
-                              {evaluation.student_answer || <span className="italic text-gray-400">No answer provided</span>}
-                            </p>
-                          </div>
+                        {(() => {
+                          const isSubjective = qType === "short_answer" || qType === "long_answer";
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {/* Your answer */}
+                              <div className={`rounded-lg p-3 border ${
+                                isSubjective
+                                  ? "bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+                                  : evaluation.is_correct
+                                    ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800"
+                                    : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
+                              }`}>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1 ${
+                                  isSubjective
+                                    ? "text-gray-500 dark:text-gray-400"
+                                    : evaluation.is_correct ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                                }`}>
+                                  {!isSubjective && (evaluation.is_correct ? <CircleCheck className="w-3 h-3" /> : <CircleX className="w-3 h-3" />)}
+                                  Your Answer
+                                </p>
+                                <p className={`text-sm leading-relaxed max-h-32 overflow-y-auto ${
+                                  isSubjective
+                                    ? "text-gray-700 dark:text-gray-300"
+                                    : evaluation.is_correct ? "text-emerald-800 dark:text-emerald-200" : "text-red-800 dark:text-red-200"
+                                }`}>
+                                  {evaluation.student_answer || <span className="italic text-gray-400">No answer provided</span>}
+                                </p>
+                              </div>
 
-                          {/* Correct answer */}
-                          <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
-                            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" />
-                              Correct Answer
-                            </p>
-                            <p className="text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed max-h-32 overflow-y-auto">
-                              {evaluation.correct_answer || "—"}
-                            </p>
-                          </div>
-                        </div>
+                              {/* Correct answer (objective) OR pending notice (subjective) */}
+                              {isSubjective ? (
+                                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700 rounded-lg p-3 flex flex-col justify-center">
+                                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <span>⏳</span> Pending Evaluation
+                                  </p>
+                                  <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
+                                    This answer will be evaluated by your teacher.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
+                                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Correct Answer
+                                  </p>
+                                  <p className="text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed max-h-32 overflow-y-auto">
+                                    {evaluation.correct_answer || "—"}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Feedback */}
                         {evaluation.feedback && (

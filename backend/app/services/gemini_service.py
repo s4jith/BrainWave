@@ -543,18 +543,18 @@ Generate {num_questions} MCQs now in valid JSON format:"""
 Requirements:
 {requirements_str}
 Question formats:
-- MCQ: Include "options" array and "correct_answer" string. marks=1
-- FILLUP: Use _______ for blank in text. marks=1
-- TRUE_FALSE: Statement that is true or false. Set "correct_answer" to "True" or "False". marks=1
-- SHORT_ANSWER: 2-3 line answer. marks=2
-- LONG_ANSWER: Detailed answer. marks=5
+- MCQ: 4 answer options in "options" array. Set "correct_answer" to the exact text of the correct option. marks=1
+- FILLUP: Use _______ in the question text for the blank. Set "correct_answer" to the word/phrase that fills the blank. marks=1
+- TRUE_FALSE: A factual statement. Set "correct_answer" to "True" or "False". marks=1
+- SHORT_ANSWER: Just the question text. Set "correct_answer" to "" (empty string — no answer needed). marks=2
+- LONG_ANSWER: Just the question text. Set "correct_answer" to "" (empty string — no answer needed). marks=5
 
 Context:
 {context[:context_limit]}
 
 Return ONLY a valid JSON array. No markdown, no extra text.
 Example format:
-[{{"text":"Question?","type":"mcq","difficulty":"easy","marks":1,"options":["A","B","C","D"],"correct_answer":"A"}},{{"text":"The sun is a star.","type":"true_false","difficulty":"easy","marks":1,"options":[],"correct_answer":"True"}}]
+[{{"text":"Which gas do plants absorb?","type":"mcq","difficulty":"easy","marks":1,"options":["Oxygen","Carbon Dioxide","Nitrogen","Hydrogen"],"correct_answer":"Carbon Dioxide"}},{{"text":"Photosynthesis occurs in the _______.","type":"fillup","difficulty":"easy","marks":1,"options":[],"correct_answer":"chloroplast"}},{{"text":"Explain the process of photosynthesis.","type":"short_answer","difficulty":"medium","marks":2,"options":[],"correct_answer":""}}]
 
 JSON:"""
 
@@ -641,8 +641,12 @@ JSON:"""
         except Exception as e:
             error_str = str(e)
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f" 429 Rate limit. Retrying ({retry_count})...")
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                logger.warning(f" 429 Rate limit. Rotating key and retrying ({retry_count})...")
+                current_key_id = gemini_key_manager.get_current_key_id()
+                if current_key_id:
+                    gemini_key_manager.mark_key_exhausted(current_key_id)
+                else:
+                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
             
             logger.error(f" Varied question generation failed: {e}")

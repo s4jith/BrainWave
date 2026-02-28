@@ -280,6 +280,22 @@ async def list_papers(
             query = {"$and": [filter_conditions, {"$or": visibility_or}]}
         else:
             query = {"$or": visibility_or}
+
+    elif current_user.role == UserRole.HEAD:
+        # Head sees papers scoped to their assignment (class or subject)
+        from app.db.mongo import db as sync_db
+        from app.routers.head_approval import build_assignment_filter, get_head_user
+        head_doc = get_head_user(current_user.user_id)
+        head_scope = build_assignment_filter(head_doc, {})
+        if filter_conditions and head_scope:
+            query = {"$and": [filter_conditions, head_scope]}
+        elif filter_conditions:
+            query = filter_conditions
+        elif head_scope:
+            query = head_scope
+        else:
+            query = {}
+
     else:
         # Admin sees everything
         query = filter_conditions
@@ -402,12 +418,6 @@ async def extract_from_pdf(
         raise HTTPException(status_code=400, detail="PDF file too large (max 20MB)")
 
     try:
-        api_key = gemini_key_manager.get_available_key()
-        if not api_key:
-            raise HTTPException(status_code=503, detail="All Gemini API keys exhausted")
-
-        genai.configure(api_key=api_key)
-
         # Extract text locally with PyMuPDF — much faster than sending
         # binary PDF to Gemini, and avoids 504 timeouts.
         try:
@@ -420,54 +430,97 @@ async def extract_from_pdf(
         if not pdf_text.strip():
             raise HTTPException(status_code=400, detail="PDF appears to be scanned/image-only. Please use a text-based PDF.")
 
-        prompt = f"""Analyze this question paper text for Class {class_level} {subject}.
+        prompt = f"""Extract all questions from this Class {class_level} {subject} question paper.
 
 QUESTION PAPER TEXT:
-{pdf_text[:15000]}
+{pdf_text[:12000]}
 
 ---
 
-Extract ALL questions from the paper and organize them into a structured JSON array.
-
-For each question, determine:
-1. "text": The complete question text
+Return a JSON array. For each question include ONLY:
+1. "text": The complete question text (preserve question number if present)
 2. "type": One of: "mcq", "fillup", "true_false", "short_answer", "long_answer"
-3. "marks": The mark value (1, 2, 3, 5, etc.) - infer from section headers if not explicit
-4. "options": Array of option strings (for MCQ only, e.g. ["Option A text", "Option B text", "Option C text", "Option D text"])
-5. "correct_answer": The correct answer if visible in the paper, otherwise empty string
-6. "section": Section label from the paper (e.g. "Section A - 1 Mark", "Section B - 2 Marks")
+3. "marks": Mark value as integer (infer from section headers if not explicit)
+4. "options": Array of option texts for MCQ only (empty array for all other types)
+5. "section": Section label e.g. "Section A", "Section B - 2 Marks" (empty string if not present)
 
 Rules:
-- Preserve the original question numbering in the text
-- For fill-in-the-blank questions, keep the blank as _______
-- For true/false, set type as "true_false"
-- MCQ must have options array with the actual option texts
-- If marks are mentioned in section headers (e.g. "1 mark questions"), apply to all questions in that section
-- Extract every single question, do not skip any
+- Do NOT include answers or solutions
+- Keep fill-in-the-blank gaps as _______
+- Extract every question, do not skip any
+- MCQ options must be the actual text, not just A/B/C/D labels
 
-Return ONLY a valid JSON array. No markdown, no explanation.
-Example: [{{"text":"What is photosynthesis?","type":"short_answer","marks":2,"options":[],"correct_answer":"","section":"Section B"}}]
+Return ONLY valid JSON array, no markdown, no explanation.
+[{{"text":"...","type":"short_answer","marks":2,"options":[],"section":"Section B"}}]
 
 JSON:"""
 
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.2, "max_output_tokens": 16384}
-        )
+        # Retry loop: try each available key once on 429
+        last_error = None
+        max_attempts = len(gemini_key_manager.keys)
+        response_text = None
 
-        text = response.text.strip()
+        for attempt in range(max_attempts):
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                raise HTTPException(status_code=503, detail="All Gemini API keys quota exhausted for today. Please try again tomorrow.")
 
-        try:
-            questions = json.loads(text)
-        except json.JSONDecodeError:
+            used_key_id = gemini_key_manager.get_current_key_id()
+            # get_available_key already advanced the index, step back to read what was just used
+            prev_index = (gemini_key_manager.current_key_index - 1) % len(gemini_key_manager.keys)
+            used_key_id = gemini_key_manager.keys[prev_index]["id"]
+
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                response = model.generate_content(
+                    prompt,
+                    generation_config={"temperature": 0.1, "max_output_tokens": 16384}
+                )
+                response_text = response.text.strip()
+                break  # success
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                if "429" in error_str:
+                    logger.warning(f"429 quota hit on {used_key_id} (attempt {attempt + 1}/{max_attempts}). Exhausting key and retrying...")
+                    gemini_key_manager.mark_key_exhausted(used_key_id)
+                    continue  # try next key
+                # Non-429 error — don't retry
+                raise
+
+        if response_text is None:
+            raise HTTPException(status_code=503, detail="All Gemini API keys quota exhausted for today. Please try again tomorrow.")
+
+        def _repair_and_parse(text: str):
+            """Strip markdown fences, fix trailing commas, handle truncation, then parse."""
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0].strip()
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0].strip()
             text = re.sub(r",\s*([}\]])", r"\1", text)
             text = re.sub(r"[\x00-\x1f]", " ", text)
-            questions = json.loads(text)
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Response was likely truncated — recover all complete objects.
+                # Find the last complete question object: last '}' still inside the array.
+                last_brace = text.rfind("}")
+                if last_brace != -1:
+                    truncated = text[:last_brace + 1]
+                    # Remove any trailing incomplete field after the last complete object.
+                    truncated = re.sub(r",\s*$", "", truncated)
+                    recovered = truncated + "]"
+                    if not recovered.strip().startswith("["):
+                        recovered = "[" + recovered
+                    recovered = re.sub(r",\s*([}\]])", r"\1", recovered)
+                    return json.loads(recovered)
+                raise
+
+        try:
+            questions = json.loads(response_text)
+        except json.JSONDecodeError:
+            questions = _repair_and_parse(response_text)
 
         if not isinstance(questions, list):
             raise HTTPException(status_code=500, detail="Failed to parse questions from PDF")

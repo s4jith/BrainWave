@@ -183,6 +183,26 @@ class GeminiKeyManager:
             if key_info["id"] == key_id:
                 self.current_key_index = (i + 1) % len(self.keys)
                 break
+
+    def mark_key_exhausted(self, key_id: str):
+        """
+        Force-mark a key's quota as fully used (called after a real 429 from Google).
+        This corrects local-counter drift and ensures the key is skipped next time.
+        """
+        if self.db is None:
+            return
+        current_date = self._get_current_pacific_date()
+        self.quota_collection.update_one(
+            {"key_id": key_id},
+            {"$set": {"request_count": self.daily_limit, "date": current_date}},
+            upsert=True
+        )
+        # Rotate away from this key immediately
+        for i, key_info in enumerate(self.keys):
+            if key_info["id"] == key_id:
+                self.current_key_index = (i + 1) % len(self.keys)
+                break
+        logger.warning(f"⚠️ Marked {key_id} as quota-exhausted (real 429 from Google)")
     
     def get_current_key_id(self) -> Optional[str]:
         """Get the ID of the current key being used."""

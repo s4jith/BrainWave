@@ -134,7 +134,7 @@ Format as JSON array:
 Only output the JSON array, nothing else."""
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         
         # Parse JSON response
@@ -191,7 +191,7 @@ Format as JSON array:
 Only output the JSON array."""
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         
         # Parse JSON

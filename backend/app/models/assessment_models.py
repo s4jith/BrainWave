@@ -200,7 +200,7 @@ class SubmissionInDB(BaseModel):
     percentage: float = 0.0
     passed: bool = False
     
-    feedback: Dict[str, str] = Field(default_factory=dict)
+    feedback: Dict[str, Any] = Field(default_factory=dict)
     overall_feedback: Optional[str] = None
     
     started_at: datetime = Field(default_factory=datetime.utcnow)
@@ -274,7 +274,7 @@ class SubmissionResponse(BaseModel):
 class SubmissionDetailResponse(SubmissionResponse):
     """Detailed submission with answers and feedback."""
     answers: List[AnswerSubmission]
-    feedback: Dict[str, str]
+    feedback: Dict[str, Any]
     overall_feedback: Optional[str]
     time_spent_seconds: int
 

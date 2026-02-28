@@ -414,13 +414,25 @@ function QuestionInput({ question, answer, onAnswer }) {
         );
     }
 
-    if (question.type === "essay" || question.type === "file_upload") {
+    if (question.type === "fillup" || question.type === "fill_up" || question.type === "fill_in_the_blank") {
+        return (
+            <input
+                type="text"
+                value={answer || ""}
+                onChange={(e) => onAnswer(e.target.value)}
+                placeholder="Fill in the blank..."
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none"
+            />
+        );
+    }
+
+    if (question.type === "long_answer" || question.type === "essay" || question.type === "file_upload") {
         return (
             <textarea
                 value={answer || ""}
                 onChange={(e) => onAnswer(e.target.value)}
-                placeholder="Enter your response..."
-                rows={6}
+                placeholder={question.type === "long_answer" ? "Write a detailed answer..." : "Enter your response..."}
+                rows={question.type === "long_answer" ? 8 : 6}
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none resize-none"
             />
         );

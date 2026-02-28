@@ -30,7 +30,8 @@ class QuestionBankService:
         offset: int = 0,
         group_filters: Optional[list] = None,
         user_id: Optional[str] = None,
-        user_role: Optional[str] = None
+        user_role: Optional[str] = None,
+        extra_filter: Optional[Dict] = None
     ) -> Dict:
         """Get questions with filters."""
         query = {}
@@ -46,7 +47,7 @@ class QuestionBankService:
         if status:
              query["status"] = status
         
-        if status == "pending" and user_role != "admin":
+        if status == "pending" and user_role not in ("admin", "head"):
             if user_id:
                 query["$or"] = [
                     {"created_by": user_id},
@@ -54,7 +55,18 @@ class QuestionBankService:
                 ]
             else:
                 query["_id"] = {"$exists": False}
-        
+
+        # Merge extra_filter (e.g. head assignment scope)
+        if extra_filter:
+            for k, v in extra_filter.items():
+                if k == "$and":
+                    if "$and" not in query:
+                        query["$and"] = v
+                    else:
+                        query["$and"].extend(v)
+                else:
+                    query[k] = v
+
         if group_filters is not None:
             group_or = []
             for gf in group_filters:
@@ -215,16 +227,24 @@ class QuestionBankService:
             expires_at = now + timedelta(days=7)
             
             for q in generated_questions:
+                q_type = q.get("type", "mcq").lower()
+                # For subjective question types, never store an AI-generated answer.
+                # Only MCQ, fillup and true_false need a correct_answer to function.
+                if q_type in ("short_answer", "long_answer"):
+                    correct_answer = ""
+                else:
+                    correct_answer = q.get("correct_answer") or ""
+
                 q_doc = {
                     "text": q.get("text") or q.get("question"),
                     "subject": subject,
                     "class_level": class_level,
                     "chapter": chapter,
-                    "type": q.get("type", "mcq").lower(),
+                    "type": q_type,
                     "difficulty": q.get("difficulty", "medium").lower(),
                     "marks": q.get("marks", 1),
                     "options": q.get("options", []),
-                    "correct_answer": q.get("correct_answer"),
+                    "correct_answer": correct_answer,
                     "created_by": "AI",
                     "created_role": "system",
                     "triggered_by": user_id,

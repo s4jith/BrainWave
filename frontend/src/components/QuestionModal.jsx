@@ -202,6 +202,13 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
             if (!response.ok) {
                 const err = await response.json();
+                if (Array.isArray(err.detail)) {
+                    const msgs = err.detail.map(e => {
+                        const field = e.loc ? e.loc[e.loc.length - 1] : "";
+                        return field ? `${field}: ${e.msg}` : e.msg;
+                    });
+                    throw new Error(msgs.join("; "));
+                }
                 throw new Error(err.detail || "Failed to save question");
             }
 
@@ -227,7 +234,10 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         setLoading(true);
         setError("");
         try {
-            
+            if (!aiConfig.subject) { setError("Please select a subject."); setLoading(false); return; }
+            if (!aiConfig.class_level) { setError("Please select a class."); setLoading(false); return; }
+            if (!aiConfig.chapter) { setError("Please select a chapter."); setLoading(false); return; }
+
             const payload = {
                 class_level: parseInt(aiConfig.class_level),
                 subject: aiConfig.subject,
@@ -247,6 +257,14 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
 
             if (!response.ok) {
                 const err = await response.json();
+                // FastAPI 422 returns detail as an array of validation error objects
+                if (Array.isArray(err.detail)) {
+                    const msgs = err.detail.map(e => {
+                        const field = e.loc ? e.loc[e.loc.length - 1] : "";
+                        return field ? `${field}: ${e.msg}` : e.msg;
+                    });
+                    throw new Error(msgs.join("; "));
+                }
                 throw new Error(err.detail || "Generation failed");
             }
 
