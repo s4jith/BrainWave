@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     PINECONE_INDEX: str
     PINECONE_HOST: str
     
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "http://localhost:3000"
     
     HOST: str = "0.0.0.0"
     PORT: int = 8000
