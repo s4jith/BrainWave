@@ -138,6 +138,9 @@ app.include_router(assessments.router)
 from app.routers import gradebook
 app.include_router(gradebook.router)
 
+from app.routers import career
+app.include_router(career.router)
+
 @app.get("/api/public/maintenance", tags=["Public"])
 async def public_maintenance_alias():
     """Alias for /api/admin/public/maintenance (backward compat)."""

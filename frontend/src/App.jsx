@@ -52,6 +52,9 @@ import HeadTests from "./pages/HeadTests";
 import MaintenancePage from "./pages/MaintenancePage";
 import CurriculumManagement from "./pages/CurriculumManagement";
 import ForgotPassword from "./pages/ForgotPassword";
+import CareerQuestions from "./pages/CareerQuestions";
+import CareerTest from "./pages/CareerTest";
+import CareerResult from "./pages/CareerResult";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import "./App.css";
 
@@ -98,7 +101,7 @@ function ProtectedRoute({ children }) {
 
   if (user.role === "admin") {
     const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries", "/head-management"];
+    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries", "/head-management", "/career-questions"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
       console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
@@ -716,6 +719,32 @@ function App() {
               <FeatureGatedRoute featureKey="my_grades">
                 <Gradebook />
               </FeatureGatedRoute>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Career Analysis */}
+        <Route
+          path="/career-questions"
+          element={
+            <StaffRoute>
+              <CareerQuestions />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/career-test"
+          element={
+            <ProtectedRoute>
+              <CareerTest />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/career-result/:resultId"
+          element={
+            <ProtectedRoute>
+              <CareerResult />
             </ProtectedRoute>
           }
         />

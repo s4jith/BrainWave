@@ -24,7 +24,8 @@ import {
   Sun,
   Moon,
   Monitor,
-  Lock
+  Lock,
+  Compass
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import useThemeStore from "../../stores/themeStore";
@@ -89,6 +90,12 @@ const navItems = [
     label: "Suggestions",
     icon: MessageCircle,
     path: "/suggestions"
+  },
+  {
+    id: "career-test",
+    label: "Career Analysis",
+    icon: Compass,
+    path: "/career-test"
   },
   {
     id: "about-you",

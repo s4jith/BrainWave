@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
-    MessageCircle, BookMarked, MessageSquare
+    MessageCircle, BookMarked, MessageSquare, Compass
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -133,6 +133,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/admin-reports", label: "Reports", icon: BarChart3 },
         { path: "/admin-suggestions", label: "Suggestions", icon: MessageCircle },
         { path: "/admin-settings", label: "Settings", icon: Settings },
+        { path: "/career-questions", label: "Career Analysis", icon: Compass },
     ];
 
     const teacherNavItems = [
