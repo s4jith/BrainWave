@@ -4,6 +4,7 @@ import { Edit, Trash2, Plus, Search, BookOpen, Loader2, X } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import QuestionModal from "../components/QuestionModal";
+import QuestionImageRenderer from "../components/QuestionImageRenderer";
 import useUserStore from "../stores/userStore";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
 
@@ -583,7 +584,9 @@ const QuestionBank = () => {
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-base font-medium text-gray-900 dark:text-white mb-3 leading-relaxed">{q.text}</p>
+                                            <p className="text-base font-medium text-gray-900 dark:text-white mb-3 leading-relaxed">
+                                                <QuestionImageRenderer text={q.text} />
+                                            </p>
 
                                             {q.type === 'mcq' && (
                                                 <div className="grid grid-cols-2 gap-2 mb-3">

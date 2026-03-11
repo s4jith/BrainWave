@@ -2,6 +2,8 @@
 node_modules/
 venv/
 .venv/
+temp_env/
+*_env/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -59,9 +61,14 @@ dist-ssr/
 backend/models/
 backend/ncert-working-dataset/
 backend/uploads/
+backend/app/uploads/books/*
+backend/app/uploads/question_images/*
+backend/app/uploads/submissions/*
+backend/app/uploads/tests/*
+!backend/app/uploads/**/.gitkeep
 backend/extracted_images/
 backend/Books/
-Books/
+/Books/
 *.pdf
 
 # Test cache
@@ -101,6 +108,16 @@ Thumbs.db
 poppler/
 backend/poppler/
 
+# Python cache
+backend/app/cache/
+backend/app/__pycache__/
+backend/app/**/__pycache__/
+backend/scripts/__pycache__/
+
+# Frontend cache
+frontend/.vite/
+frontend/node_modules/.cache/
+
 # Legacy Frontend Gitignore patterns (Consolidated)
 lerna-debug.log*
 *.suo
@@ -108,3 +125,4 @@ lerna-debug.log*
 *.njsproj
 *.sln
 
+backend/Books/

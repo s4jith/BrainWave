@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../components/AdminLayout";
+import QuestionImageRenderer from "../components/QuestionImageRenderer";
+import QuestionImageUploadPanel from "../components/QuestionImageUploadPanel";
 import useUserStore from "../stores/userStore";
 import {
   FileText, Plus, Upload, Edit2, Trash2, Search, Filter,
@@ -533,7 +535,9 @@ export default function QuestionPapers() {
                                   <div key={idx} className="flex gap-3 p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
                                     <span className="text-xs font-mono text-gray-400 mt-0.5 w-6 flex-shrink-0">{q.order || idx + 1}</span>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm text-gray-800 dark:text-gray-200">{q.text}</p>
+                                      <p className="text-sm text-gray-800 dark:text-gray-200">
+                                        <QuestionImageRenderer text={q.text} />
+                                      </p>
                                       {q.type === "mcq" && q.options?.length > 0 && (
                                         <div className="mt-2 grid grid-cols-2 gap-1">
                                           {q.options.map((opt, oi) => {
@@ -629,7 +633,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
   const [pdfFile, setPdfFile] = useState(null);
 
   const [questions, setQuestions] = useState([
-    { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "Section A" },
+    { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "Section A", image_ids: [], answer_image_ids: [] },
   ]);
 
   const [extractedQuestions, setExtractedQuestions] = useState(null);
@@ -655,7 +659,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
   const isManualFormValid = isFormValid && questions.some(q => q.text.trim());
 
   const addQuestion = () => {
-    setQuestions(prev => [...prev, { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "" }]);
+    setQuestions(prev => [...prev, { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "", image_ids: [], answer_image_ids: [] }]);
   };
 
   const removeQuestion = (idx) => {
@@ -991,10 +995,29 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
                   <textarea
                     value={q.text}
                     onChange={(e) => updateQuestion(idx, "text", e.target.value)}
-                    placeholder="Enter question text..."
+                    placeholder="Enter question text... Use the image panel below to embed images."
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none font-mono"
                   />
+
+                  <div className={`grid gap-3 ${['mcq','fillup','true_false'].includes(q.type) ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                    <QuestionImageUploadPanel
+                      title="Question Attachments"
+                      placeholder="Click to upload"
+                      text={q.text}
+                      onTextChange={(newText) => updateQuestion(idx, "text", newText)}
+                      imageIds={q.image_ids || []}
+                      onImageIdsChange={(newIds) => updateQuestion(idx, "image_ids", newIds)}
+                    />
+                    {!['mcq','fillup','true_false'].includes(q.type) && (
+                      <QuestionImageUploadPanel
+                        title="Answer Attachments"
+                        placeholder="Click to upload answer ref"
+                        imageIds={q.answer_image_ids || []}
+                        onImageIdsChange={(newIds) => updateQuestion(idx, "answer_image_ids", newIds)}
+                      />
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -1243,13 +1266,15 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
       options: q.options || [],
       correct_answer: q.correct_answer || "",
       section: q.section || "",
+      image_ids: q.image_ids || [],
+      answer_image_ids: q.answer_image_ids || [],
     }))
   );
 
   const effectivePaperType = paperType === "other" ? customPaperType.trim() : paperType;
 
   const addQuestion = () => {
-    setQuestions(prev => [...prev, { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "" }]);
+    setQuestions(prev => [...prev, { text: "", type: "mcq", marks: 1, options: ["", "", "", ""], correct_answer: "", section: "", image_ids: [], answer_image_ids: [] }]);
   };
 
   const removeQuestion = (idx) => {
@@ -1443,10 +1468,29 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                 <textarea
                   value={q.text}
                   onChange={(e) => updateQuestion(idx, "text", e.target.value)}
-                  placeholder="Enter question text..."
+                  placeholder="Enter question text... Use image panel below to embed images."
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white resize-none font-mono"
                 />
+
+                <div className={`grid gap-3 ${['mcq','fillup','true_false'].includes(q.type) ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                  <QuestionImageUploadPanel
+                    title="Question Attachments"
+                    placeholder="Click to upload"
+                    text={q.text}
+                    onTextChange={(newText) => updateQuestion(idx, "text", newText)}
+                    imageIds={q.image_ids || []}
+                    onImageIdsChange={(newIds) => updateQuestion(idx, "image_ids", newIds)}
+                  />
+                  {!['mcq','fillup','true_false'].includes(q.type) && (
+                    <QuestionImageUploadPanel
+                      title="Answer Attachments"
+                      placeholder="Click to upload answer ref"
+                      imageIds={q.answer_image_ids || []}
+                      onImageIdsChange={(newIds) => updateQuestion(idx, "answer_image_ids", newIds)}
+                    />
+                  )}
+                </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>

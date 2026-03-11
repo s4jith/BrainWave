@@ -1,4 +1,4 @@
-﻿"""
+"""
 Initialize Users in MongoDB Atlas
 Creates admin and sample student/teacher accounts
 """

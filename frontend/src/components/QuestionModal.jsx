@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Sparkles, Loader2, Plus, Trash } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import QuestionImageUploadPanel from "./QuestionImageUploadPanel";
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -8,6 +9,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [activeTab, setActiveTab] = useState(question ? "manual" : "manual");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    // Tracks which images have been attached to this question
+    const [uploadedImages, setUploadedImages] = useState([]);
 
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); 
@@ -35,6 +39,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         marks: 1,
         options: ["", "", "", ""],
         correct_answer: "",
+        answer_image_ids: [],
         status: "approved"
     });
 
@@ -64,8 +69,12 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 marks: question.marks || 1,
                 options: question.options || ["", "", "", ""],
                 correct_answer: question.correct_answer || "",
+                answer_image_ids: question.answer_image_ids || [],
                 status: question.status || "approved"
             });
+            if (question.image_ids && question.image_ids.length > 0) {
+                setUploadedImages(question.image_ids.map(id => ({ image_id: id, filename: id })));
+            }
         }
     }, [question]);
 
@@ -154,8 +163,18 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 ...question,
                 options: question.options || ["", "", "", ""]
             });
+            // Pre-populate uploaded images from existing question text
+            if (question.image_ids && question.image_ids.length > 0) {
+                setUploadedImages(
+                    question.image_ids.map(id => ({ image_id: id, filename: id }))
+                );
+            }
         }
     }, [question]);
+
+    const handleImageIdsChange = (newIds) => {
+        setUploadedImages(newIds.map(id => ({ image_id: id, filename: id })));
+    };
 
     const handleManualSubmit = async (e) => {
         e.preventDefault();
@@ -189,7 +208,11 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 }
             }
 
-            const payload = { ...formData, status: formData.status || 'approved' };
+            const payload = {
+                ...formData,
+                status: formData.status || 'approved',
+                image_ids: uploadedImages.map(img => img.image_id)
+            };
 
             const response = await fetch(url, {
                 method,
@@ -474,12 +497,34 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                             <div>
                                 <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Question Text</label>
                                 <textarea
-                                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 h-24 text-gray-900 dark:text-white"
+                                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 h-24 text-gray-900 dark:text-white font-mono text-sm"
                                     value={formData.text}
                                     onChange={e => setFormData({ ...formData, text: e.target.value })}
                                     required
+                                    placeholder="Type your question here. Use the image panel below to embed images."
                                 />
                             </div>
+
+                            {/* ── Attachment Panels ─────────────────────────────────── */}
+                            <div className={`grid gap-4 ${['mcq','fillup','true_false'].includes(formData.type) ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                                <QuestionImageUploadPanel
+                                    title="Question Attachments"
+                                    placeholder="Click to upload"
+                                    text={formData.text}
+                                    onTextChange={(newText) => setFormData(prev => ({ ...prev, text: newText }))}
+                                    imageIds={uploadedImages.map(img => img.image_id)}
+                                    onImageIdsChange={handleImageIdsChange}
+                                />
+                                {!['mcq','fillup','true_false'].includes(formData.type) && (
+                                    <QuestionImageUploadPanel
+                                        title="Answer Attachments"
+                                        placeholder="Click to upload answer ref"
+                                        imageIds={formData.answer_image_ids || []}
+                                        onImageIdsChange={(ids) => setFormData(prev => ({ ...prev, answer_image_ids: ids }))}
+                                    />
+                                )}
+                            </div>
+                            {/* ── End Attachment Panels ──────────────────────────────── */}
 
                             {formData.type === 'mcq' && (
                                 <div className="space-y-2">

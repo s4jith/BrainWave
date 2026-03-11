@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
+import QuestionImageRenderer from "../components/QuestionImageRenderer";
 
 export default function TestSession() {
   const navigate = useNavigate();
@@ -428,7 +429,7 @@ export default function TestSession() {
               </span>
             </div>
             <p className="text-lg text-gray-800 leading-relaxed">
-              {currentQuestion?.question_text}
+              <QuestionImageRenderer text={currentQuestion?.question_text} />
             </p>
           </div>
 

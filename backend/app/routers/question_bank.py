@@ -3,18 +3,29 @@ Question Bank Router
 Centralized management for all questions (Admin & Staff)
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Body
+from fastapi import APIRouter, HTTPException, Depends, Query, Body, UploadFile, File
+from fastapi.responses import FileResponse
 from typing import List, Optional, Dict
 from app.services.question_bank_service import question_bank_service
 from app.core.permissions import get_current_user, require_role
 from app.models.rbac_models import UserRole, TokenData
 from pydantic import BaseModel, Field
+from pathlib import Path
 from bson import ObjectId
 import logging
+import uuid
+import os
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/question-bank", tags=["question-bank"])
+
+# Directory where question images are stored
+QUESTION_IMAGES_DIR = Path(__file__).parent.parent / "uploads" / "question_images"
+QUESTION_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 class QuestionCreate(BaseModel):
     text: str = Field(..., description="Question text")
@@ -28,6 +39,8 @@ class QuestionCreate(BaseModel):
     options: List[str] = []
     correct_answer: str
     status: str = Field("approved", pattern="^(approved|pending|rejected)$")
+    image_ids: List[str] = Field(default_factory=list, description="IDs of images embedded in this question")
+    answer_image_ids: List[str] = Field(default_factory=list, description="IDs of answer/explanation reference images")
 
 class QuestionUpdate(BaseModel):
     text: Optional[str] = None
@@ -41,6 +54,8 @@ class QuestionUpdate(BaseModel):
     options: Optional[List[str]] = None
     correct_answer: Optional[str] = None
     status: Optional[str] = None
+    image_ids: Optional[List[str]] = None
+    answer_image_ids: Optional[List[str]] = None
 
 class GenerateRequest(BaseModel):
     class_level: int
@@ -624,3 +639,73 @@ async def cleanup_expired_questions(
     except Exception as e:
         logger.error(f"Manual cleanup error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Question Image Upload & Serve
+# ---------------------------------------------------------------------------
+
+@router.post("/images/upload")
+async def upload_question_image(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
+):
+    """
+    Upload an image to attach to a question.
+    Returns an image_id. Use [img:<image_id>] in the question text to embed it.
+    """
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed types: JPEG, PNG, GIF, WebP"
+        )
+
+    contents = await file.read()
+
+    if len(contents) > MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large. Maximum allowed size is 5 MB.")
+
+    # Derive a safe extension from content_type
+    ext_map = {
+        "image/jpeg": "jpg", "image/jpg": "jpg",
+        "image/png": "png", "image/gif": "gif", "image/webp": "webp"
+    }
+    ext = ext_map.get(file.content_type, "jpg")
+
+    image_id = str(uuid.uuid4())
+    filename = f"{image_id}.{ext}"
+    file_path = QUESTION_IMAGES_DIR / filename
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    logger.info(f"Question image uploaded: {filename} by {current_user.user_id}")
+    return {
+        "success": True,
+        "image_id": image_id,
+        "filename": filename,
+        "embed_tag": f"[img:{image_id}]",
+        "message": "Image uploaded. Copy the embed_tag and paste it into your question text where the image should appear."
+    }
+
+
+@router.get("/images/{image_id}")
+async def get_question_image(image_id: str):
+    """Serve a question image by its ID. No auth required (images are embedded in tests)."""
+    # Validate that image_id is a UUID to prevent path traversal
+    try:
+        uuid.UUID(image_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid image ID format.")
+
+    media_types = {
+        "jpg": "image/jpeg", "png": "image/png",
+        "gif": "image/gif", "webp": "image/webp"
+    }
+    for ext, media_type in media_types.items():
+        file_path = QUESTION_IMAGES_DIR / f"{image_id}.{ext}"
+        if file_path.exists():
+            return FileResponse(str(file_path), media_type=media_type)
+
+    raise HTTPException(status_code=404, detail="Image not found.")
+
