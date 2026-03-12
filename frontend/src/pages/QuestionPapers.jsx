@@ -112,7 +112,7 @@ export default function QuestionPapers() {
 
   useEffect(() => {
     if (isHead) {
-      fetch(`${API_URL}/api/head/my-assignment`, { headers: getAuthHeader() })
+      authFetch(`${API_URL}/api/head/my-assignment`)
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) setHeadAssignment(d); })
         .catch(() => {});

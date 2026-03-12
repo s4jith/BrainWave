@@ -29,7 +29,6 @@ PUBLIC_PATHS = [
     # Health / maintenance checks
     "/api/public/maintenance",
     "/api/admin/public/maintenance",
-    "/api/admin/health",
 
     # OpenAPI docs
     "/docs",

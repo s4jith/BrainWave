@@ -6,7 +6,8 @@ from app.models.rbac_models import UserRole, TokenData
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.services.gemini_key_manager import gemini_key_manager
 import json
 import re
@@ -471,11 +472,14 @@ JSON:"""
             used_key_id = gemini_key_manager.keys[prev_index]["id"]
 
             try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                response = model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.1, "max_output_tokens": 16384}
+                client = genai.Client(api_key=api_key)
+                response = client.models.generate_content(
+                    model="models/gemini-2.5-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=16384,
+                    ),
                 )
                 response_text = response.text.strip()
                 break  # success

@@ -2,7 +2,8 @@
 Gemini Service - Handles all Google Gemini AI interactions with multi-key rotation.
 """
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.services.gemini_key_manager import gemini_key_manager
 import logging
 
@@ -18,16 +19,16 @@ class GeminiService:
         
         self.embedding_model = 'models/gemini-embedding-001'
     
-    def _get_model_with_available_key(self, retry_count: int = 0, max_output_tokens: int = 8192):
+    def _get_client_and_config(self, retry_count: int = 0, max_output_tokens: int = 8192):
         """
-        Get a GenerativeModel instance with an available API key.
+        Get a genai Client with an available API key and a generation config.
         
         Args:
             retry_count: Number of retries attempted (for recursive retry logic)
             max_output_tokens: Maximum tokens for response (default: 8192)
         
         Returns:
-            Tuple of (model, key_info) for error handling
+            Tuple of (client, config, key_index) for error handling
         """
         if retry_count >= len(gemini_key_manager.keys):
             raise Exception(
@@ -45,19 +46,16 @@ class GeminiService:
                 "Quotas reset at midnight Pacific Time."
             )
         
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         
-        generation_config = {
-            "max_output_tokens": max_output_tokens,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "top_k": 40,
-        }
+        config = types.GenerateContentConfig(
+            max_output_tokens=max_output_tokens,
+            temperature=0.7,
+            top_p=0.9,
+            top_k=40,
+        )
         
-        return genai.GenerativeModel(
-            self.model_name,
-            generation_config=generation_config
-        ), gemini_key_manager.current_key_index
+        return client, config, gemini_key_manager.current_key_index
     
     def generate_embedding(self, text: str) -> list[float]:
         """
@@ -109,9 +107,13 @@ class GeminiService:
         try:
             prompt = self._build_prompt(context, question, mode, class_level)
             
-            model, key_index = self._get_model_with_available_key(retry_count)
+            client, config, key_index = self._get_client_and_config(retry_count)
             
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            )
             
             return response.text
         
@@ -147,23 +149,23 @@ class GeminiService:
             if not api_key:
                 raise Exception("No API key available")
             
-            genai.configure(api_key=api_key)
+            client = genai.Client(api_key=api_key)
             
-            generation_config = {
-                "max_output_tokens": max_output_tokens,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "top_k": 40,
-            }
+            config = types.GenerateContentConfig(
+                max_output_tokens=max_output_tokens,
+                temperature=0.7,
+                top_p=0.9,
+                top_k=40,
+            )
             
             selected_model = model_name or self.model_name
             
-            model = genai.GenerativeModel(
-                selected_model,
-                generation_config=generation_config
+            response = client.models.generate_content(
+                model=selected_model,
+                contents=prompt,
+                config=config,
             )
             
-            response = model.generate_content(prompt)
             return response.text
         
         except Exception as e:
@@ -212,11 +214,13 @@ class GeminiService:
             Text chunks as they are generated
         """
         try:
-            model, key_index = self._get_model_with_available_key(retry_count, max_output_tokens)
+            client, config, key_index = self._get_client_and_config(retry_count, max_output_tokens)
             
-            response = model.generate_content(prompt, stream=True)
-            
-            for chunk in response:
+            for chunk in client.models.generate_content_stream(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            ):
                 if chunk.text:
                     yield chunk.text
         
@@ -281,26 +285,25 @@ class GeminiService:
             if not api_key:
                 raise Exception("No API key available")
             
-            genai.configure(api_key=api_key)
+            client = genai.Client(api_key=api_key)
             
-            generation_config = {
-                "max_output_tokens": max_output_tokens,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "top_k": 40,
-            }
-            
-            model = genai.GenerativeModel(
-                self.model_name,
-                generation_config=generation_config
+            config = types.GenerateContentConfig(
+                max_output_tokens=max_output_tokens,
+                temperature=0.7,
+                top_p=0.9,
+                top_k=40,
             )
             
-            image_part = {
-                "mime_type": mime_type,
-                "data": base64.b64encode(image_bytes).decode("utf-8")
-            }
+            image_part = types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=mime_type,
+            )
             
-            response = model.generate_content([prompt, image_part])
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, image_part],
+                config=config,
+            )
             return response.text
         
         except Exception as e:
@@ -469,8 +472,12 @@ OUTPUT FORMAT (JSON):
 
 Generate {num_questions} MCQs now in valid JSON format:"""
             
-            model, key_index = self._get_model_with_available_key(retry_count)
-            response = model.generate_content(prompt)
+            client, config, key_index = self._get_client_and_config(retry_count)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            )
             
             import json
             text = response.text
@@ -558,14 +565,13 @@ Example format:
 
 JSON:"""
 
-            model, key_index = self._get_model_with_available_key(retry_count)
+            client, config, key_index = self._get_client_and_config(retry_count)
             
-            generation_config = {
-                "temperature": 0.7,
-                "max_output_tokens": 8192
-            }
-            
-            response = model.generate_content(prompt, generation_config=generation_config)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            )
             text = response.text.strip()
             
             logger.info(f"📝 Gemini response length: {len(text)} chars")
@@ -710,8 +716,12 @@ OUTPUT FORMAT (JSON):
 
 Provide evaluation in JSON format:"""
             
-            model, key_index = self._get_model_with_available_key(retry_count)
-            response = model.generate_content(prompt)
+            client, config, key_index = self._get_client_and_config(retry_count)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            )
             
             import json
             text = response.text

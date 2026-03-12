@@ -385,7 +385,7 @@ const Footer = () => {
     return (
         <footer className="bg-neutral-950 text-white py-6 px-6">
             <div className="max-w-6xl mx-auto text-center">
-                <p className="text-sm text-neutral-400">Made with ❤️ by <span className="text-white font-medium">4%</span></p>
+                <p className="text-sm text-neutral-400">Developed by <span className="text-white font-medium">TeamMistake</span></p>
             </div>
         </footer>
     );

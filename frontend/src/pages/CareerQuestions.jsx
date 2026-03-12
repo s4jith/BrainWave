@@ -112,8 +112,8 @@ export default function CareerQuestions() {
     setLoadingAssignments(true);
     try {
       const [listRes, activeRes] = await Promise.all([
-        fetch(`${API_URL}/api/career/assignments`, { headers }),
-        fetch(`${API_URL}/api/career/assignment/active`, { headers }),
+        authFetch(`${API_URL}/api/career/assignments`),
+        authFetch(`${API_URL}/api/career/assignment/active`),
       ]);
       const listData = await listRes.json();
       const activeData = await activeRes.json();

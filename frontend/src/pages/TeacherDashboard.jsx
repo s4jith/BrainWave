@@ -54,8 +54,8 @@ export default function TeacherDashboard() {
         setLoading(true);
         try {
             const [statsRes, reportsRes] = await Promise.all([
-                fetch(`${API_URL}/api/teacher/stats`, { headers: getAuthHeader() }),
-                fetch(`${API_URL}/api/teacher/reports`, { headers: getAuthHeader() }),
+                authFetch(`${API_URL}/api/teacher/stats`),
+                authFetch(`${API_URL}/api/teacher/reports`),
             ]);
             if (statsRes.ok) {
                 const d = await statsRes.json();

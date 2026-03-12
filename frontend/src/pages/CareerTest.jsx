@@ -38,8 +38,8 @@ export default function CareerTest() {
     (async () => {
       try {
         const [assignRes, resultsRes] = await Promise.all([
-          fetch(`${API_URL}/api/career/assignment/active`, { headers }),
-          fetch(`${API_URL}/api/career/results/me`, { headers }),
+          authFetch(`${API_URL}/api/career/assignment/active`),
+          authFetch(`${API_URL}/api/career/results/me`),
         ]);
         const assignData = await assignRes.json();
         const resultsData = await resultsRes.json();

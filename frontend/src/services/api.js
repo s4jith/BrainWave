@@ -7,14 +7,25 @@ import useUserStore from "../stores/userStore";
  * Authenticated fetch wrapper.
  * Automatically injects the JWT Bearer token from the user store
  * into every request's Authorization header.
+ * On 401 responses, automatically logs the user out and redirects to login.
  */
-function authFetch(url, options = {}) {
+async function authFetch(url, options = {}) {
   const token = useUserStore.getState().accessToken;
   const headers = { ...(options.headers || {}) };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    const { logout, isAuthenticated } = useUserStore.getState();
+    if (isAuthenticated) {
+      logout();
+      window.location.href = "/login";
+    }
+  }
+
+  return response;
 }
 
 export const chatService = {

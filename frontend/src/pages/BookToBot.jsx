@@ -33,7 +33,7 @@ function BookToBot() {
   useEffect(() => {
     fetchAvailableSubjects();
     if (user?.role === "student") {
-      fetch(`${API_BASE}/api/student/my-features`, { headers: getAuthHeader() })
+      authFetch(`${API_BASE}/api/student/my-features`)
         .then(r => r.ok ? r.json() : null)
         .then(data => { if (data) setAiChatUnlocked(data.features?.ai_chatbot === true); })
         .catch(() => {});

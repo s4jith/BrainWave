@@ -35,7 +35,7 @@ export default function HeadManagement() {
     // Load available subjects from curriculum API (exact names matching DB)
     const [availableSubjects, setAvailableSubjects] = useState([]);
     useEffect(() => {
-        fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, { headers: getAuthHeader() })
+        authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`)
             .then(r => r.ok ? r.json() : [])
             .then(data => {
                 const subjects = [...new Set(

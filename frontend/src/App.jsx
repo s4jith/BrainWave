@@ -259,9 +259,44 @@ function FeatureGatedRoute({ featureKey, children }) {
   return children;
 }
 
+function TokenValidator({ children }) {
+  const { isAuthenticated, accessToken, logout } = useUserStore();
+  const [validated, setValidated] = useState(false);
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) {
+      setValidated(true);
+      return;
+    }
+
+    // Verify the token is still valid by calling /api/auth/me
+    const validateToken = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.status === 401) {
+          // Token is expired or invalid — force logout
+          logout();
+        }
+      } catch {
+        // Network error — don't logout, let offline usage continue
+      }
+      setValidated(true);
+    };
+    validateToken();
+  }, []);
+
+  if (!validated) return null; // Show nothing until token is validated
+
+  return children;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <TokenValidator>
       <Routes>
         {}
         <Route path="/" element={<LandingPage />} />
@@ -753,6 +788,7 @@ function App() {
         {}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes >
+      </TokenValidator>
     </BrowserRouter >
   );
 }

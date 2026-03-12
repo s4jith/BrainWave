@@ -32,7 +32,8 @@ import numpy as np
 
 from app.services.gemini_service import gemini_service
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from pinecone import Pinecone
 
@@ -104,10 +105,10 @@ class AdvancedPDFProcessor:
         self.dpi = dpi
         self.use_gemini_vision = use_gemini_vision
         
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.vision_client = genai.Client(api_key=settings.GEMINI_API_KEY)
         
         self.embedding_model = EMBEDDING_MODEL
-        self.vision_model = genai.GenerativeModel("gemini-2.5-flash")  
+        self.vision_model_name = "models/gemini-2.5-flash"  
         
         self.vision_api_enabled = True
         
@@ -410,7 +411,10 @@ class AdvancedPDFProcessor:
             max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    response = self.vision_model.generate_content([prompt, page_image])
+                    response = self.vision_client.models.generate_content(
+                        model=self.vision_model_name,
+                        contents=[prompt, page_image],
+                    )
                     
                     if response.text and "TEXT_ONLY" not in response.text:
                         return [response.text.strip()]
@@ -605,7 +609,7 @@ class PineconeEmbeddingUploader:
     
     def __init__(self):
         """Initialize Pinecone connection."""
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
         
         self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
         self.index = self.pc.Index(host=settings.PINECONE_HOST)
