@@ -6,7 +6,7 @@ import {
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 const TYPE_COLORS = {
   mcq: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",

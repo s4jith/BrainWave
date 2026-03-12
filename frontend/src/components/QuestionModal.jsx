@@ -4,7 +4,7 @@ import useUserStore from "../stores/userStore";
 import QuestionImageUploadPanel from "./QuestionImageUploadPanel";
 import authFetch from "../utils/authFetch";
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const apiUrl = import.meta.env.VITE_API_URL;
 
 const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSubjects = [], groups = [] }) => {
     const [activeTab, setActiveTab] = useState(question ? "manual" : "manual");
@@ -183,7 +183,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         setError("");
 
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const apiUrl = import.meta.env.VITE_API_URL;
             const url = question
                 ? `${apiUrl}/api/question-bank/questions/${question.id}`
                 : `${apiUrl}/api/question-bank/questions`;
@@ -269,7 +269,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 config: aiConfig.difficulty_dist
             };
 
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const apiUrl = import.meta.env.VITE_API_URL;
             const response = await authFetch(`${apiUrl}/api/question-bank/generate`, {
                 method: "POST",
                 headers: {

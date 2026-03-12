@@ -13,7 +13,7 @@
 
 import React from "react";
 
-const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const apiUrl = import.meta.env.VITE_API_URL;
 
 // Matches [img:<valid-uuid>]
 const IMG_TAG_REGEX = /\[img:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;

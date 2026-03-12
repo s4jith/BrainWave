@@ -7,7 +7,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function TestManagement() {
   const navigate = useNavigate();

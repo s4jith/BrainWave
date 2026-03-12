@@ -6,7 +6,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function TeacherManagement() {
     const { getAuthHeader } = useUserStore();

@@ -197,7 +197,7 @@ export default function Settings() {
     if (newPwd !== confirmPwd) { setPwdError('Passwords do not match.'); return; }
     setPwdLoading(true);
     try {
-      const res = await authFetch('http://localhost:8000/api/auth/change-password-secure', {
+      const res = await authFetch(`${import.meta.env.VITE_API_URL}/api/auth/change-password-secure`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.user_id, old_password: oldPassword, new_password: newPwd, confirm_password: confirmPwd })
@@ -223,7 +223,7 @@ export default function Settings() {
     if (trimmed === user.user_id) { setUserIdError('New User ID is the same as current.'); return; }
     setUserIdLoading(true);
     try {
-      const res = await authFetch('http://localhost:8000/api/auth/profile', {
+      const res = await authFetch(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ new_user_id: trimmed })

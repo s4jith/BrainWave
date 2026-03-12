@@ -3,7 +3,7 @@ import { Search, MessageSquare, Filter, CheckCircle, Clock, Reply, Trash2, Refre
 import AdminLayout from "../components/AdminLayout";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function AdminSuggestions() {
   const [suggestions, setSuggestions] = useState([]);

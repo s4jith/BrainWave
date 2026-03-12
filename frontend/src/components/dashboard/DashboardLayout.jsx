@@ -32,7 +32,7 @@ import useThemeStore from "../../stores/themeStore";
 import ChatbotPanel from "./ChatbotPanel";
 import authFetch from "../../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Map nav item IDs to their required feature flag
 const featureGatedItems = {

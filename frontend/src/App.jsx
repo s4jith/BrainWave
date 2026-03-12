@@ -62,7 +62,7 @@ import authFetch from "./utils/authFetch";
 function useMaintenanceMode() {
   const [maintenance, setMaintenance] = useState(false);
   const [checked, setChecked] = useState(false);
-  const API_URL = import.meta.env.VITE_API_URL || "https://ncert-backend-latest.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
     const check = async () => {
@@ -195,7 +195,7 @@ function FeatureGatedRoute({ featureKey, children }) {
   const { user, getAuthHeader } = useUserStore();
   const navigate = useNavigate();
   const [allowed, setAllowed] = useState(null);
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const API_URL = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
     if (user?.role !== "student") {

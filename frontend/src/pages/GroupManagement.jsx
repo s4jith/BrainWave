@@ -8,7 +8,7 @@ import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function GroupManagement() {
     const navigate = useNavigate();

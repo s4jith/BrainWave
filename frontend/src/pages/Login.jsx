@@ -6,7 +6,7 @@ import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function Login() {
   const navigate = useNavigate();

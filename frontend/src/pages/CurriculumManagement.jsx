@@ -8,7 +8,7 @@ import { Button } from "../components/ui/button";
 import SubjectIcon from "../components/SubjectIcon";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function CurriculumManagement() {
     const navigate = useNavigate();

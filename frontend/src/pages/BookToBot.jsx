@@ -11,7 +11,7 @@ import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 function BookToBot() {
   const navigate = useNavigate();

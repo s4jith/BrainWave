@@ -4,7 +4,7 @@ import { devtools } from "zustand/middleware";
 import useUserStore from "./userStore";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 const useAssessmentStore = create(
     devtools(

@@ -13,7 +13,7 @@ import {
     PieChart, Pie, Cell
 } from "recharts";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 const DIST_COLORS = [
     { fill: "#6366f1", light: "#ede9fe" },

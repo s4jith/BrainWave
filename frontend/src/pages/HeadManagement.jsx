@@ -7,7 +7,7 @@ import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Li
 import { CLASSES } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function HeadManagement() {
     const { getAuthHeader } = useUserStore();

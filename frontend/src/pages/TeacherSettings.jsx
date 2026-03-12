@@ -4,7 +4,7 @@ import AdminLayout from "../components/AdminLayout";
 import { Settings, User, Mail, Phone, Key, IdCard, Save, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 function Alert({ type, message, onClose }) {
     if (!message) return null;

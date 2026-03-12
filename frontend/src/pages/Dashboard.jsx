@@ -19,7 +19,7 @@ import StickyNotesCard from "../components/dashboard/StickyNotesCard";
 import quotesData from "../data/quotes.json";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 const quickActions = [
   {

@@ -11,7 +11,7 @@ import {
 import useUserStore from "../../stores/userStore";
 import authFetch from "../../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
   const { user } = useUserStore();

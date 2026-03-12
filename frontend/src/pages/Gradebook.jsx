@@ -38,7 +38,7 @@ import {
 } from "recharts";
 import authFetch from "../utils/authFetch";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 function StatCard({ icon: Icon, label, value, color }) {
     return (

@@ -13,7 +13,7 @@ import { Badge } from "./ui/badge";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function UserSettingsPanel({ open, onClose }) {
   const { user, setPreferredSubject } = useUserStore();

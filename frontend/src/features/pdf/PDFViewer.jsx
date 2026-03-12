@@ -56,7 +56,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const API_BASE = import.meta.env.VITE_API_URL;
 
   const setSelectedText = useAnnotationStore((state) => state.setSelectedText);
   const activePanel = useAnnotationStore((state) => state.activePanel);
