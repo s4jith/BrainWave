@@ -4,6 +4,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -50,7 +51,7 @@ export default function TeacherManagement() {
     const fetchTeachers = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/admin/teachers`, {
+            const response = await authFetch(`${API_URL}/api/admin/teachers`, {
                 headers: getAuthHeader()
             });
             if (!response.ok) throw new Error("Failed to fetch teachers");
@@ -67,7 +68,7 @@ export default function TeacherManagement() {
     const fetchCurriculumSubjects = async () => {
         setLoadingCurriculum(true);
         try {
-            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+            const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
                 headers: getAuthHeader()
             });
             if (response.ok) {
@@ -86,7 +87,7 @@ export default function TeacherManagement() {
         try {
             setSaving(true);
             const dataToSend = { ...formData, age: parseInt(formData.age, 10) };
-            const response = await fetch(`${API_URL}/api/admin/teachers`, {
+            const response = await authFetch(`${API_URL}/api/admin/teachers`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify(dataToSend)
@@ -117,7 +118,7 @@ export default function TeacherManagement() {
             const dataToSend = { ...formData };
             if (dataToSend.age) dataToSend.age = parseInt(dataToSend.age, 10);
 
-            const response = await fetch(`${API_URL}/api/admin/teachers/${selectedTeacher.id}`, {
+            const response = await authFetch(`${API_URL}/api/admin/teachers/${selectedTeacher.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify(dataToSend)
@@ -150,7 +151,7 @@ export default function TeacherManagement() {
         setTeachers(updatedTeachers);
 
         try {
-            const response = await fetch(`${API_URL}/api/admin/teachers/${teacherId}`, {
+            const response = await authFetch(`${API_URL}/api/admin/teachers/${teacherId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
@@ -172,7 +173,7 @@ export default function TeacherManagement() {
     const handleResetPassword = async (teacher) => {
         if (!confirm(`Reset password for ${teacher.name}?`)) return;
         try {
-            const response = await fetch(`${API_URL}/api/admin/teachers/${teacher.id}/reset-password`, {
+            const response = await authFetch(`${API_URL}/api/admin/teachers/${teacher.id}/reset-password`, {
                 method: "POST",
                 headers: getAuthHeader()
             });

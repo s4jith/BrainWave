@@ -6,6 +6,7 @@ import {
     Settings, Database, Globe,
     Save, Check, Loader2
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -28,7 +29,7 @@ export default function AdminSettings() {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/admin/settings`, {
+                const res = await authFetch(`${API_URL}/api/admin/settings`, {
                     headers: getAuthHeader()
                 });
                 if (res.ok) {
@@ -45,7 +46,7 @@ export default function AdminSettings() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${API_URL}/api/admin/settings`, {
+            const res = await authFetch(`${API_URL}/api/admin/settings`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify(settings),

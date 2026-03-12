@@ -10,6 +10,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, Cell
 } from "recharts";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -48,7 +49,7 @@ export default function AdminDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/admin/dashboard-stats`, {
+        const res = await authFetch(`${API_URL}/api/admin/dashboard-stats`, {
           headers: getAuthHeader()
         });
         if (cancelled) return;

@@ -9,6 +9,7 @@ import {
   Plus
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
+import authFetch from "../../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -44,7 +45,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         page_number: pageNumber.toString(),
       });
 
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE}/api/notes/${user.id}?${params}`,
         {
           headers: {
@@ -89,7 +90,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         highlight_text: "", 
       };
 
-      const response = await fetch(`${API_BASE}/api/notes/`, {
+      const response = await authFetch(`${API_BASE}/api/notes/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,7 +129,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         note_content: noteForm.note_content,
       };
 
-      const response = await fetch(`${API_BASE}/api/notes/${noteId}`, {
+      const response = await authFetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -161,7 +162,7 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/notes/${noteId}`, {
+      const response = await authFetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "DELETE",
       });
 

@@ -5,6 +5,7 @@ import PreviousAcademics from './PreviousAcademics';
 import AvatarUsername from './AvatarUsername';
 import ExamCalendar from './ExamCalendar';
 import useUserStore from '../../stores/userStore';
+import authFetch from "../../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -73,7 +74,7 @@ function OnboardingLayout() {
   const completeOnboarding = async () => {
     try {
       
-      const response = await fetch(`${API_BASE}/api/auth/complete-onboarding`, {
+      const response = await authFetch(`${API_BASE}/api/auth/complete-onboarding`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

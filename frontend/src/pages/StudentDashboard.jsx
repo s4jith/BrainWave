@@ -17,6 +17,7 @@ import {
     GraduationCap
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -44,7 +45,7 @@ export default function StudentDashboard() {
 
     const fetchFeatures = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/student/my-features`, {
+            const res = await authFetch(`${API_URL}/api/student/my-features`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -58,7 +59,7 @@ export default function StudentDashboard() {
 
     const fetchGroups = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/student/groups`, {
+            const res = await authFetch(`${API_URL}/api/student/groups`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -72,7 +73,7 @@ export default function StudentDashboard() {
 
     const fetchStudentStats = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/gradebook/stats/student`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/stats/student`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -90,7 +91,7 @@ export default function StudentDashboard() {
 
     const fetchRecentGrades = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/gradebook/my-grades`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/my-grades`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -104,7 +105,7 @@ export default function StudentDashboard() {
 
     const fetchSubjects = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/student/my-subjects`, {
+            const res = await authFetch(`${API_URL}/api/student/my-subjects`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {

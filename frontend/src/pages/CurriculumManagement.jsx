@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import SubjectIcon from "../components/SubjectIcon";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -26,7 +27,7 @@ export default function CurriculumManagement() {
     const fetchSubjects = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
+            const res = await authFetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
             if (!res.ok) throw new Error("Failed to fetch subjects");
             const data = await res.json();
             setSubjects(data);
@@ -39,7 +40,7 @@ export default function CurriculumManagement() {
 
     const fetchSubjectDetails = async (subjectId) => {
         try {
-            const res = await fetch(`${API_BASE}/api/curriculum/subjects/${subjectId}`);
+            const res = await authFetch(`${API_BASE}/api/curriculum/subjects/${subjectId}`);
             if (!res.ok) throw new Error("Failed to fetch subject details");
             const data = await res.json();
             return data;
@@ -89,7 +90,7 @@ export default function CurriculumManagement() {
         setSaveStatus(null);
         try {
             const summaryHtml = editorRef.current?.innerHTML || "";
-            const res = await fetch(
+            const res = await authFetch(
                 `${API_BASE}/api/curriculum/subjects/${editingChapter.subjectId}/chapters/${editingChapter.chapterId}/summary`,
                 {
                     method: "PUT",

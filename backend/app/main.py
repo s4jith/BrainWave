@@ -17,6 +17,7 @@ import logging
 from app.core.config import settings
 from app.db.mongo import init_databases, close_databases
 from app.routers import chat, mcq, evaluate, notes, assessment, annotation, history
+from app.core.auth_middleware import AuthMiddleware
 
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
@@ -36,16 +37,18 @@ async def lifespan(app: FastAPI):
     
     try:
         await init_databases()
-        
+    except Exception as e:
+        logger.error(f" Database initialization failed: {e}")
+    
+    try:
         from app.services.question_bank_service import question_bank_service
         deleted = await question_bank_service.cleanup_expired_pending_questions()
         if deleted > 0:
             logger.info(f" Cleaned up {deleted} expired pending questions")
-        
-        logger.info("All systems initialized successfully")
     except Exception as e:
-        logger.error(f" Startup failed: {e}")
-        raise
+        logger.warning(f" Could not run startup cleanup: {e}")
+    
+    logger.info("All systems initialized successfully")
     
     yield
     
@@ -84,6 +87,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global auth middleware — protects all /api/ routes except public whitelist
+app.add_middleware(AuthMiddleware)
 
 app.include_router(chat.router, prefix="/api")
 app.include_router(mcq.router, prefix="/api")

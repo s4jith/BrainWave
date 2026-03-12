@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import { Settings, User, Mail, Phone, Key, IdCard, Save, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -90,7 +91,7 @@ export default function TeacherSettings() {
 
         setProfileLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/profile`, {
+            const res = await authFetch(`${API_URL}/api/auth/profile`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
@@ -127,7 +128,7 @@ export default function TeacherSettings() {
 
         setPasswordLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/change-password`, {
+            const res = await authFetch(`${API_URL}/api/auth/change-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({

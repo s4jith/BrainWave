@@ -8,6 +8,7 @@ import {
     ChevronDown, ChevronUp, Filter, RefreshCw, CheckSquare,
     BarChart3, Users, AlertCircle, BookOpen, GraduationCap
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -30,7 +31,7 @@ export default function HeadDashboard() {
 
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/dashboard-stats`, {
+            const res = await authFetch(`${API_URL}/api/head/dashboard-stats`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -44,7 +45,7 @@ export default function HeadDashboard() {
 
     const fetchAssignment = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/my-assignment`, {
+            const res = await authFetch(`${API_URL}/api/head/my-assignment`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -61,7 +62,7 @@ export default function HeadDashboard() {
             let url = `${API_URL}/api/head/pending-questions?limit=100`;
             if (filterSubject) url += `&subject=${encodeURIComponent(filterSubject)}`;
             if (filterClass) url += `&class_level=${filterClass}`;
-            const res = await fetch(url, { headers: getAuthHeader() });
+            const res = await authFetch(url, { headers: getAuthHeader() });
             if (res.ok) {
                 const data = await res.json();
                 setQuestions(data.questions || []);
@@ -76,7 +77,7 @@ export default function HeadDashboard() {
             let url = `${API_URL}/api/head/pending-papers?limit=100`;
             if (filterSubject) url += `&subject=${encodeURIComponent(filterSubject)}`;
             if (filterClass) url += `&class_level=${filterClass}`;
-            const res = await fetch(url, { headers: getAuthHeader() });
+            const res = await authFetch(url, { headers: getAuthHeader() });
             if (res.ok) {
                 const data = await res.json();
                 setPapers(data.papers || []);
@@ -103,7 +104,7 @@ export default function HeadDashboard() {
     const handleApproveQuestion = async (id) => {
         setActionLoading(prev => ({ ...prev, [id]: "approve" }));
         try {
-            const res = await fetch(`${API_URL}/api/head/approve-question/${id}`, {
+            const res = await authFetch(`${API_URL}/api/head/approve-question/${id}`, {
                 method: "POST",
                 headers: getAuthHeader()
             });
@@ -125,7 +126,7 @@ export default function HeadDashboard() {
     const handleRejectQuestion = async (id) => {
         setActionLoading(prev => ({ ...prev, [id]: "reject" }));
         try {
-            const res = await fetch(`${API_URL}/api/head/reject-question/${id}`, {
+            const res = await authFetch(`${API_URL}/api/head/reject-question/${id}`, {
                 method: "POST",
                 headers: getAuthHeader()
             });
@@ -148,7 +149,7 @@ export default function HeadDashboard() {
         if (selectedQuestions.length === 0) return;
         setActionLoading(prev => ({ ...prev, bulk: true }));
         try {
-            const res = await fetch(`${API_URL}/api/head/bulk-approve-questions`, {
+            const res = await authFetch(`${API_URL}/api/head/bulk-approve-questions`, {
                 method: "POST",
                 headers: { ...getAuthHeader(), "Content-Type": "application/json" },
                 body: JSON.stringify(selectedQuestions)
@@ -169,7 +170,7 @@ export default function HeadDashboard() {
     const handleApprovePaper = async (id) => {
         setActionLoading(prev => ({ ...prev, [id]: "approve" }));
         try {
-            const res = await fetch(`${API_URL}/api/head/approve-paper/${id}`, {
+            const res = await authFetch(`${API_URL}/api/head/approve-paper/${id}`, {
                 method: "POST",
                 headers: getAuthHeader()
             });
@@ -190,7 +191,7 @@ export default function HeadDashboard() {
     const handleRejectPaper = async (id) => {
         setActionLoading(prev => ({ ...prev, [id]: "reject" }));
         try {
-            const res = await fetch(`${API_URL}/api/head/reject-paper/${id}`, {
+            const res = await authFetch(`${API_URL}/api/head/reject-paper/${id}`, {
                 method: "POST",
                 headers: getAuthHeader()
             });

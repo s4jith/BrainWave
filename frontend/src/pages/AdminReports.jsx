@@ -6,6 +6,7 @@ import {
     BarChart3, Users, BookOpen, ClipboardList,
     Award, AlertTriangle, Activity, Download, RefreshCcw, UserCheck
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -25,7 +26,7 @@ export default function AdminReports() {
 
     const fetchSubjects = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+            const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
                 headers: getAuthHeader()
             });
             if (response.ok) {
@@ -40,7 +41,7 @@ export default function AdminReports() {
     const fetchAnalytics = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/api/admin/analytics`, {
+            const response = await authFetch(`${API_URL}/api/admin/analytics`, {
                 headers: getAuthHeader()
             });
 

@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import useUserStore from "./userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -25,7 +26,7 @@ const useAssessmentStore = create(
                     const { getAuthHeader } = useUserStore.getState();
                     const params = courseId ? `?course_id=${courseId}` : '';
 
-                    const res = await fetch(`${API_URL}/api/assessments${params}`, {
+                    const res = await authFetch(`${API_URL}/api/assessments${params}`, {
                         headers: getAuthHeader()
                     });
 
@@ -47,7 +48,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}`, {
                         headers: getAuthHeader()
                     });
 
@@ -69,7 +70,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments`, {
+                    const res = await authFetch(`${API_URL}/api/assessments`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -103,7 +104,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}`, {
                         method: "PUT",
                         headers: {
                             "Content-Type": "application/json",
@@ -133,7 +134,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}/publish`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}/publish`, {
                         method: "POST",
                         headers: getAuthHeader()
                     });
@@ -158,7 +159,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}/questions`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}/questions`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -185,7 +186,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(
+                    const res = await authFetch(
                         `${API_URL}/api/assessments/${assessmentId}/questions/${questionId}`,
                         {
                             method: "DELETE",
@@ -209,7 +210,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}/start`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}/start`, {
                         headers: getAuthHeader()
                     });
 
@@ -241,7 +242,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}/submit`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/${assessmentId}/submit`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -267,7 +268,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/assessments/submissions/my`, {
+                    const res = await authFetch(`${API_URL}/api/assessments/submissions/my`, {
                         headers: getAuthHeader()
                     });
 
@@ -288,7 +289,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(
+                    const res = await authFetch(
                         `${API_URL}/api/assessments/${assessmentId}/submissions`,
                         { headers: getAuthHeader() }
                     );
@@ -310,7 +311,7 @@ const useAssessmentStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(
+                    const res = await authFetch(
                         `${API_URL}/api/assessments/submissions/${submissionId}/grade`,
                         {
                             method: "POST",

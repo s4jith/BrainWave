@@ -30,6 +30,7 @@ import {
 import useUserStore from "../../stores/userStore";
 import useThemeStore from "../../stores/themeStore";
 import ChatbotPanel from "./ChatbotPanel";
+import authFetch from "../../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -124,7 +125,7 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
 
   const fetchFeatures = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/student/my-features`, {
+      const res = await authFetch(`${API_URL}/api/student/my-features`, {
         headers: getAuthHeader()
       });
       if (res.ok) {

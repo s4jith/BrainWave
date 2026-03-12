@@ -5,6 +5,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -77,7 +78,7 @@ export default function TestManagement() {
   const fetchTeacherGroups = async () => {
     try {
       setLoadingGroups(true);
-      const response = await fetch(`${API_URL}/api/teacher/groups`, {
+      const response = await authFetch(`${API_URL}/api/teacher/groups`, {
         headers: getAuthHeader()
       });
       if (response.ok) {
@@ -99,7 +100,7 @@ export default function TestManagement() {
   const fetchCurriculumSubjects = async () => {
     setLoadingCurriculum(true);
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
         headers: getAuthHeader()
       });
       if (response.ok) {
@@ -126,7 +127,7 @@ export default function TestManagement() {
       if (filterClass) url += `class_level=${filterClass}&`;
       if (filterSubject) url += `subject=${filterSubject}&`;
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         headers: getAuthHeader()
       });
 
@@ -172,7 +173,7 @@ export default function TestManagement() {
     try {
       setLoadingSubmissions(true);
       
-      const response = await fetch(`${API_URL}/api/assessments/${testId}/submissions`, {
+      const response = await authFetch(`${API_URL}/api/assessments/${testId}/submissions`, {
         headers: getAuthHeader()
       });
       if (!response.ok) throw new Error("Failed to fetch submissions");
@@ -203,7 +204,7 @@ export default function TestManagement() {
     }
     
     try {
-      const response = await fetch(`${API_URL}/api/assessments/${testId}`, { 
+      const response = await authFetch(`${API_URL}/api/assessments/${testId}`, { 
         method: "DELETE",
         headers: getAuthHeader()
       });
@@ -226,7 +227,7 @@ export default function TestManagement() {
     if (!comment.trim()) return alert("Please enter a comment");
     setSavingComment(true);
     try {
-      const response = await fetch(`${API_URL}/api/assessments/submissions/${selectedSubmission.id}/comment`, {
+      const response = await authFetch(`${API_URL}/api/assessments/submissions/${selectedSubmission.id}/comment`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ comment: comment.trim() })
@@ -246,7 +247,7 @@ export default function TestManagement() {
     setLoadingDetail(true);
     setShowDetailModal(true);
     try {
-      const response = await fetch(`${API_URL}/api/assessments/submissions/${sub.id}/detail`, {
+      const response = await authFetch(`${API_URL}/api/assessments/submissions/${sub.id}/detail`, {
         headers: getAuthHeader()
       });
       if (!response.ok) throw new Error("Failed to load submission");
@@ -274,7 +275,7 @@ export default function TestManagement() {
     if (!submissionDetail) return;
     setSavingGrades(true);
     try {
-      const response = await fetch(`${API_URL}/api/assessments/submissions/${submissionDetail.id}/grade`, {
+      const response = await authFetch(`${API_URL}/api/assessments/submissions/${submissionDetail.id}/grade`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
@@ -331,7 +332,7 @@ export default function TestManagement() {
     if (!topicQuizSubmissionId) return;
     setSavingTopicAnalytics(true);
     try {
-      await fetch(`${API_URL}/api/assessments/submissions/${topicQuizSubmissionId}/topic-analytics`, {
+      await authFetch(`${API_URL}/api/assessments/submissions/${topicQuizSubmissionId}/topic-analytics`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ topic_assessments: topicAssessments, evaluator_notes: topicNotes })
@@ -381,7 +382,7 @@ export default function TestManagement() {
   const handlePublishTest = async (testId) => {
     if (!confirm("Publish this draft test? Students will be able to see it.")) return;
     try {
-      const response = await fetch(`${API_URL}/api/assessments/${testId}/publish`, {
+      const response = await authFetch(`${API_URL}/api/assessments/${testId}/publish`, {
         method: "POST",
         headers: getAuthHeader()
       });

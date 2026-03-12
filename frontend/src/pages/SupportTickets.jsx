@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   Ticket
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -81,7 +82,7 @@ export default function SupportTickets() {
         params.append("status", statusFilter);
       }
 
-      const res = await fetch(`${API_BASE}/api/support-tickets/?${params.toString()}`);
+      const res = await authFetch(`${API_BASE}/api/support-tickets/?${params.toString()}`);
       const data = await res.json();
       setTickets(data.tickets || []);
     } catch (error) {
@@ -93,7 +94,7 @@ export default function SupportTickets() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/support-tickets/stats/summary`);
+      const res = await authFetch(`${API_BASE}/api/support-tickets/stats/summary`);
       const data = await res.json();
       setStats(data);
     } catch (error) {
@@ -109,7 +110,7 @@ export default function SupportTickets() {
       } else {
         url = `${API_BASE}/api/support-tickets/notifications/user/${user.id}`;
       }
-      const res = await fetch(url);
+      const res = await authFetch(url);
       const data = await res.json();
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
@@ -128,7 +129,7 @@ export default function SupportTickets() {
       params.append("user_id", user.id);
       params.append("user_name", user.name || "Student");
 
-      const res = await fetch(`${API_BASE}/api/support-tickets/?${params.toString()}`, {
+      const res = await authFetch(`${API_BASE}/api/support-tickets/?${params.toString()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTicket)
@@ -151,7 +152,7 @@ export default function SupportTickets() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/support-tickets/${ticketId}/reply`, {
+      const res = await authFetch(`${API_BASE}/api/support-tickets/${ticketId}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -175,7 +176,7 @@ export default function SupportTickets() {
 
   const handleMarkRead = async (ticketId) => {
     try {
-      await fetch(`${API_BASE}/api/support-tickets/${ticketId}/mark-read?by_admin=${isAdmin}`, {
+      await authFetch(`${API_BASE}/api/support-tickets/${ticketId}/mark-read?by_admin=${isAdmin}`, {
         method: "POST"
       });
       fetchTickets();
@@ -187,7 +188,7 @@ export default function SupportTickets() {
 
   const handleResolve = async (ticketId) => {
     try {
-      await fetch(`${API_BASE}/api/support-tickets/${ticketId}/resolve`, {
+      await authFetch(`${API_BASE}/api/support-tickets/${ticketId}/resolve`, {
         method: "POST"
       });
       fetchTickets();

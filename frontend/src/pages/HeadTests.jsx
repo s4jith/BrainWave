@@ -6,6 +6,7 @@ import {
   ClipboardList, Search, FileText, Calendar, Users,
   ChevronDown, Eye, Clock, CheckCircle, AlertCircle, BookOpen
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -39,7 +40,7 @@ export default function HeadTests() {
     const fetchAssignment = async () => {
       try {
         setLoadingAssignment(true);
-        const res = await fetch(`${API_URL}/api/head/my-assignment`, {
+        const res = await authFetch(`${API_URL}/api/head/my-assignment`, {
           headers: getAuthHeader()
         });
         if (res.ok) {
@@ -76,7 +77,7 @@ export default function HeadTests() {
         if (filterClass) params.set("class_level", filterClass);
       }
 
-      const res = await fetch(`${API_URL}/api/assessments`, {
+      const res = await authFetch(`${API_URL}/api/assessments`, {
         headers: getAuthHeader()
       });
 
@@ -115,7 +116,7 @@ export default function HeadTests() {
   const fetchSubmissions = async (testId) => {
     try {
       setLoadingSubmissions(true);
-      const res = await fetch(`${API_URL}/api/tests/submissions/${testId}`, {
+      const res = await authFetch(`${API_URL}/api/tests/submissions/${testId}`, {
         headers: getAuthHeader()
       });
       if (!res.ok) throw new Error("Failed");

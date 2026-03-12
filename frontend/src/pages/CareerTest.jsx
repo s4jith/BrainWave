@@ -5,6 +5,7 @@ import {
   Loader2, Brain, ArrowRight, RotateCcw, Lock
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -80,7 +81,7 @@ export default function CareerTest() {
     setPhase("loading");
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/career/test/start`, {
+      const res = await authFetch(`${API_URL}/api/career/test/start`, {
         method: "POST",
         headers,
       });
@@ -110,7 +111,7 @@ export default function CareerTest() {
         selected_option: opt,
       }));
 
-      const res = await fetch(`${API_URL}/api/career/test/submit`, {
+      const res = await authFetch(`${API_URL}/api/career/test/submit`, {
         method: "POST",
         headers,
         body: JSON.stringify({ test_id: testId, answers: answerList }),

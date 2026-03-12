@@ -16,6 +16,7 @@ import {
   AlertCircle,
   MessageSquare
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -45,7 +46,7 @@ export default function StudentGroups() {
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/student/groups`, {
+      const res = await authFetch(`${API_URL}/api/student/groups`, {
         headers: getAuthHeader()
       });
       if (res.ok) {
@@ -58,7 +59,7 @@ export default function StudentGroups() {
 
   const fetchUpcomingTests = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/student/upcoming-tests`, {
+      const res = await authFetch(`${API_URL}/api/student/upcoming-tests`, {
         headers: getAuthHeader()
       });
       if (res.ok) {
@@ -71,7 +72,7 @@ export default function StudentGroups() {
 
   const fetchSubjects = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/student/my-subjects`, {
+      const res = await authFetch(`${API_URL}/api/student/my-subjects`, {
         headers: getAuthHeader()
       });
       if (res.ok) {

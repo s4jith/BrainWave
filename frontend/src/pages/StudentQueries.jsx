@@ -6,6 +6,7 @@ import {
   MessageSquare, Send, CheckCircle, Clock, Loader2,
   GraduationCap, BookOpen, ChevronDown, ChevronUp, Users, Plus, X
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -45,7 +46,7 @@ export default function StudentQueries() {
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/student/groups`, { headers: getAuthHeader() });
+      const res = await authFetch(`${API_URL}/api/student/groups`, { headers: getAuthHeader() });
       if (res.ok) {
         const data = await res.json();
         setGroups(data.groups || []);
@@ -55,7 +56,7 @@ export default function StudentQueries() {
 
   const fetchQueries = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/queries/student`, { headers: getAuthHeader() });
+      const res = await authFetch(`${API_URL}/api/queries/student`, { headers: getAuthHeader() });
       if (res.ok) {
         const data = await res.json();
         setQueries(data.queries || []);
@@ -72,7 +73,7 @@ export default function StudentQueries() {
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/queries`, {
+      const res = await authFetch(`${API_URL}/api/queries`, {
         method: "POST",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify(form),

@@ -6,6 +6,7 @@ import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen, Shield } from "lucide-react";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -58,7 +59,7 @@ export default function GroupManagement() {
         }
 
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups/${groupId}/features`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups/${groupId}/features`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({ [featureKey]: newValue })
@@ -107,7 +108,7 @@ export default function GroupManagement() {
     const fetchGroups = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/admin/groups`, { headers: getAuthHeader() });
+            const response = await authFetch(`${API_URL}/api/admin/groups`, { headers: getAuthHeader() });
             if (response.ok) {
                 const data = await response.json();
                 setGroups(data.groups || []);
@@ -121,14 +122,14 @@ export default function GroupManagement() {
 
     const fetchTeachers = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/admin/teachers`, { headers: getAuthHeader() });
+            const response = await authFetch(`${API_URL}/api/admin/teachers`, { headers: getAuthHeader() });
             if (response.ok) setTeachers(await response.json());
         } catch (err) { console.error(err); }
     };
 
     const fetchAvailableStudents = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/admin/students?limit=500`);
+            const response = await authFetch(`${API_URL}/api/admin/students?limit=500`);
             if (response.ok) setAvailableStudents(await response.json());
         } catch (err) { console.error(err); }
     };
@@ -136,7 +137,7 @@ export default function GroupManagement() {
     const fetchCurriculumSubjects = async () => {
         setLoadingCurriculum(true);
         try {
-            const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+            const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
                 headers: getAuthHeader()
             });
             if (response.ok) {
@@ -190,7 +191,7 @@ export default function GroupManagement() {
 
         setSaving(true);
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
@@ -249,7 +250,7 @@ export default function GroupManagement() {
         e.preventDefault();
         setSaving(true);
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
@@ -262,13 +263,13 @@ export default function GroupManagement() {
 
             // Remove students
             for (const sid of editRemovedStudentIds) {
-                await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students/${sid}`, {
+                await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students/${sid}`, {
                     method: "DELETE", headers: getAuthHeader()
                 });
             }
             // Add students
             if (editPendingAddStudentIds.length > 0) {
-                await fetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students`, {
+                await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", ...getAuthHeader() },
                     body: JSON.stringify({ student_ids: editPendingAddStudentIds })
@@ -303,7 +304,7 @@ export default function GroupManagement() {
         if (selectedGroup?.id === groupId) setSelectedGroup(null);
         
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups/${groupId}`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups/${groupId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
@@ -321,7 +322,7 @@ export default function GroupManagement() {
         if (!selectedGroup) return;
         if (!confirm("Remove this student from the group?")) return;
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students/${studentId}`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students/${studentId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
@@ -340,7 +341,7 @@ export default function GroupManagement() {
         if (!selectedGroup || selectedStudentIds.length === 0) return;
         setSaving(true);
         try {
-            const response = await fetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students`, {
+            const response = await authFetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({ student_ids: selectedStudentIds })

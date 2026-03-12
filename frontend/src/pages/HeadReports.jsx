@@ -7,6 +7,7 @@ import {
     BarChart3, BookOpen, GraduationCap, Users, FileText,
     CheckCircle, Clock, XCircle, RefreshCw, TrendingUp
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -20,7 +21,7 @@ export default function HeadReports() {
 
     const fetchAssignment = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/my-assignment`, {
+            const res = await authFetch(`${API_URL}/api/head/my-assignment`, {
                 headers: getAuthHeader()
             });
             if (res.ok) setAssignment(await res.json());
@@ -31,7 +32,7 @@ export default function HeadReports() {
 
     const fetchReports = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/reports`, {
+            const res = await authFetch(`${API_URL}/api/head/reports`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -20,7 +21,7 @@ export default function StaffTests() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_URL}/api/admin/tests?limit=100`);
+      const response = await authFetch(`${API_URL}/api/admin/tests?limit=100`);
       if (!response.ok) throw new Error("Failed to fetch tests");
       const data = await response.json();
       setTests(data);
@@ -34,7 +35,7 @@ export default function StaffTests() {
 
   const handleToggleActive = async (testId, currentStatus) => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/tests/${testId}`, {
+      const response = await authFetch(`${API_URL}/api/admin/tests/${testId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: !currentStatus })
@@ -49,7 +50,7 @@ export default function StaffTests() {
   const handleDeleteTest = async (testId) => {
     if (!confirm("Are you sure you want to delete this test?")) return;
     try {
-      const response = await fetch(`${API_URL}/api/admin/tests/${testId}`, { method: "DELETE" });
+      const response = await authFetch(`${API_URL}/api/admin/tests/${testId}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Failed to delete test");
       setTests(tests.filter(t => t.id !== testId));
     } catch (err) {

@@ -7,6 +7,7 @@ import {
   RefreshCw, CheckCircle, FileText, Layers, Book, GraduationCap, FileQuestion
 } from "lucide-react";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -47,7 +48,7 @@ export default function BookManagement() {
   const fetchHierarchicalStructure = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/books/admin/hierarchical-structure`);
+      const response = await authFetch(`${API_BASE}/api/books/admin/hierarchical-structure`);
       if (response.ok) setStructure((await response.json()).structure);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -55,7 +56,7 @@ export default function BookManagement() {
 
   const fetchPineconeStats = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/books/admin/pinecone-stats`);
+      const response = await authFetch(`${API_BASE}/api/books/admin/pinecone-stats`);
       if (response.ok) setPineconeStats((await response.json()).stats);
     } catch (err) { console.error(err); }
   };
@@ -63,7 +64,7 @@ export default function BookManagement() {
   const fetchCurriculumSubjects = async () => {
     setLoadingCurriculum(true);
     try {
-      const response = await fetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
+      const response = await authFetch(`${API_BASE}/api/curriculum/subjects?is_active=true`);
       if (response.ok) {
         const data = await response.json();
         setCurriculumSubjects(Array.isArray(data) ? data : []);
@@ -106,7 +107,7 @@ export default function BookManagement() {
 
       setUploadProgress({ stage: "processing", message: "Processing...", percent: 30 });
 
-      const response = await fetch(`${API_BASE}/api/books/upload`, { method: "POST", body: formData });
+      const response = await authFetch(`${API_BASE}/api/books/upload`, { method: "POST", body: formData });
 
       if (response.ok) {
         setUploadProgress({ stage: "complete", message: "Done!", percent: 100 });
@@ -156,7 +157,7 @@ export default function BookManagement() {
         url = `${API_BASE}/api/books/admin/delete-chapter/${deleteTarget.subject.toLowerCase()}/${deleteTarget.classLevel}/${deleteTarget.chapter}`;
         confirmParam = `Chapter ${deleteTarget.chapter}`;
       }
-      const response = await fetch(`${url}?confirmation=${encodeURIComponent(confirmParam)}`, { method: "DELETE" });
+      const response = await authFetch(`${url}?confirmation=${encodeURIComponent(confirmParam)}`, { method: "DELETE" });
       if (response.ok) {
         alert("Deleted successfully!");
         setShowDeleteModal(false);

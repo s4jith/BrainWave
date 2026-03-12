@@ -5,6 +5,7 @@ import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, BookOpen, GraduationCap } from "lucide-react";
 import { CLASSES } from "../constants/academicConstants";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -54,7 +55,7 @@ export default function HeadManagement() {
     const fetchHeads = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/admin/heads`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads`, {
                 headers: getAuthHeader()
             });
             if (!response.ok) throw new Error("Failed to fetch heads");
@@ -82,7 +83,7 @@ export default function HeadManagement() {
                 assigned_classes: formData.assignment_type === "class" ? formData.assigned_classes : [],
                 assigned_subjects: formData.assignment_type === "subject" ? formData.assigned_subjects : []
             };
-            const response = await fetch(`${API_URL}/api/admin/heads`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify(dataToSend)
@@ -118,7 +119,7 @@ export default function HeadManagement() {
             };
             if (dataToSend.age) dataToSend.age = parseInt(dataToSend.age, 10);
 
-            const response = await fetch(`${API_URL}/api/admin/heads/${selectedHead.id}`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads/${selectedHead.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify(dataToSend)
@@ -139,7 +140,7 @@ export default function HeadManagement() {
     const handleDeleteHead = async (headId) => {
         if (!confirm("Are you sure you want to delete this head?")) return;
         try {
-            const response = await fetch(`${API_URL}/api/admin/heads/${headId}`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads/${headId}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
@@ -156,7 +157,7 @@ export default function HeadManagement() {
     const handleResetPassword = async (head) => {
         if (!confirm(`Reset password for ${head.name}?`)) return;
         try {
-            const response = await fetch(`${API_URL}/api/admin/heads/${head.id}/reset-password`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads/${head.id}/reset-password`, {
                 method: "POST",
                 headers: getAuthHeader()
             });

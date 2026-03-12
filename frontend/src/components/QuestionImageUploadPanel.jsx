@@ -16,6 +16,7 @@
 import { useState, useRef } from "react";
 import { Upload, Copy, CheckCheck, Trash2, Loader2, Plus } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -41,7 +42,7 @@ export default function QuestionImageUploadPanel({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${API_URL}/api/question-bank/images/upload`, {
+      const res = await authFetch(`${API_URL}/api/question-bank/images/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
         body: fd,

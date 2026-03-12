@@ -9,6 +9,7 @@ import {
   BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight,
   Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle, Sparkles, Clock
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -88,7 +89,7 @@ export default function SubjectsManagement() {
     setSummarySaveStatus(null);
     try {
       const html = summaryEditorRef.current?.innerHTML || "";
-      const res = await fetch(
+      const res = await authFetch(
         `${API_URL}/api/curriculum/subjects/${summaryModal.subjectId}/chapters/${summaryModal.chapterId}/summary`,
         {
           method: "PUT",
@@ -125,7 +126,7 @@ export default function SubjectsManagement() {
         url += `?class_level=${selectedClass}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
       if (response.ok) {
         const data = await response.json();
         setSubjects(data);
@@ -139,7 +140,7 @@ export default function SubjectsManagement() {
 
   const fetchSubjectDetails = async (subjectId) => {
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
       if (response.ok) {
         const data = await response.json();
         return data;
@@ -155,7 +156,7 @@ export default function SubjectsManagement() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subjectForm)
@@ -190,7 +191,7 @@ export default function SubjectsManagement() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters`,
         {
           method: "POST",
@@ -232,7 +233,7 @@ export default function SubjectsManagement() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${subjectId}/chapters/${chapterId}/topics`,
         {
           method: "POST",
@@ -274,7 +275,7 @@ export default function SubjectsManagement() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects/${subjectId}`, {
         method: "DELETE"
       });
 
@@ -320,7 +321,7 @@ export default function SubjectsManagement() {
 
     try {
       setSubmitting(true);
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${editingChapter.chapter_id}`,
         {
           method: "PUT",
@@ -359,7 +360,7 @@ export default function SubjectsManagement() {
 
     try {
       setSubmitting(true);
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}`,
         {
           method: "DELETE"
@@ -402,7 +403,7 @@ export default function SubjectsManagement() {
 
     try {
       setSubmitting(true);
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${editingTopic.chapterId}/topics/${editingTopic.topic_id}`,
         {
           method: "PUT",
@@ -443,7 +444,7 @@ export default function SubjectsManagement() {
 
     try {
       setSubmitting(true);
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}/topics/${topicId}`,
         {
           method: "DELETE"

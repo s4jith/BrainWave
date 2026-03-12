@@ -57,16 +57,17 @@ import CareerTest from "./pages/CareerTest";
 import CareerResult from "./pages/CareerResult";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import "./App.css";
+import authFetch from "./utils/authFetch";
 
 function useMaintenanceMode() {
   const [maintenance, setMaintenance] = useState(false);
   const [checked, setChecked] = useState(false);
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const API_URL = import.meta.env.VITE_API_URL || "https://ncert-backend-latest.onrender.com";
 
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/admin/public/maintenance`);
+        const res = await authFetch(`${API_URL}/api/admin/public/maintenance`);
         if (res.ok) {
           const data = await res.json();
           setMaintenance(data.maintenance_mode === true);
@@ -203,7 +204,7 @@ function FeatureGatedRoute({ featureKey, children }) {
     }
     const checkFeature = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/student/my-features`, {
+        const res = await authFetch(`${API_URL}/api/student/my-features`, {
           headers: getAuthHeader()
         });
         if (res.ok) {

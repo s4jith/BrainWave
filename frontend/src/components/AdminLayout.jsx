@@ -9,6 +9,7 @@ import {
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
     MessageCircle, BookMarked, MessageSquare, Compass
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -53,7 +54,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         if (!headers.Authorization) return;
 
         try {
-            const response = await fetch(`${API_URL}/api/notifications`, {
+            const response = await authFetch(`${API_URL}/api/notifications`, {
                 headers
             });
             if (response.ok) {
@@ -68,7 +69,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     const markAsRead = async (notificationId) => {
         try {
-            await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
+            await authFetch(`${API_URL}/api/notifications/${notificationId}/read`, {
                 method: 'POST',
                 headers: getAuthHeader()
             });
@@ -80,7 +81,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     const saveNotification = async (notificationId) => {
         try {
-            await fetch(`${API_URL}/api/notifications/${notificationId}/save`, {
+            await authFetch(`${API_URL}/api/notifications/${notificationId}/save`, {
                 method: 'POST',
                 headers: getAuthHeader()
             });
@@ -92,7 +93,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     const deleteNotification = async (notificationId) => {
         try {
-            await fetch(`${API_URL}/api/notifications/${notificationId}`, {
+            await authFetch(`${API_URL}/api/notifications/${notificationId}`, {
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
@@ -104,7 +105,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
     const markAllRead = async () => {
         try {
-            await fetch(`${API_URL}/api/notifications/read-all`, {
+            await authFetch(`${API_URL}/api/notifications/read-all`, {
                 method: 'POST',
                 headers: getAuthHeader()
             });

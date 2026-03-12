@@ -19,6 +19,7 @@ import {
     Cell,
     Legend,
 } from "recharts";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -55,7 +56,7 @@ export default function TeacherReports() {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/teacher/reports`, { headers: getAuthHeader() });
+            const response = await authFetch(`${API_URL}/api/teacher/reports`, { headers: getAuthHeader() });
             if (response.ok) {
                 const data = await response.json();
                 setStats(data);

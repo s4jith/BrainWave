@@ -8,6 +8,7 @@ import {
     ChevronDown, ChevronUp, Search, RefreshCw, Filter, X,
     AlertTriangle
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -27,7 +28,7 @@ export default function HeadGroups() {
 
     const fetchAssignment = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/my-assignment`, {
+            const res = await authFetch(`${API_URL}/api/head/my-assignment`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -41,7 +42,7 @@ export default function HeadGroups() {
 
     const fetchGroups = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/head/groups`, {
+            const res = await authFetch(`${API_URL}/api/head/groups`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {

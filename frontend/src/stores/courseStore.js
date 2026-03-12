@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import useUserStore from "./userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -35,7 +36,7 @@ const useCourseStore = create(
                     if (filters.instructorId) params.append("instructor_id", filters.instructorId);
                     if (filters.enrolledOnly) params.append("enrolled_only", "true");
 
-                    const res = await fetch(`${API_URL}/api/courses?${params}`, {
+                    const res = await authFetch(`${API_URL}/api/courses?${params}`, {
                         headers: getAuthHeader()
                     });
 
@@ -66,7 +67,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/my-courses`, {
+                    const res = await authFetch(`${API_URL}/api/courses/my-courses`, {
                         headers: getAuthHeader()
                     });
 
@@ -88,7 +89,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}`, {
                         headers: getAuthHeader()
                     });
 
@@ -110,7 +111,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses`, {
+                    const res = await authFetch(`${API_URL}/api/courses`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -144,7 +145,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}`, {
                         method: "PUT",
                         headers: {
                             "Content-Type": "application/json",
@@ -176,7 +177,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/publish`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/publish`, {
                         method: "POST",
                         headers: getAuthHeader()
                     });
@@ -203,7 +204,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/modules`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/modules`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -230,7 +231,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/modules/${moduleId}/content`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/modules/${moduleId}/content`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -257,7 +258,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/enroll`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/enroll`, {
                         method: "POST",
                         headers: getAuthHeader()
                     });
@@ -288,7 +289,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/enroll`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/enroll`, {
                         method: "DELETE",
                         headers: getAuthHeader()
                     });
@@ -317,7 +318,7 @@ const useCourseStore = create(
                 try {
                     const { getAuthHeader } = useUserStore.getState();
 
-                    const res = await fetch(`${API_URL}/api/courses/${courseId}/rate`, {
+                    const res = await authFetch(`${API_URL}/api/courses/${courseId}/rate`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -337,7 +338,7 @@ const useCourseStore = create(
 
             fetchCategories: async () => {
                 try {
-                    const res = await fetch(`${API_URL}/api/courses/categories/list`);
+                    const res = await authFetch(`${API_URL}/api/courses/categories/list`);
 
                     if (!res.ok) throw new Error("Failed to fetch categories");
 

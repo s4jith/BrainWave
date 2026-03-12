@@ -7,6 +7,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import {
     ClipboardList, Plus, Search, Edit, Trash2, Calendar
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -32,7 +33,7 @@ export default function TeacherTests() {
     const fetchTeacherGroups = async () => {
         try {
             setLoadingSubjects(true);
-            const response = await fetch(`${API_URL}/api/teacher/groups`, { headers: getAuthHeader() });
+            const response = await authFetch(`${API_URL}/api/teacher/groups`, { headers: getAuthHeader() });
             if (response.ok) {
                 const data = await response.json();
                 const groups = data.groups || [];
@@ -85,7 +86,7 @@ export default function TeacherTests() {
     const fetchTests = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/assessments`, { headers: getAuthHeader() });
+            const response = await authFetch(`${API_URL}/api/assessments`, { headers: getAuthHeader() });
             if (response.ok) {
                 const data = await response.json();
                 setTests(data.assessments || []);
@@ -105,7 +106,7 @@ export default function TeacherTests() {
         const previousTests = [...tests];
         setTests(tests.filter(t => t.id !== test.id));
         try {
-            const response = await fetch(`${API_URL}/api/assessments/${test.id}`, {
+            const response = await authFetch(`${API_URL}/api/assessments/${test.id}`, {
                 method: 'DELETE', headers: getAuthHeader()
             });
             if (!response.ok) throw new Error('Failed');

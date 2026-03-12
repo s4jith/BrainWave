@@ -6,6 +6,7 @@ import {
   ClipboardList, Power, PowerOff
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -79,7 +80,7 @@ export default function CareerQuestions() {
       if (filterSubject) params.set("subject", filterSubject);
       if (filterDifficulty) params.set("difficulty", filterDifficulty);
 
-      const res = await fetch(`${API_URL}/api/career/questions?${params}`, { headers });
+      const res = await authFetch(`${API_URL}/api/career/questions?${params}`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to load");
 
@@ -95,7 +96,7 @@ export default function CareerQuestions() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/career/questions/stats`, { headers });
+      const res = await authFetch(`${API_URL}/api/career/questions/stats`, { headers });
       const data = await res.json();
       if (res.ok) setStats(data);
     } catch (e) {
@@ -134,7 +135,7 @@ export default function CareerQuestions() {
     if (!assignmentTitle.trim()) return setAssignmentError("Title is required");
     setCreatingAssignment(true);
     try {
-      const res = await fetch(`${API_URL}/api/career/assignment`, {
+      const res = await authFetch(`${API_URL}/api/career/assignment`, {
         method: "POST",
         headers,
         body: JSON.stringify({ title: assignmentTitle.trim(), description: assignmentDesc.trim() }),
@@ -154,7 +155,7 @@ export default function CareerQuestions() {
   const handleDeactivateAssignment = async (id) => {
     if (!confirm("Deactivate this assignment? Students will no longer be able to start the career test.")) return;
     try {
-      const res = await fetch(`${API_URL}/api/career/assignment/${id}`, { method: "DELETE", headers });
+      const res = await authFetch(`${API_URL}/api/career/assignment/${id}`, { method: "DELETE", headers });
       if (!res.ok) throw new Error("Failed to deactivate");
       fetchAssignments();
     } catch (e) {
@@ -221,7 +222,7 @@ export default function CareerQuestions() {
         ? `${API_URL}/api/career/questions/${editingQuestion.id}`
         : `${API_URL}/api/career/questions`;
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: editingQuestion ? "PUT" : "POST",
         headers,
         body: JSON.stringify(form),
@@ -246,7 +247,7 @@ export default function CareerQuestions() {
   const handleDelete = async (id) => {
     if (!confirm("Delete this question permanently?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/career/questions/${id}`, { method: "DELETE", headers });
+      const res = await authFetch(`${API_URL}/api/career/questions/${id}`, { method: "DELETE", headers });
       if (!res.ok) throw new Error("Delete failed");
       fetchQuestions();
       fetchStats();

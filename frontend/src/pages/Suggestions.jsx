@@ -11,6 +11,7 @@ import {
   Calendar
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -30,7 +31,7 @@ export default function Suggestions() {
   const fetchMySuggestions = async () => {
     try {
       setLoadingHistory(true);
-      const response = await fetch(`${API_BASE}/api/suggestions/student/${user.id}`);
+      const response = await authFetch(`${API_BASE}/api/suggestions/student/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setMySuggestions(data.suggestions || []);
@@ -48,7 +49,7 @@ export default function Suggestions() {
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/suggestions`, {
+      const response = await authFetch(`${API_BASE}/api/suggestions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

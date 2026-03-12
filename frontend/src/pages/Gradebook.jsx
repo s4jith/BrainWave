@@ -36,6 +36,7 @@ import {
     Cell,
     Legend,
 } from "recharts";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -352,7 +353,7 @@ export default function Gradebook() {
     const fetchGradebook = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/gradebook/course/${courseId}`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/course/${courseId}`, {
                 headers: getAuthHeader()
             });
             if (!res.ok) throw new Error("Failed to load gradebook");
@@ -366,7 +367,7 @@ export default function Gradebook() {
 
     const fetchAnalytics = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/gradebook/course/${courseId}/analytics`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/course/${courseId}/analytics`, {
                 headers: getAuthHeader()
             });
             if (res.ok) {
@@ -381,7 +382,7 @@ export default function Gradebook() {
         setLoading(true);
         try {
             const params = courseId ? `?course_id=${courseId}` : '';
-            const res = await fetch(`${API_URL}/api/gradebook/my-grades${params}`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/my-grades${params}`, {
                 headers: getAuthHeader()
             });
             if (!res.ok) throw new Error("Failed to load grades");
@@ -395,7 +396,7 @@ export default function Gradebook() {
 
     const handleExport = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/gradebook/course/${courseId}/export`, {
+            const res = await authFetch(`${API_URL}/api/gradebook/course/${courseId}/export`, {
                 headers: getAuthHeader()
             });
             if (!res.ok) throw new Error("Export failed");

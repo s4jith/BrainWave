@@ -5,6 +5,7 @@ import {
   Shield, AlertCircle, Loader2, Star, Award, BarChart3, ChevronRight
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -35,7 +36,7 @@ export default function CareerResult() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/career/results/${resultId}`, { headers });
+        const res = await authFetch(`${API_URL}/api/career/results/${resultId}`, { headers });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Failed to load result");
         setResult(data);

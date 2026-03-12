@@ -3,6 +3,20 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 import useUserStore from "../stores/userStore";
 
+/**
+ * Authenticated fetch wrapper.
+ * Automatically injects the JWT Bearer token from the user store
+ * into every request's Authorization header.
+ */
+function authFetch(url, options = {}) {
+  const token = useUserStore.getState().accessToken;
+  const headers = { ...(options.headers || {}) };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return fetch(url, { ...options, headers });
+}
+
 export const chatService = {
   
   async processAnnotation(text, action, classLevel, subject, chapter, imageData = null, pageNumber = null) {
@@ -23,7 +37,7 @@ export const chatService = {
         requestBody.page_number = pageNumber;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/annotation/`, {
+      const response = await authFetch(`${API_BASE_URL}/api/annotation/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,7 +72,7 @@ export const chatService = {
 
   async studentChat(question, classLevel, subject, chapter, mode = "quick") {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat/student`, {
+      const response = await authFetch(`${API_BASE_URL}/api/chat/student`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,7 +107,7 @@ export const chatService = {
 
     const fetchStream = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/chat/student/stream`, {
+        const response = await authFetch(`${API_BASE_URL}/api/chat/student/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -178,7 +192,7 @@ export const chatService = {
         formData.append("user_query", userQuery);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chat/image`, {
+      const response = await authFetch(`${API_BASE_URL}/api/chat/image`, {
         method: "POST",
         body: formData,
       });
@@ -205,7 +219,7 @@ export const assessmentService = {
   
   async getEnhancedQuestions(classLevel, subject, chapter, lessonName, pageRange, studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/assessment/questions/enhanced`, {
+      const response = await authFetch(`${API_BASE_URL}/api/assessment/questions/enhanced`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -234,7 +248,7 @@ export const assessmentService = {
 
   async getQuestions(classLevel, subject, chapter, numQuestions = 3) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/assessment/questions`, {
+      const response = await authFetch(`${API_BASE_URL}/api/assessment/questions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,7 +274,7 @@ export const assessmentService = {
 
   async evaluateAnswers(classLevel, subject, chapter, answers) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/assessment/evaluate`, {
+      const response = await authFetch(`${API_BASE_URL}/api/assessment/evaluate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -294,7 +308,7 @@ export const userStatsService = {
         url += `?subject=${encodeURIComponent(subject)}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`Dashboard API Error: ${response.statusText}`);
@@ -309,7 +323,7 @@ export const userStatsService = {
 
   async getStreakData(studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/user/streak/${studentId}`);
+      const response = await authFetch(`${API_BASE_URL}/api/user/streak/${studentId}`);
 
       if (!response.ok) {
         throw new Error(`Streak API Error: ${response.statusText}`);
@@ -329,7 +343,7 @@ export const userStatsService = {
         url += `?subject=${encodeURIComponent(subject)}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`Progress API Error: ${response.statusText}`);
@@ -344,7 +358,7 @@ export const userStatsService = {
 
   async logActivity(studentId, hours = 0.5) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/user/activity/log?student_id=${studentId}&hours=${hours}`,
         { method: "POST" }
       );
@@ -376,7 +390,7 @@ export const notesService = {
         url += `?${params.toString()}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`Notes API Error: ${response.statusText}`);
@@ -391,7 +405,7 @@ export const notesService = {
 
   async createNote(noteData) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/notes/`, {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(noteData),
@@ -410,7 +424,7 @@ export const notesService = {
 
   async updateNote(id, updates) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -429,7 +443,7 @@ export const notesService = {
 
   async deleteNote(id) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/notes/${id}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/${id}`, {
         method: "DELETE",
       });
 
@@ -449,7 +463,7 @@ export const historyService = {
   
   async createEntry(data) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history/`, {
+      const response = await authFetch(`${API_BASE_URL}/api/history/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -480,7 +494,7 @@ export const historyService = {
         url += `?${params.toString()}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`Get History Error: ${response.statusText}`);
@@ -495,7 +509,7 @@ export const historyService = {
 
   async deleteEntry(id) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history/${id}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/history/${id}`, {
         method: "DELETE",
       });
 
@@ -515,7 +529,7 @@ export const testService = {
   
   async getQBSubjects(classLevel) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/subjects/${classLevel}`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/qb-test/subjects/${classLevel}`);
       if (!response.ok) throw new Error(`QB Subjects API Error: ${response.statusText}`);
       return await response.json();
     } catch (error) {
@@ -526,7 +540,7 @@ export const testService = {
 
   async getQBChapters(classLevel, subject) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/chapters/${classLevel}/${encodeURIComponent(subject)}`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/qb-test/chapters/${classLevel}/${encodeURIComponent(subject)}`);
       if (!response.ok) throw new Error(`QB Chapters API Error: ${response.statusText}`);
       return await response.json();
     } catch (error) {
@@ -537,7 +551,7 @@ export const testService = {
 
   async startQBTest(params) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/qb-test/start`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/qb-test/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -569,7 +583,7 @@ export const testService = {
 
   async getAvailableSubjects(classLevel) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/subjects/${classLevel}`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/subjects/${classLevel}`);
       if (!response.ok) throw new Error(`Subjects API Error: ${response.statusText}`);
       return await response.json();
     } catch (error) {
@@ -581,7 +595,7 @@ export const testService = {
   async getChaptersForSubject(classLevel, subject, studentId = null) {
     try {
       const params = studentId ? `?student_id=${studentId}` : '';
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/chapters/${classLevel}/${encodeURIComponent(subject)}${params}`
       );
       if (!response.ok) throw new Error(`Chapters API Error: ${response.statusText}`);
@@ -595,7 +609,7 @@ export const testService = {
   async getTopicsForChapter(classLevel, subject, chapterNumber, studentId = null) {
     try {
       const params = studentId ? `?student_id=${studentId}` : '';
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/topics/${classLevel}/${encodeURIComponent(subject)}/${chapterNumber}${params}`
       );
       if (!response.ok) throw new Error(`Topics API Error: ${response.statusText}`);
@@ -608,7 +622,7 @@ export const testService = {
 
   async getRecommendations(classLevel, subject, studentId, limit = 5) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/recommendations/${classLevel}/${encodeURIComponent(subject)}/${studentId}?limit=${limit}`
       );
       if (!response.ok) throw new Error(`Recommendations API Error: ${response.statusText}`);
@@ -621,7 +635,7 @@ export const testService = {
 
   async startTopicTest(params) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/start`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -649,7 +663,7 @@ export const testService = {
 
   async startChapterTest(params) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/start-chapter`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/start-chapter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -674,7 +688,7 @@ export const testService = {
 
   async submitAnswer(sessionId, questionId, questionNumber, answer) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/answer`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/answer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -695,7 +709,7 @@ export const testService = {
 
   async completeTest(sessionId, studentId, answers = [], completionData = {}) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/complete`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -716,7 +730,7 @@ export const testService = {
 
   async getTestHistory(studentId, limit = 20) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/history/${studentId}?limit=${limit}`
       );
       if (!response.ok) throw new Error(`Get Test History Error: ${response.statusText}`);
@@ -729,7 +743,7 @@ export const testService = {
 
   async getTestResult(sessionId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/result/${sessionId}`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/result/${sessionId}`);
       if (!response.ok) throw new Error(`Get Test Result Error: ${response.statusText}`);
       return await response.json();
     } catch (error) {
@@ -740,7 +754,7 @@ export const testService = {
 
   async deleteTestHistory(sessionId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/history/${sessionId}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/history/${sessionId}`, {
         method: "DELETE"
       });
       if (!response.ok) throw new Error(`Delete Test History Error: ${response.statusText}`);
@@ -753,7 +767,7 @@ export const testService = {
 
   async deleteAllTestHistory(studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/history/all/${studentId}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/history/all/${studentId}`, {
         method: "DELETE"
       });
       if (!response.ok) throw new Error(`Delete All Test History Error: ${response.statusText}`);
@@ -766,7 +780,7 @@ export const testService = {
 
   async startTestV2(params) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/start-v3`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/start-v3`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -796,7 +810,7 @@ export const testService = {
 
   async startAITest(params) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/ai-test/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -823,7 +837,7 @@ export const testService = {
 
   async checkQuestionsAvailable(classLevel, subject, chapterNumber) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/check-questions/${classLevel}/${encodeURIComponent(subject)}/${chapterNumber}`
       );
       if (!response.ok) throw new Error(`Check Questions Error: ${response.statusText}`);
@@ -840,7 +854,7 @@ export const testService = {
       params.append("class_level", classLevel);
       if (subject) params.append("subject", subject);
 
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/api/test/analytics/${studentId}?${params.toString()}`
       );
       if (!response.ok) throw new Error(`Analytics API Error: ${response.statusText}`);
@@ -859,7 +873,7 @@ export const testService = {
       if (studentId) params.append("student_id", studentId);
 
       const url = `${API_BASE_URL}/api/test/ai-tests${params.toString() ? '?' + params.toString() : ''}`;
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`AI Tests API Error: ${response.statusText}`);
@@ -874,7 +888,7 @@ export const testService = {
 
   async startAITestLegacy(testId, studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/ai-test/start`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/ai-test/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ test_id: testId, student_id: studentId }),
@@ -893,7 +907,7 @@ export const testService = {
 
   async submitAIAnswer(sessionId, questionNumber, answer) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/ai-tests/answer`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/ai-tests/answer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -916,7 +930,7 @@ export const testService = {
 
   async completeAITest(sessionId, studentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/ai-tests/complete`, {
+      const response = await authFetch(`${API_BASE_URL}/api/test/ai-tests/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -943,18 +957,8 @@ export const testService = {
         return [];
       }
 
-      const token = useUserStore.getState().accessToken;
-      if (!token) {
-        console.error("No auth token found");
-        return [];
-      }
-
       const url = `${API_BASE_URL}/api/assessments`;
-      const response = await fetch(url, {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error(`Staff Tests API Error: ${response.statusText}`);
@@ -1001,7 +1005,7 @@ export const testService = {
       formData.append("student_id", studentId);
       formData.append("pdf_file", pdfFile);
 
-      const response = await fetch(`${API_BASE_URL}/api/tests/submit`, {
+      const response = await authFetch(`${API_BASE_URL}/api/tests/submit`, {
         method: "POST",
         body: formData
       });
@@ -1030,7 +1034,7 @@ export const testService = {
       formData.append("test_id", testId);
       formData.append("student_id", studentId);
 
-      const response = await fetch(`${API_BASE_URL}/api/tests/submit`, {
+      const response = await authFetch(`${API_BASE_URL}/api/tests/submit`, {
         method: "POST",
         body: formData,
       });
@@ -1052,7 +1056,7 @@ export const testService = {
       params.append("class_level", classLevel);
       if (subject) params.append("subject", subject);
 
-      const response = await fetch(`${API_BASE_URL}/api/test/analytics/${studentId}?${params.toString()}`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/analytics/${studentId}?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`Test Analytics API Error: ${response.statusText}`);
@@ -1067,7 +1071,7 @@ export const testService = {
 
   async getQuestionBankStats() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/test/question-bank/stats`);
+      const response = await authFetch(`${API_BASE_URL}/api/test/question-bank/stats`);
 
       if (!response.ok) {
         throw new Error(`Question Bank Stats API Error: ${response.statusText}`);
@@ -1087,7 +1091,7 @@ export const testService = {
 
 export const healthCheck = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await authFetch(`${API_BASE_URL}/health`);
     return response.ok;
   } catch (error) {
     console.error("Backend health check failed:", error);
@@ -1099,7 +1103,7 @@ export const topQuestionsService = {
   
   async getAvailableSubjects(classLevel) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/top-questions/subjects/${classLevel}`);
+      const response = await authFetch(`${API_BASE_URL}/api/top-questions/subjects/${classLevel}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.statusText}`);
@@ -1119,7 +1123,7 @@ export const topQuestionsService = {
 
   async getTopQuestions(subject, classLevel, mode = "quick", limit = 5) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/top-questions/top`, {
+      const response = await authFetch(`${API_BASE_URL}/api/top-questions/top`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1149,7 +1153,7 @@ export const topQuestionsService = {
 
   async trackQuestion(data) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/top-questions/track`, {
+      const response = await authFetch(`${API_BASE_URL}/api/top-questions/track`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1170,7 +1174,7 @@ export const topQuestionsService = {
 
   async getRecommendations(userId, subject, classLevel, mode = "quick", limit = 5) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/top-questions/recommendations`, {
+      const response = await authFetch(`${API_BASE_URL}/api/top-questions/recommendations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

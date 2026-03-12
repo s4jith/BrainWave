@@ -7,6 +7,7 @@ import QuestionModal from "../components/QuestionModal";
 import QuestionImageRenderer from "../components/QuestionImageRenderer";
 import useUserStore from "../stores/userStore";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
+import authFetch from "../utils/authFetch";
 
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
@@ -107,7 +108,7 @@ const QuestionBank = () => {
     const fetchGroups = async () => {
         setLoadingGroups(true);
         try {
-            const response = await fetch(`${apiUrl}/api/teacher/groups`, {
+            const response = await authFetch(`${apiUrl}/api/teacher/groups`, {
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (response.ok) {
@@ -123,7 +124,7 @@ const QuestionBank = () => {
 
     const fetchSubjects = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/question-bank/subjects`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/subjects`, {
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (response.ok) {
@@ -138,7 +139,7 @@ const QuestionBank = () => {
     const fetchCurriculumSubjects = async () => {
         setLoadingCurriculum(true);
         try {
-            const response = await fetch(`${apiUrl}/api/curriculum/subjects`, {
+            const response = await authFetch(`${apiUrl}/api/curriculum/subjects`, {
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (response.ok) {
@@ -154,7 +155,7 @@ const QuestionBank = () => {
 
     const fetchHeadSubjects = async () => {
         try {
-            const res = await fetch(`${apiUrl}/api/head/my-assignment`, {
+            const res = await authFetch(`${apiUrl}/api/head/my-assignment`, {
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (res.ok) {
@@ -172,7 +173,7 @@ const QuestionBank = () => {
     const loadDeleteRequests = async () => {
         setDrLoading(true);
         try {
-            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests?status=pending`, {
+            const res = await authFetch(`${apiUrl}/api/question-bank/delete-requests?status=pending`, {
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
             if (res.ok) {
@@ -227,7 +228,7 @@ const QuestionBank = () => {
             if (filters.difficulty) queryParams.append('difficulty', filters.difficulty);
             if (filters.search) queryParams.append('search', filters.search);
 
-            const response = await fetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
                 headers: {
                     "Authorization": `Bearer ${accessToken}`
                 }
@@ -260,7 +261,7 @@ const QuestionBank = () => {
         // Head / Admin: direct delete with confirmation
         if (!window.confirm("Are you sure you want to delete this question?")) return;
         try {
-            const response = await fetch(`${apiUrl}/api/question-bank/questions/${question.id}`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/questions/${question.id}`, {
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
@@ -278,7 +279,7 @@ const QuestionBank = () => {
         if (!requestQuestion) return;
         setRequestSubmitting(true);
         try {
-            const res = await fetch(`${apiUrl}/api/question-bank/questions/${requestQuestion.id}/request-delete`, {
+            const res = await authFetch(`${apiUrl}/api/question-bank/questions/${requestQuestion.id}/request-delete`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ reason: requestNote })
@@ -299,7 +300,7 @@ const QuestionBank = () => {
     const handleApproveRequest = async (reqId) => {
         setDrActionId(reqId);
         try {
-            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/approve`, {
+            const res = await authFetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/approve`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
@@ -315,7 +316,7 @@ const QuestionBank = () => {
     const handleRejectRequest = async (reqId) => {
         setDrActionId(reqId);
         try {
-            const res = await fetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/reject`, {
+            const res = await authFetch(`${apiUrl}/api/question-bank/delete-requests/${reqId}/reject`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ reason: "" })
@@ -331,7 +332,7 @@ const QuestionBank = () => {
 
     const handleApprove = async (id) => {
         try {
-            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/approve`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/questions/${id}/approve`, {
                 method: "PUT",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
@@ -345,7 +346,7 @@ const QuestionBank = () => {
     const handleReject = async (id) => {
         if (!window.confirm("Reject and delete this question?")) return;
         try {
-            const response = await fetch(`${apiUrl}/api/question-bank/questions/${id}/reject`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/questions/${id}/reject`, {
                 method: "PUT",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });

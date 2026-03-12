@@ -7,6 +7,7 @@ import { ClipboardList, Calendar, Clock, CheckCircle, Plus, ChevronRight, FileTe
 import QuestionBankSelector from "../components/QuestionBankSelector";
 import QuestionPaperSelector from "../components/QuestionPaperSelector";
 import { parseCombinedValue, parseGroupName } from "../constants/academicConstants";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -191,7 +192,7 @@ export default function CreateTest() {
   const fetchCurriculumSubjects = async () => {
     setLoadingCurriculum(true);
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
       if (response.ok) {
         const data = await response.json();
         setCurriculumSubjects(Array.isArray(data) ? data : []);
@@ -205,7 +206,7 @@ export default function CreateTest() {
   const fetchMainFormCurriculumSubjects = async () => {
     setLoadingMainFormCurriculum(true);
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
         headers: getAuthHeader()
       });
       if (response.ok) {
@@ -228,7 +229,7 @@ export default function CreateTest() {
     const fetchDetail = async () => {
       setLoadingCurrDetail(true);
       try {
-        const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
+        const response = await authFetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
         if (response.ok) {
           const data = await response.json();
           setQuestionCurrSubject(data);
@@ -253,7 +254,7 @@ export default function CreateTest() {
   const fetchTestDetails = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/assessments/${testId}`, {
+      const response = await authFetch(`${API_URL}/api/assessments/${testId}`, {
         headers: getAuthHeader()
       });
       if (!response.ok) throw new Error("Failed to load test details");
@@ -347,7 +348,7 @@ export default function CreateTest() {
   const fetchSubjectsForClass = async (classLevel) => {
     setLoadingSubjects(true);
     try {
-      const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
+      const response = await authFetch(`${API_URL}/api/test/subjects/${classLevel}`);
       if (response.ok) {
         const data = await response.json();
         const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
@@ -367,7 +368,7 @@ export default function CreateTest() {
 
   const fetchTestSubjectsForClass = async (classLevel, resetSubject = true) => {
     try {
-      const response = await fetch(`${API_URL}/api/test/subjects/${classLevel}`);
+      const response = await authFetch(`${API_URL}/api/test/subjects/${classLevel}`);
       if (response.ok) {
         const data = await response.json();
         const subjects = data.map(s => typeof s === 'string' ? s : (s.subject || s.name || s.value));
@@ -399,7 +400,7 @@ export default function CreateTest() {
       const endpoint = isAdmin
         ? `${API_URL}/api/admin/groups`
         : `${API_URL}/api/teacher/groups`;
-      const groupsRes = await fetch(endpoint, { headers: getAuthHeader() });
+      const groupsRes = await authFetch(endpoint, { headers: getAuthHeader() });
       if (groupsRes.ok) {
         const data = await groupsRes.json();
         const fetchedGroups = data.groups || [];
@@ -438,7 +439,7 @@ export default function CreateTest() {
     }
     // Admin path: fetch all students for the class via admin API
     try {
-      const studentsRes = await fetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
+      const studentsRes = await authFetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         setStudents(data || []);
@@ -537,7 +538,7 @@ export default function CreateTest() {
         : `${API_URL}/api/assessments`;
       const method = isEditMode ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method,
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload)
@@ -610,7 +611,7 @@ export default function CreateTest() {
 
       const method = isEditMode ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: method,
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload)

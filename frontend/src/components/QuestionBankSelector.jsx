@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Check } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -31,7 +32,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
         const fetchCurriculum = async () => {
             setLoadingCurriculum(true);
             try {
-                const response = await fetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
+                const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`);
                 if (response.ok) {
                     const data = await response.json();
                     setCurriculumSubjects(Array.isArray(data) ? data : []);
@@ -56,7 +57,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
                 ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
             });
 
-            const response = await fetch(`${API_URL}/api/question-bank/questions?${queryParams}`, {
+            const response = await authFetch(`${API_URL}/api/question-bank/questions?${queryParams}`, {
                 headers: {
                     "Authorization": `Bearer ${useUserStore.getState().accessToken}`
                 }

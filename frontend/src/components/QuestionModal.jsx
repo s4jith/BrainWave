@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Sparkles, Loader2, Plus, Trash } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import QuestionImageUploadPanel from "./QuestionImageUploadPanel";
+import authFetch from "../utils/authFetch";
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -82,7 +83,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         const fetchCurriculum = async () => {
             setLoadingCurriculum(true);
             try {
-                const response = await fetch(`${apiUrl}/api/curriculum/subjects?is_active=true`);
+                const response = await authFetch(`${apiUrl}/api/curriculum/subjects?is_active=true`);
                 if (response.ok) {
                     const data = await response.json();
                     setCurriculumSubjects(Array.isArray(data) ? data : []);
@@ -109,7 +110,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         const fetchSubjectDetail = async () => {
             setLoadingSubjectDetail(true);
             try {
-                const response = await fetch(`${apiUrl}/api/curriculum/subjects/${subjectId}`);
+                const response = await authFetch(`${apiUrl}/api/curriculum/subjects/${subjectId}`);
                 if (response.ok) {
                     const data = await response.json();
                     setSelectedCurrSubject(data);
@@ -214,7 +215,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 image_ids: uploadedImages.map(img => img.image_id)
             };
 
-            const response = await fetch(url, {
+            const response = await authFetch(url, {
                 method,
                 headers: {
                     "Content-Type": "application/json",
@@ -269,7 +270,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             };
 
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-            const response = await fetch(`${apiUrl}/api/question-bank/generate`, {
+            const response = await authFetch(`${apiUrl}/api/question-bank/generate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

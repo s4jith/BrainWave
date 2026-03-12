@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { X, Upload, FileText, Sparkles, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -89,7 +90,7 @@ export default function AIExtractionModal({ isOpen, onClose, onSuccess }) {
       formData.append("board", "CBSE");
       formData.append("uploaded_by", user?.user_id || "admin");
 
-      const response = await fetch(`${API_URL}/api/curriculum/extract-from-upload`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/extract-from-upload`, {
         method: "POST",
         body: formData,
       });

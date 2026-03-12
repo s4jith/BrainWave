@@ -17,6 +17,7 @@ import DashboardLayout from "../components/dashboard/DashboardLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import StickyNotesCard from "../components/dashboard/StickyNotesCard";
 import quotesData from "../data/quotes.json";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -115,7 +116,7 @@ export default function Dashboard() {
 
   const fetchFeatures = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/student/my-features`, {
+      const res = await authFetch(`${API_BASE}/api/student/my-features`, {
         headers: getAuthHeader()
       });
       if (res.ok) {
@@ -129,7 +130,7 @@ export default function Dashboard() {
   const fetchProgressData = async () => {
     try {
       setLoadingProgress(true);
-      const response = await fetch(`${API_BASE}/api/user/dashboard/${user.id}`);
+      const response = await authFetch(`${API_BASE}/api/user/dashboard/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setProgressPercentage(data.progress?.overall_progress || 0);
@@ -155,7 +156,7 @@ export default function Dashboard() {
 
   const fetchStreakData = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/user/streak/${user.id}`);
+      const response = await authFetch(`${API_BASE}/api/user/streak/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setStreakDays(data.current_streak || 0);
@@ -166,7 +167,7 @@ export default function Dashboard() {
 
   const logUserActivity = async () => {
     try {
-      await fetch(`${API_BASE}/api/user/activity/log?student_id=${user.id}&hours=0.5`, {
+      await authFetch(`${API_BASE}/api/user/activity/log?student_id=${user.id}&hours=0.5`, {
         method: 'POST'
       });
     } catch (err) {
@@ -176,7 +177,7 @@ export default function Dashboard() {
   const fetchPendingTests = async () => {
     try {
       setLoadingTests(true);
-      const response = await fetch(`${API_BASE}/api/tests/student/${user.id}`);
+      const response = await authFetch(`${API_BASE}/api/tests/student/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         

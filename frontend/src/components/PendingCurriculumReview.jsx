@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Clock, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, FileText, User, Calendar, Sparkles, Edit2, Save, X } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -38,7 +39,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
   const fetchPendingItems = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/pending?status=pending`);
+      const response = await authFetch(`${API_URL}/api/curriculum/pending?status=pending`);
       if (response.ok) {
         const data = await response.json();
         setPendingItems(data);
@@ -75,7 +76,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
       formData.append("icon", approvalForm.icon);
       formData.append("color", approvalForm.color);
 
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/pending/${pendingId}/approve`,
         {
           method: "POST",
@@ -116,7 +117,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
       formData.append("rejection_reason", reason);
       formData.append("reviewed_by", user?.user_id || "admin");
 
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URL}/api/curriculum/pending/${pendingId}/approve`,
         {
           method: "POST",
@@ -147,7 +148,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
     setProcessing(prev => ({ ...prev, [pendingId]: true }));
 
     try {
-      const response = await fetch(`${API_URL}/api/curriculum/pending/${pendingId}`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/pending/${pendingId}`, {
         method: "DELETE"
       });
 
@@ -193,7 +194,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
       formData.append("class_level", editForm.class_level);
       formData.append("extracted_chapters", JSON.stringify(editForm.extracted_chapters));
 
-      const response = await fetch(`${API_URL}/api/curriculum/pending/${pendingId}`, {
+      const response = await authFetch(`${API_URL}/api/curriculum/pending/${pendingId}`, {
         method: "PUT",
         body: formData
       });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, KeyRound, Lock, ArrowLeft, Loader2, CheckCircle, ShieldCheck } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = "http://localhost:8000";
 
@@ -22,7 +23,7 @@ export default function ForgotPassword() {
         setIsLoading(true);
         setError("");
         try {
-            const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+            const res = await authFetch(`${API_BASE}/api/auth/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email })
@@ -46,7 +47,7 @@ export default function ForgotPassword() {
         setIsLoading(true);
         setError("");
         try {
-            const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+            const res = await authFetch(`${API_BASE}/api/auth/verify-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, otp })
@@ -72,7 +73,7 @@ export default function ForgotPassword() {
         setIsLoading(true);
         setError("");
         try {
-            const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+            const res = await authFetch(`${API_BASE}/api/auth/reset-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, reset_token: resetToken, new_password: newPassword })

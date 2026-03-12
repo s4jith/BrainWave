@@ -4,6 +4,7 @@ import {
   BookOpen, Calendar, Loader2, Edit2, ChevronDown, ChevronUp, Plus
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -87,7 +88,7 @@ const QuestionPaperSelector = ({
       if (filters.paper_type) params.append("paper_type", filters.paper_type);
       if (filters.year) params.append("year", filters.year);
 
-      const res = await fetch(`${API_URL}/api/question-papers?${params}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers?${params}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -118,7 +119,7 @@ const QuestionPaperSelector = ({
     setLoadingQuestions(true);
     setView("questions");
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paper.id}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -204,7 +205,7 @@ const QuestionPaperSelector = ({
     if (!editTitle.trim()) return;
     setEditLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}`, {
         method: "PUT",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify({ title: editTitle.trim() }),

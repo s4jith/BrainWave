@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     MONGO_URI: str
     
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: Optional[str] = None
     
     PINECONE_API_KEY: str
     

@@ -9,6 +9,7 @@ import { SUBJECTS_WITH_RAG } from "../constants/lessons";
 import { Menu, X, Settings, MessageCircle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -50,7 +51,7 @@ function BookToBot() {
   const fetchAvailableSubjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
+      const response = await authFetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -86,7 +87,7 @@ function BookToBot() {
   const fetchLessons = async (subject) => {
     try {
       setLoadingLessons(true);
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE}/api/books/student/lessons?class_level=${user.classLevel}&subject=${encodeURIComponent(subject)}`
       );
 

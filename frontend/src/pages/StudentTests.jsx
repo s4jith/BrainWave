@@ -26,6 +26,7 @@ import {
   X,
   Loader2
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -66,7 +67,7 @@ export default function StudentTests() {
     try {
       setLoading(true);
       const studentId = user?.id || user?.user_id;
-      const response = await fetch(`${API_URL}/api/tests/student/${studentId}`);
+      const response = await authFetch(`${API_URL}/api/tests/student/${studentId}`);
       if (!response.ok) throw new Error("Failed to fetch tests");
       const data = await response.json();
       setTests(data);
@@ -80,7 +81,7 @@ export default function StudentTests() {
   const fetchSubmissions = async () => {
     try {
       const studentId = user?.id || user?.user_id;
-      const response = await fetch(`${API_URL}/api/tests/my-submissions/${studentId}`);
+      const response = await authFetch(`${API_URL}/api/tests/my-submissions/${studentId}`);
       if (response.ok) {
         const data = await response.json();
         setSubmissions(data);
@@ -93,7 +94,7 @@ export default function StudentTests() {
   const fetchNotifications = async () => {
     try {
       const studentId = user?.id || user?.user_id;
-      const response = await fetch(`${API_URL}/api/tests/notifications/${studentId}?unread_only=true`);
+      const response = await authFetch(`${API_URL}/api/tests/notifications/${studentId}?unread_only=true`);
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
@@ -105,7 +106,7 @@ export default function StudentTests() {
 
   const markNotificationRead = async (notificationId) => {
     try {
-      await fetch(`${API_URL}/api/tests/notifications/${notificationId}/read`, { method: "PUT" });
+      await authFetch(`${API_URL}/api/tests/notifications/${notificationId}/read`, { method: "PUT" });
       setNotifications(notifications.filter(n => n.id !== notificationId));
     } catch (err) {
       console.error("Failed to mark notification read:", err);
@@ -133,7 +134,7 @@ export default function StudentTests() {
       formData.append("student_id", user?.id || user?.user_id);
       formData.append("pdf_file", uploadFile);
 
-      const response = await fetch(`${API_URL}/api/tests/submit`, {
+      const response = await authFetch(`${API_URL}/api/tests/submit`, {
         method: "POST",
         body: formData
       });

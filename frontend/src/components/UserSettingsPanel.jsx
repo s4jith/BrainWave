@@ -11,6 +11,7 @@ import {
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import useUserStore from "../stores/userStore";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -39,7 +40,7 @@ export default function UserSettingsPanel({ open, onClose }) {
   const fetchAvailableSubjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
+      const response = await authFetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
       
       if (response.ok) {
         const data = await response.json();

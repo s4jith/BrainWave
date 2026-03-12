@@ -674,7 +674,10 @@ async def init_databases():
     """Initialize all database connections."""
     logger.info("Initializing database connections...")
     
-    await mongodb.connect()
+    try:
+        await mongodb.connect()
+    except Exception as e:
+        logger.warning(f"MongoDB unavailable at startup (will retry on first request): {e}")
     
     pinecone_db.connect()
     

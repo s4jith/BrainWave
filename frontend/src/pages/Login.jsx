@@ -4,6 +4,7 @@ import { Eye, EyeOff, Lock, KeyRound } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = "http://localhost:8000";
 
@@ -32,7 +33,7 @@ export default function Login() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await authFetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, password: password })
@@ -98,7 +99,7 @@ export default function Login() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+      const res = await authFetch(`${API_BASE}/api/auth/change-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: tempUserId, old_password: password, new_password: newPassword })

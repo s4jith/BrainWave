@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, MessageSquare, Filter, CheckCircle, Clock, Reply, Trash2, RefreshCw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -25,7 +26,7 @@ export default function AdminSuggestions() {
       if (filterStatus !== "all") params.append("status", filterStatus);
       if (filterCategory !== "all") params.append("category", filterCategory);
 
-      const response = await fetch(`${API_BASE}/api/suggestions/all?${params}`);
+      const response = await authFetch(`${API_BASE}/api/suggestions/all?${params}`);
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.suggestions || []);
@@ -45,7 +46,7 @@ export default function AdminSuggestions() {
     if (!replyText.trim()) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/suggestions/${suggestionId}/respond?response=${encodeURIComponent(replyText)}&status=reviewed`, {
+      const response = await authFetch(`${API_BASE}/api/suggestions/${suggestionId}/respond?response=${encodeURIComponent(replyText)}&status=reviewed`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" }
       });
@@ -64,7 +65,7 @@ export default function AdminSuggestions() {
     if (!confirm("Are you sure you want to delete this suggestion?")) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/suggestions/${suggestionId}`, {
+      const response = await authFetch(`${API_BASE}/api/suggestions/${suggestionId}`, {
         method: "DELETE"
       });
 

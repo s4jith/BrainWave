@@ -1,3 +1,4 @@
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -26,7 +27,7 @@ export const fetchCurriculumSubjects = async (classLevel = null) => {
       url += `&class_level=${classLevel}`;
     }
     
-    const response = await fetch(url);
+    const response = await authFetch(url);
     if (response.ok) {
       return await response.json();
     }
@@ -39,7 +40,7 @@ export const fetchCurriculumSubjects = async (classLevel = null) => {
 
 export const fetchSubjectDetails = async (subjectId) => {
   try {
-    const response = await fetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
+    const response = await authFetch(`${API_URL}/api/curriculum/subjects/${subjectId}`);
     if (response.ok) {
       return await response.json();
     }

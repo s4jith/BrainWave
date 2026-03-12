@@ -25,6 +25,7 @@ import NotesPanel from "../annotations/NotesPanel";
 import HistoryPanel from "../annotations/HistoryPanel";
 import HighlightOverlay from "../annotations/HighlightOverlay";
 import NoteTaker from "./NoteTaker";
+import authFetch from "../../utils/authFetch";
 
 export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [numPages, setNumPages] = useState(null);
@@ -78,12 +79,12 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
         if (bookId) {
           
-          response = await fetch(`${API_BASE}/api/books/render/${bookId}/info`);
+          response = await authFetch(`${API_BASE}/api/books/render/${bookId}/info`);
         } else {
           
           const filePath = getFilePath();
           if (!filePath) return;
-          response = await fetch(`${API_BASE}/api/books/pdf-info/${filePath}`);
+          response = await authFetch(`${API_BASE}/api/books/pdf-info/${filePath}`);
         }
 
         if (!response.ok) {
@@ -275,7 +276,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
       const subject = currentLesson.subject || currentLesson.book_subject || "";
       const classLevel = currentLesson.classLevel || currentLesson.class_level || currentLesson.book_class || 0;
       const chapterNumber = currentLesson.chapter_number || currentLesson.chapterNumber || currentLesson.number || 1;
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/api/curriculum/chapter-summary-by-book?subject_name=${encodeURIComponent(subject)}&class_level=${classLevel}&chapter_number=${chapterNumber}`
       );
       if (!res.ok) throw new Error("Failed to fetch summary");

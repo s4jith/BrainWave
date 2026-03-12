@@ -9,6 +9,7 @@ import {
   BookOpen, Calendar, GraduationCap, ClipboardList, ArrowRight,
   Check, Ban, Save
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -81,7 +82,7 @@ export default function QuestionPapers() {
       if (filters.year) params.append("year", filters.year);
       if (filters.status) params.append("status", filters.status);
 
-      const res = await fetch(`${API_URL}/api/question-papers?${params}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers?${params}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -97,7 +98,7 @@ export default function QuestionPapers() {
 
   const fetchMetadata = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/metadata`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/metadata`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -131,7 +132,7 @@ export default function QuestionPapers() {
     }
     setLoadingDetail(paperId);
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -151,7 +152,7 @@ export default function QuestionPapers() {
       : "Delete this question paper?";
     if (!confirm(msg)) return;
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}`, {
         method: "DELETE",
         headers: getAuthHeader(),
       });
@@ -175,7 +176,7 @@ export default function QuestionPapers() {
   const handleAddToBank = async (paperId) => {
     setAddingToBank(paperId);
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/add-to-bank`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/add-to-bank`, {
         method: "POST",
         headers: getAuthHeader(),
       });
@@ -194,7 +195,7 @@ export default function QuestionPapers() {
 
   const handleApprove = async (paperId) => {
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/approve`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/approve`, {
         method: "POST",
         headers: getAuthHeader(),
       });
@@ -209,7 +210,7 @@ export default function QuestionPapers() {
   const handleReject = async (paperId) => {
     if (!confirm("Reject this question paper?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/reject`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/reject`, {
         method: "POST",
         headers: getAuthHeader(),
       });
@@ -224,7 +225,7 @@ export default function QuestionPapers() {
   const handleApproveDelete = async (paperId) => {
     if (!confirm("Approve deletion? The paper will be permanently deleted.")) return;
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/approve-delete`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/approve-delete`, {
         method: "POST",
         headers: getAuthHeader(),
       });
@@ -238,7 +239,7 @@ export default function QuestionPapers() {
 
   const handleRejectDelete = async (paperId) => {
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}/reject-delete`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/reject-delete`, {
         method: "POST",
         headers: getAuthHeader(),
       });
@@ -252,7 +253,7 @@ export default function QuestionPapers() {
 
   const handleEdit = async (paperId) => {
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paperId}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -692,7 +693,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
       formData.append("subject", subject);
       formData.append("year", year);
 
-      const res = await fetch(`${API_URL}/api/question-papers/extract-pdf`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/extract-pdf`, {
         method: "POST",
         headers: getAuthHeader(),
         body: formData,
@@ -743,7 +744,7 @@ function CreatePaperModal({ metadata, onClose, onCreated, createMode, setCreateM
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/question-papers`, {
+      const res = await authFetch(`${API_URL}/api/question-papers`, {
         method: "POST",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1318,7 +1319,7 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/question-papers/${paper.id}`, {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}`, {
         method: "PUT",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify({

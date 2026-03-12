@@ -4,6 +4,7 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp, Shield } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -45,7 +46,7 @@ export default function StudentManagement() {
     setStudentFeatures(prev => ({ ...prev, [key]: value }));
     
     try {
-      const response = await fetch(`${API_URL}/api/admin/students/${featuresStudent.id}/features`, {
+      const response = await authFetch(`${API_URL}/api/admin/students/${featuresStudent.id}/features`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ [key]: value })
@@ -92,7 +93,7 @@ export default function StudentManagement() {
       let url = `${API_URL}/api/admin/students?limit=100`;
       if (filterActive !== "all") url += `&is_active=${filterActive === "active"}`;
       if (filterClass !== "all") url += `&class_level=${filterClass}`;
-      const response = await fetch(url);
+      const response = await authFetch(url);
       if (!response.ok) throw new Error("Failed to fetch students");
       const data = await response.json();
       setStudents(data);
@@ -122,7 +123,7 @@ export default function StudentManagement() {
     
     try {
       setSaving(true);
-      const response = await fetch(`${API_URL}/api/admin/students`, {
+      const response = await authFetch(`${API_URL}/api/admin/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -154,7 +155,7 @@ export default function StudentManagement() {
     e.preventDefault();
     try {
       setSaving(true);
-      const response = await fetch(`${API_URL}/api/admin/students/${selectedStudent.id}`, {
+      const response = await authFetch(`${API_URL}/api/admin/students/${selectedStudent.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -180,7 +181,7 @@ export default function StudentManagement() {
     setStudents(updatedStudents);
     
     try {
-      const response = await fetch(`${API_URL}/api/admin/students/${studentId}`, {
+      const response = await authFetch(`${API_URL}/api/admin/students/${studentId}`, {
         method: "DELETE"
       });
       if (!response.ok) {
@@ -196,7 +197,7 @@ export default function StudentManagement() {
   const handleResetPassword = async (student) => {
     if (!confirm(`Reset password for ${student.name}?`)) return;
     try {
-      const response = await fetch(`${API_URL}/api/admin/students/${student.id}/reset-password`, {
+      const response = await authFetch(`${API_URL}/api/admin/students/${student.id}/reset-password`, {
         method: "POST"
       });
       if (!response.ok) throw new Error("Failed to reset password");

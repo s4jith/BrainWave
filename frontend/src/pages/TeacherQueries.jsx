@@ -5,6 +5,7 @@ import {
   MessageSquare, Send, CheckCircle, Clock, Loader2,
   GraduationCap, Users, Filter, RefreshCw, ChevronDown, ChevronUp
 } from "lucide-react";
+import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -27,7 +28,7 @@ export default function TeacherQueries() {
     setLoading(true);
     try {
       const params = statusFilter !== "all" ? `?status=${statusFilter}` : "";
-      const res = await fetch(`${API_URL}/api/queries/teacher${params}`, {
+      const res = await authFetch(`${API_URL}/api/queries/teacher${params}`, {
         headers: getAuthHeader(),
       });
       if (res.ok) {
@@ -44,7 +45,7 @@ export default function TeacherQueries() {
     setSubmittingId(queryId);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/api/queries/${queryId}/reply`, {
+      const res = await authFetch(`${API_URL}/api/queries/${queryId}/reply`, {
         method: "POST",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify({ reply }),
