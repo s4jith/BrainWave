@@ -124,7 +124,6 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/admin-dashboard", label: "Dashboard", icon: LayoutDashboard },
         { path: "/student-management", label: "Students", icon: Users },
         { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
-        { path: "/head-management", label: "Heads", icon: BookMarked },
         { path: "/group-management", label: "Student Groups", icon: FolderKanban },
         { path: "/subjects-management", label: "Subjects", icon: Layers },
         { path: "/book-management", label: "Books", icon: BookOpen },

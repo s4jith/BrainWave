@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { GraduationCap, Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { GraduationCap, Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { CLASSES } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -23,6 +24,12 @@ export default function TeacherManagement() {
     const [expandedTeacherGroups, setExpandedTeacherGroups] = useState({});
     const [teacherGroupConflict, setTeacherGroupConflict] = useState(null);
 
+    // Promote to Head
+    const [showPromoteModal, setShowPromoteModal] = useState(false);
+    const [promoteTeacher, setPromoteTeacher] = useState(null);
+    const [promoteForm, setPromoteForm] = useState({ assigned_classes: [], assigned_subjects: [] });
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+
     const [formData, setFormData] = useState({
         name: "",
         email: "",
@@ -38,6 +45,7 @@ export default function TeacherManagement() {
     useEffect(() => {
         fetchTeachers();
         fetchCurriculumSubjects();
+        fetchAvailableSubjects();
     }, []);
 
     useEffect(() => {
@@ -79,6 +87,27 @@ export default function TeacherManagement() {
             console.error("Failed to fetch curriculum:", err);
         } finally {
             setLoadingCurriculum(false);
+        }
+    };
+
+    const fetchAvailableSubjects = async () => {
+        try {
+            const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+                headers: getAuthHeader()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const subjects = [...new Set(
+                    (Array.isArray(data) ? data : (data.subjects || []))
+                        .map(s => s.subject_name || s.name || s)
+                        .filter(Boolean)
+                )].sort();
+                setAvailableSubjects(subjects.length > 0 ? subjects : ["Maths", "English", "Hindi", "Science", "Social Science"]);
+            } else {
+                setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
+            }
+        } catch {
+            setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
         }
     };
 
@@ -192,6 +221,77 @@ export default function TeacherManagement() {
 
     const resetForm = () => {
         setFormData({ name: "", email: "", mobile: "", age: "", preferred_subject: "" });
+    };
+
+    const openPromoteModal = (teacher) => {
+        setPromoteTeacher(teacher);
+        setPromoteForm({ assigned_classes: [], assigned_subjects: [] });
+        setShowPromoteModal(true);
+    };
+
+    const handlePromoteToHead = async () => {
+        if (!promoteForm.assigned_classes.length && !promoteForm.assigned_subjects.length) {
+            alert("Please assign at least one class or subject.");
+            return;
+        }
+        try {
+            setSaving(true);
+            const response = await authFetch(`${API_URL}/api/admin/heads`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                body: JSON.stringify({
+                    teacher_id: promoteTeacher.id,
+                    assigned_classes: promoteForm.assigned_classes,
+                    assigned_subjects: promoteForm.assigned_subjects,
+                })
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Failed to promote teacher");
+            }
+            setShowPromoteModal(false);
+            setPromoteTeacher(null);
+            fetchTeachers();
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDemoteToTeacher = async (teacher) => {
+        if (!confirm(`Demote ${teacher.name} back to teacher? Their head assignments will be removed.`)) return;
+        try {
+            const response = await authFetch(`${API_URL}/api/admin/heads/${teacher.id}`, {
+                method: "DELETE",
+                headers: getAuthHeader()
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Failed to demote");
+            }
+            fetchTeachers();
+        } catch (err) {
+            alert("Error: " + err.message);
+        }
+    };
+
+    const togglePromoteClass = (cls) => {
+        setPromoteForm(f => ({
+            ...f,
+            assigned_classes: f.assigned_classes.includes(cls)
+                ? f.assigned_classes.filter(c => c !== cls)
+                : [...f.assigned_classes, cls]
+        }));
+    };
+
+    const togglePromoteSubject = (sub) => {
+        setPromoteForm(f => ({
+            ...f,
+            assigned_subjects: f.assigned_subjects.includes(sub)
+                ? f.assigned_subjects.filter(s => s !== sub)
+                : [...f.assigned_subjects, sub]
+        }));
     };
 
     const openEditModal = (teacher) => {
@@ -374,14 +474,27 @@ export default function TeacherManagement() {
                                         </td>
                                         <td className="px-6 py-4">
                                             {teacher.role === "head" ? (
-                                                <span className="text-xs text-amber-600 dark:text-amber-400 italic">Manage in Head Management</span>
-                                            ) : (
                                                 <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => handleDemoteToTeacher(teacher)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition"
+                                                    >
+                                                        <ArrowDownCircle className="w-3.5 h-3.5" /> Demote
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex gap-2 flex-wrap">
                                                     <button
                                                         onClick={() => openEditModal(teacher)}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
                                                     >
                                                         <Edit className="w-3.5 h-3.5" /> Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openPromoteModal(teacher)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition"
+                                                    >
+                                                        <ArrowUpCircle className="w-3.5 h-3.5" /> Promote
                                                     </button>
                                                     <button
                                                         onClick={() => handleDeleteTeacher(teacher.id)}
@@ -618,6 +731,86 @@ export default function TeacherManagement() {
                         >
                             OK, Got It
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Promote to Head Modal */}
+            {showPromoteModal && promoteTeacher && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Promote to Head</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    <span className="font-medium text-amber-600 dark:text-amber-400">{promoteTeacher.name}</span> will be designated as a Head
+                                </p>
+                            </div>
+                            <button onClick={() => setShowPromoteModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+                        </div>
+
+                        <div className="mb-5">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                Assign Classes <span className="font-normal text-gray-400">({promoteForm.assigned_classes.length} selected)</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {CLASSES.map(cls => (
+                                    <button
+                                        key={cls}
+                                        type="button"
+                                        onClick={() => togglePromoteClass(cls)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                            promoteForm.assigned_classes.includes(cls)
+                                                ? "bg-amber-500 text-white"
+                                                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                        }`}
+                                    >
+                                        Class {cls}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                Assign Subjects <span className="font-normal text-gray-400">({promoteForm.assigned_subjects.length} selected)</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {availableSubjects.map(sub => (
+                                    <button
+                                        key={sub}
+                                        type="button"
+                                        onClick={() => togglePromoteSubject(sub)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                            promoteForm.assigned_subjects.includes(sub)
+                                                ? "bg-amber-500 text-white"
+                                                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                        }`}
+                                    >
+                                        {sub}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowPromoteModal(false)}
+                                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePromoteToHead}
+                                disabled={saving}
+                                className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg disabled:opacity-50 font-medium transition flex items-center justify-center gap-2"
+                            >
+                                <ArrowUpCircle className="w-4 h-4" />
+                                {saving ? "Promoting..." : "Promote to Head"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
