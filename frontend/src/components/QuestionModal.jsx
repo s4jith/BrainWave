@@ -37,6 +37,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         topic: "",
         type: savedDefaults.type || "mcq",
         difficulty: savedDefaults.difficulty || "medium",
+        bloom_level: savedDefaults.bloom_level || "remember",
         marks: 1,
         options: ["", "", "", ""],
         correct_answer: "",
@@ -51,8 +52,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         difficulty_dist: {
             easy: { mcq: 2, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
             medium: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
-            hard: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
-            advanced: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 }
+            hard: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 }
         }
     });
 
@@ -67,6 +67,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 topic: question.topic || "",
                 type: question.type || "mcq",
                 difficulty: question.difficulty || "medium",
+                bloom_level: question.bloom_level || "remember",
                 marks: question.marks || 1,
                 options: question.options || ["", "", "", ""],
                 correct_answer: question.correct_answer || "",
@@ -244,7 +245,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                     class_level: formData.class_level,
                     chapter: formData.chapter,
                     type: formData.type,
-                    difficulty: formData.difficulty
+                    difficulty: formData.difficulty,
+                    bloom_level: formData.bloom_level
                 }));
             } catch { }
         } catch (err) {
@@ -456,7 +458,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Type</label>
                                     <select
@@ -472,6 +474,21 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     </select>
                                 </div>
                                 <div>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Cognitive Level</label>
+                                    <select
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
+                                        value={formData.bloom_level}
+                                        onChange={e => setFormData({ ...formData, bloom_level: e.target.value })}
+                                    >
+                                        <option value="remember">Remember</option>
+                                        <option value="understand">Understand</option>
+                                        <option value="apply">Apply</option>
+                                        <option value="analyze">Analyze</option>
+                                        <option value="evaluate">Evaluate</option>
+                                        <option value="create">Create</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Difficulty</label>
                                     <select
                                         className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
@@ -481,7 +498,6 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         <option value="easy">Easy</option>
                                         <option value="medium">Medium</option>
                                         <option value="hard">Hard</option>
-                                        <option value="advanced">Advanced</option>
                                     </select>
                                 </div>
                                 <div>
@@ -733,12 +749,11 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                 </h3>
 
                                 <div className="space-y-6">
-                                    {['easy', 'medium', 'hard', 'advanced'].map(diff => (
+                                    {['easy', 'medium', 'hard'].map(diff => (
                                         <div key={diff} className="space-y-2">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className={`w-2 h-2 rounded-full ${diff === 'easy' ? 'bg-green-500' :
-                                                    diff === 'medium' ? 'bg-yellow-500' :
-                                                        diff === 'hard' ? 'bg-orange-500' : 'bg-red-500'
+                                                    diff === 'medium' ? 'bg-yellow-500' : 'bg-orange-500'
                                                     }`}></span>
                                                 <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{diff}</span>
                                             </div>

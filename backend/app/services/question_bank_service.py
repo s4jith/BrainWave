@@ -24,6 +24,7 @@ class QuestionBankService:
         search: Optional[str] = None,
         type: Optional[str] = None,
         difficulty: Optional[str] = None,
+        bloom_level: Optional[str] = None,
         status: Optional[str] = "approved",
         created_by: Optional[str] = None,
         limit: int = 50,
@@ -43,6 +44,8 @@ class QuestionBankService:
             query["type"] = type
         if difficulty:
             query["difficulty"] = difficulty
+        if bloom_level:
+            query["bloom_level"] = bloom_level
             
         if status:
              query["status"] = status
@@ -105,6 +108,7 @@ class QuestionBankService:
                 "topic": q.get("topic"),
                 "type": q.get("type"),
                 "difficulty": q.get("difficulty"),
+                "bloom_level": q.get("bloom_level"),
                 "marks": q.get("marks"),
                 "options": q.get("options", []),
                 "correct_answer": q.get("correct_answer"),

@@ -34,7 +34,8 @@ class QuestionCreate(BaseModel):
     chapter: int
     topic: Optional[str] = None
     type: str = Field(..., pattern="^(mcq|fillup|true_false|short_answer|long_answer)$")
-    difficulty: str = Field(..., pattern="^(easy|medium|hard|advanced)$")
+    difficulty: str = Field(..., pattern="^(easy|medium|hard)$")
+    bloom_level: Optional[str] = Field(None, pattern="^(remember|understand|apply|analyze|evaluate|create)$", description="Bloom's taxonomy cognitive level")
     marks: int
     options: List[str] = []
     correct_answer: str
@@ -50,6 +51,7 @@ class QuestionUpdate(BaseModel):
     topic: Optional[str] = None
     type: Optional[str] = None
     difficulty: Optional[str] = None
+    bloom_level: Optional[str] = None
     marks: Optional[int] = None
     options: Optional[List[str]] = None
     correct_answer: Optional[str] = None
@@ -128,6 +130,7 @@ async def get_questions(
     search: Optional[str] = None,
     type: Optional[str] = None,
     difficulty: Optional[str] = None,
+    bloom_level: Optional[str] = None,
     status: Optional[str] = "approved",
     limit: int = 50,
     offset: int = 0,
@@ -181,6 +184,7 @@ async def get_questions(
             search=search,
             type=type,
             difficulty=difficulty,
+            bloom_level=bloom_level,
             status=status,
             limit=limit,
             offset=offset,

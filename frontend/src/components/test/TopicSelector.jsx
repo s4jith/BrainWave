@@ -35,6 +35,7 @@ export default function TopicSelector({
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
+  const [selectedBloomLevel, setSelectedBloomLevel] = useState(null);
 
   const [testConfig, setTestConfig] = useState({
     mcq: 5,
@@ -108,8 +109,7 @@ export default function TopicSelector({
         short: Math.min(5, maxShort)
       }));
     }
-
-    setStep(4);
+    // Don't auto-advance — wait for bloom level selection too
   };
 
   const handleStartTest = () => {
@@ -120,6 +120,7 @@ export default function TopicSelector({
       chapter_number: selectedChapter.chapter_number || selectedChapter.chapter,
       chapter_name: selectedChapter.chapter_name,
       difficulty: selectedDifficulty,
+      bloom_level: selectedBloomLevel,
 
       mcq_count: testConfig.mcq,
       fillup_count: testConfig.fillup,
@@ -167,6 +168,7 @@ export default function TopicSelector({
     if (step === 3) {
       setStep(2);
       setSelectedDifficulty(null);
+      setSelectedBloomLevel(null);
     } else if (step === 2) {
       setStep(1);
       setSelectedChapter(null);
@@ -197,7 +199,7 @@ export default function TopicSelector({
               <h2 className="text-xl font-bold text-gray-800">
                 {step === 1 && "Select Subject"}
                 {step === 2 && "Select Chapter"}
-                {step === 3 && "Select Difficulty"}
+                {step === 3 && "Difficulty & Cognitive Level"}
               </h2>
             </div>
             <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -330,82 +332,105 @@ export default function TopicSelector({
                     </div>
                   </div>
 
+                  {/* Difficulty Selection */}
                   <div className="space-y-3">
-                    <h4 className="font-medium text-gray-700 mb-4">Choose your difficulty level:</h4>
-
-                    <button
-                      onClick={() => handleSelectDifficulty("easy")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "easy"
-                        ? "border-green-500 bg-green-50"
-                        : "border-gray-200 bg-white hover:border-green-300"
+                    <h4 className="font-medium text-gray-700">Choose difficulty level:</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <button
+                        onClick={() => handleSelectDifficulty("easy")}
+                        className={`p-4 rounded-xl border-2 transition-all text-center ${
+                          selectedDifficulty === "easy" ? "border-green-500 bg-green-50" : "border-gray-200 bg-white hover:border-green-300"
                         }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "easy" ? "bg-green-500" : "bg-green-100"
-                          }`}>
-                          <Zap className={`w-6 h-6 ${selectedDifficulty === "easy" ? "text-white" : "text-green-600"}`} />
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 ${selectedDifficulty === "easy" ? "bg-green-500" : "bg-green-100"}`}>
+                          <Zap className={`w-5 h-5 ${selectedDifficulty === "easy" ? "text-white" : "text-green-600"}`} />
                         </div>
-                        <div className="flex-1">
-                          <h5 className="font-semibold text-gray-800 text-lg">Easy</h5>
-                          <p className="text-sm text-gray-500">Basic concepts, definitions & simple recall questions</p>
-                        </div>
-                        {selectedDifficulty === "easy" && (
-                          <CheckCircle className="w-6 h-6 text-green-500" />
-                        )}
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectDifficulty("medium")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "medium"
-                        ? "border-orange-500 bg-orange-50"
-                        : "border-gray-200 bg-white hover:border-orange-300"
+                        <p className="font-semibold text-gray-800 text-sm">Easy</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Basic recall</p>
+                        {selectedDifficulty === "easy" && <CheckCircle className="w-4 h-4 text-green-500 mx-auto mt-1" />}
+                      </button>
+                      <button
+                        onClick={() => handleSelectDifficulty("medium")}
+                        className={`p-4 rounded-xl border-2 transition-all text-center ${
+                          selectedDifficulty === "medium" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white hover:border-orange-300"
                         }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "medium" ? "bg-orange-500" : "bg-orange-100"
-                          }`}>
-                          <Award className={`w-6 h-6 ${selectedDifficulty === "medium" ? "text-white" : "text-orange-600"}`} />
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 ${selectedDifficulty === "medium" ? "bg-orange-500" : "bg-orange-100"}`}>
+                          <Award className={`w-5 h-5 ${selectedDifficulty === "medium" ? "text-white" : "text-orange-600"}`} />
                         </div>
-                        <div className="flex-1">
-                          <h5 className="font-semibold text-gray-800 text-lg">Medium</h5>
-                          <p className="text-sm text-gray-500">Application-based questions requiring understanding</p>
-                        </div>
-                        {selectedDifficulty === "medium" && (
-                          <CheckCircle className="w-6 h-6 text-orange-500" />
-                        )}
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectDifficulty("hard")}
-                      className={`w-full p-5 rounded-xl border-2 transition-all text-left ${selectedDifficulty === "hard"
-                        ? "border-red-500 bg-red-50"
-                        : "border-gray-200 bg-white hover:border-red-300"
+                        <p className="font-semibold text-gray-800 text-sm">Medium</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Application</p>
+                        {selectedDifficulty === "medium" && <CheckCircle className="w-4 h-4 text-orange-500 mx-auto mt-1" />}
+                      </button>
+                      <button
+                        onClick={() => handleSelectDifficulty("hard")}
+                        className={`p-4 rounded-xl border-2 transition-all text-center ${
+                          selectedDifficulty === "hard" ? "border-red-500 bg-red-50" : "border-gray-200 bg-white hover:border-red-300"
                         }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedDifficulty === "hard" ? "bg-red-500" : "bg-red-100"
-                          }`}>
-                          <Flame className={`w-6 h-6 ${selectedDifficulty === "hard" ? "text-white" : "text-red-600"}`} />
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 ${selectedDifficulty === "hard" ? "bg-red-500" : "bg-red-100"}`}>
+                          <Flame className={`w-5 h-5 ${selectedDifficulty === "hard" ? "text-white" : "text-red-600"}`} />
                         </div>
-                        <div className="flex-1">
-                          <h5 className="font-semibold text-gray-800 text-lg">Hard</h5>
-                          <p className="text-sm text-gray-500">Advanced analysis & higher-order thinking questions</p>
-                        </div>
-                        {selectedDifficulty === "hard" && (
-                          <CheckCircle className="w-6 h-6 text-red-500" />
-                        )}
-                      </div>
-                    </button>
+                        <p className="font-semibold text-gray-800 text-sm">Hard</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Analysis</p>
+                        {selectedDifficulty === "hard" && <CheckCircle className="w-4 h-4 text-red-500 mx-auto mt-1" />}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="bg-blue-50/50 rounded-xl p-4 mt-6 border border-blue-100">
-                    <p className="text-sm text-blue-800 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      Select a difficulty to proceed to question configuration
-                    </p>
+                  {/* Bloom's Taxonomy Level */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-700">Choose cognitive level (Bloom's Taxonomy):</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <button onClick={() => setSelectedBloomLevel("remember")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "remember" ? "border-purple-500 bg-purple-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "remember" ? "text-purple-700" : "text-gray-800"}`}>Remember</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Recall facts & basic concepts</p></div>
+                          {selectedBloomLevel === "remember" && <CheckCircle className="w-4 h-4 text-purple-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                      <button onClick={() => setSelectedBloomLevel("understand")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "understand" ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "understand" ? "text-blue-700" : "text-gray-800"}`}>Understand</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Explain ideas or concepts</p></div>
+                          {selectedBloomLevel === "understand" && <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                      <button onClick={() => setSelectedBloomLevel("apply")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "apply" ? "border-teal-500 bg-teal-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "apply" ? "text-teal-700" : "text-gray-800"}`}>Apply</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Use info in new situations</p></div>
+                          {selectedBloomLevel === "apply" && <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                      <button onClick={() => setSelectedBloomLevel("analyze")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "analyze" ? "border-green-500 bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "analyze" ? "text-green-700" : "text-gray-800"}`}>Analyze</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Draw connections & patterns</p></div>
+                          {selectedBloomLevel === "analyze" && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                      <button onClick={() => setSelectedBloomLevel("evaluate")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "evaluate" ? "border-yellow-500 bg-yellow-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "evaluate" ? "text-yellow-700" : "text-gray-800"}`}>Evaluate</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Justify decisions & judgments</p></div>
+                          {selectedBloomLevel === "evaluate" && <CheckCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                      <button onClick={() => setSelectedBloomLevel("create")} className={`p-3 rounded-xl border-2 transition-all text-left ${selectedBloomLevel === "create" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className="flex items-start justify-between">
+                          <div><p className={`font-semibold text-sm ${selectedBloomLevel === "create" ? "text-orange-700" : "text-gray-800"}`}>Create</p><p className="text-xs text-gray-500 mt-0.5 leading-tight">Produce new or original work</p></div>
+                          {selectedBloomLevel === "create" && <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 ml-1" />}
+                        </div>
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Continue button */}
+                  {selectedDifficulty && (
+                    <button
+                      onClick={() => setStep(4)}
+                      className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+                    >
+                      Continue
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -416,6 +441,7 @@ export default function TopicSelector({
                       <h3 className="font-semibold text-gray-800">{selectedChapter.chapter_name}</h3>
                       <p className="text-sm text-gray-500">
                         {selectedSubject?.subject} • <span className="capitalize">{selectedDifficulty}</span>
+                        {selectedBloomLevel && <span> • <span className="capitalize">{selectedBloomLevel}</span></span>}
                       </p>
                     </div>
                     <div className="text-right">
