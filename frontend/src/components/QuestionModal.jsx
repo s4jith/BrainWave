@@ -49,6 +49,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         subject: savedDefaults.subject && subjectList.includes(savedDefaults.subject) ? savedDefaults.subject : (subjectList[0] || ""),
         class_level: savedDefaults.class_level || "",
         chapter: savedDefaults.chapter || "",
+        bloom_level: savedDefaults.bloom_level || "remember",
         difficulty_dist: {
             easy: { mcq: 2, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
             medium: { mcq: 0, fillup: 0, true_false: 0, short_answer: 0, long_answer: 0 },
@@ -268,7 +269,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                 class_level: parseInt(aiConfig.class_level),
                 subject: aiConfig.subject,
                 chapter: parseInt(aiConfig.chapter),
-                config: aiConfig.difficulty_dist
+                config: aiConfig.difficulty_dist,
+                bloom_level: aiConfig.bloom_level || null
             };
 
             const apiUrl = import.meta.env.VITE_API_URL;
@@ -740,6 +742,24 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         )}
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="font-medium text-gray-700 dark:text-gray-300 text-sm">Cognitive Level (Bloom's Taxonomy)</label>
+                                </div>
+                                <select
+                                    className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white text-sm mb-1"
+                                    value={aiConfig.bloom_level}
+                                    onChange={e => setAiConfig({ ...aiConfig, bloom_level: e.target.value })}
+                                >
+                                    <option value="remember">Remember — Recall facts &amp; basic concepts</option>
+                                    <option value="understand">Understand — Explain ideas &amp; concepts</option>
+                                    <option value="apply">Apply — Use info in new situations</option>
+                                    <option value="analyze">Analyze — Draw connections &amp; patterns</option>
+                                    <option value="evaluate">Evaluate — Justify decisions &amp; judgments</option>
+                                    <option value="create">Create — Produce new or original work</option>
+                                </select>
                             </div>
 
                             <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">

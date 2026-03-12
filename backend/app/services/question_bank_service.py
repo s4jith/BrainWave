@@ -197,7 +197,8 @@ class QuestionBankService:
         chapter: int,
         config: dict,
         user_id: str,
-        user_role: str
+        user_role: str,
+        bloom_level: Optional[str] = None
     ):
         """
         Generate questions using AI and save to bank.
@@ -223,7 +224,8 @@ class QuestionBankService:
                 config=config,
                 class_level=class_level,
                 subject=subject,
-                chapter=chapter
+                chapter=chapter,
+                bloom_level=bloom_level
             )
             
             saved_ids = []
@@ -246,6 +248,7 @@ class QuestionBankService:
                     "chapter": chapter,
                     "type": q_type,
                     "difficulty": q.get("difficulty", "medium").lower(),
+                    "bloom_level": bloom_level,
                     "marks": q.get("marks", 1),
                     "options": q.get("options", []),
                     "correct_answer": correct_answer,

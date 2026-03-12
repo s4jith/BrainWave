@@ -509,7 +509,8 @@ Generate {num_questions} MCQs now in valid JSON format:"""
         class_level: int,
         subject: str,
         chapter: int,
-        retry_count: int = 0
+        retry_count: int = 0,
+        bloom_level: str = None
     ) -> list[dict]:
         """
         Generate varied questions based on a specific configuration.
@@ -543,12 +544,24 @@ Generate {num_questions} MCQs now in valid JSON format:"""
                         requirements_str += f"- {count} {difficulty.upper()} {q_type.upper().replace('_', ' ')} questions\n"
                         total_q += count
             
+            bloom_desc_map = {
+                "remember": "Recall facts, definitions & basic concepts (knowledge-level questions)",
+                "understand": "Explain ideas, describe concepts in own words (comprehension-level questions)",
+                "apply": "Use concepts/formulas in new situations, solve problems (application-level questions)",
+                "analyze": "Break down information, draw connections, compare & contrast (analysis-level questions)",
+                "evaluate": "Justify decisions, critique arguments, judge value of information (evaluation-level questions)",
+                "create": "Design solutions, formulate hypotheses, construct new ideas (synthesis-level questions)",
+            }
+            bloom_instruction = ""
+            if bloom_level and bloom_level in bloom_desc_map:
+                bloom_instruction = f"\nCognitive Level (Bloom's Taxonomy): {bloom_level.upper()} — {bloom_desc_map[bloom_level]}\nAll questions MUST target this cognitive level.\n"
+            
             context_limit = min(3000, len(context))
             
             prompt = f"""Generate {total_q} questions for Class {class_level} {subject} Chapter {chapter}.
 
 Requirements:
-{requirements_str}
+{requirements_str}{bloom_instruction}
 Question formats:
 - MCQ: 4 answer options in "options" array. Set "correct_answer" to the exact text of the correct option. marks=1
 - FILLUP: Use _______ in the question text for the blank. Set "correct_answer" to the word/phrase that fills the blank. marks=1

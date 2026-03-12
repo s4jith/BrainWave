@@ -64,6 +64,7 @@ class GenerateRequest(BaseModel):
     subject: str
     chapter: int
     config: Dict[str, Dict[str, int]]
+    bloom_level: Optional[str] = Field(None, pattern="^(remember|understand|apply|analyze|evaluate|create)$", description="Bloom's taxonomy cognitive level for AI generation")
 
 class DeleteRequestBody(BaseModel):
     reason: Optional[str] = None
@@ -611,7 +612,8 @@ async def generate_questions(
             request.chapter,
             request.config,
             current_user.user_id,
-            current_user.role.value
+            current_user.role.value,
+            bloom_level=request.bloom_level
         )
         
         # AI-generated questions already have status "pending" in the service

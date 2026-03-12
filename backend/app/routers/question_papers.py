@@ -60,6 +60,9 @@ class ManualQuestion(BaseModel):
     options: List[str] = []
     correct_answer: str = ""
     section: str = ""
+    bloom_level: Optional[str] = None
+    difficulty: Optional[str] = None
+    question_bank_id: Optional[str] = None
 
 
 class CreatePaperManual(BaseModel):
@@ -374,6 +377,9 @@ async def create_paper_manual(
             "options": q.options,
             "correct_answer": q.correct_answer,
             "section": q.section,
+            "bloom_level": q.bloom_level,
+            "difficulty": q.difficulty,
+            "question_bank_id": q.question_bank_id,
         })
 
     doc = {
