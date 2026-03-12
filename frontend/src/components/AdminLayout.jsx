@@ -120,20 +120,30 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         navigate("/");
     };
 
-    const adminNavItems = [
-        { path: "/admin-dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { path: "/student-management", label: "Students", icon: Users },
-        { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
-        { path: "/group-management", label: "Student Groups", icon: FolderKanban },
-        { path: "/subjects-management", label: "Subjects", icon: Layers },
-        { path: "/book-management", label: "Books", icon: BookOpen },
-        { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
-        { path: "/question-papers", label: "Question Papers", icon: FileText },
-        { path: "/test-management", label: "Tests", icon: ClipboardList },
-        { path: "/admin-reports", label: "Reports", icon: BarChart3 },
-        { path: "/admin-suggestions", label: "Suggestions", icon: MessageCircle },
-        { path: "/admin-settings", label: "Settings", icon: Settings },
-        { path: "/career-questions", label: "Career Analysis", icon: Compass },
+    const adminNavGroups = [
+        { type: 'item', path: "/admin-dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { type: 'item', path: "/subjects-management", label: "Subjects", icon: Layers },
+        { type: 'item', path: "/book-management", label: "Books", icon: BookOpen },
+        {
+            type: 'group', id: "Users", label: "Users", icon: Users,
+            children: [
+                { path: "/student-management", label: "Students", icon: Users },
+                { path: "/teacher-management", label: "Teachers", icon: GraduationCap },
+                { path: "/group-management", label: "Student Groups", icon: FolderKanban },
+            ]
+        },
+        {
+            type: 'group', id: "Questions", label: "Questions", icon: HelpCircle,
+            children: [
+                { path: "/question-bank", label: "Question Bank", icon: HelpCircle },
+                { path: "/question-papers", label: "Question Papers", icon: FileText },
+            ]
+        },
+        { type: 'item', path: "/test-management", label: "Tests", icon: ClipboardList },
+        { type: 'item', path: "/admin-reports", label: "Results", icon: BarChart3 },
+        { type: 'item', path: "/career-questions", label: "Career Analysis", icon: Compass },
+        { type: 'item', path: "/admin-suggestions", label: "Suggestions", icon: MessageCircle },
+        { type: 'item', path: "/admin-settings", label: "Settings", icon: Settings },
     ];
 
     const teacherNavItems = [
@@ -155,11 +165,12 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/head-reports", label: "Reports", icon: BarChart3 },
     ];
 
+    const [expandedNavGroups, setExpandedNavGroups] = useState({ Users: true, Questions: true });
     const navItems = user?.role === "teacher"
         ? teacherNavItems
         : user?.role === "head"
             ? headNavItems
-            : adminNavItems;
+            : [];
 
     const themeOptions = [
         { value: 'light', label: 'Light', icon: Sun },
@@ -196,26 +207,90 @@ export default function AdminLayout({ children, title, icon: Icon }) {
 
                 {/* Navigation */}
                 <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-                    {navItems.map((item) => {
-                        const ItemIcon = item.icon;
-                        
-                        const isActive = currentPath === item.path ||
-                            (item.path === "/test-management" && (currentPath === "/create-test" || currentPath.startsWith("/test/edit/")));
-
-                        return (
-                            <button
-                                key={item.path}
-                                onClick={() => navigate(item.path)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-                  ${isActive
-                                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
-                                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
-                            >
-                                <ItemIcon className="w-5 h-5" />
-                                <span>{item.label}</span>
-                            </button>
-                        );
-                    })}
+                    {user?.role === "admin" ? (
+                        adminNavGroups.map((item) => {
+                            if (item.type === 'group') {
+                                const isExpanded = expandedNavGroups[item.id];
+                                const GroupIcon = item.icon;
+                                const isGroupActive = item.children.some(c => currentPath === c.path);
+                                return (
+                                    <div key={item.id}>
+                                        <button
+                                            onClick={() => setExpandedNavGroups(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                                isGroupActive
+                                                    ? 'text-gray-900 dark:text-white font-medium'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                            }`}
+                                        >
+                                            <GroupIcon className="w-5 h-5" />
+                                            <span className="flex-1 text-left">{item.label}</span>
+                                            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 dark:border-gray-700 pl-3">
+                                                {item.children.map(child => {
+                                                    const ChildIcon = child.icon;
+                                                    const isActive = currentPath === child.path;
+                                                    return (
+                                                        <button
+                                                            key={child.path}
+                                                            onClick={() => navigate(child.path)}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                                                isActive
+                                                                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
+                                                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                            }`}
+                                                        >
+                                                            <ChildIcon className="w-4 h-4" />
+                                                            <span>{child.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }
+                            const ItemIcon = item.icon;
+                            const isActive = currentPath === item.path ||
+                                (item.path === "/test-management" && (currentPath === "/create-test" || currentPath.startsWith("/test/edit/")));
+                            return (
+                                <button
+                                    key={item.path}
+                                    onClick={() => navigate(item.path)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                        isActive
+                                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
+                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                    }`}
+                                >
+                                    <ItemIcon className="w-5 h-5" />
+                                    <span>{item.label}</span>
+                                </button>
+                            );
+                        })
+                    ) : (
+                        navItems.map((item) => {
+                            const ItemIcon = item.icon;
+                            const isActive = currentPath === item.path ||
+                                (item.path === "/test-management" && (currentPath === "/create-test" || currentPath.startsWith("/test/edit/")));
+                            return (
+                                <button
+                                    key={item.path}
+                                    onClick={() => navigate(item.path)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                        isActive
+                                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
+                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                    }`}
+                                >
+                                    <ItemIcon className="w-5 h-5" />
+                                    <span>{item.label}</span>
+                                </button>
+                            );
+                        })
+                    )}
                 </nav>
 
                 {/* Bottom Section */}

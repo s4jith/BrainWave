@@ -97,17 +97,12 @@ export default function TeacherManagement() {
             });
             if (response.ok) {
                 const data = await response.json();
-                const subjects = [...new Set(
-                    (Array.isArray(data) ? data : (data.subjects || []))
-                        .map(s => s.subject_name || s.name || s)
-                        .filter(Boolean)
-                )].sort();
-                setAvailableSubjects(subjects.length > 0 ? subjects : ["Maths", "English", "Hindi", "Science", "Social Science"]);
-            } else {
-                setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
+                const items = (Array.isArray(data) ? data : (data.subjects || []))
+                    .filter(s => s.subject_name && s.class_level != null);
+                setAvailableSubjects(items);
             }
         } catch {
-            setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
+            setAvailableSubjects([]);
         }
     };
 
@@ -277,12 +272,20 @@ export default function TeacherManagement() {
     };
 
     const togglePromoteClass = (cls) => {
-        setPromoteForm(f => ({
-            ...f,
-            assigned_classes: f.assigned_classes.includes(cls)
+        setPromoteForm(f => {
+            const newClasses = f.assigned_classes.includes(cls)
                 ? f.assigned_classes.filter(c => c !== cls)
-                : [...f.assigned_classes, cls]
-        }));
+                : [...f.assigned_classes, cls];
+            const validSubjects = new Set(
+                availableSubjects
+                    .filter(s => newClasses.includes(s.class_level))
+                    .map(s => s.subject_name)
+            );
+            return {
+                assigned_classes: newClasses,
+                assigned_subjects: f.assigned_subjects.filter(s => validSubjects.has(s))
+            };
+        });
     };
 
     const togglePromoteSubject = (sub) => {
@@ -775,22 +778,35 @@ export default function TeacherManagement() {
                             <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                 Assign Subjects <span className="font-normal text-gray-400">({promoteForm.assigned_subjects.length} selected)</span>
                             </p>
-                            <div className="flex flex-wrap gap-2">
-                                {availableSubjects.map(sub => (
-                                    <button
-                                        key={sub}
-                                        type="button"
-                                        onClick={() => togglePromoteSubject(sub)}
-                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                                            promoteForm.assigned_subjects.includes(sub)
-                                                ? "bg-amber-500 text-white"
-                                                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                                        }`}
-                                    >
-                                        {sub}
-                                    </button>
-                                ))}
-                            </div>
+                            {promoteForm.assigned_classes.length === 0 ? (
+                                <p className="text-sm text-gray-400 dark:text-gray-500 italic">Select classes above to see available subjects</p>
+                            ) : (() => {
+                                const filtered = [...new Set(
+                                    availableSubjects
+                                        .filter(s => promoteForm.assigned_classes.includes(s.class_level))
+                                        .map(s => s.subject_name)
+                                )].sort();
+                                return filtered.length === 0 ? (
+                                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">No subjects found for selected classes</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {filtered.map(sub => (
+                                            <button
+                                                key={sub}
+                                                type="button"
+                                                onClick={() => togglePromoteSubject(sub)}
+                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                                    promoteForm.assigned_subjects.includes(sub)
+                                                        ? "bg-amber-500 text-white"
+                                                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                }`}
+                                            >
+                                                {sub}
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         <div className="flex gap-3">
