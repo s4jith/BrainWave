@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { GraduationCap, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { GraduationCap, Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, Users, ChevronDown, ChevronUp } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -326,9 +326,15 @@ export default function TeacherManagement() {
                                             <p className="text-sm text-gray-600 dark:text-gray-300">{teacher.email}</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
-                                                <GraduationCap className="w-3 h-3" /> Teacher
-                                            </span>
+                                            {teacher.role === "head" ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                                    <Shield className="w-3 h-3" /> Head
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
+                                                    <GraduationCap className="w-3 h-3" /> Teacher
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             {teacher.group_names && teacher.group_names.length > 0 ? (
@@ -367,20 +373,24 @@ export default function TeacherManagement() {
                                             </p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => openEditModal(teacher)}
-                                                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
-                                                >
-                                                    <Edit className="w-3.5 h-3.5" /> Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteTeacher(teacher.id)}
-                                                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                                </button>
-                                            </div>
+                                            {teacher.role === "head" ? (
+                                                <span className="text-xs text-amber-600 dark:text-amber-400 italic">Manage in Head Management</span>
+                                            ) : (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => openEditModal(teacher)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                    >
+                                                        <Edit className="w-3.5 h-3.5" /> Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTeacher(teacher.id)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                    </button>
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

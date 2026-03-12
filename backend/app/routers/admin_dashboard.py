@@ -769,7 +769,8 @@ async def get_teachers(
     Get list of all teachers with optional filters.
     """
     try:
-        filter_query = {"role": "teacher"}
+        # Include regular teachers AND teachers who have been promoted to head
+        filter_query = {"$or": [{"role": "teacher"}, {"role": "head", "promoted_from_teacher": True}]}
         
         if is_active is not None:
             filter_query["is_active"] = is_active
@@ -812,6 +813,7 @@ async def get_teachers(
                 "group_count": group_count,
                 "group_names": group_names,
                 "is_active": t.get("is_active", True),
+                "role": t.get("role", "teacher"),
                 "created_at": t.get("created_at", datetime.utcnow()).isoformat() if t.get("created_at") else None,
                 "last_login": t.get("last_login").isoformat() if t.get("last_login") else None
             })
@@ -1422,25 +1424,16 @@ async def get_maintenance_status():
 # ──────────── Head Management (CRUD) ────────────
 
 class HeadCreate(BaseModel):
-    """Model for creating a new head user."""
-    name: str = Field(..., min_length=2, max_length=100)
-    email: str = Field(..., description="Email address")
-    mobile: Optional[str] = None
-    age: Optional[int] = Field(None, ge=18, le=100)
-    subjects: List[str] = []
-    assignment_type: str = Field("class", description="Assignment type: 'class' or 'subject'")
-    assigned_classes: List[int] = Field(default=[], description="Class levels assigned (when type=class)")
-    assigned_subjects: List[str] = Field(default=[], description="Subjects assigned (when type=subject)")
+    """Model for designating an existing teacher as a head."""
+    teacher_id: str = Field(..., description="MongoDB _id or user_id of the teacher to promote")
+    assigned_classes: List[int] = Field(default=[], description="Class levels this head is responsible for")
+    assigned_subjects: List[str] = Field(default=[], description="Subjects this head is responsible for")
 
 class HeadUpdate(BaseModel):
     """Model for updating a head user."""
     name: Optional[str] = None
-    email: Optional[str] = None
     mobile: Optional[str] = None
-    age: Optional[int] = None
-    subjects: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    assignment_type: Optional[str] = None
     assigned_classes: Optional[List[int]] = None
     assigned_subjects: Optional[List[str]] = None
 
@@ -1498,9 +1491,9 @@ async def get_heads(
                 "email": h.get("email", ""),
                 "mobile": h.get("mobile", ""),
                 "subjects": h.get("subjects", []),
-                "assignment_type": h.get("assignment_type", "class"),
                 "assigned_classes": h.get("assigned_classes", []),
                 "assigned_subjects": h.get("assigned_subjects", []),
+                "promoted_from_teacher": h.get("promoted_from_teacher", False),
                 "is_active": h.get("is_active", True),
                 "created_at": h.get("created_at", datetime.utcnow()).isoformat() if h.get("created_at") else None,
                 "last_login": h.get("last_login").isoformat() if h.get("last_login") else None
@@ -1514,63 +1507,48 @@ async def get_heads(
 
 @router.post("/heads")
 async def create_head(head: HeadCreate):
-    """Create a new head account."""
+    """Designate an existing teacher as a head by promoting their account."""
     try:
-        existing = db.users.find_one({"email": head.email})
-        if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
+        # Find teacher by MongoDB _id or user_id
+        query = (
+            {"_id": ObjectId(head.teacher_id), "role": "teacher"}
+            if ObjectId.is_valid(head.teacher_id)
+            else {"user_id": head.teacher_id, "role": "teacher"}
+        )
+        teacher = db.users.find_one(query)
+        if not teacher:
+            raise HTTPException(
+                status_code=404,
+                detail="Teacher not found. Only existing active teachers can be designated as heads."
+            )
 
-        user_id = generate_head_id(head.name)
-        password = generate_head_password(head.name)
-        hashed_password = hash_password(password)
-
-        head_doc = {
-            "user_id": user_id,
-            "name": head.name,
-            "email": head.email,
-            "mobile": head.mobile or "",
-            "age": head.age,
-            "subjects": head.subjects,
-            "assignment_type": head.assignment_type,
+        # Promote teacher to head role
+        update_doc = {
+            "role": "head",
             "assigned_classes": head.assigned_classes,
             "assigned_subjects": head.assigned_subjects,
-            "password": hashed_password,
-            "role": "head",
-            "is_active": True,
-            "created_at": datetime.utcnow(),
-            "created_by": "admin",
-            "last_login": None
+            "promoted_to_head_at": datetime.utcnow(),
+            "promoted_from_teacher": True,
+            "updated_by": "admin",
         }
-
-        result = db.users.insert_one(head_doc)
-        head_doc["_id"] = result.inserted_id
+        db.users.update_one({"_id": teacher["_id"]}, {"$set": update_doc})
+        updated = db.users.find_one({"_id": teacher["_id"]})
 
         response = {
-            "id": str(head_doc["_id"]),
-            "user_id": user_id,
-            "name": head.name,
-            "email": head.email,
-            "mobile": head.mobile or "",
-            "subjects": head.subjects,
-            "assignment_type": head.assignment_type,
+            "id": str(updated["_id"]),
+            "user_id": updated.get("user_id", ""),
+            "name": updated.get("name", ""),
+            "email": updated.get("email", ""),
+            "mobile": updated.get("mobile", ""),
+            "subjects": updated.get("subjects", []),
             "assigned_classes": head.assigned_classes,
             "assigned_subjects": head.assigned_subjects,
-            "is_active": True,
-            "generated_credentials": {
-                "user_id": user_id,
-                "password": password,
-                "note": "Share these credentials with the head."
-            }
+            "promoted_from_teacher": True,
+            "is_active": updated.get("is_active", True),
+            "note": f"{updated.get('name')} has been designated as head. They can log in with their existing credentials (User ID: {updated.get('user_id')})."
         }
 
-        email_sent = send_credentials_email(head.email, user_id, password, head.name)
-        if email_sent:
-            response["generated_credentials"]["email_status"] = "sent"
-        else:
-            response["generated_credentials"]["email_status"] = "failed"
-            logger.warning(f"Failed to send email to {head.email}")
-
-        logger.info(f"Created head: {user_id} ({head.name})")
+        logger.info(f"Promoted teacher to head: {updated.get('user_id')} ({updated.get('name')})")
         return response
 
     except HTTPException:
@@ -1581,23 +1559,15 @@ async def create_head(head: HeadCreate):
 
 @router.put("/heads/{head_id}")
 async def update_head(head_id: str, head: HeadUpdate):
-    """Update a head user's information."""
+    """Update a head user's assignment and status."""
     try:
         update_doc = {}
         if head.name is not None:
             update_doc["name"] = head.name
-        if head.email is not None:
-            update_doc["email"] = head.email
         if head.mobile is not None:
             update_doc["mobile"] = head.mobile
-        if head.age is not None:
-            update_doc["age"] = head.age
-        if head.subjects is not None:
-            update_doc["subjects"] = head.subjects
         if head.is_active is not None:
             update_doc["is_active"] = head.is_active
-        if head.assignment_type is not None:
-            update_doc["assignment_type"] = head.assignment_type
         if head.assigned_classes is not None:
             update_doc["assigned_classes"] = head.assigned_classes
         if head.assigned_subjects is not None:
@@ -1626,9 +1596,9 @@ async def update_head(head_id: str, head: HeadUpdate):
             "email": result.get("email", ""),
             "mobile": result.get("mobile", ""),
             "subjects": result.get("subjects", []),
-            "assignment_type": result.get("assignment_type", "class"),
             "assigned_classes": result.get("assigned_classes", []),
             "assigned_subjects": result.get("assigned_subjects", []),
+            "promoted_from_teacher": result.get("promoted_from_teacher", False),
             "is_active": result.get("is_active", True)
         }
 
@@ -1640,7 +1610,7 @@ async def update_head(head_id: str, head: HeadUpdate):
 
 @router.delete("/heads/{head_id}")
 async def delete_head(head_id: str):
-    """Delete a head user."""
+    """Remove head designation. Demotes promoted teachers back to teacher; deletes legacy heads."""
     try:
         query = {"_id": ObjectId(head_id), "role": "head"} if ObjectId.is_valid(head_id) else {"user_id": head_id, "role": "head"}
 
@@ -1648,10 +1618,27 @@ async def delete_head(head_id: str):
         if not head:
             raise HTTPException(status_code=404, detail="Head not found")
 
-        db.users.delete_one({"_id": head["_id"]})
-
-        logger.info(f"Deleted head: {head_id}")
-        return {"success": True, "message": "Head deleted successfully"}
+        if head.get("promoted_from_teacher", False):
+            # Restore to teacher role instead of deleting
+            db.users.update_one(
+                {"_id": head["_id"]},
+                {
+                    "$set": {"role": "teacher"},
+                    "$unset": {
+                        "assigned_classes": "",
+                        "assigned_subjects": "",
+                        "promoted_to_head_at": "",
+                        "promoted_from_teacher": ""
+                    }
+                }
+            )
+            logger.info(f"Demoted head back to teacher: {head_id}")
+            return {"success": True, "message": f"{head.get('name')} has been demoted back to teacher.", "demoted": True}
+        else:
+            # Legacy head account — delete entirely
+            db.users.delete_one({"_id": head["_id"]})
+            logger.info(f"Deleted legacy head: {head_id}")
+            return {"success": True, "message": "Head deleted successfully", "demoted": False}
 
     except HTTPException:
         raise

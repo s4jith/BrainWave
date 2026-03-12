@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Lightbulb, BookOpen, GraduationCap } from "lucide-react";
+import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, BookOpen, GraduationCap, User, X, Info } from "lucide-react";
 import { CLASSES } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
@@ -16,41 +16,75 @@ export default function HeadManagement() {
     const [error, setError] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-    const [newCredentials, setNewCredentials] = useState(null);
+    const [showInfoModal, setShowInfoModal] = useState(false);
+    const [infoMessage, setInfoMessage] = useState(null);
     const [selectedHead, setSelectedHead] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const [formData, setFormData] = useState({
-        name: "",
-        email: "",
-        mobile: "",
-        age: "",
-        assignment_type: "class",
+    // Available teachers for the Add modal
+    const [availableTeachers, setAvailableTeachers] = useState([]);
+    const [teacherSearch, setTeacherSearch] = useState("");
+
+    // Available subjects from curriculum API
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+
+    // Add form: pick a teacher + assign classes/subjects
+    const [addForm, setAddForm] = useState({
+        teacher_id: "",
         assigned_classes: [],
         assigned_subjects: [],
     });
 
-    // Load available subjects from curriculum API (exact names matching DB)
-    const [availableSubjects, setAvailableSubjects] = useState([]);
+    // Edit form: update assignments + active status
+    const [editForm, setEditForm] = useState({
+        assigned_classes: [],
+        assigned_subjects: [],
+        is_active: true,
+    });
+
     useEffect(() => {
-        authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`)
-            .then(r => r.ok ? r.json() : [])
-            .then(data => {
+        fetchHeads();
+        loadTeachers();
+        loadSubjects();
+    }, []);
+
+    const loadTeachers = async () => {
+        try {
+            const resp = await authFetch(`${API_URL}/api/admin/teachers?is_active=true&limit=500`, {
+                headers: getAuthHeader()
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                // Only show pure teachers (not already promoted to head) in the picker
+                const pureTeachers = (Array.isArray(data) ? data : []).filter(t => t.role !== "head");
+                setAvailableTeachers(pureTeachers);
+            }
+        } catch {
+            setAvailableTeachers([]);
+        }
+    };
+
+    const loadSubjects = async () => {
+        try {
+            const resp = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
+                headers: getAuthHeader()
+            });
+            if (resp.ok) {
+                const data = await resp.json();
                 const subjects = [...new Set(
                     (Array.isArray(data) ? data : (data.subjects || []))
                         .map(s => s.subject_name || s.name || s)
                         .filter(Boolean)
                 )].sort();
                 setAvailableSubjects(subjects.length > 0 ? subjects : ["Maths", "English", "Hindi", "Science", "Social Science"]);
-            })
-            .catch(() => setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]));
-    }, []);
-
-    useEffect(() => {
-        fetchHeads();
-    }, []);
+            } else {
+                setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
+            }
+        } catch {
+            setAvailableSubjects(["Maths", "English", "Hindi", "Science", "Social Science"]);
+        }
+    };
 
     const fetchHeads = async () => {
         try {
@@ -71,35 +105,38 @@ export default function HeadManagement() {
 
     const handleAddHead = async (e) => {
         e.preventDefault();
+        if (!addForm.teacher_id) return alert("Please select a teacher to designate as head.");
+        if (addForm.assigned_classes.length === 0 && addForm.assigned_subjects.length === 0) {
+            return alert("Please assign at least one class or subject to this head.");
+        }
         try {
             setSaving(true);
-            const dataToSend = {
-                name: formData.name,
-                email: formData.email,
-                mobile: formData.mobile,
-                age: formData.age ? parseInt(formData.age, 10) : null,
-                subjects: [],
-                assignment_type: formData.assignment_type,
-                assigned_classes: formData.assignment_type === "class" ? formData.assigned_classes : [],
-                assigned_subjects: formData.assignment_type === "subject" ? formData.assigned_subjects : []
-            };
             const response = await authFetch(`${API_URL}/api/admin/heads`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify(dataToSend)
+                body: JSON.stringify({
+                    teacher_id: addForm.teacher_id,
+                    assigned_classes: addForm.assigned_classes,
+                    assigned_subjects: addForm.assigned_subjects,
+                })
             });
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.detail || "Failed to add head");
+                throw new Error(err.detail || "Failed to designate head");
             }
             const newHead = await response.json();
-            if (newHead.generated_credentials) {
-                setNewCredentials(newHead.generated_credentials);
-                setShowCredentialsModal(true);
-            }
             setHeads([newHead, ...heads]);
             setShowAddModal(false);
-            resetForm();
+            resetAddForm();
+            setInfoMessage({
+                title: "Head Designated Successfully",
+                user_id: newHead.user_id,
+                name: newHead.name,
+                note: newHead.note || `${newHead.name} can now log in with their existing credentials.`
+            });
+            setShowInfoModal(true);
+            // Reload teachers to exclude the promoted one
+            loadTeachers();
         } catch (err) {
             alert("Error: " + err.message);
         } finally {
@@ -109,27 +146,25 @@ export default function HeadManagement() {
 
     const handleEditHead = async (e) => {
         e.preventDefault();
+        if (editForm.assigned_classes.length === 0 && editForm.assigned_subjects.length === 0) {
+            return alert("Please assign at least one class or subject.");
+        }
         try {
             setSaving(true);
-            const dataToSend = {
-                ...formData,
-                assignment_type: formData.assignment_type,
-                assigned_classes: formData.assignment_type === "class" ? formData.assigned_classes : [],
-                assigned_subjects: formData.assignment_type === "subject" ? formData.assigned_subjects : []
-            };
-            if (dataToSend.age) dataToSend.age = parseInt(dataToSend.age, 10);
-
             const response = await authFetch(`${API_URL}/api/admin/heads/${selectedHead.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify(dataToSend)
+                body: JSON.stringify({
+                    assigned_classes: editForm.assigned_classes,
+                    assigned_subjects: editForm.assigned_subjects,
+                    is_active: editForm.is_active,
+                })
             });
             if (!response.ok) throw new Error("Failed to update head");
             const updated = await response.json();
             setHeads(heads.map(h => h.id === selectedHead.id ? { ...h, ...updated } : h));
             setShowEditModal(false);
             setSelectedHead(null);
-            resetForm();
         } catch (err) {
             alert("Error: " + err.message);
         } finally {
@@ -137,18 +172,24 @@ export default function HeadManagement() {
         }
     };
 
-    const handleDeleteHead = async (headId) => {
-        if (!confirm("Are you sure you want to delete this head?")) return;
+    const handleRemoveHead = async (head) => {
+        const isPromoted = head.promoted_from_teacher;
+        const msg = isPromoted
+            ? `Remove ${head.name} as head? They will be demoted back to teacher.`
+            : `Delete head ${head.name}? This cannot be undone.`;
+        if (!confirm(msg)) return;
         try {
-            const response = await authFetch(`${API_URL}/api/admin/heads/${headId}`, {
+            const response = await authFetch(`${API_URL}/api/admin/heads/${head.id}`, {
                 method: "DELETE",
                 headers: getAuthHeader()
             });
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.detail || "Failed to delete head");
+                throw new Error(err.detail || "Failed to remove head");
             }
-            setHeads(heads.filter(h => h.id !== headId));
+            const result = await response.json();
+            setHeads(heads.filter(h => h.id !== head.id));
+            if (result.demoted) loadTeachers(); // Back to teacher pool
         } catch (err) {
             alert("Error: " + err.message);
         }
@@ -163,43 +204,118 @@ export default function HeadManagement() {
             });
             if (!response.ok) throw new Error("Failed to reset password");
             const result = await response.json();
-            setNewCredentials({
+            setInfoMessage({
+                title: "Password Reset",
                 user_id: head.user_id,
+                name: head.name,
                 password: result.new_password,
-                note: "Password has been reset"
+                note: "Share the new password with the head."
             });
-            setShowCredentialsModal(true);
+            setShowInfoModal(true);
         } catch (err) {
             alert("Error: " + err.message);
         }
     };
 
-    const resetForm = () => {
-        setFormData({ name: "", email: "", mobile: "", age: "", assignment_type: "class", assigned_classes: [], assigned_subjects: [] });
+    const resetAddForm = () => {
+        setAddForm({ teacher_id: "", assigned_classes: [], assigned_subjects: [] });
+        setTeacherSearch("");
     };
 
     const openEditModal = (head) => {
         setSelectedHead(head);
-        setFormData({
-            name: head.name,
-            email: head.email,
-            mobile: head.mobile || "",
-            age: head.age || "",
-            assignment_type: head.assignment_type || "class",
+        setEditForm({
             assigned_classes: head.assigned_classes || [],
-            assigned_subjects: head.assigned_subjects || []
+            assigned_subjects: head.assigned_subjects || [],
+            is_active: head.is_active !== false,
         });
         setShowEditModal(true);
     };
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert("Copied to clipboard!");
     };
 
     const filteredHeads = heads.filter(h =>
         h.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        h.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        h.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        h.user_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const filteredTeachers = availableTeachers.filter(t =>
+        t.name?.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+        t.email?.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+        t.user_id?.toLowerCase().includes(teacherSearch.toLowerCase())
+    );
+
+    const selectedTeacher = availableTeachers.find(t => t.id === addForm.teacher_id);
+
+    // Toggle helper for class/subject selection
+    const toggleClass = (c, form, setForm) => {
+        const updated = form.assigned_classes.includes(c)
+            ? form.assigned_classes.filter(x => x !== c)
+            : [...form.assigned_classes, c];
+        setForm({ ...form, assigned_classes: updated });
+    };
+
+    const toggleSubject = (s, form, setForm) => {
+        const updated = form.assigned_subjects.includes(s)
+            ? form.assigned_subjects.filter(x => x !== s)
+            : [...form.assigned_subjects, s];
+        setForm({ ...form, assigned_subjects: updated });
+    };
+
+    // Shared assignment section JSX
+    const AssignmentSection = ({ form, setForm }) => (
+        <div className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Assign Classes
+                    <span className="ml-2 text-xs font-normal text-gray-500">({form.assigned_classes.length} selected)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    {CLASSES.map(c => (
+                        <button
+                            key={c}
+                            type="button"
+                            onClick={() => toggleClass(c, form, setForm)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                                form.assigned_classes.includes(c)
+                                    ? "bg-blue-500 text-white border-blue-500"
+                                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-blue-300"
+                            }`}
+                        >
+                            Class {c}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Assign Subjects
+                    <span className="ml-2 text-xs font-normal text-gray-500">({form.assigned_subjects.length} selected)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    {availableSubjects.map(s => (
+                        <button
+                            key={s}
+                            type="button"
+                            onClick={() => toggleSubject(s, form, setForm)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                                form.assigned_subjects.includes(s)
+                                    ? "bg-purple-500 text-white border-purple-500"
+                                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-purple-300"
+                            }`}
+                        >
+                            {s}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {form.assigned_classes.length === 0 && form.assigned_subjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">Assign at least one class or subject</p>
+            )}
+        </div>
     );
 
     return (
@@ -210,17 +326,17 @@ export default function HeadManagement() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                     <input
                         type="text"
-                        placeholder="Search by name or email..."
+                        placeholder="Search by name, email or user ID..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                     />
                 </div>
                 <button
-                    onClick={() => setShowAddModal(true)}
+                    onClick={() => { resetAddForm(); setShowAddModal(true); }}
                     className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition flex items-center gap-2 font-medium"
                 >
-                    <UserPlus className="w-4 h-4" /> Add New Head
+                    <UserPlus className="w-4 h-4" /> Designate Head
                 </button>
             </div>
 
@@ -250,12 +366,12 @@ export default function HeadManagement() {
                 </div>
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                            <User className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Inactive</p>
-                            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{heads.filter(h => h.is_active === false).length}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">From Teachers</p>
+                            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{heads.filter(h => h.promoted_from_teacher).length}</p>
                         </div>
                     </div>
                 </div>
@@ -270,12 +386,13 @@ export default function HeadManagement() {
                 ) : heads.length === 0 ? (
                     <div className="p-12 text-center">
                         <Shield className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">No heads found</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">No heads designated yet</p>
+                        <p className="text-gray-400 dark:text-gray-500 text-sm mb-6">Select a teacher to designate as head</p>
                         <button
-                            onClick={() => setShowAddModal(true)}
+                            onClick={() => { resetAddForm(); setShowAddModal(true); }}
                             className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium"
                         >
-                            Add Your First Head
+                            Designate First Head
                         </button>
                     </div>
                 ) : (
@@ -285,8 +402,8 @@ export default function HeadManagement() {
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">User ID</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Assignment</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Email</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Classes</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Subjects</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
                                 </tr>
@@ -295,36 +412,35 @@ export default function HeadManagement() {
                                 {filteredHeads.map((head) => (
                                     <tr key={head.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                                         <td className="px-6 py-4">
-                                            <p className="font-medium text-gray-900 dark:text-white">{head.name}</p>
+                                            <div>
+                                                <p className="font-medium text-gray-900 dark:text-white">{head.name}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{head.email}</p>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <code className="text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded">{head.user_id}</code>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {head.assignment_type === "subject" ? (
-                                                <div className="flex flex-wrap gap-1">
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 mb-0.5">
-                                                        <BookOpen className="w-3 h-3" /> Subject
-                                                    </span>
-                                                    {(head.assigned_subjects || []).map(s => (
-                                                        <span key={s} className="px-2 py-0.5 rounded-full text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-300">{s}</span>
-                                                    ))}
-                                                    {(!head.assigned_subjects || head.assigned_subjects.length === 0) && <span className="text-xs text-gray-400">None set</span>}
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-1">
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 mb-0.5">
-                                                        <GraduationCap className="w-3 h-3" /> Class
-                                                    </span>
-                                                    {(head.assigned_classes || []).map(c => (
-                                                        <span key={c} className="px-2 py-0.5 rounded-full text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300">Class {c}</span>
-                                                    ))}
-                                                    {(!head.assigned_classes || head.assigned_classes.length === 0) && <span className="text-xs text-gray-400">None set</span>}
-                                                </div>
-                                            )}
+                                            <div className="flex flex-wrap gap-1 max-w-[160px]">
+                                                {(head.assigned_classes || []).length > 0 ? (
+                                                    (head.assigned_classes || []).map(c => (
+                                                        <span key={c} className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">C{c}</span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">—</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">{head.email}</p>
+                                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                {(head.assigned_subjects || []).length > 0 ? (
+                                                    (head.assigned_subjects || []).map(s => (
+                                                        <span key={s} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">{s}</span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">—</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${head.is_active !== false ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"}`}>
@@ -336,7 +452,7 @@ export default function HeadManagement() {
                                                 <button
                                                     onClick={() => openEditModal(head)}
                                                     className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
-                                                    title="Edit"
+                                                    title="Edit assignments"
                                                 >
                                                     <Edit className="w-3.5 h-3.5" /> Edit
                                                 </button>
@@ -348,9 +464,9 @@ export default function HeadManagement() {
                                                     <Key className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteHead(head.id)}
+                                                    onClick={() => handleRemoveHead(head)}
                                                     className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
-                                                    title="Delete"
+                                                    title={head.promoted_from_teacher ? "Demote to teacher" : "Delete head"}
                                                 >
                                                     <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
@@ -364,330 +480,225 @@ export default function HeadManagement() {
                 )}
             </div>
 
-            {/* Add Modal */}
+            {/* ── Designate Head Modal ── */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Add New Head</h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex items-start gap-2">
-                            <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
-                            <span>User ID and Password will be auto-generated based on name. The head will be able to approve or reject teacher-created questions and papers.</span>
-                        </p>
-                        <form onSubmit={handleAddHead} className="space-y-4">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-xl mx-auto border dark:border-gray-700 flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700 flex-shrink-0">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name *</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                    placeholder="Head name"
-                                />
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Designate Head</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Select a teacher to promote as head</p>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email *</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                    placeholder="email@example.com"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile</label>
-                                    <input
-                                        type="tel"
-                                        value={formData.mobile}
-                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="10-digit number"
-                                        maxLength={10}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
-                                    <input
-                                        type="number"
-                                        min={18}
-                                        max={100}
-                                        value={formData.age}
-                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="Age"
-                                    />
-                                </div>
-                            </div>
+                            <button onClick={() => { setShowAddModal(false); resetAddForm(); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
 
-                            {/* Assignment Type */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assignment Type *</label>
-                                <div className="flex gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, assignment_type: "class", assigned_subjects: [] })}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition font-medium text-sm ${formData.assignment_type === "class" ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300"}`}
-                                    >
-                                        <GraduationCap className="w-4 h-4" /> By Class
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, assignment_type: "subject", assigned_classes: [] })}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition font-medium text-sm ${formData.assignment_type === "subject" ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400" : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300"}`}
-                                    >
-                                        <BookOpen className="w-4 h-4" /> By Subject
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Class Selection */}
-                            {formData.assignment_type === "class" && (
+                        {/* Modal Body */}
+                        <div className="overflow-y-auto flex-1 p-6">
+                            <form onSubmit={handleAddHead} id="add-head-form" className="space-y-5">
+                                {/* Step 1: Select Teacher */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Classes</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {CLASSES.map(c => (
-                                            <button
-                                                key={c}
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = formData.assigned_classes.includes(c)
-                                                        ? formData.assigned_classes.filter(x => x !== c)
-                                                        : [...formData.assigned_classes, c];
-                                                    setFormData({ ...formData, assigned_classes: updated });
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${formData.assigned_classes.includes(c) ? "bg-blue-500 text-white border-blue-500" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-blue-300"}`}
-                                            >
-                                                Class {c}
-                                            </button>
-                                        ))}
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <User className="w-4 h-4" /> Select Teacher *
+                                        </span>
+                                    </label>
+                                    <div className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden">
+                                        <div className="p-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search teachers by name or email..."
+                                                    value={teacherSearch}
+                                                    onChange={e => setTeacherSearch(e.target.value)}
+                                                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="max-h-44 overflow-y-auto">
+                                            {availableTeachers.length === 0 ? (
+                                                <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                    No teachers available
+                                                </div>
+                                            ) : filteredTeachers.length === 0 ? (
+                                                <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                    No teachers match "{teacherSearch}"
+                                                </div>
+                                            ) : (
+                                                filteredTeachers.map(teacher => (
+                                                    <label
+                                                        key={teacher.id}
+                                                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-gray-50 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition ${addForm.teacher_id === teacher.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name="teacher_select"
+                                                            value={teacher.id}
+                                                            checked={addForm.teacher_id === teacher.id}
+                                                            onChange={() => setAddForm({ ...addForm, teacher_id: teacher.id })}
+                                                            className="w-4 h-4 text-blue-600 border-gray-300"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{teacher.name}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                                {teacher.user_id}
+                                                                {teacher.email ? ` • ${teacher.email}` : ""}
+                                                            </p>
+                                                            {teacher.subjects?.length > 0 && (
+                                                                <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">{teacher.subjects.join(", ")}</p>
+                                                            )}
+                                                        </div>
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                    {formData.assigned_classes.length === 0 && <p className="text-xs text-amber-500 mt-1">Select at least one class</p>}
+                                    {selectedTeacher && (
+                                        <div className="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
+                                            Selected: <strong>{selectedTeacher.name}</strong> ({selectedTeacher.user_id})
+                                        </div>
+                                    )}
+                                    {!addForm.teacher_id && (
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Select a teacher to designate as head</p>
+                                    )}
                                 </div>
-                            )}
 
-                            {/* Subject Selection */}
-                            {formData.assignment_type === "subject" && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Subjects</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {availableSubjects.map(s => (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = formData.assigned_subjects.includes(s)
-                                                        ? formData.assigned_subjects.filter(x => x !== s)
-                                                        : [...formData.assigned_subjects, s];
-                                                    setFormData({ ...formData, assigned_subjects: updated });
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${formData.assigned_subjects.includes(s) ? "bg-purple-500 text-white border-purple-500" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-purple-300"}`}
-                                            >
-                                                {s}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {formData.assigned_subjects.length === 0 && <p className="text-xs text-amber-500 mt-1">Select at least one subject</p>}
-                                </div>
-                            )}
+                                <hr className="border-gray-200 dark:border-gray-700" />
 
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowAddModal(false); resetForm(); }}
-                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
-                                >
-                                    {saving ? "Adding..." : "Add Head"}
-                                </button>
-                            </div>
-                        </form>
+                                {/* Step 2: Assign Classes & Subjects */}
+                                <AssignmentSection form={addForm} setForm={setAddForm} />
+                            </form>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t dark:border-gray-700 flex gap-3 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => { setShowAddModal(false); resetAddForm(); }}
+                                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                form="add-head-form"
+                                disabled={saving}
+                                className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
+                            >
+                                {saving ? "Designating..." : "Designate as Head"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Edit Modal */}
-            {showEditModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 border dark:border-gray-700">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-5">Edit Head</h2>
-                        <form onSubmit={handleEditHead} className="space-y-4">
+            {/* ── Edit Head Modal ── */}
+            {showEditModal && selectedHead && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-xl mx-auto border dark:border-gray-700 flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700 flex-shrink-0">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                />
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Head</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{selectedHead.name} ({selectedHead.user_id})</p>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mobile</label>
-                                    <input
-                                        type="tel"
-                                        value={formData.mobile}
-                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="10-digit number"
-                                        maxLength={10}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
-                                    <input
-                                        type="number"
-                                        min={18}
-                                        max={100}
-                                        value={formData.age}
-                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="Age"
-                                    />
-                                </div>
-                            </div>
+                            <button onClick={() => { setShowEditModal(false); setSelectedHead(null); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
 
-                            {/* Assignment Type */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assignment Type</label>
-                                <div className="flex gap-3">
+                        {/* Modal Body */}
+                        <div className="overflow-y-auto flex-1 p-6">
+                            <form onSubmit={handleEditHead} id="edit-head-form" className="space-y-5">
+                                {/* Assignment */}
+                                <AssignmentSection form={editForm} setForm={setEditForm} />
+
+                                <hr className="border-gray-200 dark:border-gray-700" />
+
+                                {/* Active Status */}
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Account Status</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Disable to temporarily restrict access</p>
+                                    </div>
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ ...formData, assignment_type: "class", assigned_subjects: [] })}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition font-medium text-sm ${formData.assignment_type === "class" ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300"}`}
+                                        onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}
                                     >
-                                        <GraduationCap className="w-4 h-4" /> By Class
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, assignment_type: "subject", assigned_classes: [] })}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition font-medium text-sm ${formData.assignment_type === "subject" ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400" : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300"}`}
-                                    >
-                                        <BookOpen className="w-4 h-4" /> By Subject
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.is_active ? "translate-x-6" : "translate-x-1"}`} />
                                     </button>
                                 </div>
-                            </div>
+                            </form>
+                        </div>
 
-                            {formData.assignment_type === "class" && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Classes</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {CLASSES.map(c => (
-                                            <button
-                                                key={c}
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = formData.assigned_classes.includes(c)
-                                                        ? formData.assigned_classes.filter(x => x !== c)
-                                                        : [...formData.assigned_classes, c];
-                                                    setFormData({ ...formData, assigned_classes: updated });
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${formData.assigned_classes.includes(c) ? "bg-blue-500 text-white border-blue-500" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-blue-300"}`}
-                                            >
-                                                Class {c}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {formData.assignment_type === "subject" && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Subjects</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {availableSubjects.map(s => (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = formData.assigned_subjects.includes(s)
-                                                        ? formData.assigned_subjects.filter(x => x !== s)
-                                                        : [...formData.assigned_subjects, s];
-                                                    setFormData({ ...formData, assigned_subjects: updated });
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${formData.assigned_subjects.includes(s) ? "bg-purple-500 text-white border-purple-500" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-purple-300"}`}
-                                            >
-                                                {s}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowEditModal(false); setSelectedHead(null); resetForm(); }}
-                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
-                                >
-                                    {saving ? "Saving..." : "Save Changes"}
-                                </button>
-                            </div>
-                        </form>
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t dark:border-gray-700 flex gap-3 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => { setShowEditModal(false); setSelectedHead(null); }}
+                                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                form="edit-head-form"
+                                disabled={saving}
+                                className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 font-medium"
+                            >
+                                {saving ? "Saving..." : "Save Changes"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Credentials Modal */}
-            {showCredentialsModal && newCredentials && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 border dark:border-gray-700">
+            {/* ── Info Modal (after designation or reset) ── */}
+            {showInfoModal && infoMessage && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-auto border dark:border-gray-700">
                         <div className="text-center mb-6">
                             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
                             </div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Credentials Generated</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Share these with the head</p>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{infoMessage.title}</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{infoMessage.name}</p>
                         </div>
-                        <div className="space-y-4 mb-6">
+
+                        <div className="space-y-3 mb-6">
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">User ID</p>
                                 <div className="flex items-center justify-between">
-                                    <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.user_id}</code>
-                                    <button onClick={() => copyToClipboard(newCredentials.user_id)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+                                    <code className="font-mono text-base font-semibold text-gray-900 dark:text-white">{infoMessage.user_id}</code>
+                                    <button onClick={() => copyToClipboard(infoMessage.user_id)} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg" title="Copy">
                                         <Clipboard className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Password</p>
-                                <div className="flex items-center justify-between">
-                                    <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.password}</code>
-                                    <button onClick={() => copyToClipboard(newCredentials.password)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
-                                        <Clipboard className="w-4 h-4" />
-                                    </button>
+                            {infoMessage.password && (
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">New Password</p>
+                                    <div className="flex items-center justify-between">
+                                        <code className="font-mono text-base font-semibold text-gray-900 dark:text-white">{infoMessage.password}</code>
+                                        <button onClick={() => copyToClipboard(infoMessage.password)} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg" title="Copy">
+                                            <Clipboard className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">{newCredentials.note}</p>
+
+                        <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400 mb-5 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" />
+                            <span>{infoMessage.note}</span>
+                        </div>
+
                         <button
-                            onClick={() => { setShowCredentialsModal(false); setNewCredentials(null); }}
+                            onClick={() => { setShowInfoModal(false); setInfoMessage(null); }}
                             className="w-full px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 font-medium transition"
                         >
                             Done
@@ -698,3 +709,4 @@ export default function HeadManagement() {
         </AdminLayout>
     );
 }
+

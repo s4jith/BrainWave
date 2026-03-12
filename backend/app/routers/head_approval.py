@@ -58,8 +58,11 @@ def _subject_regex_pattern(name: str) -> str:
 def build_assignment_filter(head_doc: dict, base_query: dict = None) -> dict:
     """
     Build a MongoDB query filter based on head's assignment.
-    - assignment_type='class' → filter by class_level in assigned_classes
-    - assignment_type='subject' → filter by subject in assigned_subjects
+    New-style heads (promoted_from_teacher=True, no assignment_type):
+      - Filter by class_level in assigned_classes OR subject in assigned_subjects
+    Legacy heads (with assignment_type):
+      - assignment_type='class' → filter by class_level in assigned_classes
+      - assignment_type='subject' → filter by subject in assigned_subjects
     - Admin (no head_doc) → no restriction
     - Head with empty assignment → return impossible filter (see nothing)
     """
@@ -67,54 +70,86 @@ def build_assignment_filter(head_doc: dict, base_query: dict = None) -> dict:
     if not head_doc:
         return query
 
-    a_type = head_doc.get("assignment_type", "class")
+    a_type = head_doc.get("assignment_type")  # None for new-style promoted heads
     a_classes = head_doc.get("assigned_classes", [])
     a_subjects = head_doc.get("assigned_subjects", [])
 
-    if a_type == "class":
-        if a_classes:
-            query["class_level"] = {"$in": a_classes}
-        else:
-            # No classes assigned — head should see nothing
-            query["_id"] = {"$exists": False}
-    elif a_type == "subject":
-        if a_subjects:
-            # Case-insensitive match for subjects including common aliases (e.g. Mathematics ↔ Maths)
-            subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
-            if "$and" not in query:
-                query["$and"] = [{"$or": subject_patterns}]
+    if a_type is not None:
+        # Legacy: use assignment_type strictly
+        if a_type == "class":
+            if a_classes:
+                query["class_level"] = {"$in": a_classes}
             else:
-                query["$and"].append({"$or": subject_patterns})
-        else:
-            # No subjects assigned — head should see nothing
+                query["_id"] = {"$exists": False}
+        elif a_type == "subject":
+            if a_subjects:
+                subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
+                if "$and" not in query:
+                    query["$and"] = [{"$or": subject_patterns}]
+                else:
+                    query["$and"].append({"$or": subject_patterns})
+            else:
+                query["_id"] = {"$exists": False}
+    else:
+        # New-style: match by class OR subject (OR logic between both)
+        flat_conditions = []
+        if a_classes:
+            flat_conditions.append({"class_level": {"$in": a_classes}})
+        if a_subjects:
+            for s in a_subjects:
+                flat_conditions.append({"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}})
+
+        if not flat_conditions:
             query["_id"] = {"$exists": False}
+        elif len(flat_conditions) == 1:
+            query.update(flat_conditions[0])
+        else:
+            if "$and" in query:
+                query["$and"].append({"$or": flat_conditions})
+            else:
+                query["$or"] = flat_conditions
 
     return query
 
 
 def build_assignment_filter_groups(head_doc: dict) -> dict:
-    """Build filter for groups collection."""
+    """Build filter for groups collection (same logic as build_assignment_filter)."""
     query = {}
     if not head_doc:
         return query
 
-    a_type = head_doc.get("assignment_type", "class")
+    a_type = head_doc.get("assignment_type")  # None for new-style promoted heads
     a_classes = head_doc.get("assigned_classes", [])
     a_subjects = head_doc.get("assigned_subjects", [])
 
-    if a_type == "class":
+    if a_type is not None:
+        # Legacy
+        if a_type == "class":
+            if a_classes:
+                query["class_level"] = {"$in": a_classes}
+            else:
+                query["_id"] = {"$exists": False}
+        elif a_type == "subject":
+            if a_subjects:
+                subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
+                query["$or"] = subject_patterns
+            else:
+                query["_id"] = {"$exists": False}
+    else:
+        # New-style: class OR subject
+        flat_conditions = []
         if a_classes:
-            query["class_level"] = {"$in": a_classes}
-        else:
-            # No classes assigned — head sees no groups
-            query["_id"] = {"$exists": False}
-    elif a_type == "subject":
+            flat_conditions.append({"class_level": {"$in": a_classes}})
         if a_subjects:
-            subject_patterns = [{"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}} for s in a_subjects]
-            query["$or"] = subject_patterns
-        else:
-            # No subjects assigned — head sees no groups
+            for s in a_subjects:
+                flat_conditions.append({"subject": {"$regex": _subject_regex_pattern(s), "$options": "i"}})
+
+        if not flat_conditions:
             query["_id"] = {"$exists": False}
+        elif len(flat_conditions) == 1:
+            query.update(flat_conditions[0])
+        else:
+            query["$or"] = flat_conditions
 
     return query
 
@@ -130,7 +165,7 @@ async def get_my_assignment(
         head = get_head_user(current_user.user_id)
         if not head:
             return {
-                "assignment_type": "class",
+                "assignment_type": None,
                 "assigned_classes": [],
                 "assigned_subjects": [],
                 "head_subjects": []
@@ -141,7 +176,7 @@ async def get_my_assignment(
             if g.get("subject")
         )))
         return {
-            "assignment_type": head.get("assignment_type", "class"),
+            "assignment_type": head.get("assignment_type"),
             "assigned_classes": head.get("assigned_classes", []),
             "assigned_subjects": head.get("assigned_subjects", []),
             "head_subjects": head_subjects
