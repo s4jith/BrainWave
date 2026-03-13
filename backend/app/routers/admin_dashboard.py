@@ -13,6 +13,7 @@ from bson import ObjectId
 import hashlib
 import logging
 import time
+import re
 
 from app.db.mongo import db
 from app.utils.email import send_credentials_email
@@ -769,21 +770,26 @@ async def get_teachers(
     Get list of all teachers with optional filters.
     """
     try:
-        # Include regular teachers AND teachers who have been promoted to head
-        filter_query = {"$or": [{"role": "teacher"}, {"role": "head", "promoted_from_teacher": True}]}
-        
+        # Include regular teachers and promoted-teacher heads in one stable query.
+        role_filter = {"$or": [{"role": "teacher"}, {"role": "head", "promoted_from_teacher": True}]}
+        filters = [role_filter]
+
         if is_active is not None:
-            filter_query["is_active"] = is_active
-            
+            filters.append({"is_active": is_active})
+
         if search:
-            filter_query["$or"] = [
-                {"name": {"$regex": search, "$options": "i"}},
-                {"email": {"$regex": search, "$options": "i"}},
-                {"user_id": {"$regex": search, "$options": "i"}}
-            ]
-            
+            filters.append({
+                "$or": [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"email": {"$regex": search, "$options": "i"}},
+                    {"user_id": {"$regex": search, "$options": "i"}}
+                ]
+            })
+
         if subject:
-            filter_query["subjects"] = {"$regex": f"^{subject}$", "$options": "i"}
+            filters.append({"subjects": {"$regex": f"^{re.escape(subject)}$", "$options": "i"}})
+
+        filter_query = {"$and": filters} if len(filters) > 1 else role_filter
         
         cursor = db.users.find(filter_query).limit(limit).sort("created_at", -1)
         teachers = []
@@ -868,7 +874,13 @@ def generate_teacher_password(name: str) -> str:
 async def create_teacher(teacher: TeacherCreate):
     """Create a new teacher account."""
     try:
-        existing = db.users.find_one({"email": teacher.email})
+        normalized_email = (teacher.email or "").strip().lower()
+        existing = db.users.find_one({
+            "$or": [
+                {"email_normalized": normalized_email},
+                {"email": {"$regex": f"^{re.escape((teacher.email or '').strip())}$", "$options": "i"}},
+            ]
+        })
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
@@ -879,7 +891,8 @@ async def create_teacher(teacher: TeacherCreate):
         teacher_doc = {
             "user_id": user_id,
             "name": teacher.name,
-            "email": teacher.email,
+            "email": (teacher.email or "").strip(),
+            "email_normalized": normalized_email,
             "mobile": teacher.mobile or "",
             "age": teacher.age,
             "subjects": teacher.subjects,
@@ -935,7 +948,28 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
         if teacher.name is not None:
             update_doc["name"] = teacher.name
         if teacher.email is not None:
-            update_doc["email"] = teacher.email
+            cleaned_email = teacher.email.strip()
+            normalized_email = cleaned_email.lower()
+            # Ensure email uniqueness when updating.
+            email_conflict = db.users.find_one({
+                "$and": [
+                    {
+                        "$or": [
+                            {"email_normalized": normalized_email},
+                            {"email": {"$regex": f"^{re.escape(cleaned_email)}$", "$options": "i"}},
+                        ]
+                    },
+                    {
+                        "$or": [
+                            {"_id": {"$ne": ObjectId(teacher_id)}} if ObjectId.is_valid(teacher_id) else {"user_id": {"$ne": teacher_id}},
+                        ]
+                    }
+                ]
+            })
+            if email_conflict:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            update_doc["email"] = cleaned_email
+            update_doc["email_normalized"] = normalized_email
         if teacher.mobile is not None:
             update_doc["mobile"] = teacher.mobile
         if teacher.age is not None:
@@ -981,7 +1015,24 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
 async def delete_teacher(teacher_id: str):
     """Delete a teacher. Blocked if the teacher is assigned to any groups."""
     try:
-        query = {"_id": ObjectId(teacher_id), "role": "teacher"} if ObjectId.is_valid(teacher_id) else {"user_id": teacher_id, "role": "teacher"}
+        # Teacher management may surface promoted teachers (role=head, promoted_from_teacher=True).
+        # Allow deleting either a pure teacher or a promoted-teacher account.
+        if ObjectId.is_valid(teacher_id):
+            query = {
+                "_id": ObjectId(teacher_id),
+                "$or": [
+                    {"role": "teacher"},
+                    {"role": "head", "promoted_from_teacher": True}
+                ]
+            }
+        else:
+            query = {
+                "user_id": teacher_id,
+                "$or": [
+                    {"role": "teacher"},
+                    {"role": "head", "promoted_from_teacher": True}
+                ]
+            }
 
         teacher = db.users.find_one(query)
         if not teacher:
@@ -1509,11 +1560,16 @@ async def get_heads(
 async def create_head(head: HeadCreate):
     """Designate an existing teacher as a head by promoting their account."""
     try:
+        if not (head.teacher_id or "").strip():
+            raise HTTPException(status_code=400, detail="teacher_id is required")
+
+        teacher_id = head.teacher_id.strip()
+
         # Find teacher by MongoDB _id or user_id
         query = (
-            {"_id": ObjectId(head.teacher_id), "role": "teacher"}
-            if ObjectId.is_valid(head.teacher_id)
-            else {"user_id": head.teacher_id, "role": "teacher"}
+            {"_id": ObjectId(teacher_id)}
+            if ObjectId.is_valid(teacher_id)
+            else {"user_id": teacher_id}
         )
         teacher = db.users.find_one(query)
         if not teacher:
@@ -1521,6 +1577,12 @@ async def create_head(head: HeadCreate):
                 status_code=404,
                 detail="Teacher not found. Only existing active teachers can be designated as heads."
             )
+
+        if teacher.get("role") == "head":
+            raise HTTPException(status_code=400, detail="Selected user is already a head")
+
+        if teacher.get("role") != "teacher":
+            raise HTTPException(status_code=400, detail="Selected user is not a teacher")
 
         # Promote teacher to head role
         update_doc = {

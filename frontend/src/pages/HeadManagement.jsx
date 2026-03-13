@@ -9,6 +9,19 @@ import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+function parseApiError(detail, fallback) {
+    if (!detail) return fallback;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+        const msgs = detail
+            .map((item) => item?.msg || item?.message)
+            .filter(Boolean);
+        return msgs.length ? msgs.join(", ") : fallback;
+    }
+    if (typeof detail === "object") return detail.message || fallback;
+    return fallback;
+}
+
 export default function HeadManagement() {
     const { getAuthHeader } = useUserStore();
     const [heads, setHeads] = useState([]);
@@ -111,18 +124,24 @@ export default function HeadManagement() {
         }
         try {
             setSaving(true);
+            const payload = {
+                teacher_id: String(addForm.teacher_id || "").trim(),
+                assigned_classes: addForm.assigned_classes
+                    .map((c) => Number(c))
+                    .filter((c) => Number.isInteger(c) && c >= 1 && c <= 12),
+                assigned_subjects: addForm.assigned_subjects
+                    .map((s) => String(s).trim())
+                    .filter(Boolean),
+            };
+
             const response = await authFetch(`${API_URL}/api/admin/heads`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify({
-                    teacher_id: addForm.teacher_id,
-                    assigned_classes: addForm.assigned_classes,
-                    assigned_subjects: addForm.assigned_subjects,
-                })
+                body: JSON.stringify(payload)
             });
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || "Failed to designate head");
+                const err = await response.json().catch(() => ({}));
+                throw new Error(parseApiError(err.detail, "Failed to designate head"));
             }
             const newHead = await response.json();
             setHeads([newHead, ...heads]);
