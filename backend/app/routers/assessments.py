@@ -35,8 +35,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/assessments", tags=["assessments"])
 
 
-def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
-    """Generate organized PDF for questions/answers/both using PyMuPDF."""
+def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict] = None) -> bytes:
+    """Generate organized PDF for questions/answers/both using PyMuPDF.
+
+    If submission is provided, answer sections print student answers.
+    """
     import fitz  # PyMuPDF
 
     doc = fitz.open()
@@ -69,6 +72,12 @@ def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
             y += line_height
 
     questions = assessment.get("questions", []) or []
+    answers_map = {}
+    if submission:
+        for ans in submission.get("answers", []) or []:
+            qid = ans.get("question_id")
+            if qid:
+                answers_map[qid] = ans
 
     write_line(assessment.get("title", "Assessment"), size=16)
     write_line(f"Class {assessment.get('class_level', '-')} | {assessment.get('subject', '-')}", size=10)
@@ -99,7 +108,67 @@ def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
 
         return q.get("correct_answer_text") or q.get("answer_text") or q.get("correct_answer") or "N/A"
 
-    if mode in ("questions", "both"):
+    def resolve_student_answer(q: dict) -> str:
+        qid = q.get("id")
+        ans = answers_map.get(qid, {})
+        if not ans:
+            return "No answer provided"
+
+        q_type = (q.get("type") or "").lower()
+
+        if q_type.startswith("mcq"):
+            options = q.get("options") or []
+            selected_ids = ans.get("selected_option_ids") or []
+            if not selected_ids:
+                selected_single = ans.get("selected_option")
+                if selected_single is not None:
+                    selected_ids = [selected_single]
+            selected_texts = []
+            for sel in selected_ids:
+                for opt in options:
+                    if isinstance(opt, dict) and (opt.get("id") == sel or opt.get("text") == sel):
+                        selected_texts.append(str(opt.get("text", "")).strip())
+                        break
+                    if not isinstance(opt, dict) and (opt == sel):
+                        selected_texts.append(str(opt).strip())
+                        break
+            if selected_texts:
+                return " | ".join([t for t in selected_texts if t])
+
+        if q_type == "true_false":
+            if ans.get("answer_bool") is True:
+                return "True"
+            if ans.get("answer_bool") is False:
+                return "False"
+
+        text_answer = ans.get("answer_text") or ans.get("text_answer")
+        if text_answer:
+            return str(text_answer)
+
+        return "No answer provided"
+
+    # For submission exports, "both" should directly print Questions + Student Answers
+    # in one continuous section instead of separate question-paper + answer-key pages.
+    if submission and mode == "both":
+        write_line("Questions & Student Answers", size=13)
+        y += 4
+        for idx, q in enumerate(questions, start=1):
+            points = q.get("points", q.get("marks", 1))
+            q_text = q.get("question_text") or q.get("text") or ""
+            write_wrapped(f"Q{idx}. {q_text} ({points} mark{'s' if points != 1 else ''})", size=11, width=90)
+
+            q_type = (q.get("type") or "").lower()
+            options = q.get("options") or []
+            if q_type.startswith("mcq") and options:
+                for oi, opt in enumerate(options):
+                    opt_text = opt.get("text") if isinstance(opt, dict) else str(opt)
+                    write_wrapped(f"{chr(65 + oi)}. {opt_text}", size=10, indent=14, width=82)
+
+            student_answer = resolve_student_answer(q)
+            write_wrapped(f"Student Answer: {student_answer}", size=11, indent=12, width=84)
+            write_line("", size=10)
+
+    elif mode in ("questions", "both"):
         write_line("Question Paper", size=13)
         y += 4
         for idx, q in enumerate(questions, start=1):
@@ -115,15 +184,15 @@ def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
                     write_wrapped(f"{chr(65 + oi)}. {opt_text}", size=10, indent=14, width=82)
             write_line("", size=10)
 
-    if mode in ("answers", "both"):
+    if mode in ("answers", "both") and not (submission and mode == "both"):
         if mode == "both":
             page = doc.new_page()
             y = margin_top
-        write_line("Answer Key", size=13)
+        write_line("Student Answers" if submission else "Answer Key", size=13)
         y += 4
         for idx, q in enumerate(questions, start=1):
             q_text = q.get("question_text") or q.get("text") or ""
-            answer = resolve_answer(q)
+            answer = resolve_student_answer(q) if submission else resolve_answer(q)
             write_wrapped(f"Q{idx}. {q_text}", size=10, width=90)
             write_wrapped(f"Answer: {answer}", size=11, indent=12, width=84)
             write_line("", size=10)
@@ -137,6 +206,7 @@ def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
 async def download_assessment_pdf(
     assessment_id: str,
     mode: str = Query("questions", pattern="^(questions|answers|both)$"),
+    submission_id: Optional[str] = Query(None),
     current_user: TokenData = Depends(get_current_user)
 ):
     """Download assessment as PDF: questions only, answers only, or both."""
@@ -151,9 +221,23 @@ async def download_assessment_pdf(
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Students cannot download assessment PDFs")
 
-    pdf_bytes = _build_assessment_pdf(assessment, mode)
+    submission_doc = None
+    if submission_id:
+        if not ObjectId.is_valid(submission_id):
+            raise HTTPException(status_code=400, detail="Invalid submission ID")
+        submission_doc = await mongodb.db.submissions.find_one({"_id": ObjectId(submission_id)})
+        if not submission_doc:
+            raise HTTPException(status_code=404, detail="Submission not found")
+        if submission_doc.get("assessment_id") != assessment_id:
+            raise HTTPException(status_code=400, detail="Submission does not belong to this assessment")
+
+    pdf_bytes = _build_assessment_pdf(assessment, mode, submission=submission_doc)
     safe_title = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in (assessment.get("title") or "assessment"))
-    filename = f"{safe_title}_{mode}.pdf"
+    if submission_doc:
+        student_part = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in (submission_doc.get("student_name") or submission_doc.get("student_id") or "student"))
+        filename = f"{safe_title}_{student_part}_{mode}.pdf"
+    else:
+        filename = f"{safe_title}_{mode}.pdf"
 
     return StreamingResponse(
         io.BytesIO(pdf_bytes),

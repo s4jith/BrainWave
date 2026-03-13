@@ -50,6 +50,7 @@ export default function TestManagement() {
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [downloadMenuTestId, setDownloadMenuTestId] = useState(null);
   const [downloading, setDownloading] = useState(null);
+  const [downloadingSubmissionPdf, setDownloadingSubmissionPdf] = useState(false);
 
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
@@ -429,6 +430,37 @@ export default function TestManagement() {
     }
   };
 
+  const handleDownloadSubmissionQAPdf = async () => {
+    if (!submissionDetail?.assessment_id || !submissionDetail?.id) return;
+    setDownloadingSubmissionPdf(true);
+    try {
+      const response = await authFetch(
+        `${API_URL}/api/assessments/${submissionDetail.assessment_id}/download?mode=both&submission_id=${submissionDetail.id}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to download submission PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeTitle = (submissionDetail.assessment_title || "assessment").replace(/[^a-z0-9-_]+/gi, "_");
+      const safeStudent = (submissionDetail.student_name || submissionDetail.student_id || "student").replace(/[^a-z0-9-_]+/gi, "_");
+      a.href = url;
+      a.download = `${safeTitle}_${safeStudent}_qa.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message || "Failed to download submission PDF");
+    } finally {
+      setDownloadingSubmissionPdf(false);
+    }
+  };
+
   const displayedTests = filterStatus
     ? tests.filter(t => {
         const s = getTestStatus(t);
@@ -696,9 +728,26 @@ export default function TestManagement() {
                     {submissionDetail.student_name} • Score: {submissionDetail.total_score}/{submissionDetail.max_score} ({submissionDetail.percentage}%)
                   </p>
                 )}
+                {submissionDetail && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Formula: Percentage = (Total Score / Max Score) x 100
+                  </p>
+                )}
               </div>
-              <button onClick={() => { setShowDetailModal(false); setSubmissionDetail(null); }}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+              <div className="flex items-center gap-2">
+                {submissionDetail && (
+                  <button
+                    onClick={handleDownloadSubmissionQAPdf}
+                    disabled={downloadingSubmissionPdf}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <Download className="w-3 h-3" />
+                    {downloadingSubmissionPdf ? "Downloading..." : "Download Q+A PDF"}
+                  </button>
+                )}
+                <button onClick={() => { setShowDetailModal(false); setSubmissionDetail(null); }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+              </div>
             </div>
             
             {loadingDetail ? (

@@ -1220,7 +1220,6 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
   const isAnswerDraftMode = paper.status === "draft_answer";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [submittingQuestion, setSubmittingQuestion] = useState(null);
   const [savingDraft, setSavingDraft] = useState(false);
 
   const [title, setTitle] = useState(paper.title || "");
@@ -1241,7 +1240,6 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
       options: q.options || [],
       correct_answer: q.correct_answer || "",
       section: q.section || "",
-      approval_status: q.approval_status || "draft_answer",
       image_ids: q.image_ids || [],
       answer_image_ids: q.answer_image_ids || [],
     }))
@@ -1366,38 +1364,6 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
       setError("Failed to update paper");
     }
     setLoading(false);
-  };
-
-  const handleSendQuestion = async (idx) => {
-    const q = questions[idx];
-    const validationError = validateQuestionForPending(q, idx);
-    if (validationError) { setError(validationError); return; }
-
-    const saved = await saveDraftToServer();
-    if (!saved) return;
-
-    setSubmittingQuestion(idx);
-    setError("");
-    try {
-      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}/questions/${idx + 1}/send-to-pending`, {
-        method: "POST",
-        headers: getAuthHeader(),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.detail || "Failed to send question to pending");
-        return;
-      }
-
-      setQuestions(prev => prev.map((item, i) => i === idx ? { ...item, approval_status: "pending" } : item));
-      if (data.paper_status === "pending") {
-        onSaved();
-      }
-    } catch {
-      setError("Failed to send question to pending");
-    } finally {
-      setSubmittingQuestion(null);
-    }
   };
 
   const handleSendAll = async () => {
@@ -1546,20 +1512,6 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-500">Question {idx + 1}</span>
                   <div className="flex items-center gap-2">
-                    {isAnswerDraftMode && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${q.approval_status === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"}`}>
-                        {q.approval_status === "pending" ? "Pending" : "Draft"}
-                      </span>
-                    )}
-                    {isAnswerDraftMode && q.approval_status !== "pending" && (
-                      <button
-                        onClick={() => handleSendQuestion(idx)}
-                        disabled={submittingQuestion === idx || savingDraft}
-                        className="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
-                      >
-                        {submittingQuestion === idx ? "Sending..." : "Send This Question"}
-                      </button>
-                    )}
                   {questions.length > 1 && (
                     <button onClick={() => removeQuestion(idx)} className="p-1 text-gray-400 hover:text-red-600">
                       <Trash2 className="w-4 h-4" />

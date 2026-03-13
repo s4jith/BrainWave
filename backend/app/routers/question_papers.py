@@ -775,69 +775,6 @@ async def send_paper_to_pending(
     return {"message": "Paper sent to pending approval"}
 
 
-@router.post("/{paper_id}/questions/{question_order}/send-to-pending")
-async def send_single_question_to_pending(
-    paper_id: str,
-    question_order: int,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
-):
-    """Move one draft question to pending; paper auto-moves when all questions are pending."""
-    if not ObjectId.is_valid(paper_id):
-        raise HTTPException(status_code=400, detail="Invalid paper ID")
-    if question_order < 1:
-        raise HTTPException(status_code=400, detail="Invalid question order")
-
-    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Paper not found")
-
-    if doc.get("status") != "draft_answer":
-        raise HTTPException(status_code=400, detail="Only draft answer papers can submit individual questions")
-
-    if doc.get("created_by") != current_user.user_id:
-        raise HTTPException(status_code=403, detail="You can only submit questions from your own draft paper")
-
-    questions = doc.get("questions", [])
-    if not questions:
-        raise HTTPException(status_code=400, detail="Paper has no questions")
-    if question_order > len(questions):
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    q = questions[question_order - 1]
-    _validate_question_for_pending(q, question_order)
-    q["approval_status"] = "pending"
-
-    pending_count = sum(1 for item in questions if item.get("approval_status") == "pending")
-    all_pending = pending_count == len(questions)
-
-    update_set = {
-        "questions": questions,
-        "updated_at": datetime.utcnow().isoformat(),
-    }
-    if all_pending:
-        update_set["status"] = "pending"
-        update_set["submitted_by"] = current_user.user_id
-        update_set["submitted_at"] = datetime.utcnow().isoformat()
-
-    await mongodb.db.question_papers.update_one(
-        {"_id": ObjectId(paper_id)},
-        {"$set": update_set}
-    )
-
-    if all_pending:
-        await create_approval_notification(
-            "create",
-            doc.get("title", "Question Paper"),
-            current_user.user_id,
-            paper_id,
-            doc.get("subject", ""),
-            doc.get("class_level", 0),
-        )
-        return {"message": "Question sent. All questions are now pending, paper submitted for approval.", "pending_count": pending_count, "total": len(questions), "paper_status": "pending"}
-
-    return {"message": "Question sent to pending.", "pending_count": pending_count, "total": len(questions), "paper_status": "draft_answer"}
-
-
 @router.post("/{paper_id}/approve")
 async def approve_paper(
     paper_id: str,

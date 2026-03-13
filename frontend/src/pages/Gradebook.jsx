@@ -120,6 +120,14 @@ function GradeRow({ grade }) {
     const pendingCount = isPendingReview
         ? (grade.evaluations || []).filter(e => e.evaluation_status === "pending").length
         : 0;
+    const totalQuestions = Number(
+        grade.total_questions ?? (Array.isArray(grade.evaluations) ? grade.evaluations.length : 0)
+    ) || 0;
+    const correctQuestions = Number(
+        grade.correct_count ?? (Array.isArray(grade.evaluations)
+            ? grade.evaluations.filter(e => e.is_correct === true).length
+            : 0)
+    ) || 0;
 
     const formatDate = (dt) => {
         if (!dt) return "";
@@ -141,7 +149,7 @@ function GradeRow({ grade }) {
                         <p className="font-medium text-gray-900 dark:text-white truncate">{grade.title}</p>
                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                             <span className={`px-1.5 py-0.5 rounded ${isAI ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
-                                {isAI ? "AI Test" : "Staff Test"}
+                                {isAI ? "AI Test" : "Assigned Test"}
                             </span>
                             {isPendingReview && (
                                 <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300">
@@ -159,7 +167,11 @@ function GradeRow({ grade }) {
                             {grade.percentage}%{isPendingReview ? "*" : ""}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {isPendingReview ? "Partial" : `${grade.score}/${grade.max_score}`}
+                            {isPendingReview
+                                ? "Partial"
+                                : totalQuestions > 0
+                                    ? `${correctQuestions}/${totalQuestions} correct`
+                                    : `${grade.score}/${grade.max_score} points`}
                         </p>
                     </div>
                     {isPendingReview ? (
@@ -600,7 +612,7 @@ export default function Gradebook() {
                         {[
                             { key: "all", label: `All (${myGrades?.grade_count || 0})` },
                             { key: "ai_test", label: `AI Tests (${aiCount})` },
-                            { key: "staff_test", label: `Staff Tests (${staffCount})` }
+                            { key: "staff_test", label: `Assigned Tests (${staffCount})` }
                         ].map(f => (
                             <button
                                 key={f.key}

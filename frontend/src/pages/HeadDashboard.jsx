@@ -257,7 +257,7 @@ export default function HeadDashboard() {
                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl flex items-center gap-2">
                         <AlertCircle className="w-5 h-5" />
                         {error}
-                        <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">×</button>
+                        <button onClick={() => setError(null)} className="ml-auto text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors">×</button>
                     </div>
                 )}
 
@@ -349,7 +349,7 @@ export default function HeadDashboard() {
                         className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                             activeTab === "questions"
                                 ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
                         }`}
                     >
                         <HelpCircle className="w-4 h-4" />
@@ -360,7 +360,7 @@ export default function HeadDashboard() {
                         className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                             activeTab === "papers"
                                 ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
                         }`}
                     >
                         <FileText className="w-4 h-4" />
@@ -399,7 +399,7 @@ export default function HeadDashboard() {
                         <button
                             onClick={handleBulkApprove}
                             disabled={actionLoading.bulk}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-green-600 dark:bg-green-500 hover:bg-green-700 dark:hover:bg-green-400 rounded-lg transition-colors disabled:opacity-50"
                         >
                             <CheckSquare className="w-4 h-4" />
                             Approve Selected ({selectedQuestions.length})

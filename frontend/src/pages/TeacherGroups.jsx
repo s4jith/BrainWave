@@ -97,7 +97,7 @@ export default function TeacherGroups() {
                     {hasActiveFilters && (
                         <button
                             onClick={clearFilters}
-                            className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-gray-300 transition"
+                            className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition"
                         >
                             Clear
                         </button>
@@ -159,7 +159,7 @@ export default function TeacherGroups() {
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
                             <Filter className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                             <p className="text-gray-500 dark:text-gray-400 text-sm">No groups match the filters.</p>
-                            <button onClick={clearFilters} className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                            <button onClick={clearFilters} className="mt-2 px-2.5 py-1 text-xs font-medium rounded-md text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
                                 Clear filters
                             </button>
                         </div>

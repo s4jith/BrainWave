@@ -103,8 +103,8 @@ export default function TeacherQueries() {
               onClick={() => setStatusFilter(tab.id)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                 statusFilter === tab.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-orange-300"
+                  ? "bg-orange-500 dark:bg-orange-500 text-white hover:bg-orange-600 dark:hover:bg-orange-400"
+                  : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-300 hover:border-orange-300 dark:hover:border-orange-500/70"
               }`}
             >
               {tab.label}
@@ -201,12 +201,12 @@ export default function TeacherQueries() {
                         value={replyMap[q.id] || ""}
                         onChange={(e) => setReplyMap(prev => ({ ...prev, [q.id]: e.target.value }))}
                         placeholder="Type your reply..."
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-500/50 resize-none"
                       />
                       <button
                         onClick={() => handleReply(q.id)}
                         disabled={submittingId === q.id || !(replyMap[q.id] || "").trim()}
-                        className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors disabled:opacity-60"
+                        className="flex items-center gap-2 px-4 py-2 bg-orange-500 dark:bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 dark:hover:bg-orange-400 transition-colors disabled:opacity-60"
                       >
                         {submittingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         {submittingId === q.id ? "Sending..." : "Send Reply"}

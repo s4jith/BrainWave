@@ -8,11 +8,9 @@ import {
   Brain,
   Award,
   BookOpen,
-  Target,
   TrendingUp,
   Clock,
   CheckCircle2,
-  ChevronRight,
   Play,
   ClipboardList,
   Calendar
@@ -67,8 +65,8 @@ export default function TestCenter() {
   };
 
   const tabs = [
-    { id: "ai", label: "Tests", icon: Brain },
-    { id: "staff", label: "Staff Tests", icon: FileText },
+    { id: "ai", label: "AI Test", icon: Brain },
+    { id: "staff", label: "Assigned Test", icon: FileText },
   ];
 
   const now = new Date();
@@ -130,95 +128,62 @@ export default function TestCenter() {
           ))}
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-all ${activeTab === tab.id
-                ? "bg-orange-600 text-white"
-                : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                }`}
-            >
-              <tab.icon className="w-5 h-5" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <LoadingSpinner size="lg" color="orange" text="Loading tests…" />
+        {/* Tab + Content Layout */}
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="md:w-56 w-full flex md:flex-col gap-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-all md:w-full ${activeTab === tab.id
+                  ? "bg-orange-600 text-white"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  }`}
+              >
+                <tab.icon className="w-5 h-5" />
+                {tab.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            {/* AI Tests Tab */}
-            {activeTab === "ai" && (
-              <div className="space-y-6">
-                {/* Main CTA Card */}
-                <div className="bg-white rounded-3xl p-8 border border-gray-100">
-                  <div className="flex items-center gap-6">
-                    <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-                      <Brain className="w-10 h-10 text-gray-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-xl font-bold text-gray-900 mb-2">
-                        Take an AI-Powered Test
-                      </h2>
-                      <p className="text-gray-500 mb-4">
-                        Select a topic from your syllabus. Get instant evaluation with detailed feedback.
-                      </p>
-                      <button
-                        onClick={() => setShowTopicSelector(true)}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium"
-                      >
-                        <Play className="w-5 h-5" />
-                        Start Test
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Features */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
-                      <Target className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Topic-Focused</h4>
-                    <p className="text-sm text-gray-500">
-                      Pre-generated questions for every topic in your syllabus.
-                    </p>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
-                      <TrendingUp className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Smart Recommendations</h4>
-                    <p className="text-sm text-gray-500">
-                      Get topic suggestions based on your weak areas.
-                    </p>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
-                      <Brain className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">AI Evaluation</h4>
-                    <p className="text-sm text-gray-500">
-                      RAG-based answer evaluation for accurate assessment.
-                    </p>
-                  </div>
-                </div>
+          <div className="flex-1">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <LoadingSpinner size="lg" color="orange" text="Loading tests…" />
               </div>
-            )}
+            ) : (
+              <>
+                {/* AI Test Tab */}
+                {activeTab === "ai" && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl p-8 border border-gray-100">
+                      <div className="flex items-center gap-6">
+                        <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+                          <Brain className="w-10 h-10 text-gray-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h2 className="text-xl font-bold text-gray-900 mb-2">
+                            Take an AI-Powered Test
+                          </h2>
+                          <p className="text-gray-500 mb-4">
+                            Select a topic from your syllabus. Get instant evaluation with detailed feedback.
+                          </p>
+                          <button
+                            onClick={() => setShowTopicSelector(true)}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium"
+                          >
+                            <Play className="w-5 h-5" />
+                            Start Test
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-            {/* Staff Tests Tab */}
-            {activeTab === "staff" && (
-              <div className="space-y-6">
+                {/* Assigned Test Tab */}
+                {activeTab === "staff" && (
+                  <div className="space-y-6">
                 {/* Info Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center gap-4">
@@ -226,7 +191,7 @@ export default function TestCenter() {
                       <ClipboardList className="w-7 h-7 text-gray-600 dark:text-gray-300" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Tests from Your Teachers</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Assigned Tests from Your Teachers</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Take tests assigned by your teachers and admin. Get instant results and feedback.
                       </p>
@@ -370,10 +335,12 @@ export default function TestCenter() {
                     })}
                   </div>
                 )}
-              </div>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {/* Topic Selector Modal */}
