@@ -39,7 +39,7 @@ class QuestionCreate(BaseModel):
     marks: int
     options: List[str] = []
     correct_answer: str
-    status: str = Field("approved", pattern="^(approved|pending|rejected)$")
+    status: str = Field("approved", pattern="^(approved|pending|rejected|draft_answer|archived)$")
     image_ids: List[str] = Field(default_factory=list, description="IDs of images embedded in this question")
     answer_image_ids: List[str] = Field(default_factory=list, description="IDs of answer/explanation reference images")
 
@@ -146,13 +146,22 @@ async def get_questions(
         group_filters = None
         extra_filter = None
 
-        if current_user.role == UserRole.HEAD:
+        if status == "draft_answer":
+            # Answer Page: show only creator/trigger owner drafts, regardless of staff role.
+            extra_filter = {
+                "$or": [
+                    {"created_by": current_user.user_id},
+                    {"triggered_by": current_user.user_id},
+                ]
+            }
+
+        if current_user.role == UserRole.HEAD and status != "draft_answer":
             from app.db.mongo import db
             from app.routers.head_approval import build_assignment_filter, get_head_user
             head_doc = get_head_user(current_user.user_id)
             extra_filter = build_assignment_filter(head_doc, {})
 
-        if current_user.role == UserRole.TEACHER:
+        if current_user.role == UserRole.TEACHER and status != "draft_answer":
             from app.db.mongo import db
             
             teacher_doc = db.users.find_one({"user_id": current_user.user_id, "role": "teacher"})
@@ -495,7 +504,13 @@ async def approve_delete_request(
 
     question_id = req.get("question_id")
     if question_id and ObjectId.is_valid(question_id):
-        db.questions.delete_one({"_id": ObjectId(question_id)})
+        success, msg = await question_bank_service.delete_question(
+            question_id,
+            current_user.user_id,
+            current_user.role.value,
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail=msg)
 
     now = datetime.utcnow()
     db.question_delete_requests.update_one(
@@ -569,7 +584,7 @@ async def reject_delete_request(
 @router.post("/generate")
 async def generate_questions(
     request: GenerateRequest,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER]))
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
     """Generate questions using AI."""
     try:
@@ -616,16 +631,78 @@ async def generate_questions(
             bloom_level=request.bloom_level
         )
         
-        # AI-generated questions already have status "pending" in the service
-        # Add teacher context info to response
+        # AI-generated questions are stored as draft_answer first.
+        # Teacher/Admin can fill answers in Answer Page, then send each to pending.
         if current_user.role == UserRole.TEACHER and result.get("success"):
-            result["message"] = f"Successfully generated {result.get('count', 0)} questions. They are now pending head approval."
+            result["message"] = f"Successfully generated {result.get('count', 0)} questions. Fill answers in Answer Page, then send to pending for head approval."
+        elif current_user.role == UserRole.ADMIN and result.get("success"):
+            result["message"] = f"Successfully generated {result.get('count', 0)} questions. Fill answers in Answer Page, then send to pending."
         
         return result
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/questions/{question_id}/send-to-pending")
+async def send_question_to_pending(
+    question_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
+):
+    """
+    Move an AI draft question from draft_answer -> pending after answer is filled.
+    Pending questions are visible to admin/head approval flow only.
+    """
+    from app.db.mongo import db
+
+    if not ObjectId.is_valid(question_id):
+        raise HTTPException(status_code=400, detail="Invalid question ID")
+
+    question = db.questions.find_one({"_id": ObjectId(question_id)})
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    if question.get("status") != "draft_answer":
+        raise HTTPException(status_code=400, detail="Only draft answer questions can be sent to pending")
+
+    is_owner = (
+        question.get("triggered_by") == current_user.user_id
+        or question.get("created_by") == current_user.user_id
+    )
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="You can only send your own draft questions")
+
+    q_type = (question.get("type") or "").lower()
+    correct_answer = (question.get("correct_answer") or "").strip()
+    options = question.get("options") or []
+
+    if not correct_answer:
+        raise HTTPException(status_code=400, detail="Please fill the answer before sending to pending")
+
+    if q_type == "mcq":
+        if not options or any(not str(opt).strip() for opt in options):
+            raise HTTPException(status_code=400, detail="MCQ options are incomplete")
+        answers = [a.strip() for a in correct_answer.split("|") if a.strip()]
+        if not answers:
+            raise HTTPException(status_code=400, detail="Please select at least one correct answer")
+        invalid = [a for a in answers if a not in options]
+        if invalid:
+            raise HTTPException(status_code=400, detail="Correct answer must match one of the options")
+
+    if q_type == "true_false" and correct_answer not in ("True", "False"):
+        raise HTTPException(status_code=400, detail="True/False question must have answer as True or False")
+
+    success, msg = await question_bank_service.update_question(
+        question_id,
+        {"status": "pending", "updated_at": __import__("datetime").datetime.utcnow().isoformat()},
+        current_user.user_id,
+        current_user.role.value,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+
+    return {"success": True, "message": "Question sent to pending approval"}
 
 @router.post("/cleanup-expired")
 async def cleanup_expired_questions(

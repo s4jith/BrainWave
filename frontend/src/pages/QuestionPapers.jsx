@@ -48,6 +48,7 @@ const PAPER_TYPE_COLORS = {
 };
 
 const STATUS_COLORS = {
+  draft_answer: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   approved: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
@@ -70,6 +71,7 @@ export default function QuestionPapers() {
   const [metadata, setMetadata] = useState({ subjects: [], years: [] });
   const [addingToBank, setAddingToBank] = useState(null);
   const [editPaper, setEditPaper] = useState(null);
+  const [activeTab, setActiveTab] = useState("papers");
 
   const fetchPapers = useCallback(async () => {
     setLoading(true);
@@ -79,7 +81,11 @@ export default function QuestionPapers() {
       if (filters.subject) params.append("subject", filters.subject);
       if (filters.paper_type) params.append("paper_type", filters.paper_type);
       if (filters.year) params.append("year", filters.year);
-      if (filters.status) params.append("status", filters.status);
+      const requestedStatus = filters.status || (activeTab === "answers" ? "draft_answer" : activeTab === "pending-papers" ? "pending" : "");
+      if (requestedStatus) params.append("status", requestedStatus);
+      if (activeTab === "answers" || activeTab === "pending-papers") {
+        params.append("include_questions", "true");
+      }
 
       const res = await authFetch(`${API_URL}/api/question-papers?${params}`, {
         headers: getAuthHeader(),
@@ -93,7 +99,7 @@ export default function QuestionPapers() {
       //
     }
     setLoading(false);
-  }, [filters, getAuthHeader]);
+  }, [filters, getAuthHeader, activeTab]);
 
   const fetchMetadata = useCallback(async () => {
     try {
@@ -264,6 +270,26 @@ export default function QuestionPapers() {
     }
   };
 
+  const handleSendToPending = async (paperId) => {
+    if (!confirm("Send this paper to pending for admin/head review?")) return;
+    try {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paperId}/send-to-pending`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.message) alert(data.message);
+        fetchPapers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || "Failed to send paper to pending");
+      }
+    } catch (err) {
+      alert("Failed to send paper to pending");
+    }
+  };
+
   const getPaperTypeLabel = (val) => PAPER_TYPES.find(p => p.value === val)?.label || val;
   const getTypeLabel = (val) => QUESTION_TYPES.find(t => t.value === val)?.label || val;
 
@@ -311,6 +337,31 @@ export default function QuestionPapers() {
             <Plus className="w-4 h-4" />
             Add Paper
           </button>
+        </div>
+
+        <div className="flex gap-1 border-b border-gray-200 dark:border-zinc-800 pb-1">
+          <button
+            onClick={() => { setActiveTab("papers"); setFilters((f) => ({ ...f, status: "" })); }}
+            className={`px-3 py-2 text-sm font-medium rounded-lg ${activeTab === "papers" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+          >
+            Papers
+          </button>
+          {(isTeacher || isAdmin || isHead) && (
+            <button
+              onClick={() => { setActiveTab("answers"); setFilters((f) => ({ ...f, status: "" })); }}
+              className={`px-3 py-2 text-sm font-medium rounded-lg ${activeTab === "answers" ? "bg-indigo-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+            >
+              Answer Page
+            </button>
+          )}
+          {canApprove && (
+            <button
+              onClick={() => { setActiveTab("pending-papers"); setFilters((f) => ({ ...f, status: "" })); }}
+              className={`px-3 py-2 text-sm font-medium rounded-lg ${activeTab === "pending-papers" ? "bg-amber-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"}`}
+            >
+              Pending Papers
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -374,6 +425,7 @@ export default function QuestionPapers() {
             className="px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
           >
             <option value="">All Status</option>
+            {(isTeacher || isAdmin || isHead) && <option value="draft_answer">Draft Answer</option>}
             <option value="approved">Approved</option>
             {!isTeacher && <option value="pending">Pending</option>}
             <option value="rejected">Rejected</option>
@@ -395,7 +447,9 @@ export default function QuestionPapers() {
               <div key={paper.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl overflow-hidden">
                 <div
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors"
-                  onClick={() => handleExpand(paper.id)}
+                  onClick={() => {
+                    if (activeTab === "papers") handleExpand(paper.id);
+                  }}
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
@@ -442,6 +496,15 @@ export default function QuestionPapers() {
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">AI</span>
                     )}
 
+                    {activeTab === "answers" && paper.status === "draft_answer" && (isTeacher || isAdmin || isHead) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleSendToPending(paper.id); }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 rounded-lg transition-colors"
+                      >
+                        <Save className="w-3.5 h-3.5" /> Send to Pending
+                      </button>
+                    )}
+
                     {/* Approve/Reject for pending papers — admin & head only */}
                     {paper.status === "pending" && canApprove && (
                       <>
@@ -478,7 +541,7 @@ export default function QuestionPapers() {
                       </>
                     )}
 
-                    {paper.status === "approved" && !paper.delete_requested && (
+                    {activeTab === "papers" && paper.status === "approved" && !paper.delete_requested && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleAddToBank(paper.id); }}
                         disabled={addingToBank === paper.id}
@@ -488,14 +551,14 @@ export default function QuestionPapers() {
                         {addingToBank === paper.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
                       </button>
                     )}
-                    <button
+                    {activeTab !== "pending-papers" && <button
                       onClick={(e) => { e.stopPropagation(); handleEdit(paper.id); }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       title={isTeacher ? "Edit (requires approval)" : "Edit"}
                     >
                       <Edit2 className="w-4 h-4" />
-                    </button>
-                    {!(isTeacher && paper.delete_requested) && (
+                    </button>}
+                    {activeTab !== "pending-papers" && !(isTeacher && paper.delete_requested) && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(paper.id); }}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -504,25 +567,26 @@ export default function QuestionPapers() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
-                    {loadingDetail === paper.id ? (
+                    {activeTab === "papers" && (loadingDetail === paper.id ? (
                       <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                     ) : expandedPaper === paper.id ? (
                       <ChevronUp className="w-4 h-4 text-gray-400" />
                     ) : (
                       <ChevronDown className="w-4 h-4 text-gray-400" />
-                    )}
+                    ))}
                   </div>
                 </div>
 
-                {expandedPaper === paper.id && (
+                {(expandedPaper === paper.id || activeTab === "answers" || activeTab === "pending-papers") && (
                   <div className="border-t border-gray-100 dark:border-zinc-800 p-4">
-                    {expandedQuestions.length === 0 ? (
+                    {((activeTab === "answers" || activeTab === "pending-papers") ? (paper.questions || []) : expandedQuestions).length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-4">No questions</p>
                     ) : (
                       <div className="space-y-3">
                         {(() => {
                           const sections = {};
-                          expandedQuestions.forEach(q => {
+                          const sourceQuestions = (activeTab === "answers" || activeTab === "pending-papers") ? (paper.questions || []) : expandedQuestions;
+                          sourceQuestions.forEach(q => {
                             const sec = q.section || "General";
                             if (!sections[sec]) sections[sec] = [];
                             sections[sec].push(q);
@@ -544,14 +608,14 @@ export default function QuestionPapers() {
                                             const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
                                             const isCorrect = correctAnswers.includes(opt);
                                             return (
-                                              <span key={oi} className={`text-xs px-2 py-1 rounded ${isCorrect ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium" : "bg-white dark:bg-zinc-700 text-gray-600 dark:text-gray-300"}`}>
+                                              <span key={oi} className={`text-xs px-2 py-1 rounded border ${isCorrect ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium" : "bg-white dark:bg-zinc-700 border-gray-200 dark:border-zinc-600 text-gray-600 dark:text-gray-300"}`}>
                                                 {String.fromCharCode(65 + oi)}. {opt}
                                               </span>
                                             );
                                           })}
                                         </div>
                                       )}
-                                      {q.type === "fillup" && q.correct_answer && (
+                                      {q.type === "fillup" && activeTab === "papers" && q.correct_answer && (
                                         <div className="mt-1 flex flex-wrap gap-1">
                                           <span className="text-xs text-gray-500">Answer(s):</span>
                                           {q.correct_answer.split("|").filter(Boolean).map((ans, ai) => (
@@ -559,13 +623,22 @@ export default function QuestionPapers() {
                                           ))}
                                         </div>
                                       )}
-                                      {q.type === "true_false" && q.correct_answer && (
+                                      {q.type === "true_false" && activeTab === "papers" && q.correct_answer && (
                                         <p className="text-xs mt-1 text-gray-500">
                                           Answer: <span className={q.correct_answer.toLowerCase() === "true" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{q.correct_answer}</span>
                                         </p>
                                       )}
-                                      {q.type !== "mcq" && q.type !== "true_false" && q.type !== "fillup" && q.correct_answer && (
+                                      {q.type !== "mcq" && q.type !== "true_false" && q.type !== "fillup" && activeTab === "papers" && q.correct_answer && (
                                         <p className="text-xs mt-1 text-gray-500">Answer: {q.correct_answer}</p>
+                                      )}
+
+                                      {(activeTab === "answers" || activeTab === "pending-papers") && q.type !== "mcq" && (
+                                        <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-zinc-700 border border-gray-200 dark:border-zinc-600 rounded px-2 py-1.5 whitespace-pre-wrap">
+                                          Answer: {q.correct_answer || "[Write answer here]"}
+                                        </div>
+                                      )}
+                                      {(activeTab === "answers" || activeTab === "pending-papers") && !q.correct_answer && (
+                                        <p className="text-xs mt-1 text-red-500">Missing answer</p>
                                       )}
                                     </div>
                                     <div className="flex items-start gap-2 flex-shrink-0">
@@ -741,6 +814,11 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
   // ── Save PDF extraction ───────────────────────────────────────────────────
   const handlePdfExtract = async () => {
     if (!pdfFile) return;
+    const isPdf = pdfFile.type === "application/pdf" || pdfFile.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setError("Please upload a valid PDF file");
+      return;
+    }
     setLoading(true); setError("");
     try {
       const formData = new FormData();
@@ -759,8 +837,20 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
     setLoading(false);
   };
 
+  const handlePdfFileChange = (file) => {
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setError("Only PDF files are allowed");
+      setPdfFile(null);
+      return;
+    }
+    setError("");
+    setPdfFile(file);
+  };
+
   // ── Paper details form (reusable in both modes) ───────────────────────────
-  const PaperDetailsForm = () => (
+  const renderPaperDetailsForm = () => (
     <div className="grid grid-cols-2 gap-3">
       <div className="col-span-2">
         <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Exam Name / Title <span className="text-red-500">*</span></label>
@@ -864,7 +954,7 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {error && <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0" />{error}</div>}
-            <PaperDetailsForm />
+            {renderPaperDetailsForm()}
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Question Paper PDF</label>
               <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${pdfFile ? "border-violet-300 bg-violet-50 dark:bg-violet-900/10" : "border-gray-200 dark:border-zinc-700 hover:border-gray-300"}`}>
@@ -882,7 +972,7 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
                     <Upload className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
                     <p className="text-sm text-gray-500 dark:text-gray-400">Click to upload or drag & drop</p>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">PDF only, max 20MB</p>
-                    <input type="file" accept=".pdf" className="hidden" onChange={e => { if (e.target.files[0]) setPdfFile(e.target.files[0]); }} />
+                    <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={e => { if (e.target.files[0]) handlePdfFileChange(e.target.files[0]); }} />
                   </label>
                 )}
               </div>
@@ -941,7 +1031,7 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
             {/* Paper details */}
             <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-xl p-3 space-y-3">
               <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Paper Details</h3>
-              <PaperDetailsForm />
+              {renderPaperDetailsForm()}
             </div>
 
             {/* Sections */}
@@ -1126,10 +1216,12 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
 
 function EditPaperModal({ paper, metadata, onClose, onSaved }) {
   const { getAuthHeader, user } = useUserStore();
-  const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
+  const isAnswerDraftMode = paper.status === "draft_answer";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [submittingQuestion, setSubmittingQuestion] = useState(null);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const [title, setTitle] = useState(paper.title || "");
   const [paperType, setPaperType] = useState(
@@ -1149,6 +1241,7 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
       options: q.options || [],
       correct_answer: q.correct_answer || "",
       section: q.section || "",
+      approval_status: q.approval_status || "draft_answer",
       image_ids: q.image_ids || [],
       answer_image_ids: q.answer_image_ids || [],
     }))
@@ -1177,24 +1270,72 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
     }));
   };
 
+  const validateQuestionForPending = (q, idx) => {
+    const qLabel = `Question ${idx + 1}`;
+    if (!q.text?.trim()) {
+      return `${qLabel}: Question text is required`;
+    }
+
+    if (q.type === "mcq") {
+      const options = (q.options || []).map(opt => (opt || "").trim()).filter(Boolean);
+      const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
+      if (options.length < 2) return `${qLabel}: Add at least 2 options for MCQ`;
+      if (correctAnswers.length === 0) return `${qLabel}: Select at least one correct answer for MCQ`;
+    } else if (q.type === "fillup") {
+      const answers = (q.correct_answer || "").split("|").filter(Boolean);
+      if (answers.length === 0) return `${qLabel}: Enter at least one correct answer for Fill-in-the-blank`;
+    } else if (q.type === "true_false") {
+      if (!q.correct_answer || (q.correct_answer !== "True" && q.correct_answer !== "False")) {
+        return `${qLabel}: Select True or False as the correct answer`;
+      }
+    } else if (!(q.correct_answer || "").trim()) {
+      return `${qLabel}: Answer is required before pending submission`;
+    }
+    return "";
+  };
+
+  const saveDraftToServer = async () => {
+    const validQuestions = questions.filter(q => q.text.trim());
+    setSavingDraft(true);
+    setError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}`, {
+        method: "PUT",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          paper_type: effectivePaperType || undefined,
+          class_level: classLevel ? Number(classLevel) : undefined,
+          subject: subject || undefined,
+          year: year ? Number(year) : undefined,
+          questions: validQuestions,
+          submit_for_approval: false,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.detail || "Failed to save draft");
+        return false;
+      }
+      return true;
+    } catch {
+      setError("Failed to save draft");
+      return false;
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) { setError("Title is required"); return; }
 
-    // Validate answers for 1-mark objective questions
     const validQuestions = questions.filter(q => q.text.trim());
-    for (let i = 0; i < validQuestions.length; i++) {
-      const q = validQuestions[i];
-      const qLabel = `Question ${i + 1}`;
-      if (q.type === "mcq") {
-        const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
-        if (correctAnswers.length === 0) { setError(`${qLabel}: Select at least one correct answer for MCQ`); return; }
-      } else if (q.type === "fillup") {
-        const answers = (q.correct_answer || "").split("|").filter(Boolean);
-        if (answers.length === 0) { setError(`${qLabel}: Enter at least one correct answer for Fill-in-the-blank`); return; }
-      } else if (q.type === "true_false") {
-        if (!q.correct_answer || (q.correct_answer !== "True" && q.correct_answer !== "False")) {
-          setError(`${qLabel}: Select True or False as the correct answer`); return;
-        }
+
+    // In draft answer mode, normal save should not force all answers to be filled.
+    if (!isAnswerDraftMode) {
+      for (let i = 0; i < validQuestions.length; i++) {
+        const validationError = validateQuestionForPending(validQuestions[i], i);
+        if (validationError) { setError(validationError); return; }
       }
     }
 
@@ -1211,6 +1352,7 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
           subject: subject || undefined,
           year: year ? Number(year) : undefined,
           questions: validQuestions.length > 0 ? validQuestions : undefined,
+          submit_for_approval: !isAnswerDraftMode,
         }),
       });
 
@@ -1224,6 +1366,68 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
       setError("Failed to update paper");
     }
     setLoading(false);
+  };
+
+  const handleSendQuestion = async (idx) => {
+    const q = questions[idx];
+    const validationError = validateQuestionForPending(q, idx);
+    if (validationError) { setError(validationError); return; }
+
+    const saved = await saveDraftToServer();
+    if (!saved) return;
+
+    setSubmittingQuestion(idx);
+    setError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}/questions/${idx + 1}/send-to-pending`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.detail || "Failed to send question to pending");
+        return;
+      }
+
+      setQuestions(prev => prev.map((item, i) => i === idx ? { ...item, approval_status: "pending" } : item));
+      if (data.paper_status === "pending") {
+        onSaved();
+      }
+    } catch {
+      setError("Failed to send question to pending");
+    } finally {
+      setSubmittingQuestion(null);
+    }
+  };
+
+  const handleSendAll = async () => {
+    const validQuestions = questions.filter(q => q.text.trim());
+    for (let i = 0; i < validQuestions.length; i++) {
+      const validationError = validateQuestionForPending(validQuestions[i], i);
+      if (validationError) { setError(validationError); return; }
+    }
+
+    const saved = await saveDraftToServer();
+    if (!saved) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/question-papers/${paper.id}/send-to-pending`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.detail || "Failed to send paper to pending");
+        return;
+      }
+      onSaved();
+    } catch {
+      setError("Failed to send paper to pending");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1341,11 +1545,27 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
               <div key={idx} className="p-4 border border-gray-200 dark:border-zinc-700 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-500">Question {idx + 1}</span>
+                  <div className="flex items-center gap-2">
+                    {isAnswerDraftMode && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${q.approval_status === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"}`}>
+                        {q.approval_status === "pending" ? "Pending" : "Draft"}
+                      </span>
+                    )}
+                    {isAnswerDraftMode && q.approval_status !== "pending" && (
+                      <button
+                        onClick={() => handleSendQuestion(idx)}
+                        disabled={submittingQuestion === idx || savingDraft}
+                        className="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
+                      >
+                        {submittingQuestion === idx ? "Sending..." : "Send This Question"}
+                      </button>
+                    )}
                   {questions.length > 1 && (
                     <button onClick={() => removeQuestion(idx)} className="p-1 text-gray-400 hover:text-red-600">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
+                  </div>
                 </div>
 
                 <textarea
@@ -1548,10 +1768,16 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
         </div>
 
         <div className="p-6 border-t border-gray-100 dark:border-zinc-800">
-          {isTeacher && (
+          {isTeacher && !isAnswerDraftMode && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               Your changes will be submitted for admin/head approval.
+            </p>
+          )}
+          {isAnswerDraftMode && (
+            <p className="text-xs text-indigo-600 dark:text-indigo-300 mb-3 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              You can send one question at a time or submit all answered questions together.
             </p>
           )}
           <div className="flex justify-end gap-3">
@@ -1563,12 +1789,22 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || savingDraft}
             className="flex items-center gap-2 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {loading ? "Saving..." : isTeacher ? "Submit for Approval" : "Save Changes"}
+            {loading ? "Saving..." : isAnswerDraftMode ? "Save Draft" : isTeacher ? "Submit for Approval" : "Save Changes"}
           </button>
+          {isAnswerDraftMode && (
+            <button
+              onClick={handleSendAll}
+              disabled={loading || savingDraft}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {loading ? "Submitting..." : "Send All To Pending"}
+            </button>
+          )}
           </div>
         </div>
       </div>

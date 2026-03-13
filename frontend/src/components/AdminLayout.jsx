@@ -187,6 +187,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     };
 
     const ThemeIcon = getThemeIcon();
+    const roleLabel = user?.role ? String(user.role).charAt(0).toUpperCase() + String(user.role).slice(1) : "";
 
     return (
         <div className="h-screen bg-gray-50 dark:bg-black flex transition-colors duration-200 overflow-hidden">
@@ -339,6 +340,11 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                     <div className="flex items-center gap-3">
                         {Icon && <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />}
                         <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h1>
+                        {roleLabel && (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-zinc-700">
+                                {roleLabel}
+                            </span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-3">

@@ -53,8 +53,7 @@ export default function Settings() {
     calendar,
     updateProfile,
     updateAcademics,
-    updateCalendar,
-    getAuthHeader
+    updateCalendar
   } = useUserStore();
 
   const [activeTab, setActiveTab] = useState('profile');
@@ -87,10 +86,6 @@ export default function Settings() {
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
 
-  const [newUserId, setNewUserId] = useState('');
-  const [userIdLoading, setUserIdLoading] = useState(false);
-  const [userIdError, setUserIdError] = useState('');
-  const [userIdSuccess, setUserIdSuccess] = useState('');
 
   const showSaveMessage = (message) => {
     setSaveMessage(message);
@@ -215,32 +210,6 @@ export default function Settings() {
     setPwdLoading(false);
   };
 
-  const handleChangeUserId = async () => {
-    setUserIdError('');
-    setUserIdSuccess('');
-    const trimmed = newUserId.trim();
-    if (!trimmed) { setUserIdError('Please enter a new User ID.'); return; }
-    if (trimmed === user.user_id) { setUserIdError('New User ID is the same as current.'); return; }
-    setUserIdLoading(true);
-    try {
-      const res = await authFetch(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ new_user_id: trimmed })
-      });
-      const data = await res.json();
-      if (data.success) {
-        updateProfile({ user_id: trimmed });
-        setUserIdSuccess('User ID updated successfully!');
-        setNewUserId('');
-      } else {
-        setUserIdError(data.error || 'Failed to update User ID.');
-      }
-    } catch {
-      setUserIdError('Network error. Please try again.');
-    }
-    setUserIdLoading(false);
-  };
 
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
@@ -715,34 +684,6 @@ export default function Settings() {
               {pwdLoading ? 'Changing...' : 'Change Password'}
             </Button>
 
-            <div className="border-t border-gray-200 pt-6 space-y-4">
-              <p className="text-sm text-gray-500">
-                Change your login User ID. The new ID must be unique across all students.
-              </p>
-              <p className="text-sm text-gray-500">
-                Current ID: <span className="font-medium text-gray-800">{user.user_id}</span>
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">New User ID</label>
-                <input
-                  type="text"
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                  placeholder="Enter new user ID"
-                  className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-                />
-              </div>
-              {userIdError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{userIdError}</p>}
-              {userIdSuccess && <p className="text-green-600 text-sm text-center bg-green-50 p-2 rounded-lg">{userIdSuccess}</p>}
-              <Button
-                onClick={handleChangeUserId}
-                disabled={userIdLoading}
-                className="w-full h-12"
-              >
-                {userIdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <User className="w-4 h-4 mr-2" />}
-                {userIdLoading ? 'Updating...' : 'Update User ID'}
-              </Button>
-            </div>
           </div>
         );
 

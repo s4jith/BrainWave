@@ -19,6 +19,81 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/question-papers", tags=["question-papers"])
 
 
+def _estimate_question_count(pdf_text: str) -> int:
+    """Estimate expected question count from numbered question patterns in extracted text."""
+    patterns = [
+        r"(?im)^\s*(?:q(?:uestion)?\s*)?\d{1,3}\s*[\).:-]",
+        r"(?im)^\s*\(\d{1,3}\)\s+",
+    ]
+    counts = [len(re.findall(p, pdf_text)) for p in patterns]
+    return max(counts) if counts else 0
+
+
+def _repair_and_parse_json_array(text: str):
+    """Strip fences, repair minor JSON issues, recover truncated arrays, then parse."""
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0].strip()
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0].strip()
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    text = re.sub(r"[\x00-\x1f]", " ", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        last_brace = text.rfind("}")
+        if last_brace != -1:
+            truncated = text[:last_brace + 1]
+            truncated = re.sub(r",\s*$", "", truncated)
+            recovered = truncated + "]"
+            if not recovered.strip().startswith("["):
+                recovered = "[" + recovered
+            recovered = re.sub(r",\s*([}\]])", r"\1", recovered)
+            return json.loads(recovered)
+        raise
+
+
+def _clean_extracted_questions(questions: list) -> list:
+    """Normalize extracted question schema and drop empty entries."""
+    cleaned_questions = []
+    for i, q in enumerate(questions):
+        if not isinstance(q, dict):
+            continue
+
+        q_type = str(q.get("type", "short_answer")).lower().replace(" ", "_")
+        valid_types = ["mcq", "fillup", "true_false", "short_answer", "long_answer"]
+        if q_type in ("fill_in_the_blank", "fill_up"):
+            q_type = "fillup"
+        if q_type not in valid_types:
+            q_type = "short_answer"
+
+        raw_text = str(q.get("text", "")).strip()
+        if not raw_text:
+            continue
+
+        marks_raw = q.get("marks", 1)
+        try:
+            marks = int(float(marks_raw))
+        except (TypeError, ValueError):
+            marks = 1
+        marks = max(1, marks)
+
+        options = q.get("options", [])
+        if not isinstance(options, list):
+            options = []
+
+        cleaned_questions.append({
+            "order": i + 1,
+            "text": raw_text,
+            "type": q_type,
+            "marks": marks,
+            "options": [str(opt).strip() for opt in options if str(opt).strip()],
+            "correct_answer": str(q.get("correct_answer", "")).strip(),
+            "section": str(q.get("section", "")).strip(),
+        })
+
+    return cleaned_questions
+
+
 async def create_approval_notification(action: str, paper_title: str, teacher_id: str, paper_id: str, subject: str = "", class_level: int = 0):
     """Create notifications for admin and head when a teacher requests an action on a question paper."""
     now = datetime.utcnow()
@@ -63,6 +138,9 @@ class ManualQuestion(BaseModel):
     bloom_level: Optional[str] = None
     difficulty: Optional[str] = None
     question_bank_id: Optional[str] = None
+    approval_status: Optional[str] = "draft_answer"
+    image_ids: List[str] = []
+    answer_image_ids: List[str] = []
 
 
 class CreatePaperManual(BaseModel):
@@ -81,6 +159,30 @@ class UpdatePaperData(BaseModel):
     subject: Optional[str] = None
     year: Optional[int] = None
     questions: Optional[List[ManualQuestion]] = None
+    submit_for_approval: Optional[bool] = False
+
+
+def _validate_question_for_pending(q: dict, idx: int):
+    """Ensure a question has enough answer data before moving to pending."""
+    q_type = (q.get("type") or "").lower()
+    answer = (q.get("correct_answer") or "").strip()
+    options = q.get("options") or []
+
+    if not answer:
+        raise HTTPException(status_code=400, detail=f"Question {idx} is missing answer")
+
+    if q_type == "mcq":
+        if not options or any(not str(opt).strip() for opt in options):
+            raise HTTPException(status_code=400, detail=f"Question {idx} has incomplete MCQ options")
+        answers = [a.strip() for a in answer.split("|") if a.strip()]
+        if not answers:
+            raise HTTPException(status_code=400, detail=f"Question {idx} has no selected correct option")
+        invalid = [a for a in answers if a not in options]
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"Question {idx} answer must match options")
+
+    if q_type == "true_false" and answer not in ("True", "False"):
+        raise HTTPException(status_code=400, detail=f"Question {idx} true/false answer must be True or False")
 
 
 @router.get("/metadata")
@@ -219,10 +321,53 @@ async def list_papers(
     paper_type: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    include_questions: bool = Query(False),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
 ):
+    if status == "draft_answer":
+        query = {"created_by": current_user.user_id}
+
+        if class_level:
+            query["class_level"] = class_level
+        if subject:
+            query["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
+        if paper_type:
+            query["paper_type"] = paper_type
+        if year:
+            query["year"] = year
+
+        total = await mongodb.db.question_papers.count_documents(query)
+        cursor = mongodb.db.question_papers.find(query).sort("created_at", -1).skip(offset).limit(limit)
+        papers = []
+        async for doc in cursor:
+            paper_item = {
+                "id": str(doc["_id"]),
+                "title": doc.get("title"),
+                "paper_type": doc.get("paper_type"),
+                "class_level": doc.get("class_level"),
+                "subject": doc.get("subject"),
+                "year": doc.get("year"),
+                "question_count": len(doc.get("questions", [])),
+                "created_by": doc.get("created_by"),
+                "created_at": doc.get("created_at"),
+                "source": doc.get("source", "manual"),
+                "status": doc.get("status", "approved"),
+                "delete_requested": doc.get("delete_requested", False),
+                "delete_requested_by": doc.get("delete_requested_by"),
+            }
+            if include_questions:
+                paper_item["questions"] = doc.get("questions", [])
+            papers.append(paper_item)
+
+        return {
+            "papers": papers,
+            "total": total,
+            "page": (offset // limit) + 1,
+            "pages": (total + limit - 1) // limit
+        }
+
     # Build explicit filters (applied on top of visibility)
     filter_conditions = {}
     if class_level:
@@ -309,7 +454,7 @@ async def list_papers(
     cursor = mongodb.db.question_papers.find(query).sort("created_at", -1).skip(offset).limit(limit)
     papers = []
     async for doc in cursor:
-        papers.append({
+        paper_item = {
             "id": str(doc["_id"]),
             "title": doc.get("title"),
             "paper_type": doc.get("paper_type"),
@@ -323,7 +468,10 @@ async def list_papers(
             "status": doc.get("status", "approved"),
             "delete_requested": doc.get("delete_requested", False),
             "delete_requested_by": doc.get("delete_requested_by"),
-        })
+        }
+        if include_questions:
+            paper_item["questions"] = doc.get("questions", [])
+        papers.append(paper_item)
 
     return {
         "papers": papers,
@@ -380,6 +528,9 @@ async def create_paper_manual(
             "bloom_level": q.bloom_level,
             "difficulty": q.difficulty,
             "question_bank_id": q.question_bank_id,
+            "approval_status": q.approval_status or ("draft_answer" if current_user.role == UserRole.TEACHER else "pending"),
+            "image_ids": q.image_ids or [],
+            "answer_image_ids": q.answer_image_ids or [],
         })
 
     doc = {
@@ -462,10 +613,14 @@ Return ONLY valid JSON array, no markdown, no explanation.
 
 JSON:"""
 
-        # Retry loop: try each available key once on 429
+        estimated_question_count = _estimate_question_count(pdf_text)
+        expected_min = max(1, estimated_question_count)
+        acceptance_threshold = max(3, int(expected_min * 0.7)) if expected_min >= 5 else max(1, expected_min)
+
+        # Retry loop: try each key and keep the best parse; continue on partial extraction.
         last_error = None
-        max_attempts = len(gemini_key_manager.keys)
-        response_text = None
+        max_attempts = max(1, len(gemini_key_manager.keys))
+        best_questions = []
 
         for attempt in range(max_attempts):
             api_key = gemini_key_manager.get_available_key()
@@ -487,8 +642,25 @@ JSON:"""
                         max_output_tokens=16384,
                     ),
                 )
-                response_text = response.text.strip()
-                break  # success
+                response_text = (response.text or "").strip()
+                if not response_text:
+                    continue
+
+                try:
+                    parsed = json.loads(response_text)
+                except json.JSONDecodeError:
+                    parsed = _repair_and_parse_json_array(response_text)
+
+                if not isinstance(parsed, list):
+                    continue
+
+                cleaned = _clean_extracted_questions(parsed)
+                if len(cleaned) > len(best_questions):
+                    best_questions = cleaned
+
+                # Accept early if extraction appears complete enough.
+                if len(cleaned) >= acceptance_threshold:
+                    break
             except Exception as e:
                 error_str = str(e)
                 last_error = e
@@ -496,63 +668,26 @@ JSON:"""
                     logger.warning(f"429 quota hit on {used_key_id} (attempt {attempt + 1}/{max_attempts}). Exhausting key and retrying...")
                     gemini_key_manager.mark_key_exhausted(used_key_id)
                     continue  # try next key
-                # Non-429 error — don't retry
-                raise
+                # Try another key for transient/model-formatting failures.
+                logger.warning(f"Gemini extraction attempt failed on {used_key_id}: {e}")
+                continue
 
-        if response_text is None:
-            raise HTTPException(status_code=503, detail="All Gemini API keys quota exhausted for today. Please try again tomorrow.")
-
-        def _repair_and_parse(text: str):
-            """Strip markdown fences, fix trailing commas, handle truncation, then parse."""
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-            text = re.sub(r",\s*([}\]])", r"\1", text)
-            text = re.sub(r"[\x00-\x1f]", " ", text)
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
-                # Response was likely truncated — recover all complete objects.
-                # Find the last complete question object: last '}' still inside the array.
-                last_brace = text.rfind("}")
-                if last_brace != -1:
-                    truncated = text[:last_brace + 1]
-                    # Remove any trailing incomplete field after the last complete object.
-                    truncated = re.sub(r",\s*$", "", truncated)
-                    recovered = truncated + "]"
-                    if not recovered.strip().startswith("["):
-                        recovered = "[" + recovered
-                    recovered = re.sub(r",\s*([}\]])", r"\1", recovered)
-                    return json.loads(recovered)
-                raise
-
-        try:
-            questions = json.loads(response_text)
-        except json.JSONDecodeError:
-            questions = _repair_and_parse(response_text)
-
-        if not isinstance(questions, list):
+        if not best_questions:
+            if last_error:
+                raise HTTPException(status_code=500, detail=f"Failed to extract questions: {last_error}")
             raise HTTPException(status_code=500, detail="Failed to parse questions from PDF")
 
-        cleaned_questions = []
-        for i, q in enumerate(questions):
-            q_type = q.get("type", "short_answer").lower().replace(" ", "_")
-            valid_types = ["mcq", "fillup", "true_false", "short_answer", "long_answer"]
-            if q_type in ("fill_in_the_blank", "fill_up"):
-                q_type = "fillup"
-            if q_type not in valid_types:
-                q_type = "short_answer"
+        # Guard against obviously partial extraction when the source appears to contain many questions.
+        if expected_min >= 8 and len(best_questions) < max(5, int(expected_min * 0.6)):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"Extraction appears incomplete ({len(best_questions)} of about {expected_min} questions). "
+                    "Please retry with a cleaner PDF or split the file by sections."
+                )
+            )
 
-            cleaned_questions.append({
-                "order": i + 1,
-                "text": q.get("text", ""),
-                "type": q_type,
-                "marks": q.get("marks", 1),
-                "options": q.get("options", []),
-                "correct_answer": q.get("correct_answer", ""),
-                "section": q.get("section", ""),
-            })
+        cleaned_questions = best_questions
 
         doc = {
             "title": title,
@@ -562,7 +697,8 @@ JSON:"""
             "year": year,
             "questions": cleaned_questions,
             "source": "pdf_extracted",
-            "status": "approved" if current_user.role in (UserRole.ADMIN, UserRole.HEAD) else "pending",
+            # AI/PDF papers must be answered first, then explicitly sent to pending approval.
+            "status": "draft_answer",
             "teacher_id": current_user.user_id if current_user.role == UserRole.TEACHER else None,
             "original_filename": pdf_file.filename,
             "created_by": current_user.user_id,
@@ -571,14 +707,7 @@ JSON:"""
 
         result = await mongodb.db.question_papers.insert_one(doc)
 
-        if current_user.role == UserRole.TEACHER:
-            await create_approval_notification(
-                "create", title, current_user.user_id,
-                str(result.inserted_id), subject, class_level
-            )
-            msg = f"Extracted {len(cleaned_questions)} questions. Paper submitted for approval."
-        else:
-            msg = f"Extracted {len(cleaned_questions)} questions. Paper saved and approved."
+        msg = f"Extracted {len(cleaned_questions)} questions. Fill answers in Answer Page, then send to pending approval."
 
         return {
             "id": str(result.inserted_id),
@@ -595,6 +724,118 @@ JSON:"""
     except Exception as e:
         logger.error(f"PDF extraction error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to extract questions: {str(e)}")
+
+
+@router.post("/{paper_id}/send-to-pending")
+async def send_paper_to_pending(
+    paper_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
+):
+    """Move AI/PDF draft paper to pending after answers are filled for all questions."""
+    if not ObjectId.is_valid(paper_id):
+        raise HTTPException(status_code=400, detail="Invalid paper ID")
+
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if doc.get("status") != "draft_answer":
+        raise HTTPException(status_code=400, detail="Only draft answer papers can be sent to pending")
+
+    if doc.get("created_by") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You can only send your own draft papers")
+
+    questions = doc.get("questions", [])
+    if not questions:
+        raise HTTPException(status_code=400, detail="Paper has no questions")
+
+    for idx, q in enumerate(questions, start=1):
+        _validate_question_for_pending(q, idx)
+        q["approval_status"] = "pending"
+
+    await mongodb.db.question_papers.update_one(
+        {"_id": ObjectId(paper_id)},
+        {"$set": {
+            "questions": questions,
+            "status": "pending",
+            "submitted_by": current_user.user_id,
+            "submitted_at": datetime.utcnow().isoformat(),
+        }}
+    )
+
+    await create_approval_notification(
+        "create",
+        doc.get("title", "Question Paper"),
+        current_user.user_id,
+        paper_id,
+        doc.get("subject", ""),
+        doc.get("class_level", 0),
+    )
+
+    return {"message": "Paper sent to pending approval"}
+
+
+@router.post("/{paper_id}/questions/{question_order}/send-to-pending")
+async def send_single_question_to_pending(
+    paper_id: str,
+    question_order: int,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.TEACHER, UserRole.HEAD]))
+):
+    """Move one draft question to pending; paper auto-moves when all questions are pending."""
+    if not ObjectId.is_valid(paper_id):
+        raise HTTPException(status_code=400, detail="Invalid paper ID")
+    if question_order < 1:
+        raise HTTPException(status_code=400, detail="Invalid question order")
+
+    doc = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if doc.get("status") != "draft_answer":
+        raise HTTPException(status_code=400, detail="Only draft answer papers can submit individual questions")
+
+    if doc.get("created_by") != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You can only submit questions from your own draft paper")
+
+    questions = doc.get("questions", [])
+    if not questions:
+        raise HTTPException(status_code=400, detail="Paper has no questions")
+    if question_order > len(questions):
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    q = questions[question_order - 1]
+    _validate_question_for_pending(q, question_order)
+    q["approval_status"] = "pending"
+
+    pending_count = sum(1 for item in questions if item.get("approval_status") == "pending")
+    all_pending = pending_count == len(questions)
+
+    update_set = {
+        "questions": questions,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    if all_pending:
+        update_set["status"] = "pending"
+        update_set["submitted_by"] = current_user.user_id
+        update_set["submitted_at"] = datetime.utcnow().isoformat()
+
+    await mongodb.db.question_papers.update_one(
+        {"_id": ObjectId(paper_id)},
+        {"$set": update_set}
+    )
+
+    if all_pending:
+        await create_approval_notification(
+            "create",
+            doc.get("title", "Question Paper"),
+            current_user.user_id,
+            paper_id,
+            doc.get("subject", ""),
+            doc.get("class_level", 0),
+        )
+        return {"message": "Question sent. All questions are now pending, paper submitted for approval.", "pending_count": pending_count, "total": len(questions), "paper_status": "pending"}
+
+    return {"message": "Question sent to pending.", "pending_count": pending_count, "total": len(questions), "paper_status": "draft_answer"}
 
 
 @router.post("/{paper_id}/approve")
@@ -702,6 +943,9 @@ async def update_paper(
                 "options": q.options,
                 "correct_answer": q.correct_answer,
                 "section": q.section,
+                "approval_status": q.approval_status or "draft_answer",
+                "image_ids": q.image_ids or [],
+                "answer_image_ids": q.answer_image_ids or [],
             })
         update_fields["questions"] = questions
 
@@ -710,21 +954,45 @@ async def update_paper(
 
     update_fields["updated_at"] = datetime.utcnow().isoformat()
 
-    # Teacher edits go through approval
-    if current_user.role == UserRole.TEACHER:
-        update_fields["status"] = "pending"
-        update_fields["edit_requested_by"] = current_user.user_id
-        update_fields["edit_requested_at"] = datetime.utcnow().isoformat()
-
     existing = await mongodb.db.question_papers.find_one({"_id": ObjectId(paper_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Paper not found")
+
+    if bool(data.submit_for_approval) and existing.get("status") == "draft_answer":
+        questions_for_submit = update_fields.get("questions", existing.get("questions", []))
+        if not questions_for_submit:
+            raise HTTPException(status_code=400, detail="Paper has no questions")
+        for idx, q in enumerate(questions_for_submit, start=1):
+            _validate_question_for_pending(q, idx)
+            q["approval_status"] = "pending"
+
+        update_fields["questions"] = questions_for_submit
+        update_fields["status"] = "pending"
+        update_fields["submitted_by"] = current_user.user_id
+        update_fields["submitted_at"] = datetime.utcnow().isoformat()
+
+    # Teachers editing draft_answer should be able to save draft without auto-submitting.
+    if current_user.role == UserRole.TEACHER and existing.get("status") != "draft_answer":
+        update_fields["status"] = "pending"
+        update_fields["edit_requested_by"] = current_user.user_id
+        update_fields["edit_requested_at"] = datetime.utcnow().isoformat()
 
     await mongodb.db.question_papers.update_one(
         {"_id": ObjectId(paper_id)}, {"$set": update_fields}
     )
 
-    if current_user.role == UserRole.TEACHER:
+    if bool(data.submit_for_approval) and existing.get("status") == "draft_answer":
+        await create_approval_notification(
+            "create",
+            update_fields.get("title") or existing.get("title", "Question Paper"),
+            current_user.user_id,
+            paper_id,
+            update_fields.get("subject") or existing.get("subject", ""),
+            update_fields.get("class_level") or existing.get("class_level", 0),
+        )
+        return {"message": "Paper submitted for approval"}
+
+    if current_user.role == UserRole.TEACHER and existing.get("status") != "draft_answer":
         title = data.title or existing.get("title", "Unknown")
         await create_approval_notification(
             "edit", title, current_user.user_id, paper_id,

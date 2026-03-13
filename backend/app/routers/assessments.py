@@ -5,11 +5,13 @@ API endpoints for assessment creation, question management,
 student submissions, and grading.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
 from datetime import datetime
 import logging
+import io
+import textwrap
 
 from app.models.assessment_models import (
     AssessmentCreateRequest, AssessmentUpdateRequest,
@@ -26,10 +28,138 @@ from app.models.rbac_models import Permission, TokenData, UserRole
 from app.db.mongo import db
 from app.db.mongo import mongodb
 from bson import ObjectId
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assessments", tags=["assessments"])
+
+
+def _build_assessment_pdf(assessment: dict, mode: str) -> bytes:
+    """Generate organized PDF for questions/answers/both using PyMuPDF."""
+    import fitz  # PyMuPDF
+
+    doc = fitz.open()
+    page = doc.new_page()
+
+    margin_x = 42
+    margin_top = 42
+    margin_bottom = 42
+    line_height = 15
+    y = margin_top
+
+    def ensure_space(lines=1):
+        nonlocal page, y
+        if y + (lines * line_height) > (page.rect.height - margin_bottom):
+            page = doc.new_page()
+            y = margin_top
+
+    def write_line(text, size=11):
+        nonlocal y
+        ensure_space(1)
+        page.insert_text((margin_x, y), str(text), fontsize=size)
+        y += line_height
+
+    def write_wrapped(text, size=11, indent=0, width=92):
+        nonlocal y
+        wrapped_lines = textwrap.wrap(str(text), width=max(20, width)) or [""]
+        for ln in wrapped_lines:
+            ensure_space(1)
+            page.insert_text((margin_x + indent, y), ln, fontsize=size)
+            y += line_height
+
+    questions = assessment.get("questions", []) or []
+
+    write_line(assessment.get("title", "Assessment"), size=16)
+    write_line(f"Class {assessment.get('class_level', '-')} | {assessment.get('subject', '-')}", size=10)
+    write_line(f"Total Questions: {len(questions)}", size=10)
+    y += 8
+
+    def resolve_answer(q: dict) -> str:
+        q_type = (q.get("type") or "").lower()
+        if q_type.startswith("mcq"):
+            options = q.get("options") or []
+            # Option objects with explicit correctness.
+            labels = []
+            for oi, opt in enumerate(options):
+                if isinstance(opt, dict) and opt.get("is_correct"):
+                    labels.append(f"{chr(65 + oi)}. {opt.get('text', '')}")
+            if labels:
+                return " | ".join(labels)
+            # Fall back to any stored answer fields.
+            return q.get("correct_answer_text") or q.get("correct_answer") or q.get("answer_text") or "N/A"
+
+        if q_type == "true_false":
+            tf = q.get("correct_answer_bool")
+            if tf is True:
+                return "True"
+            if tf is False:
+                return "False"
+            return q.get("correct_answer") or q.get("correct_answer_text") or "N/A"
+
+        return q.get("correct_answer_text") or q.get("answer_text") or q.get("correct_answer") or "N/A"
+
+    if mode in ("questions", "both"):
+        write_line("Question Paper", size=13)
+        y += 4
+        for idx, q in enumerate(questions, start=1):
+            points = q.get("points", q.get("marks", 1))
+            q_text = q.get("question_text") or q.get("text") or ""
+            write_wrapped(f"Q{idx}. {q_text} ({points} mark{'s' if points != 1 else ''})", size=11, width=90)
+
+            q_type = (q.get("type") or "").lower()
+            options = q.get("options") or []
+            if q_type.startswith("mcq") and options:
+                for oi, opt in enumerate(options):
+                    opt_text = opt.get("text") if isinstance(opt, dict) else str(opt)
+                    write_wrapped(f"{chr(65 + oi)}. {opt_text}", size=10, indent=14, width=82)
+            write_line("", size=10)
+
+    if mode in ("answers", "both"):
+        if mode == "both":
+            page = doc.new_page()
+            y = margin_top
+        write_line("Answer Key", size=13)
+        y += 4
+        for idx, q in enumerate(questions, start=1):
+            q_text = q.get("question_text") or q.get("text") or ""
+            answer = resolve_answer(q)
+            write_wrapped(f"Q{idx}. {q_text}", size=10, width=90)
+            write_wrapped(f"Answer: {answer}", size=11, indent=12, width=84)
+            write_line("", size=10)
+
+    pdf_bytes = doc.write()
+    doc.close()
+    return pdf_bytes
+
+
+@router.get("/{assessment_id}/download")
+async def download_assessment_pdf(
+    assessment_id: str,
+    mode: str = Query("questions", pattern="^(questions|answers|both)$"),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Download assessment as PDF: questions only, answers only, or both."""
+    if not ObjectId.is_valid(assessment_id):
+        raise HTTPException(status_code=400, detail="Invalid assessment ID")
+
+    assessment = await mongodb.db.assessments.find_one({"_id": ObjectId(assessment_id)})
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Allow staff to download any visible assessment PDF; students are blocked.
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot download assessment PDFs")
+
+    pdf_bytes = _build_assessment_pdf(assessment, mode)
+    safe_title = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in (assessment.get("title") or "assessment"))
+    filename = f"{safe_title}_{mode}.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 @router.post("", response_model=AssessmentResponse)
 async def create_assessment(

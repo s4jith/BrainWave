@@ -98,7 +98,6 @@ export default function TeacherSettings() {
                     name: profile.name.trim(),
                     email: profile.email.trim(),
                     phone: profile.phone.trim(),
-                    new_user_id: profile.user_id.trim() !== (user.user_id || user.userId) ? profile.user_id.trim() : undefined,
                 }),
             });
             const data = await res.json();
@@ -106,7 +105,7 @@ export default function TeacherSettings() {
                 setProfileAlert({ type: "success", message: "Profile updated successfully." });
                 // Update local user store
                 if (setUser) {
-                    setUser({ ...user, name: profile.name.trim(), email: profile.email.trim(), phone: profile.phone.trim(), user_id: profile.user_id.trim() });
+                    setUser({ ...user, name: profile.name.trim(), email: profile.email.trim(), phone: profile.phone.trim() });
                 }
             } else {
                 setProfileAlert({ type: "error", message: data.error || "Failed to update profile." });
@@ -128,13 +127,14 @@ export default function TeacherSettings() {
 
         setPasswordLoading(true);
         try {
-            const res = await authFetch(`${API_URL}/api/auth/change-password`, {
+            const res = await authFetch(`${API_URL}/api/auth/change-password-secure`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({
                     user_id: user.user_id || user.userId,
                     old_password: passwords.current,
                     new_password: passwords.new_password,
+                    confirm_password: passwords.confirm,
                 }),
             });
             const data = await res.json();
@@ -205,16 +205,6 @@ export default function TeacherSettings() {
                                 rightElement={<Phone className="w-4 h-4 text-gray-400" />}
                             />
                         </div>
-
-                        <InputField
-                            label="User ID"
-                            id="user_id"
-                            value={profile.user_id}
-                            onChange={e => setProfile(p => ({ ...p, user_id: e.target.value }))}
-                            placeholder="Your login user ID"
-                            hint="Changing your User ID will require you to use the new ID on next login."
-                            rightElement={<IdCard className="w-4 h-4 text-gray-400" />}
-                        />
 
                         <div className="flex justify-end pt-2">
                             <button

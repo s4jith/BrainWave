@@ -42,11 +42,6 @@ class LoginResponse(BaseModel):
     user: dict = None
     error: str = None
 
-class PasswordChangeRequest(BaseModel):
-    user_id: str
-    old_password: str
-    new_password: str
-
 class CreateTeacherRequest(BaseModel):
     """Request to create a teacher account (admin only)."""
     name: str = Field(..., min_length=2, description="Teacher's full name")
@@ -263,56 +258,6 @@ async def login(request: LoginRequest):
         return {
             "success": False,
             "error": "Login failed. Please try again."
-        }
-
-@router.post("/change-password")
-async def change_password(request: PasswordChangeRequest):
-    """
-    Change user password (for first-time login or password reset)
-    """
-    try:
-        user = db.users.find_one({"user_id": request.user_id})
-        
-        if not user:
-            return {
-                "success": False,
-                "error": "User not found"
-            }
-        
-        if not verify_password(request.old_password, user.get("password", "")):
-            return {
-                "success": False,
-                "error": "Current password is incorrect"
-            }
-        
-        if len(request.new_password) < 8:
-            return {
-                "success": False,
-                "error": "New password must be at least 8 characters"
-            }
-        
-        new_hashed = hash_password(request.new_password)
-        
-        db.users.update_one(
-            {"_id": user["_id"]},
-            {
-                "$set": {
-                    "password": new_hashed,
-                    "password_changed_at": datetime.utcnow()
-                }
-            }
-        )
-        
-        return {
-            "success": True,
-            "message": "Password changed successfully"
-        }
-    
-    except Exception as e:
-        logger.error(f"Password change error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to change password"
         }
 
 @router.post("/complete-onboarding")
@@ -786,6 +731,9 @@ async def update_profile(
             updates["mobile"] = request.phone.strip()  # keep both fields in sync
 
         if request.new_user_id and request.new_user_id.strip():
+            if current_user.role != UserRole.ADMIN:
+                return {"success": False, "error": "User ID change is not allowed for this account."}
+
             new_uid = request.new_user_id.strip()
             if new_uid != current_user.user_id:
                 existing = db.users.find_one({"user_id": new_uid})

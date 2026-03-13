@@ -59,6 +59,16 @@ class QuestionBankService:
             else:
                 query["_id"] = {"$exists": False}
 
+        # Draft answer page should show only owner's drafts for all staff users.
+        if status == "draft_answer" and user_role in ("teacher", "admin", "head"):
+            if user_id:
+                query["$or"] = [
+                    {"created_by": user_id},
+                    {"triggered_by": user_id}
+                ]
+            else:
+                query["_id"] = {"$exists": False}
+
         # Merge extra_filter (e.g. head assignment scope)
         if extra_filter:
             for k, v in extra_filter.items():
@@ -162,6 +172,10 @@ class QuestionBankService:
         """Delete a question."""
         if not ObjectId.is_valid(question_id):
             return False, "Invalid ID"
+
+        used, detail = self._is_question_used_in_tests(question_id)
+        if used:
+            return False, detail
             
         result = self.collection.delete_one({"_id": ObjectId(question_id)})
         
@@ -169,6 +183,40 @@ class QuestionBankService:
             return False, "Question not found"
             
         return True, "Deleted successfully"
+
+    def _is_question_used_in_tests(self, question_id: str):
+        """Check if question is currently referenced by any active test structure."""
+        assessment_count = db.assessments.count_documents({
+            "questions": {
+                "$elemMatch": {
+                    "$or": [
+                        {"id": question_id},
+                        {"question_id": question_id},
+                        {"question_bank_id": question_id},
+                        {"source_question_id": question_id},
+                    ]
+                }
+            }
+        })
+
+        legacy_tests_count = db.tests.count_documents({
+            "questions": {
+                "$elemMatch": {
+                    "$or": [
+                        {"id": question_id},
+                        {"question_id": question_id},
+                        {"question_bank_id": question_id},
+                        {"source_question_id": question_id},
+                    ]
+                }
+            }
+        })
+
+        total_refs = assessment_count + legacy_tests_count
+        if total_refs > 0:
+            return True, "Question is used in one or more tests. First remove it from tests, then delete."
+
+        return False, ""
 
     async def archive_question(self, question_id: str, user_id: str):
         """Soft-delete a question by marking it archived. Used by teachers."""
@@ -259,7 +307,7 @@ class QuestionBankService:
                     "teacher_id": user_id if user_role == "teacher" else None,
                     "created_at": now.isoformat(),
                     "is_ai_generated": True,
-                    "status": "pending",
+                    "status": "draft_answer",
                     "expires_at": expires_at
                 }
                 
@@ -272,7 +320,7 @@ class QuestionBankService:
                 "success": True, 
                 "count": len(saved_ids), 
                 "ids": saved_ids,
-                "message": f"Successfully generated {len(saved_ids)} questions. They are now pending approval."
+                "message": f"Successfully generated {len(saved_ids)} questions. Fill answers in Answer Page, then send to pending."
             }
             
         except Exception as e:

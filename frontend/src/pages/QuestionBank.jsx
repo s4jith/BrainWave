@@ -11,12 +11,12 @@ import authFetch from "../utils/authFetch";
 
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
+    const isAdmin = user.role === "admin";
     const isTeacher = user.role === "teacher";
     const isHead = user.role === "head";
 
     const [activeTab, setActiveTab] = useState("bank"); 
     const [questions, setQuestions] = useState([]);
-    const [subjects, setSubjects] = useState([]); 
     const [groups, setGroups] = useState([]); 
     const [curriculumSubjects, setCurriculumSubjects] = useState([]); 
     const [loadingGroups, setLoadingGroups] = useState(true); 
@@ -85,7 +85,6 @@ const QuestionBank = () => {
     const apiUrl = import.meta.env.VITE_API_URL;
 
     useEffect(() => {
-        fetchSubjects();
         fetchCurriculumSubjects();
         if (isTeacher) {
             fetchGroups();
@@ -119,20 +118,6 @@ const QuestionBank = () => {
             console.error("Error fetching groups:", error);
         } finally {
             setLoadingGroups(false);
-        }
-    };
-
-    const fetchSubjects = async () => {
-        try {
-            const response = await authFetch(`${apiUrl}/api/question-bank/subjects`, {
-                headers: { "Authorization": `Bearer ${accessToken}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setSubjects(data.subjects || []);
-            }
-        } catch (error) {
-            console.error("Error fetching subjects:", error);
         }
     };
 
@@ -191,7 +176,12 @@ const QuestionBank = () => {
         if (activeTab === "delete-requests") return; // handled separately
         setLoading(true);
         try {
-            const status = activeTab === "approvals" ? "pending" : "approved";
+            const status =
+                activeTab === "approvals"
+                    ? "pending"
+                    : activeTab === "answers"
+                        ? "draft_answer"
+                        : "approved";
             
             let classLevel = null;
             let subject = null;
@@ -362,6 +352,21 @@ const QuestionBank = () => {
         setShowModal(true);
     };
 
+    const handleSendToPending = async (id) => {
+        try {
+            const response = await authFetch(`${apiUrl}/api/question-bank/questions/${id}/send-to-pending`, {
+                method: "PUT",
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || "Failed to send question to pending");
+            fetchQuestions();
+            alert(data.message || "Question sent to pending approval");
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const handleAddNew = () => {
         setSelectedQuestion(null);
         setShowModal(true);
@@ -404,6 +409,17 @@ const QuestionBank = () => {
                             }`}
                     >
                         Pending Approvals
+                    </button>
+                    )}
+                    {(isTeacher || isAdmin || isHead) && (
+                    <button
+                        onClick={() => setActiveTab("answers")}
+                        className={`px-4 py-2.5 font-medium border-b-2 transition-colors flex items-center gap-2 text-sm ${activeTab === "answers"
+                            ? "border-indigo-600 dark:border-indigo-400 text-indigo-700 dark:text-indigo-300"
+                            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
+                            }`}
+                    >
+                        Answer Page
                     </button>
                     )}
                     {isHead && (
@@ -489,7 +505,6 @@ const QuestionBank = () => {
                         <option value="easy">Easy</option>
                         <option value="medium">Medium</option>
                         <option value="hard">Hard</option>
-                        <option value="advanced">Advanced</option>
                     </select>
                     <select
                         className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
@@ -564,6 +579,12 @@ const QuestionBank = () => {
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex flex-wrap gap-2 mb-3">
+                                                <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
+                                                    {q.subject} • Class {q.class_level}
+                                                </span>
+                                                <span className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize">
+                                                    {q.bloom_level || "Not Set"}
+                                                </span>
                                                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold 
                                                     ${q.difficulty === 'easy' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
                                                     q.difficulty === 'medium' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
@@ -572,9 +593,6 @@ const QuestionBank = () => {
                                                 </span>
                                                 <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
                                                     {q.type.replace('_', ' ').toUpperCase()}
-                                                </span>
-                                                <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
-                                                    {q.subject} • Class {q.class_level}
                                                 </span>
                                                 <span className="bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2.5 py-0.5 rounded-full text-xs font-medium">
                                                     {q.marks} Mark{q.marks > 1 ? 's' : ''}
@@ -618,6 +636,12 @@ const QuestionBank = () => {
                                                 </div>
                                             )}
 
+                                            {activeTab === "answers" && !q.correct_answer && (
+                                                <div className="mb-3 text-sm text-red-600 dark:text-red-400 font-medium">
+                                                    Add answer before sending to pending.
+                                                </div>
+                                            )}
+
                                             <div className="text-xs text-gray-400 dark:text-gray-500 flex flex-wrap items-center gap-x-1">
                                                 <span>Chapter {q.chapter}</span>
                                                 <span>•</span>
@@ -654,6 +678,15 @@ const QuestionBank = () => {
                                                         Reject
                                                     </button>
                                                 </>
+                                            )}
+                                            {activeTab === "answers" && (
+                                                <button
+                                                    onClick={() => handleSendToPending(q.id)}
+                                                    disabled={!q.correct_answer}
+                                                    className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    Send to Pending
+                                                </button>
                                             )}
                                             <button
                                                 onClick={() => handleEdit(q)}
@@ -708,7 +741,7 @@ const QuestionBank = () => {
                     onClose={handleModalClose}
                     isTeacher={isTeacher}
                     userSubjects={user.subjects || []}
-                    availableSubjects={subjects}
+                    availableSubjects={[]}
                     groups={isTeacher ? groups : []}
                 />
             )}

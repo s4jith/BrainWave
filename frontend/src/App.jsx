@@ -91,8 +91,8 @@ function ProtectedRoute({ children }) {
   console.log("ProtectedRoute - isAuth:", isAuthenticated, "user:", user);
 
   if (!isAuthenticated) {
-    console.log("Not authenticated, redirecting to /");
-    return <Navigate to="/" replace />;
+    console.log("Not authenticated, redirecting to /login");
+    return <Navigate to="/login" replace />;
   }
 
   // Block non-admins when maintenance mode is on
@@ -174,8 +174,8 @@ function StaffRoute({ children }) {
   console.log("StaffRoute - isAuth:", isAuthenticated, "user:", user);
 
   if (!isAuthenticated) {
-    console.log("Not authenticated, redirecting to /");
-    return <Navigate to="/" replace />;
+    console.log("Not authenticated, redirecting to /login");
+    return <Navigate to="/login" replace />;
   }
 
   if (user.role !== "admin" && user.role !== "teacher" && user.role !== "head") {
@@ -276,9 +276,10 @@ function TokenValidator({ children }) {
         const res = await fetch(`${API_URL}/api/auth/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        if (res.status === 401) {
-          // Token is expired or invalid — force logout
+        // Treat explicit auth/session failures as invalid login state.
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
           logout();
+          window.location.replace("/login");
         }
       } catch {
         // Network error — don't logout, let offline usage continue

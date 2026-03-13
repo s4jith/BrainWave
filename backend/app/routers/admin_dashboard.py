@@ -7,7 +7,7 @@ Admin Dashboard Router
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime, timedelta
 from bson import ObjectId
 import hashlib
@@ -1477,7 +1477,7 @@ async def get_maintenance_status():
 class HeadCreate(BaseModel):
     """Model for designating an existing teacher as a head."""
     teacher_id: str = Field(..., description="MongoDB _id or user_id of the teacher to promote")
-    assigned_classes: List[int] = Field(default=[], description="Class levels this head is responsible for")
+    assigned_classes: List[Union[int, str]] = Field(default=[], description="Class levels this head is responsible for")
     assigned_subjects: List[str] = Field(default=[], description="Subjects this head is responsible for")
 
 class HeadUpdate(BaseModel):
@@ -1485,8 +1485,61 @@ class HeadUpdate(BaseModel):
     name: Optional[str] = None
     mobile: Optional[str] = None
     is_active: Optional[bool] = None
-    assigned_classes: Optional[List[int]] = None
+    assigned_classes: Optional[List[Union[int, str]]] = None
     assigned_subjects: Optional[List[str]] = None
+
+
+def parse_class_level(value) -> Optional[int]:
+    """Parse class from int/string forms like 10, '10', 'Class 10', 'X', 'XI', 'XII'."""
+    if value is None:
+        return None
+
+    if isinstance(value, int):
+        return value if 1 <= value <= 12 else None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    lowered = raw.lower().replace("class", "").strip().replace("-", " ")
+
+    # Numeric forms
+    if lowered.isdigit():
+        parsed = int(lowered)
+        return parsed if 1 <= parsed <= 12 else None
+
+    # Roman numeral forms sometimes sent by inconsistent UIs.
+    roman_map = {
+        "i": 1,
+        "ii": 2,
+        "iii": 3,
+        "iv": 4,
+        "v": 5,
+        "vi": 6,
+        "vii": 7,
+        "viii": 8,
+        "ix": 9,
+        "x": 10,
+        "xi": 11,
+        "xii": 12,
+    }
+    return roman_map.get(lowered)
+
+
+def normalize_head_assignments(classes: Optional[List[Union[int, str]]], subjects: Optional[List[str]]):
+    normalized_classes: List[int] = []
+    for c in classes or []:
+        parsed = parse_class_level(c)
+        if parsed and parsed not in normalized_classes:
+            normalized_classes.append(parsed)
+
+    normalized_subjects = []
+    for s in subjects or []:
+        sub = str(s).strip()
+        if sub and sub not in normalized_subjects:
+            normalized_subjects.append(sub)
+
+    return normalized_classes, normalized_subjects
 
 def generate_head_id(name: str) -> str:
     """Generate unique head ID in format: head_{number}_{name}"""
@@ -1584,11 +1637,19 @@ async def create_head(head: HeadCreate):
         if teacher.get("role") != "teacher":
             raise HTTPException(status_code=400, detail="Selected user is not a teacher")
 
+        normalized_classes, normalized_subjects = normalize_head_assignments(
+            head.assigned_classes,
+            head.assigned_subjects,
+        )
+
+        if not normalized_classes and not normalized_subjects:
+            raise HTTPException(status_code=400, detail="Assign at least one class or subject")
+
         # Promote teacher to head role
         update_doc = {
             "role": "head",
-            "assigned_classes": head.assigned_classes,
-            "assigned_subjects": head.assigned_subjects,
+            "assigned_classes": normalized_classes,
+            "assigned_subjects": normalized_subjects,
             "promoted_to_head_at": datetime.utcnow(),
             "promoted_from_teacher": True,
             "updated_by": "admin",
@@ -1603,8 +1664,8 @@ async def create_head(head: HeadCreate):
             "email": updated.get("email", ""),
             "mobile": updated.get("mobile", ""),
             "subjects": updated.get("subjects", []),
-            "assigned_classes": head.assigned_classes,
-            "assigned_subjects": head.assigned_subjects,
+            "assigned_classes": normalized_classes,
+            "assigned_subjects": normalized_subjects,
             "promoted_from_teacher": True,
             "is_active": updated.get("is_active", True),
             "note": f"{updated.get('name')} has been designated as head. They can log in with their existing credentials (User ID: {updated.get('user_id')})."
@@ -1630,10 +1691,15 @@ async def update_head(head_id: str, head: HeadUpdate):
             update_doc["mobile"] = head.mobile
         if head.is_active is not None:
             update_doc["is_active"] = head.is_active
-        if head.assigned_classes is not None:
-            update_doc["assigned_classes"] = head.assigned_classes
-        if head.assigned_subjects is not None:
-            update_doc["assigned_subjects"] = head.assigned_subjects
+        if head.assigned_classes is not None or head.assigned_subjects is not None:
+            normalized_classes, normalized_subjects = normalize_head_assignments(
+                head.assigned_classes if head.assigned_classes is not None else [],
+                head.assigned_subjects if head.assigned_subjects is not None else [],
+            )
+            if head.assigned_classes is not None:
+                update_doc["assigned_classes"] = normalized_classes
+            if head.assigned_subjects is not None:
+                update_doc["assigned_subjects"] = normalized_subjects
 
         if not update_doc:
             raise HTTPException(status_code=400, detail="No fields to update")

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -48,9 +48,38 @@ export default function TeacherReports() {
     const { getAuthHeader } = useUserStore();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
+    const performanceRef = useRef(null);
+    const distributionRef = useRef(null);
+    const [performanceSize, setPerformanceSize] = useState({ width: 0, height: 0 });
+    const [distributionSize, setDistributionSize] = useState({ width: 0, height: 0 });
 
     useEffect(() => {
         fetchReports();
+    }, []);
+
+    useEffect(() => {
+        const observeSize = (element, setter) => {
+            if (!element) return null;
+            const observer = new ResizeObserver((entries) => {
+                const entry = entries[0];
+                if (!entry) return;
+                const { width, height } = entry.contentRect;
+                setter({
+                    width: Math.max(0, Math.floor(width)),
+                    height: Math.max(0, Math.floor(height)),
+                });
+            });
+            observer.observe(element);
+            return observer;
+        };
+
+        const performanceObserver = observeSize(performanceRef.current, setPerformanceSize);
+        const distributionObserver = observeSize(distributionRef.current, setDistributionSize);
+
+        return () => {
+            if (performanceObserver) performanceObserver.disconnect();
+            if (distributionObserver) distributionObserver.disconnect();
+        };
     }, []);
 
     const fetchReports = async () => {
@@ -146,8 +175,9 @@ export default function TeacherReports() {
                             <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">Create assessments and have students take them</p>
                         </div>
                     ) : (
-                        <div className="h-52">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-52" ref={performanceRef}>
+                            {performanceSize.width > 0 && performanceSize.height > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={stats.recent_performance} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
@@ -170,7 +200,8 @@ export default function TeacherReports() {
                                         name="Avg Score"
                                     />
                                 </AreaChart>
-                            </ResponsiveContainer>
+                                </ResponsiveContainer>
+                            ) : null}
                         </div>
                     )}
                 </div>
@@ -189,8 +220,9 @@ export default function TeacherReports() {
                         </div>
                     ) : (
                         <>
-                            <div className="h-36">
-                                <ResponsiveContainer width="100%" height="100%">
+                            <div className="h-36" ref={distributionRef}>
+                                {distributionSize.width > 0 && distributionSize.height > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={stats.distribution}
@@ -211,7 +243,8 @@ export default function TeacherReports() {
                                             contentStyle={{ backgroundColor: "#1f2937", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px" }}
                                         />
                                     </PieChart>
-                                </ResponsiveContainer>
+                                    </ResponsiveContainer>
+                                ) : null}
                             </div>
                             {/* Legend */}
                             <div className="space-y-2 mt-2">

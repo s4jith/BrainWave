@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink, Download } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -48,6 +48,8 @@ export default function TestManagement() {
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [teacherClassLevels, setTeacherClassLevels] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
+  const [downloadMenuTestId, setDownloadMenuTestId] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
@@ -397,6 +399,36 @@ export default function TestManagement() {
     }
   };
 
+  const handleDownloadTestPdf = async (test, mode) => {
+    const key = `${test.id}:${mode}`;
+    setDownloading(key);
+    try {
+      const response = await authFetch(`${API_URL}/api/assessments/${test.id}/download?mode=${mode}`, {
+        headers: getAuthHeader()
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to download PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeTitle = (test.title || "assessment").replace(/[^a-z0-9-_]+/gi, "_");
+      a.href = url;
+      a.download = `${safeTitle}_${mode}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setDownloadMenuTestId(null);
+    } catch (err) {
+      alert(err.message || "Failed to download PDF");
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const displayedTests = filterStatus
     ? tests.filter(t => {
         const s = getTestStatus(t);
@@ -516,6 +548,42 @@ export default function TestManagement() {
                       className="text-xs px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-1">
                       <Trash2 className="w-3 h-3" /> Delete
                     </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDownloadMenuTestId((prev) => (prev === test.id ? null : test.id));
+                        }}
+                        className="text-xs px-2 py-1 bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" /> Download
+                      </button>
+                      {downloadMenuTestId === test.id && (
+                        <div className="absolute z-20 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDownloadTestPdf(test, "questions"); }}
+                            disabled={downloading === `${test.id}:questions`}
+                            className="w-full text-left px-3 py-2 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                          >
+                            Download Questions (PDF)
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDownloadTestPdf(test, "answers"); }}
+                            disabled={downloading === `${test.id}:answers`}
+                            className="w-full text-left px-3 py-2 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                          >
+                            Download Answers (PDF)
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDownloadTestPdf(test, "both"); }}
+                            disabled={downloading === `${test.id}:both`}
+                            className="w-full text-left px-3 py-2 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                          >
+                            Download Questions + Answers (PDF)
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

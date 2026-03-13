@@ -41,7 +41,6 @@ export default function TeacherManagement() {
     const [showPromoteModal, setShowPromoteModal] = useState(false);
     const [promoteTeacher, setPromoteTeacher] = useState(null);
     const [promoteForm, setPromoteForm] = useState({ assigned_classes: [], assigned_subjects: [] });
-    const [availableSubjects, setAvailableSubjects] = useState([]);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -58,7 +57,6 @@ export default function TeacherManagement() {
     useEffect(() => {
         fetchTeachers();
         fetchCurriculumSubjects();
-        fetchAvailableSubjects();
     }, []);
 
     useEffect(() => {
@@ -103,21 +101,9 @@ export default function TeacherManagement() {
         }
     };
 
-    const fetchAvailableSubjects = async () => {
-        try {
-            const response = await authFetch(`${API_URL}/api/curriculum/subjects?is_active=true`, {
-                headers: getAuthHeader()
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const items = (Array.isArray(data) ? data : (data.subjects || []))
-                    .filter(s => s.subject_name && s.class_level != null);
-                setAvailableSubjects(items);
-            }
-        } catch {
-            setAvailableSubjects([]);
-        }
-    };
+    const availableSubjects = curriculumSubjects
+        .filter(s => s.subject_name && s.class_level != null)
+        .map(s => ({ subject_name: s.subject_name, class_level: s.class_level }));
 
     const handleAddTeacher = async (e) => {
         e.preventDefault();
@@ -386,23 +372,23 @@ export default function TeacherManagement() {
                 </div>
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Total Heads</p>
+                            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{teachers.filter(t => t.role === "head").length}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                             <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">With Groups</p>
                             <p className="text-2xl font-semibold text-gray-900 dark:text-white">{teachers.filter(t => t.group_count > 0).length}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                            <GraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Subjects</p>
-                            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{[...new Set(teachers.map(t => t.preferred_subject))].length}</p>
                         </div>
                     </div>
                 </div>

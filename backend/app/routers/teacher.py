@@ -22,6 +22,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
 
+
+def _extract_submission_percent(sub: Dict[str, Any]) -> Optional[float]:
+    """Normalize submission score into a percent value (0-100) across schema variants."""
+    try:
+        if sub.get("percentage") is not None:
+            return float(sub.get("percentage"))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        if sub.get("score") is not None:
+            return float(sub.get("score"))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        total = float(sub.get("total_score")) if sub.get("total_score") is not None else None
+        max_score = float(sub.get("max_score")) if sub.get("max_score") is not None else None
+        if total is not None and max_score and max_score > 0:
+            return (total / max_score) * 100.0
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass
+
+    return None
+
 class QuestionCreate(BaseModel):
     text: str
     subject: str
@@ -382,8 +407,9 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         
         all_scores = []
         for sub in assessment_submissions:
-            if sub.get("score") is not None:
-                all_scores.append(sub["score"])
+            percent = _extract_submission_percent(sub)
+            if percent is not None:
+                all_scores.append(percent)
         if is_admin:
             for s in test_sessions:
                 if s.get("score") is not None:
@@ -412,7 +438,11 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
             for assessment in sorted(my_assessments, key=lambda a: a.get("created_at", ""), reverse=True)[:10]:
                 aid = str(assessment["_id"])
                 subs = subs_by_assessment.get(aid, [])
-                scored = [s.get("score", 0) for s in subs if s.get("score") is not None]
+                scored = []
+                for s in subs:
+                    percent = _extract_submission_percent(s)
+                    if percent is not None:
+                        scored.append(percent)
                 avg_t = round(sum(scored) / len(scored), 1) if scored else 0
                 recent_performance.append({
                     "name": assessment.get("title", "Test")[:14],
@@ -473,7 +503,12 @@ async def get_teacher_reports(current_user: TokenData = Depends(require_role([Us
         
         for assessment in my_assessments[:20]:
             assessment_subs = [s for s in assessment_submissions if s.get("assessment_id") == str(assessment["_id"])]
-            avg_score_test = sum(s.get("score", 0) for s in assessment_subs if s.get("score") is not None) / len([s for s in assessment_subs if s.get("score") is not None]) if any(s.get("score") is not None for s in assessment_subs) else 0
+            assessment_scores = []
+            for s in assessment_subs:
+                percent = _extract_submission_percent(s)
+                if percent is not None:
+                    assessment_scores.append(percent)
+            avg_score_test = sum(assessment_scores) / len(assessment_scores) if assessment_scores else 0
             computed_status = compute_assessment_status(assessment)
             created_at = assessment.get("created_at", "")
             if hasattr(created_at, "isoformat"):

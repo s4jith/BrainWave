@@ -134,31 +134,34 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const selectedChapterObj = availableChapters.find(ch => ch.chapter_number === formData.chapter);
     const availableTopics = selectedChapterObj?.topics?.filter(t => t.is_active !== false) || [];
 
-    const curriculumSubjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
-    
-    const curriculumClassLevels = [...new Set(
-        curriculumSubjects
-            .filter(s => s.subject_name === activeSubject)
-            .map(s => s.class_level)
-    )].sort((a, b) => a - b);
-    
     const allAvailableClassLevels = [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
 
     // For teachers: derive subjects/classes from their assigned groups only
-    const teacherGroupSubjects = React.useMemo(() =>
+    const teacherGroupClassLevels = React.useMemo(() =>
         isTeacher && groups.length > 0
-            ? [...new Set(groups.map(g => g.subject).filter(Boolean))].sort()
+            ? [...new Set(groups.map(g => g.class_level).filter(Boolean))].sort((a, b) => a - b)
             : null,
         [isTeacher, groups]
     );
 
-    const getTeacherClassesForSubject = React.useCallback((subject) => {
-        if (!isTeacher || groups.length === 0) return null;
-        const filtered = subject
-            ? groups.filter(g => g.subject?.toLowerCase() === subject.toLowerCase())
-            : groups;
-        return [...new Set(filtered.map(g => g.class_level).filter(Boolean))].sort((a, b) => a - b);
-    }, [isTeacher, groups]);
+    const getSubjectsForClass = React.useCallback((classLevel) => {
+        if (!classLevel) return [];
+        const cls = Number(classLevel);
+        if (isTeacher && groups.length > 0) {
+            return [...new Set(
+                groups
+                    .filter(g => Number(g.class_level) === cls)
+                    .map(g => g.subject)
+                    .filter(Boolean)
+            )].sort();
+        }
+        return [...new Set(
+            curriculumSubjects
+                .filter(s => Number(s.class_level) === cls)
+                .map(s => s.subject_name)
+                .filter(Boolean)
+        )].sort();
+    }, [isTeacher, groups, curriculumSubjects]);
 
     useEffect(() => {
         if (question) {
@@ -261,8 +264,8 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         setLoading(true);
         setError("");
         try {
-            if (!aiConfig.subject) { setError("Please select a subject."); setLoading(false); return; }
             if (!aiConfig.class_level) { setError("Please select a class."); setLoading(false); return; }
+            if (!aiConfig.subject) { setError("Please select a subject."); setLoading(false); return; }
             if (!aiConfig.chapter) { setError("Please select a chapter."); setLoading(false); return; }
 
             const payload = {
@@ -364,6 +367,24 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         <form onSubmit={handleManualSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
+                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Class <span className="text-red-500">*</span></label>
+                                    <select
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
+                                        value={formData.class_level}
+                                        onChange={e => {
+                                            const selectedClass = parseInt(e.target.value);
+                                            setFormData({ ...formData, class_level: selectedClass || "", subject: "", chapter: "", chapter_name: "", topic: "" });
+                                            setSelectedCurrSubject(null);
+                                        }}
+                                        required
+                                    >
+                                        <option value="">Select Class</option>
+                                        {(teacherGroupClassLevels ?? (allAvailableClassLevels.length > 0 ? allAvailableClassLevels : Array.from({ length: 12 }, (_, i) => i + 1))).map(c => (
+                                            <option key={c} value={c}>Class {c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Subject <span className="text-red-500">*</span></label>
                                     {loadingCurriculum ? (
                                         <div className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
@@ -374,34 +395,18 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                             className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                             value={formData.subject}
                                             onChange={e => {
-                                                setFormData({ ...formData, subject: e.target.value, chapter: "", chapter_name: "", topic: "", class_level: "" });
+                                                setFormData({ ...formData, subject: e.target.value, chapter: "", chapter_name: "", topic: "" });
                                                 setSelectedCurrSubject(null);
                                             }}
+                                            disabled={!formData.class_level}
                                             required
                                         >
-                                            <option value="">Select Subject</option>
-                                            {(teacherGroupSubjects ?? (curriculumSubjectNames.length > 0 ? curriculumSubjectNames : subjectList)).map(s => (
+                                            <option value="">{formData.class_level ? "Select Subject" : "Select Class First"}</option>
+                                            {getSubjectsForClass(formData.class_level).map(s => (
                                                 <option key={s} value={s}>{s}</option>
                                             ))}
                                         </select>
                                     )}
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Class <span className="text-red-500">*</span></label>
-                                    <select
-                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
-                                        value={formData.class_level}
-                                        onChange={e => {
-                                            setFormData({ ...formData, class_level: parseInt(e.target.value), chapter: "", chapter_name: "", topic: "" });
-                                            setSelectedCurrSubject(null);
-                                        }}
-                                        required
-                                    >
-                                        <option value="">Select Class</option>
-                                        {(getTeacherClassesForSubject(formData.subject) ?? (curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels)).map(c => (
-                                            <option key={c} value={c}>Class {c}</option>
-                                        ))}
-                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Chapter <span className="text-red-500">*</span></label>
@@ -433,7 +438,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                     </option>
                                                 ))
                                             ) : (
-                                                <option disabled>{formData.subject && formData.class_level ? "No chapters found – add in Subjects page" : "Select subject & class first"}</option>
+                                                <option disabled>{formData.subject && formData.class_level ? "No chapters found – add in Subjects page" : "Select class & subject first"}</option>
                                             )}
                                         </select>
                                     )}
@@ -694,6 +699,17 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                         <div className="space-y-6">
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
+                                    <select
+                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
+                                        value={aiConfig.class_level}
+                                        onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value) || "", subject: "", chapter: "" })}
+                                    >
+                                        <option value="">Select Class</option>
+                                        {(teacherGroupClassLevels ?? (allAvailableClassLevels.length > 0 ? allAvailableClassLevels : Array.from({ length: 12 }, (_, i) => i + 1))).map(c => <option key={c} value={c}>Class {c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Subject <span className="text-red-500">*</span></label>
                                     {loadingCurriculum ? (
                                         <div className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-500 flex items-center gap-2">
@@ -703,25 +719,15 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         <select
                                             className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
                                             value={aiConfig.subject}
-                                            onChange={e => setAiConfig({ ...aiConfig, subject: e.target.value, chapter: "", class_level: "" })}
+                                            onChange={e => setAiConfig({ ...aiConfig, subject: e.target.value, chapter: "" })}
+                                            disabled={!aiConfig.class_level}
                                         >
-                                            <option value="">Select Subject</option>
-                                            {(teacherGroupSubjects ?? (curriculumSubjectNames.length > 0 ? curriculumSubjectNames : subjectList)).map(s => (
+                                            <option value="">{aiConfig.class_level ? "Select Subject" : "Select Class First"}</option>
+                                            {getSubjectsForClass(aiConfig.class_level).map(s => (
                                                 <option key={s} value={s}>{s}</option>
                                             ))}
                                         </select>
                                     )}
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Class <span className="text-red-400">*</span></label>
-                                    <select
-                                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-gray-900 dark:text-white"
-                                        value={aiConfig.class_level}
-                                        onChange={e => setAiConfig({ ...aiConfig, class_level: parseInt(e.target.value), chapter: "" })}
-                                    >
-                                        <option value="">Select Class</option>
-                                        {(getTeacherClassesForSubject(aiConfig.subject) ?? (curriculumClassLevels.length > 0 ? curriculumClassLevels : allAvailableClassLevels)).map(c => <option key={c} value={c}>Class {c}</option>)}
-                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Chapter <span className="text-red-500">*</span></label>
@@ -738,7 +744,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                                 </option>
                                             ))
                                         ) : (
-                                            <option disabled>Select subject & class first</option>
+                                            <option disabled>Select class & subject first</option>
                                         )}
                                     </select>
                                 </div>

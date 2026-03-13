@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Lock, KeyRound } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
@@ -18,10 +18,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isTypingPassword, setIsTypingPassword] = useState(false);
-  const [showPasswordChange, setShowPasswordChange] = useState(false);
-  const [tempUserId, setTempUserId] = useState(null);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,14 +37,6 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        
-        if (data.first_login) {
-          setTempUserId(data.user_id);
-          setShowPasswordChange(true);
-          setIsLoading(false);
-          return;
-        }
-
         const userRole = data.user.role || "student";
 
         login({
@@ -83,39 +71,6 @@ export default function Login() {
     } catch (err) {
       console.error("Login error:", err);
       setError("Login failed. Please check your credentials and ensure the server is running.");
-    }
-    setIsLoading(false);
-  };
-
-  const handlePasswordChange = async () => {
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-    try {
-      const res = await authFetch(`${API_BASE}/api/auth/change-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: tempUserId, old_password: password, new_password: newPassword })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPassword(newPassword);
-        setShowPasswordChange(false);
-        alert("Password changed successfully! Please sign in again.");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        setError(data.error || "Failed to change password");
-      }
-    } catch (err) {
-      setError("Failed to change password");
     }
     setIsLoading(false);
   };
@@ -177,33 +132,6 @@ export default function Login() {
           </div>
         </div>
       </div>
-      {showPasswordChange && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <KeyRound className="w-8 h-8 text-green-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Change Your Password</h2>
-              <p className="text-gray-500 mt-2">This is your first login. Please set a new password.</p>
-            </div>
-            <div className="space-y-4">
-              <div className="relative">
-                <input type="password" placeholder="New password (min 8 characters)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full h-14 px-5 pr-12 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-green-200" />
-                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>
-              <div className="relative">
-                <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full h-14 px-5 pr-12 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-green-200" />
-                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>
-              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-              <button onClick={handlePasswordChange} disabled={isLoading} className="w-full h-14 mt-4 font-semibold rounded-2xl bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50">
-                {isLoading ? "Changing..." : "Set New Password"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
