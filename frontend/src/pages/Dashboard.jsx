@@ -109,13 +109,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchPendingTests();
     fetchStreakData();
     fetchProgressData();
     logUserActivity();
     fetchFeatures();
     fetchRecentNotes();
-  }, [user.id]);
+  }, [user?.id]);
 
   const fetchFeatures = async () => {
     try {
@@ -178,6 +179,11 @@ export default function Dashboard() {
   };
 
   const fetchPendingTests = async () => {
+    if (!user?.id) {
+      setPendingTests([]);
+      setLoadingTests(false);
+      return;
+    }
     try {
       setLoadingTests(true);
       const staffTests = await testService.getStaffTests(user.preferredSubject, null, user.id);
@@ -322,7 +328,7 @@ export default function Dashboard() {
                         {test.subject || 'General'}
                       </span>
                       <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {test.deadline ? new Date(test.deadline).toLocaleDateString() : 'No deadline'}
+                        {test.due_date ? new Date(test.due_date).toLocaleDateString() : 'No deadline'}
                       </span>
                       <button
                         onClick={() => navigate('/test')}

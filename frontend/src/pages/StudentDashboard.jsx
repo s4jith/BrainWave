@@ -36,12 +36,13 @@ export default function StudentDashboard() {
     const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
 
     useEffect(() => {
+        if (!user?.id) return;
         fetchStudentStats();
         fetchRecentGrades();
         fetchGroups();
         fetchSubjects();
         fetchFeatures();
-    }, []);
+    }, [user?.id]);
 
     const fetchFeatures = async () => {
         try {
