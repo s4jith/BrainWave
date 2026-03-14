@@ -73,22 +73,21 @@ export const chatService = {
       try {
         data = await this._postAnnotation(requestBody);
       } catch (error) {
-        // Backward-compatible fallback: older backend may fail image OCR with 500.
-        const canRetryWithoutImage = Boolean(imageData) && (
+        const imageOcrFailed = Boolean(imageData) && (
           error?.status >= 500 ||
-          /image ocr failed|could not extract text from image/i.test(error?.detail || error?.message || "")
+          error?.status === 422 ||
+          /image ocr failed|could not extract text from image|could not process screenshot|could not read enough content from screenshot/i.test(error?.detail || error?.message || "")
         );
 
-        if (!canRetryWithoutImage) {
-          throw error;
+        if (imageOcrFailed) {
+          throw {
+            status: 422,
+            detail: "Unable to read the uploaded image clearly. Please upload a clearer page image and try again.",
+            message: "Unable to read the uploaded image clearly."
+          };
         }
 
-        const fallbackBody = {
-          ...requestBody,
-          image_data: null,
-          selected_text: text || `Please help with this screenshot topic from class ${classLevel} ${subject}.`
-        };
-        data = await this._postAnnotation(fallbackBody);
+        throw error;
       }
 
       return {

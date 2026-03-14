@@ -9,6 +9,7 @@ from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag_service import rag_service
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
+from app.services.safe_image_rag_service import safe_image_rag_service
 from app.services.top_question_service import top_question_service
 from app.utils.tutor_persona import get_tutor_system_prompt
 import logging
@@ -472,9 +473,10 @@ async def image_chat(
     
     **Flow:**
     1. Validate and preprocess image
-    2. Extract text using Gemini Vision OCR
-    3. Generate query from extracted text AND user input
-    4. Run RAG pipeline for answer generation
+    2. Run strict relevance detection (educational vs irrelevant)
+    3. Extract query from relevant image content
+    4. Retrieve NCERT context with similarity threshold (>= 0.75)
+    5. Answer using retrieved NCERT context only
     
     **Supported formats:** JPEG, PNG, WebP (max 5MB)
     """
@@ -509,84 +511,36 @@ async def image_chat(
             raise HTTPException(status_code=400, detail=f"Failed to parse image: {str(e)}")
         
         import base64
-        image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-        vision_prompt = """Extract the main educational text from this image.
-        Return ONLY the extracted text, no explanations.
-        If there are mathematical formulas, express them in plain text."""
-        
-        try:
-            ocr_text = gemini_service.analyze_image(
-                image_data=image_b64,
-                prompt=vision_prompt,
-                mime_type=image.content_type or "image/jpeg"
-            )
-        except Exception as e:
-            logger.warning(f"Gemini Vision OCR failed: {e}")
-            ocr_text = ""
-        
-        image_analysis = {
-            "text": ocr_text,
-            "image_type": "textbook",
-            "source": "gemini_vision"
-        }
-        image_type = "textbook"
-        
-        logger.info(f"   OCR extracted: {len(ocr_text)} chars")
-        
-        if (not ocr_text or len(ocr_text) < 10) and not user_query:
-            return ImageChatResponse(
-                answer="I couldn't extract enough text from this image. Please try:\n"
-                       "1. Take a clearer photo with better lighting\n"
-                       "2. Make sure the text is in focus\n"
-                       "3. Avoid shadows and glare\n"
-                       "Or, you can type your question directly along with the image!",
-                used_mode=mode,
-                source_chunks=[],
-                image_analysis=image_analysis
-            )
-        
-        query_parts = []
-        if user_query:
-            query_parts.append(f"User Question: {user_query}")
-        
-        if ocr_text:
-            if image_type == "formula":
-                query_parts.append(f"Image Content (Formula): {ocr_text}")
-            elif image_type == "diagram":
-                query_parts.append(f"Image Content (Diagram labels): {ocr_text}")
-            elif image_type == "handwritten":
-                query_parts.append(f"Image Content (Handwritten): {ocr_text}")
-            else:
-                query_parts.append(f"Image Content (Textbook): {ocr_text}")
-        
-        query = "\n\n".join(query_parts)
-        
-        if not ocr_text and user_query:
-            query = f"User Question about uploaded image: {user_query}\n(Note: OCR could not extract text from the image)"
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        action = "define" if mode == "quick" else "elaborate"
 
-        logger.info(f"   Generated query: {query[:100]}...")
-        
-        if mode == "quick":
-            answer, source_chunks_list = await enhanced_rag_service.answer_question_basic(
-                question=query,
-                subject=subject,
-                student_class=class_level,
-                chapter=chapter
-            )
-        else:
-            answer, source_chunks_list = await enhanced_rag_service.answer_question_deepdive(
-                question=query,
-                subject=subject,
-                student_class=class_level,
-                chapter=chapter
-            )
-        
-        source_chunks = [chunk.get('text', '') for chunk in source_chunks_list]
-        
-        logger.info(f"Image chat complete: {len(answer)} chars, {len(source_chunks)} sources")
+        pipeline_result = await safe_image_rag_service.run_pipeline(
+            image_data=image_b64,
+            action=action,
+            class_level=class_level,
+            subject=subject,
+            chapter=chapter,
+            fallback_text=user_query or "",
+        )
+
+        source_chunks = pipeline_result.source_chunks[:8]
+
+        image_analysis = {
+            "query": pipeline_result.extracted_query,
+            "best_similarity": pipeline_result.best_similarity,
+            "source_count": pipeline_result.source_count,
+            "pipeline": "safe_image_rag_v1",
+        }
+
+        logger.info(
+            "Image chat complete (safe): %s chars, %s sources, best similarity %.3f",
+            len(pipeline_result.answer),
+            len(source_chunks),
+            pipeline_result.best_similarity,
+        )
         
         return ImageChatResponse(
-            answer=answer,
+            answer=pipeline_result.answer,
             used_mode=mode,
             source_chunks=source_chunks,
             image_analysis=image_analysis

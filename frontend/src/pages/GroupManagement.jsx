@@ -49,7 +49,7 @@ export default function GroupManagement() {
         test_center: false,
         my_grades: false,
         book_to_bot: true,
-        book_to_bot_doubt: true
+        book_to_bot_doubt: false
     };
 
     const handleToggleGroupFeature = async (groupId, featureKey, newValue) => {

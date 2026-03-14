@@ -25,7 +25,7 @@ DEFAULT_FEATURE_FLAGS = {
     "test_center": False,
     "my_grades": False,
     "book_to_bot": True,  # Unlocked by default; admin/group can lock it
-    "book_to_bot_doubt": True,  # Extra lock for in-book doubt button
+    "book_to_bot_doubt": False,  # Locked by default; can be unlocked by admin/group
 }
 
 def _get_student_id_variants(current_user: TokenData) -> list:

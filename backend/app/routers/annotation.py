@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from app.services.enhanced_rag_service import enhanced_rag_service
 from app.services.gemini_service import gemini_service
+from app.services.safe_image_rag_service import safe_image_rag_service
 from app.utils.tutor_persona import get_tutor_system_prompt
 import logging
 
@@ -85,8 +86,6 @@ async def process_annotation(request: AnnotationRequest):
     """
     try:
         from app.services.cache_service import cache_service
-        import asyncio
-        import base64
         
         cached_response = await cache_service.get_annotation_cache(
             action=request.action,
@@ -102,95 +101,23 @@ async def process_annotation(request: AnnotationRequest):
 
         query_text = request.selected_text
         source_chunks = []
-        image_only_answer = None
-        
-        subject_to_lang = {
-            "hindi": "hi",
-            "urdu": "ur",
-            "tamil": "ta",
-            "telugu": "te",
-            "bengali": "bn",
-            "marathi": "mr",
-            "gujarati": "gu",
-            "kn": "kn",
-            "ml": "ml",
-            "pa": "pa",
-            "english": "en",
-            "physics": "en",
-            "chemistry": "en",
-            "biology": "en",
-            "mathematics": "en",
-            "math": "en",
-            "maths": "en",
-            "social science": "en",
-            "history": "en",
-            "geography": "en",
-            "civics": "en",
-            "economics": "en",
-            "science": "en",
-        }
-        language_hint = subject_to_lang.get(request.subject.lower(), "en")
-        
+
         if request.image_data:
-            logger.info(f"[IMAGE] Screenshot doubt - using Gemini Vision OCR directly...")
-            
-            try:
-                if request.image_data.startswith('data:'):
-                    b64_data = request.image_data.split(',', 1)[1]
-                else:
-                    b64_data = request.image_data
-                    
-                image_bytes = base64.b64decode(b64_data)
-                
-                vision_prompt = """Extract the main educational text from this textbook screenshot. 
-                If it contains a question, output the question. 
-                If it contains a paragraph, output the paragraph.
-                Do not describe the UI, just give the content text.
-                Output ONLY the extracted text."""
-                
-                extracted_text_vision = await asyncio.to_thread(
-                    gemini_service.generate_response_with_image,
-                    prompt=vision_prompt,
-                    image_bytes=image_bytes
-                )
-                
-                if extracted_text_vision and len(extracted_text_vision.strip()) > 3:
-                     query_text = extracted_text_vision.strip()
-                     logger.info(f"   Gemini Vision extracted: '{query_text[:100]}'")
-                else:
-                     logger.warning("    Gemini Vision failed to extract meaningful text, using direct image answer fallback")
+            logger.info("[IMAGE] Running strict safe image RAG pipeline")
 
-                     action_map = {
-                         "define": "Define and explain the main concept/question shown in this textbook screenshot in simple language for the student.",
-                         "elaborate": "Explain in detail the concept/question shown in this textbook screenshot, step by step with examples if possible.",
-                         "stick_flow": "Create a clear text-based step-by-step flow for the concept/question shown in this textbook screenshot."
-                     }
-                     fallback_prompt = (
-                         f"You are helping a Class {request.class_level} {request.subject} student. "
-                         f"Respond in {language_hint.upper()} language when possible. "
-                         f"{action_map.get(request.action, action_map['define'])}"
-                     )
+            image_result = await safe_image_rag_service.run_pipeline(
+                image_data=request.image_data,
+                action=request.action,
+                class_level=request.class_level,
+                subject=request.subject,
+                chapter=request.chapter,
+                fallback_text=request.selected_text,
+            )
 
-                     image_only_answer = await asyncio.to_thread(
-                         gemini_service.generate_response_with_image,
-                         prompt=fallback_prompt,
-                         image_bytes=image_bytes
-                     )
-
-                     if not image_only_answer or len(image_only_answer.strip()) < 3:
-                         raise HTTPException(status_code=422, detail="Could not read enough content from screenshot. Please select a clearer area.")
-
-            except HTTPException:
-                raise
-            except Exception as ve:
-                logger.error(f"    Gemini Vision/OCR fallback failed: {ve}")
-                raise HTTPException(status_code=422, detail="Could not process screenshot. Please try selecting a clearer area.")
-
-        if image_only_answer:
             response_data = {
-                "answer": image_only_answer.strip(),
+                "answer": image_result.answer,
                 "action_type": request.action,
-                "source_count": 0
+                "source_count": image_result.source_count,
             }
 
             await cache_service.set_annotation_cache(
@@ -199,7 +126,7 @@ async def process_annotation(request: AnnotationRequest):
                 class_level=request.class_level,
                 selected_text=request.selected_text,
                 response_data=response_data,
-                image_data=request.image_data
+                image_data=request.image_data,
             )
 
             return AnnotationResponse(**response_data)

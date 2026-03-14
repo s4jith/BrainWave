@@ -136,11 +136,15 @@ async def login(request: LoginRequest):
     Returns user data, session token, and JWT access token.
     """
     try:
+        normalized_user_id = (request.user_id or "").strip()
+        if not normalized_user_id:
+            return {"success": False, "error": "User ID is required"}
+
         ADMIN_EMAIL = "admin1@gmail.com"
         ADMIN_PASSWORD = "admin1234"
         ADMIN_IDS = ["admin1", ADMIN_EMAIL, "ADMIN_ROOT"]
         
-        if request.user_id in ADMIN_IDS and request.password == ADMIN_PASSWORD:
+        if normalized_user_id in ADMIN_IDS and request.password == ADMIN_PASSWORD:
             access_token = create_access_token(
                 user_id="ADMIN_ROOT",
                 email=ADMIN_EMAIL,
@@ -170,11 +174,30 @@ async def login(request: LoginRequest):
                 }
             }
         
-        query = {"user_id": request.user_id}
+        # Primary: exact user_id match.
+        query = {"user_id": normalized_user_id}
         if request.role:
             query["role"] = request.role
-            
         user = db.users.find_one(query)
+
+        # Fallback 1: case-insensitive user_id exact match.
+        if not user:
+            ci_query = {"user_id": {"$regex": f"^{normalized_user_id}$", "$options": "i"}}
+            if request.role:
+                ci_query["role"] = request.role
+            user = db.users.find_one(ci_query)
+
+        # Fallback 2: allow email login when user enters email in the same field.
+        if not user and "@" in normalized_user_id:
+            email_query = {
+                "$or": [
+                    {"email_normalized": normalized_user_id.lower()},
+                    {"email": {"$regex": f"^{normalized_user_id}$", "$options": "i"}},
+                ]
+            }
+            if request.role:
+                email_query["role"] = request.role
+            user = db.users.find_one(email_query)
         
         if not user:
             role_msg = f"No {request.role}" if request.role else "No user"

@@ -27,10 +27,15 @@ from datetime import datetime
 import PyPDF2
 from pdf2image import convert_from_path
 from PIL import Image
-import cv2
 import numpy as np
 
+try:
+    import cv2  # Optional: used for advanced preprocessing when available.
+except ImportError:
+    cv2 = None
+
 from app.services.gemini_service import gemini_service
+from app.services.gemini_key_manager import gemini_key_manager
 
 from google import genai
 from google.genai import types
@@ -105,14 +110,31 @@ class AdvancedPDFProcessor:
         self.dpi = dpi
         self.use_gemini_vision = use_gemini_vision
         
-        self.vision_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        # Initialize Gemini Vision client lazily via key manager.
+        self.vision_client = None
         
         self.embedding_model = EMBEDDING_MODEL
         self.vision_model_name = "models/gemini-2.5-flash"  
         
         self.vision_api_enabled = True
+        self.cv2_available = cv2 is not None
+
+        if not self.cv2_available:
+            logger.warning("OpenCV (cv2) not installed. Falling back to PIL preprocessing and image heuristics.")
         
         logger.info("✓ AdvancedPDFProcessor initialized")
+
+    def _get_vision_client(self):
+        """Get (or create) a Gemini Vision client using rotated API keys."""
+        if self.vision_client is not None:
+            return self.vision_client
+
+        api_key = gemini_key_manager.get_available_key()
+        if not api_key:
+            raise RuntimeError("No Gemini API key available for Vision processing")
+
+        self.vision_client = genai.Client(api_key=api_key)
+        return self.vision_client
     
     def process_pdf(
         self,
@@ -248,7 +270,6 @@ class AdvancedPDFProcessor:
                 pil_img = Image.fromarray(processed_img) if isinstance(processed_img, np.ndarray) else processed_img
                 buffer = BytesIO()
                 pil_img.save(buffer, format='PNG')
-                pil_img.save(buffer, format='PNG')
                 
                 page_content.ocr_content = gemini_service.generate_response_with_image(
                     prompt="Extract all text from this page image. Return only the text content.",
@@ -294,21 +315,28 @@ class AdvancedPDFProcessor:
         - Noise reduction
         - Contrast enhancement
         """
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = image
-        
-        binary = cv2.adaptiveThreshold(
-            gray, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            11, 2
-        )
-        
-        denoised = cv2.fastNlMeansDenoising(binary, None, 10, 7, 21)
-        
-        return denoised
+        if self.cv2_available:
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = image
+
+            binary = cv2.adaptiveThreshold(
+                gray, 255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                11, 2
+            )
+
+            denoised = cv2.fastNlMeansDenoising(binary, None, 10, 7, 21)
+            return denoised
+
+        # Fallback: PIL-based grayscale + contrast enhancement + thresholding.
+        pil_img = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+        gray = pil_img.convert("L")
+        # Basic binarization that works reasonably for OCR without cv2.
+        binary = gray.point(lambda p: 255 if p > 170 else 0)
+        return np.array(binary)
     
     def _detect_images_in_page(self, image: np.ndarray) -> bool:
         """
@@ -317,22 +345,35 @@ class AdvancedPDFProcessor:
         Uses edge detection and contour analysis.
         """
         try:
-            if len(image.shape) == 3:
-                gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            if self.cv2_available:
+                if len(image.shape) == 3:
+                    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+                else:
+                    gray = image
+
+                edges = cv2.Canny(gray, 50, 150)
+
+                contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                significant_contours = 0
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area > 5000:
+                        significant_contours += 1
+
+                return significant_contours > 2
+
+            # Fallback heuristic: high edge density often indicates tables/diagrams.
+            arr = np.array(image)
+            if arr.ndim == 3:
+                gray = arr.mean(axis=2)
             else:
-                gray = image
-            
-            edges = cv2.Canny(gray, 50, 150)
-            
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            significant_contours = 0
-            for contour in contours:
-                area = cv2.contourArea(contour)
-                if area > 5000:
-                    significant_contours += 1
-            
-            return significant_contours > 2
+                gray = arr
+
+            gx = np.abs(np.diff(gray, axis=1))
+            gy = np.abs(np.diff(gray, axis=0))
+            edge_strength = (gx.mean() + gy.mean()) / 2.0
+            return edge_strength > 18.0
             
         except Exception:
             return False
@@ -411,7 +452,8 @@ class AdvancedPDFProcessor:
             max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    response = self.vision_client.models.generate_content(
+                    vision_client = self._get_vision_client()
+                    response = vision_client.models.generate_content(
                         model=self.vision_model_name,
                         contents=[prompt, page_image],
                     )
@@ -609,8 +651,6 @@ class PineconeEmbeddingUploader:
     
     def __init__(self):
         """Initialize Pinecone connection."""
-        self.genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        
         self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
         self.index = self.pc.Index(host=settings.PINECONE_HOST)
         
@@ -626,9 +666,13 @@ class PineconeEmbeddingUploader:
         Returns 768-dimensional vector for Pinecone compatibility.
         """
         try:
+            api_key = settings.GEMINI_API_KEY or gemini_key_manager.get_available_key()
+            if not api_key:
+                raise RuntimeError("No Gemini API key available for embedding generation")
+
             return _generate_embedding_rest(
                 text=text,
-                api_key=settings.GEMINI_API_KEY,
+                api_key=api_key,
                 task_type="RETRIEVAL_DOCUMENT"
             )
         except Exception as e:
@@ -641,9 +685,13 @@ class PineconeEmbeddingUploader:
         Uses batch endpoint for efficiency.
         """
         try:
+            api_key = settings.GEMINI_API_KEY or gemini_key_manager.get_available_key()
+            if not api_key:
+                raise RuntimeError("No Gemini API key available for batch embedding generation")
+
             return _generate_embeddings_batch_rest(
                 texts=texts,
-                api_key=settings.GEMINI_API_KEY,
+                api_key=api_key,
                 task_type="RETRIEVAL_DOCUMENT"
             )
         except Exception as e:

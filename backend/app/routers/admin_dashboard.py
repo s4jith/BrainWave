@@ -62,7 +62,57 @@ def hash_password(password: str) -> str:
     """Hash password using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
 
-def generate_student_id(class_level: int, age: int) -> str:
+
+def _clean_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _credential_settings() -> dict:
+    defaults = {
+        "studentUserIdPattern": "class_level_counter5_age",
+        "studentPasswordPattern": "nameage",
+        "teacherUserIdPattern": "staff_counter_name",
+        "teacherPasswordPattern": "name@123",
+    }
+    try:
+        doc = db.get_collection("platform_settings").find_one({"_id": "global"}) or {}
+        return {**defaults, **{k: v for k, v in doc.items() if isinstance(v, str)}}
+    except Exception:
+        return defaults
+
+
+def _format_credential(pattern: str, values: dict, fallback: str) -> str:
+    try:
+        rendered = str(pattern or "")
+        token_values = {
+            **{k: str(v) for k, v in values.items()},
+            "counter5": f"{int(values.get('counter', 1)):05d}",
+            "counter4": f"{int(values.get('counter', 1)):04d}",
+        }
+
+        for key, val in token_values.items():
+            # Backward compatible placeholders with braces.
+            rendered = rendered.replace(f"{{{key}}}", val)
+            # Simpler tokens without braces (case-insensitive).
+            rendered = re.sub(rf"(?<![a-zA-Z0-9]){re.escape(key)}(?![a-zA-Z0-9])", val, rendered, flags=re.IGNORECASE)
+
+        rendered = rendered.strip()
+        if rendered:
+            return rendered
+    except Exception:
+        pass
+    return fallback
+
+
+def _ensure_unique_user_id(base_user_id: str) -> str:
+    candidate = base_user_id
+    suffix = 1
+    while db.users.find_one({"user_id": candidate}):
+        candidate = f"{base_user_id}_{suffix}"
+        suffix += 1
+    return candidate
+
+def generate_student_id(class_level: int, age: int, name: str = "") -> str:
     """
     Generate unique student ID.
     Format: {class_level}_{sequential_number:05d}_{age}
@@ -78,9 +128,19 @@ def generate_student_id(class_level: int, age: int) -> str:
         )
         student_number = counter.get("count", 1)
         
-        user_id = f"{class_level}_{student_number:05d}_{age}"
-        
-        return user_id
+        settings = _credential_settings()
+        fallback = f"{class_level}_{student_number:05d}_{age}"
+        user_id = _format_credential(
+            settings.get("studentUserIdPattern", fallback),
+            {
+                "class_level": class_level,
+                "age": age,
+                "name": _clean_name(name),
+                "counter": student_number,
+            },
+            fallback,
+        )
+        return _ensure_unique_user_id(user_id)
     except Exception as e:
         logger.error(f"Error generating student ID: {e}")
         import time
@@ -92,8 +152,14 @@ def generate_password(name: str, age: int) -> str:
     Format: {name_lowercase}{age}
     Example: sajith14
     """
-    clean_name = name.lower().replace(" ", "").replace(".", "")
-    return f"{clean_name}{age}"
+    settings = _credential_settings()
+    clean_name = _clean_name(name)
+    fallback = f"{clean_name}{age}"
+    return _format_credential(
+        settings.get("studentPasswordPattern", fallback),
+        {"name": clean_name, "age": age, "class_level": "", "counter": 1},
+        fallback,
+    )
 
 def serialize_student(student: dict) -> dict:
     """Convert MongoDB document to response dict."""
@@ -576,7 +642,7 @@ async def create_student(student: StudentCreate):
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        user_id = generate_student_id(student.class_level, student.age)
+        user_id = generate_student_id(student.class_level, student.age, student.name)
         password = generate_password(student.name, student.age)
         hashed_password = hash_password(password)
         
@@ -857,8 +923,15 @@ def generate_teacher_id(name: str) -> str:
             return_document=True
         )
         teacher_number = counter.get("count", 1)
-        clean_name = name.lower().replace(" ", "").replace(".", "")[:10]
-        return f"staff_{teacher_number}_{clean_name}"
+        settings = _credential_settings()
+        clean_name = _clean_name(name)[:10]
+        fallback = f"staff_{teacher_number}_{clean_name}"
+        user_id = _format_credential(
+            settings.get("teacherUserIdPattern", fallback),
+            {"name": clean_name, "counter": teacher_number, "class_level": "", "age": ""},
+            fallback,
+        )
+        return _ensure_unique_user_id(user_id)
     except Exception as e:
         logger.error(f"Error generating teacher ID: {e}")
         import time
@@ -867,8 +940,14 @@ def generate_teacher_id(name: str) -> str:
 
 def generate_teacher_password(name: str) -> str:
     """Generate default teacher password."""
-    clean_name = name.lower().replace(" ", "").replace(".", "")
-    return f"{clean_name}@123"
+    settings = _credential_settings()
+    clean_name = _clean_name(name)
+    fallback = f"{clean_name}@123"
+    return _format_credential(
+        settings.get("teacherPasswordPattern", fallback),
+        {"name": clean_name, "counter": 1, "class_level": "", "age": ""},
+        fallback,
+    )
 
 @router.post("/teachers")
 async def create_teacher(teacher: TeacherCreate):
@@ -1159,7 +1238,7 @@ async def get_groups():
                 "student_ids": g.get("student_ids", []),
                 "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
                 "student_count": len(g.get("student_ids", [])),
-                "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True, "book_to_bot_doubt": True}, **g.get("feature_flags", {})},
+                "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True, "book_to_bot_doubt": False}, **g.get("feature_flags", {})},
                 "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
             })
         
@@ -1340,7 +1419,7 @@ DEFAULT_FEATURE_FLAGS = {
     "test_center": False,
     "my_grades": False,
     "book_to_bot": True,  # Unlocked by default; admin/group can lock it
-    "book_to_bot_doubt": True,
+    "book_to_bot_doubt": False,
 }
 
 class FeatureFlagsUpdate(BaseModel):
@@ -1355,15 +1434,14 @@ class FeatureFlagsUpdate(BaseModel):
 async def update_group_features(group_id: str, flags: FeatureFlagsUpdate):
     """Update feature flags for a group. All students in this group inherit these unless overridden."""
     try:
-        if not ObjectId.is_valid(group_id):
-            raise HTTPException(status_code=400, detail="Invalid group ID")
+        query = {"_id": ObjectId(group_id)} if ObjectId.is_valid(group_id) else {"_id": group_id}
         
         updates = {f"feature_flags.{k}": v for k, v in flags.dict().items() if v is not None}
         if not updates:
             raise HTTPException(status_code=400, detail="No feature flags provided")
         
         result = db.groups.find_one_and_update(
-            {"_id": ObjectId(group_id)},
+            query,
             {"$set": {**updates, "updated_at": datetime.utcnow()}},
             return_document=True
         )
@@ -1383,15 +1461,14 @@ async def update_group_features(group_id: str, flags: FeatureFlagsUpdate):
 async def update_student_features(student_id: str, flags: FeatureFlagsUpdate):
     """Update feature overrides for an individual student. These take priority over group flags."""
     try:
-        if not ObjectId.is_valid(student_id):
-            raise HTTPException(status_code=400, detail="Invalid student ID")
+        query = {"_id": ObjectId(student_id), "role": "student"} if ObjectId.is_valid(student_id) else {"user_id": student_id, "role": "student"}
         
         updates = {f"feature_overrides.{k}": v for k, v in flags.dict().items() if v is not None}
         if not updates:
             raise HTTPException(status_code=400, detail="No feature flags provided")
         
         result = db.users.find_one_and_update(
-            {"_id": ObjectId(student_id), "role": "student"},
+            query,
             {"$set": {**updates, "updated_at": datetime.utcnow()}},
             return_document=True
         )
@@ -1418,6 +1495,10 @@ _DEFAULT_SETTINGS = {
     "questionTypes": ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     "cognitiveLevels": ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     "difficultyLevels": ["easy", "medium", "hard"],
+    "studentUserIdPattern": "class_level_counter5_age",
+    "studentPasswordPattern": "nameage",
+    "teacherUserIdPattern": "staff_counter_name",
+    "teacherPasswordPattern": "name@123",
 }
 
 
@@ -1457,6 +1538,10 @@ class PlatformSettings(BaseModel):
     questionTypes: Optional[List[str]] = None
     cognitiveLevels: Optional[List[str]] = None
     difficultyLevels: Optional[List[str]] = None
+    studentUserIdPattern: Optional[str] = None
+    studentPasswordPattern: Optional[str] = None
+    teacherUserIdPattern: Optional[str] = None
+    teacherPasswordPattern: Optional[str] = None
 
 
 @router.get("/settings")

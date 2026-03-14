@@ -96,7 +96,7 @@ def send_credentials_email(to_email: str, user_id: str, password: str, name: str
         Please change your password after your first login.
       </p>
 
-      <button style="background: #ef4444; color: #ffffff; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;"> <a href="https://thebrainwave.in" style="color: #ffffff; text-decoration: none;">Login Now</a> </button>
+      <button style="background: #ef4444; color: #ffffff; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;"> <a href="https://micro-learning.app/" style="color: #ffffff; text-decoration: none;">Login Now</a> </button>
       
       <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
       <p style="color: #9ca3af; font-size: 12px; text-align: center;">

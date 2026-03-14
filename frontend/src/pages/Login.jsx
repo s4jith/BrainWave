@@ -21,7 +21,8 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!userId || !password) {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId || !password) {
       setError("Please fill in all fields");
       return;
     }
@@ -32,7 +33,7 @@ export default function Login() {
       const res = await authFetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, password: password })
+        body: JSON.stringify({ user_id: normalizedUserId, password: password })
       });
       const data = await res.json();
 

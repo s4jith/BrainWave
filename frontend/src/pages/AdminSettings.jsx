@@ -19,6 +19,10 @@ const DEFAULT_SETTINGS = {
     questionTypes: ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     cognitiveLevels: ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     difficultyLevels: ["easy", "medium", "hard"],
+    studentUserIdPattern: "class_level_counter5_age",
+    studentPasswordPattern: "nameage",
+    teacherUserIdPattern: "staff_counter_name",
+    teacherPasswordPattern: "name@123",
 };
 
 const normalizeOptionValue = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
@@ -46,7 +50,7 @@ const sanitizeSettings = (raw = {}) => {
 
 export default function AdminSettings() {
     const { user, getAuthHeader } = useUserStore();
-    const [activeSection, setActiveSection] = useState("general");
+    const [activeSection, setActiveSection] = useState("general_settings");
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loadError, setLoadError] = useState("");
@@ -54,6 +58,13 @@ export default function AdminSettings() {
     const [newQuestionType, setNewQuestionType] = useState("");
     const [newCognitiveLevel, setNewCognitiveLevel] = useState("");
     const [newDifficultyLevel, setNewDifficultyLevel] = useState("");
+
+    const credentialTokens = ["name", "age", "class_level", "counter", "counter5"];
+
+    const appendToken = (field, token) => {
+        const current = settings[field] || "";
+        setSettings({ ...settings, [field]: `${current}${token}` });
+    };
 
     const persistSettings = async (nextSettings) => {
         const payload = sanitizeSettings(nextSettings);
@@ -131,7 +142,9 @@ export default function AdminSettings() {
     };
 
     const sections = [
-        { id: "general", label: "General", icon: Globe },
+        { id: "general_settings", label: "General Settings", icon: Globe },
+        { id: "question_options", label: "Question Dropdown Option", icon: Settings },
+        { id: "credential_generation", label: "Credential Generation", icon: Settings },
         { id: "database", label: "Database", icon: Database },
     ];
 
@@ -160,7 +173,6 @@ export default function AdminSettings() {
             </div>
 
             <div className="max-w-4xl">
-                {}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
                     <div className="flex overflow-x-auto">
                         {sections.map((section) => (
@@ -179,8 +191,7 @@ export default function AdminSettings() {
                     </div>
                 </div>
 
-                {/* General Settings */}
-                {activeSection === "general" && (
+                {activeSection === "general_settings" && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">General Settings</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Configure basic platform settings</p>
@@ -217,37 +228,94 @@ export default function AdminSettings() {
                                     </p>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
 
-                            <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Question Dropdown Options</h3>
+                {activeSection === "question_options" && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Question Dropdown Option</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Manage all dropdown values used while creating and evaluating questions</p>
+                        <div className="space-y-2">
+                            <OptionEditor
+                                title="Question Types"
+                                values={settings.questionTypes || []}
+                                inputValue={newQuestionType}
+                                setInputValue={setNewQuestionType}
+                                onAdd={() => addOption("questionTypes", newQuestionType, setNewQuestionType).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("questionTypes", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                            />
 
-                                <OptionEditor
-                                    title="Question Types"
-                                    values={settings.questionTypes || []}
-                                    inputValue={newQuestionType}
-                                    setInputValue={setNewQuestionType}
-                                    onAdd={() => addOption("questionTypes", newQuestionType, setNewQuestionType).catch((err) => alert(err.message || "Failed to save settings."))}
-                                    onRemove={(v) => removeOption("questionTypes", v).catch((err) => alert(err.message || "Failed to save settings."))}
-                                />
+                            <OptionEditor
+                                title="Cognitive Levels"
+                                values={settings.cognitiveLevels || []}
+                                inputValue={newCognitiveLevel}
+                                setInputValue={setNewCognitiveLevel}
+                                onAdd={() => addOption("cognitiveLevels", newCognitiveLevel, setNewCognitiveLevel).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("cognitiveLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                            />
 
-                                <OptionEditor
-                                    title="Cognitive Levels"
-                                    values={settings.cognitiveLevels || []}
-                                    inputValue={newCognitiveLevel}
-                                    setInputValue={setNewCognitiveLevel}
-                                    onAdd={() => addOption("cognitiveLevels", newCognitiveLevel, setNewCognitiveLevel).catch((err) => alert(err.message || "Failed to save settings."))}
-                                    onRemove={(v) => removeOption("cognitiveLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
-                                />
+                            <OptionEditor
+                                title="Difficulty Levels"
+                                values={settings.difficultyLevels || []}
+                                inputValue={newDifficultyLevel}
+                                setInputValue={setNewDifficultyLevel}
+                                onAdd={() => addOption("difficultyLevels", newDifficultyLevel, setNewDifficultyLevel).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("difficultyLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                            />
+                        </div>
+                    </div>
+                )}
 
-                                <OptionEditor
-                                    title="Difficulty Levels"
-                                    values={settings.difficultyLevels || []}
-                                    inputValue={newDifficultyLevel}
-                                    setInputValue={setNewDifficultyLevel}
-                                    onAdd={() => addOption("difficultyLevels", newDifficultyLevel, setNewDifficultyLevel).catch((err) => alert(err.message || "Failed to save settings."))}
-                                    onRemove={(v) => removeOption("difficultyLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
-                                />
+                {activeSection === "credential_generation" && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Credential Generation</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Use simple tokens to define auto-generated student and teacher credentials.</p>
+                        <div className="space-y-5">
+                            <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Click a token to insert it into the selected pattern.</p>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {credentialTokens.map((token) => (
+                                        <span key={token} className="px-2.5 py-1 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{token}</span>
+                                    ))}
+                                </div>
                             </div>
+
+                            <PatternField
+                                label="Student User ID Pattern"
+                                value={settings.studentUserIdPattern || ""}
+                                onChange={(v) => setSettings({ ...settings, studentUserIdPattern: v })}
+                                onTokenClick={(t) => appendToken("studentUserIdPattern", t)}
+                                tokens={credentialTokens}
+                                help="Example: class_level_counter5_age"
+                            />
+
+                            <PatternField
+                                label="Student Password Pattern"
+                                value={settings.studentPasswordPattern || ""}
+                                onChange={(v) => setSettings({ ...settings, studentPasswordPattern: v })}
+                                onTokenClick={(t) => appendToken("studentPasswordPattern", t)}
+                                tokens={credentialTokens}
+                                help="Example: nameage"
+                            />
+
+                            <PatternField
+                                label="Teacher User ID Pattern"
+                                value={settings.teacherUserIdPattern || ""}
+                                onChange={(v) => setSettings({ ...settings, teacherUserIdPattern: v })}
+                                onTokenClick={(t) => appendToken("teacherUserIdPattern", t)}
+                                tokens={credentialTokens}
+                                help="Example: staff_counter_name"
+                            />
+
+                            <PatternField
+                                label="Teacher Password Pattern"
+                                value={settings.teacherPasswordPattern || ""}
+                                onChange={(v) => setSettings({ ...settings, teacherPasswordPattern: v })}
+                                onTokenClick={(t) => appendToken("teacherPasswordPattern", t)}
+                                tokens={credentialTokens}
+                                help="Example: name@123"
+                            />
                         </div>
                     </div>
                 )}
@@ -321,6 +389,33 @@ function OptionEditor({ title, values, inputValue, setInputValue, onAdd, onRemov
                     </span>
                 ))}
                 {values.length === 0 && <span className="text-xs text-gray-400">No options added</span>}
+            </div>
+        </div>
+    );
+}
+
+function PatternField({ label, value, onChange, onTokenClick, tokens, help }) {
+    return (
+        <div className="mb-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/20">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+            />
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{help}</p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+                {tokens.map((token) => (
+                    <button
+                        key={token}
+                        type="button"
+                        onClick={() => onTokenClick(token)}
+                        className="px-2 py-0.5 rounded text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                        + {token}
+                    </button>
+                ))}
             </div>
         </div>
     );
