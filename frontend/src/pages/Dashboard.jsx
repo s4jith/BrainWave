@@ -28,19 +28,19 @@ const quickActions = [
     description: "View and submit your assigned tests, track your progress",
     icon: FileText,
     color: "bg-orange-600",
-    bgColor: "bg-orange-50",
-    textColor: "text-orange-600",
+    bgColor: "bg-orange-50 dark:bg-orange-900/25",
+    textColor: "text-orange-600 dark:text-orange-300",
     route: "/my-tests",
     featureKey: "test_center"
   },
   {
     id: 2,
     title: "Book to Bot",
-    description: "Upload any textbook and chat with AI to understand concepts",
+    description: "Chat with AI to understand concepts",
     icon: BookOpen,
     color: "bg-orange-500",
-    bgColor: "bg-orange-50",
-    textColor: "text-orange-600",
+    bgColor: "bg-orange-50 dark:bg-orange-900/25",
+    textColor: "text-orange-600 dark:text-orange-300",
     route: "/book-to-bot",
     featureKey: "book_to_bot"
   },
@@ -50,8 +50,8 @@ const quickActions = [
     description: "View your assigned groups, teachers and upcoming tests",
     icon: Users,
     color: "bg-orange-500",
-    bgColor: "bg-orange-50",
-    textColor: "text-orange-600",
+    bgColor: "bg-orange-50 dark:bg-orange-900/25",
+    textColor: "text-orange-600 dark:text-orange-300",
     route: "/my-groups"
   },
   {
@@ -60,8 +60,8 @@ const quickActions = [
     description: "Get instant answers and explanations from our AI assistant",
     icon: MessageCircle,
     color: "bg-orange-500",
-    bgColor: "bg-orange-50",
-    textColor: "text-orange-600",
+    bgColor: "bg-orange-50 dark:bg-orange-900/25",
+    textColor: "text-orange-600 dark:text-orange-300",
     route: "/book-to-bot",
     featureKey: "book_to_bot"
   },
@@ -215,7 +215,7 @@ export default function Dashboard() {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Quick Actions</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Quick Actions</h3>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -225,7 +225,7 @@ export default function Dashboard() {
                   <div
                     key={item.id}
                     onClick={() => navigate(item.route)}
-                    className={`relative bg-white rounded-2xl p-6 border cursor-pointer hover:shadow-lg group transition-all ${isLocked ? 'border-gray-100 opacity-80' : 'border-gray-100 hover:border-gray-200'}`}
+                    className={`relative bg-white dark:bg-zinc-900 rounded-2xl p-6 border cursor-pointer hover:shadow-lg group transition-all ${isLocked ? 'border-gray-100 dark:border-zinc-800 opacity-80' : 'border-gray-100 dark:border-zinc-800 hover:border-gray-200 dark:hover:border-zinc-700'}`}
                   >
                     {isLocked && (
                       <div className="absolute top-3 right-3 w-6 h-6 bg-gray-800/80 rounded-full flex items-center justify-center">
@@ -235,10 +235,10 @@ export default function Dashboard() {
                     <div className={`w-14 h-14 ${item.bgColor} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110`}>
                       <item.icon className={`w-7 h-7 ${item.textColor}`} />
                     </div>
-                    <h4 className="font-semibold text-gray-800 text-lg mb-2">{item.title}</h4>
-                    <p className="text-sm text-gray-500 mb-4">{item.description}</p>
+                    <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-lg mb-2">{item.title}</h4>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{item.description}</p>
                     {isLocked ? (
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-500 rounded-full text-sm font-medium">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 rounded-full text-sm font-medium">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         Locked by Admin
                       </div>
@@ -253,10 +253,10 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Your Pending Tests</h3>
-                <button onClick={() => navigate('/test')} className="text-sm text-orange-600 hover:underline">See all</button>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Your Pending Tests</h3>
+                <button onClick={() => navigate('/test')} className="text-sm text-orange-600 dark:text-orange-300 hover:underline">See all</button>
               </div>
 
               {loadingTests ? (
@@ -266,12 +266,12 @@ export default function Dashboard() {
               ) : pendingTests.length === 0 ? (
                 <div className="text-center py-8">
                   <Award className="w-12 h-12 mx-auto text-green-500 mb-3" />
-                  <h4 className="font-semibold text-gray-800 mb-1">All Caught Up!</h4>
-                  <p className="text-sm text-gray-500">You have no pending tests. Great job!</p>
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">All Caught Up!</h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">You have no pending tests. Great job!</p>
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-4 text-xs text-gray-500 uppercase tracking-wider pb-3 border-b border-gray-100">
+                  <div className="grid grid-cols-4 gap-4 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider pb-3 border-b border-gray-100 dark:border-zinc-800">
                     <span>Test Name</span>
                     <span>Subject</span>
                     <span>Due Date</span>
@@ -279,18 +279,18 @@ export default function Dashboard() {
                   </div>
 
                   {pendingTests.map(test => (
-                    <div key={test.id} className="grid grid-cols-4 gap-4 items-center py-4 border-b border-gray-50">
+                    <div key={test.id} className="grid grid-cols-4 gap-4 items-center py-4 border-b border-gray-50 dark:border-zinc-800">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-orange-600" />
+                        <div className="w-10 h-10 bg-orange-50 dark:bg-orange-900/25 rounded-full flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-orange-600 dark:text-orange-300" />
                         </div>
-                        <p className="font-medium text-sm text-gray-800 line-clamp-1">{test.title}</p>
+                        <p className="font-medium text-sm text-gray-800 dark:text-gray-100 line-clamp-1">{test.title}</p>
                       </div>
-                      <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full inline-block w-fit">
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full inline-block w-fit">
                         <BookOpen className="w-3 h-3 inline mr-1" />
                         {test.subject || 'General'}
                       </span>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
                         {test.deadline ? new Date(test.deadline).toLocaleDateString() : 'No deadline'}
                       </span>
                       <button
@@ -308,16 +308,16 @@ export default function Dashboard() {
 
           <div className="space-y-6">
 
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-800">Your Progress</h3>
-                <BarChart3 className="w-5 h-5 text-gray-400" />
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Your Progress</h3>
+                <BarChart3 className="w-5 h-5 text-gray-400 dark:text-gray-500" />
               </div>
 
               <div className="flex flex-col items-center mb-6">
                 <div className="relative w-24 h-24">
                   <svg className="w-24 h-24 -rotate-90">
-                    <circle cx="48" cy="48" r="40" stroke="#e5e7eb" strokeWidth="8" fill="none" />
+                    <circle cx="48" cy="48" r="40" stroke="#e5e7eb" strokeWidth="8" fill="none" className="dark:stroke-zinc-700" />
                     <circle
                       cx="48"
                       cy="48"
@@ -331,7 +331,7 @@ export default function Dashboard() {
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
                     <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name || 'User'}`}
+                      src={`https://api.dicebear.com/7.x/${user.avatarStyle || 'avataaars'}/svg?seed=${user.avatarSeed || user.name || 'User'}`}
                       alt="Profile"
                       className="w-16 h-16 rounded-full"
                     />
@@ -343,20 +343,20 @@ export default function Dashboard() {
               </div>
 
               <div className="text-center mb-6">
-                <h4 className="font-semibold text-gray-800 flex items-center justify-center gap-1">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-center gap-1">
                   {getGreeting()} {user.name || 'Student'} <Flame className="w-4 h-4 text-orange-500" />
                 </h4>
-                <p className="text-sm text-gray-500">Continue your learning to achieve your target!</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Continue your learning to achieve your target!</p>
               </div>
 
               <div className="flex items-end justify-between h-24 px-4">
                 {(activityData.length > 0 ? activityData : statsData).map((stat, i) => (
                   <div key={i} className="flex flex-col items-center gap-2">
                     <div
-                      className={`w-12 rounded-t-lg ${stat.isActive ? 'bg-orange-500' : 'bg-orange-200'}`}
+                      className={`w-12 rounded-t-lg ${stat.isActive ? 'bg-orange-500' : 'bg-orange-200 dark:bg-orange-900/40'}`}
                       style={{ height: `${stat.value}px` }}
                     />
-                    <span className="text-xs text-gray-500">{stat.label}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</span>
                   </div>
                 ))}
               </div>

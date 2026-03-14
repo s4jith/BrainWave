@@ -85,6 +85,8 @@ async def process_annotation(request: AnnotationRequest):
     """
     try:
         from app.services.cache_service import cache_service
+        import asyncio
+        import base64
         
         cached_response = await cache_service.get_annotation_cache(
             action=request.action,
@@ -99,6 +101,8 @@ async def process_annotation(request: AnnotationRequest):
             return AnnotationResponse(**cached_response)
 
         query_text = request.selected_text
+        source_chunks = []
+        image_only_answer = None
         
         subject_to_lang = {
             "hindi": "hi",
@@ -131,9 +135,6 @@ async def process_annotation(request: AnnotationRequest):
             logger.info(f"[IMAGE] Screenshot doubt - using Gemini Vision OCR directly...")
             
             try:
-                import base64
-                import asyncio
-                
                 if request.image_data.startswith('data:'):
                     b64_data = request.image_data.split(',', 1)[1]
                 else:
@@ -157,12 +158,51 @@ async def process_annotation(request: AnnotationRequest):
                      query_text = extracted_text_vision.strip()
                      logger.info(f"   Gemini Vision extracted: '{query_text[:100]}'")
                 else:
-                     logger.warning("    Gemini Vision failed to extract meaningful text")
-                     raise HTTPException(status_code=400, detail="Could not extract text from image")
-                     
+                     logger.warning("    Gemini Vision failed to extract meaningful text, using direct image answer fallback")
+
+                     action_map = {
+                         "define": "Define and explain the main concept/question shown in this textbook screenshot in simple language for the student.",
+                         "elaborate": "Explain in detail the concept/question shown in this textbook screenshot, step by step with examples if possible.",
+                         "stick_flow": "Create a clear text-based step-by-step flow for the concept/question shown in this textbook screenshot."
+                     }
+                     fallback_prompt = (
+                         f"You are helping a Class {request.class_level} {request.subject} student. "
+                         f"Respond in {language_hint.upper()} language when possible. "
+                         f"{action_map.get(request.action, action_map['define'])}"
+                     )
+
+                     image_only_answer = await asyncio.to_thread(
+                         gemini_service.generate_response_with_image,
+                         prompt=fallback_prompt,
+                         image_bytes=image_bytes
+                     )
+
+                     if not image_only_answer or len(image_only_answer.strip()) < 3:
+                         raise HTTPException(status_code=422, detail="Could not read enough content from screenshot. Please select a clearer area.")
+
+            except HTTPException:
+                raise
             except Exception as ve:
-                logger.error(f"    Gemini Vision failed: {ve}")
-                raise HTTPException(status_code=500, detail="Image OCR failed")
+                logger.error(f"    Gemini Vision/OCR fallback failed: {ve}")
+                raise HTTPException(status_code=422, detail="Could not process screenshot. Please try selecting a clearer area.")
+
+        if image_only_answer:
+            response_data = {
+                "answer": image_only_answer.strip(),
+                "action_type": request.action,
+                "source_count": 0
+            }
+
+            await cache_service.set_annotation_cache(
+                action=request.action,
+                subject=request.subject,
+                class_level=request.class_level,
+                selected_text=request.selected_text,
+                response_data=response_data,
+                image_data=request.image_data
+            )
+
+            return AnnotationResponse(**response_data)
         
         logger.info(f"[NOTE] Annotation request: {request.action.upper()} for '{query_text[:50]}...'")
         logger.info(f"   Class {request.class_level}, {request.subject}")
@@ -405,6 +445,8 @@ Current search: "{request.selected_text}" in Class {request.class_level} {reques
 
         return AnnotationResponse(**response_data)
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[ERROR] Annotation error: {e}")
         import traceback

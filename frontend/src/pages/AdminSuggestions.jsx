@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, MessageSquare, Filter, CheckCircle, Clock, Reply, Trash2, RefreshCw } from "lucide-react";
+import { Search, MessageSquare, CheckCircle, Clock, Reply, Trash2, RefreshCw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import authFetch from "../utils/authFetch";
 
@@ -87,20 +87,20 @@ export default function AdminSuggestions() {
     <AdminLayout title="Suggestions" icon={MessageSquare}>
     <div className="max-w-7xl mx-auto space-y-6">
         {}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                <MessageSquare className="w-6 h-6 text-orange-600" />
+              <div className="w-12 h-12 bg-gray-100 dark:bg-zinc-800 rounded-xl flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-gray-700 dark:text-gray-200" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Student Suggestions</h1>
-                <p className="text-gray-500">Review and respond to student feedback</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Student Suggestions</h1>
+                <p className="text-gray-500 dark:text-gray-400">Review and respond to student feedback</p>
               </div>
             </div>
             <button
               onClick={fetchSuggestions}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
@@ -109,23 +109,23 @@ export default function AdminSuggestions() {
 
           {}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-sm text-gray-500 mb-1">Total Suggestions</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            <div className="bg-gray-50 dark:bg-zinc-800 rounded-xl p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Suggestions</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
             </div>
-            <div className="bg-yellow-50 rounded-xl p-4">
-              <p className="text-sm text-yellow-700 mb-1">Pending Review</p>
-              <p className="text-2xl font-bold text-yellow-800">{stats.pending}</p>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-1">Pending Review</p>
+              <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">{stats.pending}</p>
             </div>
-            <div className="bg-green-50 rounded-xl p-4">
-              <p className="text-sm text-green-700 mb-1">Reviewed</p>
-              <p className="text-2xl font-bold text-green-800">{stats.total - stats.pending}</p>
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+              <p className="text-sm text-green-700 dark:text-green-300 mb-1">Reviewed</p>
+              <p className="text-2xl font-bold text-green-800 dark:text-green-200">{stats.total - stats.pending}</p>
             </div>
           </div>
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {}
             <div className="relative">
@@ -135,7 +135,7 @@ export default function AdminSuggestions() {
                 placeholder="Search by name, subject, or content..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
             </div>
 
@@ -143,7 +143,7 @@ export default function AdminSuggestions() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -155,29 +155,29 @@ export default function AdminSuggestions() {
         {}
         <div className="space-y-4">
           {loading ? (
-            <div className="bg-white rounded-2xl p-12 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-orange-600 mx-auto" />
-              <p className="text-gray-500 mt-4">Loading suggestions...</p>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-zinc-800">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 dark:border-zinc-700 border-t-gray-900 dark:border-t-gray-200 mx-auto" />
+              <p className="text-gray-500 dark:text-gray-400 mt-4">Loading suggestions...</p>
             </div>
           ) : filteredSuggestions.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center">
-              <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No suggestions found</p>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-zinc-800">
+              <MessageSquare className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No suggestions found</p>
             </div>
           ) : (
             filteredSuggestions.map((suggestion) => (
-              <div key={suggestion.id} className="bg-white rounded-2xl p-6 border border-gray-100">
+              <div key={suggestion.id} className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
                 {}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                      <span className="text-orange-600 font-medium">
+                    <div className="w-10 h-10 bg-gray-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
+                      <span className="text-gray-700 dark:text-gray-200 font-medium">
                         {suggestion.student_name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{suggestion.student_name}</h3>
-                      <p className="text-sm text-gray-500">Class {suggestion.class_level}</p>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{suggestion.student_name}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Class {suggestion.class_level}</p>
                     </div>
                   </div>
 
@@ -189,8 +189,8 @@ export default function AdminSuggestions() {
                     )}
                     <span className={`text-xs px-2 py-1 rounded-full border flex items-center gap-1 ${
                       suggestion.status === "reviewed"
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                        ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                        : "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
                     }`}>
                       {suggestion.status === "reviewed" ? (
                         <CheckCircle className="w-3 h-3" />
@@ -206,15 +206,15 @@ export default function AdminSuggestions() {
                 </div>
 
                 {}
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-gray-700 leading-relaxed">{suggestion.content}</p>
+                <div className="bg-gray-50 dark:bg-zinc-800 rounded-xl p-4 mb-4">
+                  <p className="text-gray-700 dark:text-gray-200 leading-relaxed">{suggestion.content}</p>
                 </div>
 
                 {}
                 {suggestion.admin_response && (
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-                    <p className="text-sm font-medium text-green-800 mb-2">Your Response:</p>
-                    <p className="text-green-700">{suggestion.admin_response}</p>
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 mb-4">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Your Response:</p>
+                    <p className="text-green-700 dark:text-green-300">{suggestion.admin_response}</p>
                   </div>
                 )}
 
@@ -226,12 +226,12 @@ export default function AdminSuggestions() {
                       onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Type your response..."
                       rows={3}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 resize-none bg-white dark:bg-zinc-800 text-gray-900 dark:text-white"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleReply(suggestion.id)}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                        className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
                       >
                         Send Reply
                       </button>
@@ -240,7 +240,7 @@ export default function AdminSuggestions() {
                           setReplyingTo(null);
                           setReplyText("");
                         }}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors"
+                        className="px-4 py-2 bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-zinc-600 transition-colors"
                       >
                         Cancel
                       </button>
@@ -253,7 +253,7 @@ export default function AdminSuggestions() {
                   {!suggestion.admin_response && (
                     <button
                       onClick={() => setReplyingTo(suggestion.id)}
-                      className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors text-sm"
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors text-sm"
                     >
                       <Reply className="w-4 h-4" />
                       Reply
@@ -261,7 +261,7 @@ export default function AdminSuggestions() {
                   )}
                   <button
                     onClick={() => handleDelete(suggestion.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition-colors text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors text-sm"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete

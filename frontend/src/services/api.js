@@ -29,6 +29,27 @@ async function authFetch(url, options = {}) {
 }
 
 export const chatService = {
+  async _postAnnotation(requestBody) {
+    const response = await authFetch(`${API_BASE_URL}/api/annotation/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const detail = errorData.detail || `API Error: ${response.statusText}`;
+      const error = new Error(detail);
+      error.status = response.status;
+      error.detail = detail;
+      throw error;
+    }
+
+    return response.json();
+  },
+
   
   async processAnnotation(text, action, classLevel, subject, chapter, imageData = null, pageNumber = null) {
     try {
@@ -48,20 +69,28 @@ export const chatService = {
         requestBody.page_number = pageNumber;
       }
 
-      const response = await authFetch(`${API_BASE_URL}/api/annotation/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      let data;
+      try {
+        data = await this._postAnnotation(requestBody);
+      } catch (error) {
+        // Backward-compatible fallback: older backend may fail image OCR with 500.
+        const canRetryWithoutImage = Boolean(imageData) && (
+          error?.status >= 500 ||
+          /image ocr failed|could not extract text from image/i.test(error?.detail || error?.message || "")
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `API Error: ${response.statusText}`);
+        if (!canRetryWithoutImage) {
+          throw error;
+        }
+
+        const fallbackBody = {
+          ...requestBody,
+          image_data: null,
+          selected_text: text || `Please help with this screenshot topic from class ${classLevel} ${subject}.`
+        };
+        data = await this._postAnnotation(fallbackBody);
       }
 
-      const data = await response.json();
       return {
         answer: data.answer,
         actionType: data.action_type,

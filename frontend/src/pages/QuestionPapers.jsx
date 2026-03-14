@@ -892,7 +892,7 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
             className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-gray-900 dark:text-white">
             <option value="">Select subject</option>
             {(metadata.subjects || []).filter(s => !classLevel || (s.class_levels || []).includes(Number(classLevel)))
-              .map(s => <option key={s.subject} value={s.subject}>{s.subject}</option>)}
+              .map((s, idx) => <option key={`${s.subject}-${idx}`} value={s.subject}>{s.subject}</option>)}
           </select>
         ) : (
           <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Maths"
@@ -1469,7 +1469,7 @@ function EditPaperModal({ paper, metadata, onClose, onSaved }) {
                   {(metadata.subjects || [])
                     .filter(s => !classLevel || (s.class_levels || []).includes(Number(classLevel)))
                     .map(s => (
-                      <option key={s.subject} value={s.subject}>{s.subject}</option>
+                      <option key={`${s.subject}-${(s.class_levels || []).join("-")}`} value={s.subject}>{s.subject}</option>
                     ))}
                 </select>
               ) : (

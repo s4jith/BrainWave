@@ -44,21 +44,21 @@ export default function StickyNotesCard() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-100 via-slate-300 to-slate-200 rounded-2xl p-6 border border-slate-200">
+    <div className="bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800 rounded-2xl p-6 border border-slate-200 dark:border-zinc-800">
       {}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-grey-100 to-red-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-300 to-gray-500 dark:from-zinc-700 dark:to-zinc-600 flex items-center justify-center">
             <StickyNote className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-black">Sticky Notes</h3>
-            <p className="text-xs text-slate-400">{notes.length} notes</p>
+            <h3 className="text-lg font-bold text-black dark:text-white">Sticky Notes</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{notes.length} notes</p>
           </div>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="p-2 bg-gradient-to-r from-aliceblue-100 to-blue-500 rounded-lg text-white hover:opacity-90"
+          className="p-2 bg-gray-900 dark:bg-white rounded-lg text-white dark:text-gray-900 hover:opacity-90"
         >
           <Plus className="w-5 h-5" />
         </button>
@@ -67,13 +67,13 @@ export default function StickyNotesCard() {
       {}
       {recentNotes.length === 0 ? (
         <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-700 flex items-center justify-center">
-            <StickyNote className="w-8 h-8 text-slate-500" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-700 dark:bg-zinc-700 flex items-center justify-center">
+            <StickyNote className="w-8 h-8 text-slate-300 dark:text-zinc-300" />
           </div>
-          <p className="text-slate-400 mb-3">No sticky notes yet</p>
+          <p className="text-slate-500 dark:text-slate-400 mb-3">No sticky notes yet</p>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-gradient-to-r from-pink-200 to-blue-100 text-white text-sm font-medium rounded-lg hover:opacity-90"
+            className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-lg hover:opacity-90"
           >
             Create Your First Note
           </button>
@@ -125,11 +125,11 @@ export default function StickyNotesCard() {
       {}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl w-full max-w-md p-6 border border-slate-700">
+          <div className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-zinc-900 dark:to-zinc-800 rounded-2xl w-full max-w-md p-6 border border-slate-300 dark:border-zinc-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-black">New Sticky Note</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-700 rounded-lg">
-                <X className="w-5 h-5 text-slate-400" />
+              <h3 className="text-lg font-bold text-black dark:text-white">New Sticky Note</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-300 dark:hover:bg-zinc-700 rounded-lg">
+                <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
               </button>
             </div>
             <input
@@ -137,27 +137,27 @@ export default function StickyNotesCard() {
               placeholder="Note title..."
               value={newNote.title}
               onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-100 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-500 text-white placeholder-slate-400 mb-4"
+              className="w-full px-4 py-3 bg-white dark:bg-zinc-800 rounded-xl border border-slate-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 text-gray-900 dark:text-white placeholder-slate-400 mb-4"
             />
             <textarea
               placeholder="Write your note..."
               value={newNote.content}
               onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
               rows={4}
-              className="w-full px-4 py-3 bg-slate-200 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 text-white placeholder-slate-400 mb-4 resize-none"
+              className="w-full px-4 py-3 bg-white dark:bg-zinc-800 rounded-xl border border-slate-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 text-gray-900 dark:text-white placeholder-slate-400 mb-4 resize-none"
             />
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-slate-400 hover:bg-slate-200 rounded-xl"
+                className="px-4 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-xl"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddNote}
-                className="px-4 py-2 bg-gradient-to-r from-aliceblue-100 to-blue-500 text-black rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
+                className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
               >
-                <Save className="w-4 h-4 text-blue-100" />
+                <Save className="w-4 h-4" />
                 Save Note
               </button>
             </div>
@@ -198,7 +198,7 @@ export default function StickyNotesCard() {
               </button>
               <button
                 onClick={handleUpdateNote}
-                className="px-4 py-2 bg-gradient-to-r from-aliceblue-100 to-blue-500 text-white rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
+                className="px-4 py-2 bg-white text-gray-900 rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 Update

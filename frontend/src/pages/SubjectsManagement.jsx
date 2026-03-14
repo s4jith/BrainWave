@@ -507,14 +507,14 @@ export default function SubjectsManagement() {
             placeholder="Search subjects..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500 focus:border-transparent"
           />
         </div>
 
         <select
           value={selectedClass}
           onChange={(e) => setSelectedClass(e.target.value)}
-          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-400 dark:focus:ring-zinc-500"
         >
           <option value="all">All Classes</option>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(cls => (
@@ -524,7 +524,7 @@ export default function SubjectsManagement() {
 
         <button
           onClick={() => setShowPendingReview(true)}
-          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
+          className="px-4 py-2 bg-gray-700 dark:bg-zinc-700 hover:bg-gray-800 dark:hover:bg-zinc-600 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
         >
           <Clock className="w-5 h-5" /> Pending Review
         </button>
@@ -538,7 +538,7 @@ export default function SubjectsManagement() {
 
         <button
           onClick={() => setShowAddSubjectModal(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition whitespace-nowrap"
+          className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg flex items-center gap-2 transition whitespace-nowrap hover:bg-gray-800 dark:hover:bg-gray-100"
         >
           <Plus className="w-5 h-5" /> Add Manual
         </button>
@@ -557,12 +557,12 @@ export default function SubjectsManagement() {
             <div
               key={subject.subject_id}
               className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition"
-              style={{ borderLeftColor: subject.color, borderLeftWidth: "4px" }}
+              style={{ borderLeftColor: "#111827", borderLeftWidth: "4px" }}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: subject.color ? subject.color + "22" : "#3B82F622" }}>
-                    <SubjectIcon name={subject.subject_name} size="w-6 h-6" className="" style={{ color: subject.color || "#3B82F6" }} />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-zinc-800">
+                    <SubjectIcon name={subject.subject_name} size="w-6 h-6" className="text-gray-700 dark:text-gray-200" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -670,7 +670,7 @@ export default function SubjectsManagement() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2 hover:bg-gray-800 dark:hover:bg-gray-100"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   Create Subject
@@ -688,8 +688,8 @@ export default function SubjectsManagement() {
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 rounded-t-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: selectedSubject.color ? selectedSubject.color + "22" : "#3B82F622" }}>
-                    <SubjectIcon name={selectedSubject.subject_name} size="w-6 h-6" />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-zinc-800">
+                    <SubjectIcon name={selectedSubject.subject_name} size="w-6 h-6" className="text-gray-700 dark:text-gray-200" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -733,7 +733,7 @@ export default function SubjectsManagement() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+                    className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg transition disabled:opacity-50 flex items-center gap-2 hover:bg-gray-800 dark:hover:bg-gray-100"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     Add
@@ -776,7 +776,7 @@ export default function SubjectsManagement() {
                               <button
                                 onClick={handleSaveChapter}
                                 disabled={submitting || !editingChapter.chapter_name.trim()}
-                                className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+                                className="px-3 py-2 text-sm bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg transition disabled:opacity-50 flex items-center gap-2 hover:bg-gray-800 dark:hover:bg-gray-100"
                               >
                                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                 Save
@@ -824,7 +824,7 @@ export default function SubjectsManagement() {
                                   e.stopPropagation();
                                   handleEditChapter(chapter);
                                 }}
-                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
                                 title="Edit chapter"
                               >
                                 <Edit2 className="w-4 h-4" />
@@ -943,7 +943,7 @@ export default function SubjectsManagement() {
                                         <button
                                           onClick={handleSaveTopic}
                                           disabled={submitting || !editingTopic.topic_name.trim()}
-                                          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-1"
+                                          className="px-3 py-1.5 text-xs bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg transition disabled:opacity-50 flex items-center gap-1 hover:bg-gray-800 dark:hover:bg-gray-100"
                                         >
                                           {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                                           Save
@@ -976,7 +976,7 @@ export default function SubjectsManagement() {
                                         </span>
                                         <button
                                           onClick={() => handleEditTopic(topic, chapter.chapter_id)}
-                                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                                          className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
                                           title="Edit topic"
                                         >
                                           <Edit2 className="w-3.5 h-3.5" />

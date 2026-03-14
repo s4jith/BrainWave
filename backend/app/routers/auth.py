@@ -248,6 +248,8 @@ async def login(request: LoginRequest):
                 "role": user["role"],
                 "class_level": user.get("class_level"),
                 "subjects": user.get("subjects", []),
+                "avatar_seed": user.get("avatar_seed", ""),
+                "avatar_style": user.get("avatar_style", "avataaars"),
                 "is_onboarded": user.get("isOnboarded", False),
                 "permissions": permissions
             }
@@ -491,6 +493,22 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     Get current authenticated user's information.
     """
     try:
+        # Built-in admin account is token-backed and may not exist in Mongo users.
+        if current_user.user_id == "ADMIN_ROOT":
+            role_enum = UserRole.ADMIN
+            permissions = [p.value for p in get_role_permissions(role_enum)]
+            return {
+                "id": "admin-root",
+                "user_id": "ADMIN_ROOT",
+                "name": "Administrator",
+                "email": "admin1@gmail.com",
+                "role": "admin",
+                "class_level": None,
+                "subjects": [],
+                "is_active": True,
+                "permissions": permissions,
+            }
+
         user = db.users.find_one({"user_id": current_user.user_id})
         
         if not user:

@@ -1413,7 +1413,38 @@ _DEFAULT_SETTINGS = {
     "maintenanceMode": False,
     "backupFrequency": "daily",
     "retentionDays": 30,
+    "questionTypes": ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
+    "cognitiveLevels": ["remember", "understand", "apply", "analyze", "evaluate", "create"],
+    "difficultyLevels": ["easy", "medium", "hard"],
 }
+
+
+def _normalize_settings_option_list(values: Optional[List[str]], fallback: List[str]) -> List[str]:
+    """Normalize settings arrays to stable lowercase slug values."""
+    if not isinstance(values, list):
+        return fallback
+
+    cleaned: List[str] = []
+    for value in values:
+        if value is None:
+            continue
+        normalized = str(value).strip().lower().replace(" ", "_")
+        normalized = re.sub(r"_+", "_", normalized)
+        if not normalized:
+            continue
+        if normalized not in cleaned:
+            cleaned.append(normalized)
+
+    return cleaned if cleaned else fallback
+
+
+def _normalize_settings_doc(doc: dict) -> dict:
+    """Return a normalized settings payload with defaults."""
+    payload = {**_DEFAULT_SETTINGS, **(doc or {})}
+    payload["questionTypes"] = _normalize_settings_option_list(payload.get("questionTypes"), _DEFAULT_SETTINGS["questionTypes"])
+    payload["cognitiveLevels"] = _normalize_settings_option_list(payload.get("cognitiveLevels"), _DEFAULT_SETTINGS["cognitiveLevels"])
+    payload["difficultyLevels"] = _normalize_settings_option_list(payload.get("difficultyLevels"), _DEFAULT_SETTINGS["difficultyLevels"])
+    return payload
 
 class PlatformSettings(BaseModel):
     platformName: Optional[str] = None
@@ -1421,6 +1452,9 @@ class PlatformSettings(BaseModel):
     maintenanceMode: Optional[bool] = None
     backupFrequency: Optional[str] = None
     retentionDays: Optional[int] = None
+    questionTypes: Optional[List[str]] = None
+    cognitiveLevels: Optional[List[str]] = None
+    difficultyLevels: Optional[List[str]] = None
 
 
 @router.get("/settings")
@@ -1432,7 +1466,7 @@ async def get_admin_settings():
         if not doc:
             return _DEFAULT_SETTINGS
         doc.pop("_id", None)
-        return {**_DEFAULT_SETTINGS, **doc}
+        return _normalize_settings_doc(doc)
     except Exception as e:
         logger.error(f"Error fetching platform settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1442,14 +1476,16 @@ async def get_admin_settings():
 async def save_admin_settings(settings: PlatformSettings):
     """Save platform settings to DB (admin only)."""
     try:
-        updates = {k: v for k, v in settings.dict().items() if v is not None}
+        updates = {k: v for k, v in settings.model_dump().items() if v is not None}
         if not updates:
             return {"success": False, "error": "No settings provided."}
+
+        normalized_updates = _normalize_settings_doc(updates)
 
         col = db.get_collection("platform_settings")
         col.update_one(
             {"_id": "global"},
-            {"$set": {**updates, "updated_at": datetime.utcnow()}},
+            {"$set": {**normalized_updates, "updated_at": datetime.utcnow()}},
             upsert=True
         )
         return {"success": True, "message": "Settings saved successfully."}

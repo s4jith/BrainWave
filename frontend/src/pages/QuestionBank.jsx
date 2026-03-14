@@ -9,6 +9,12 @@ import useUserStore from "../stores/userStore";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+const DEFAULT_QUESTION_TYPES = ["mcq", "fillup", "true_false", "short_answer", "long_answer"];
+const DEFAULT_DIFFICULTY_LEVELS = ["easy", "medium", "hard"];
+const DEFAULT_COGNITIVE_LEVELS = ["remember", "understand", "apply", "analyze", "evaluate", "create"];
+
+const humanizeOption = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
     const isAdmin = user.role === "admin";
@@ -22,6 +28,9 @@ const QuestionBank = () => {
     const [loadingGroups, setLoadingGroups] = useState(true); 
     const [loadingCurriculum, setLoadingCurriculum] = useState(true); 
     const [loading, setLoading] = useState(true);
+    const [questionTypes, setQuestionTypes] = useState(DEFAULT_QUESTION_TYPES);
+    const [difficultyLevels, setDifficultyLevels] = useState(DEFAULT_DIFFICULTY_LEVELS);
+    const [cognitiveLevels, setCognitiveLevels] = useState(DEFAULT_COGNITIVE_LEVELS);
     const [showModal, setShowModal] = useState(false);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
 
@@ -72,6 +81,7 @@ const QuestionBank = () => {
         class_level: "", // head class filter (subject-assigned HEAD)
         type: "",
         difficulty: "",
+        bloom_level: "",
         search: ""
     });
 
@@ -86,6 +96,7 @@ const QuestionBank = () => {
 
     useEffect(() => {
         fetchCurriculumSubjects();
+        fetchQuestionConfig();
         if (isTeacher) {
             fetchGroups();
         }
@@ -135,6 +146,30 @@ const QuestionBank = () => {
             console.error("Error fetching curriculum subjects:", error);
         } finally {
             setLoadingCurriculum(false);
+        }
+    };
+
+    const fetchQuestionConfig = async () => {
+        try {
+            const response = await authFetch(`${apiUrl}/api/admin/settings`, {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            const types = Array.isArray(data.questionTypes) && data.questionTypes.length > 0
+                ? data.questionTypes
+                : DEFAULT_QUESTION_TYPES;
+            const levels = Array.isArray(data.difficultyLevels) && data.difficultyLevels.length > 0
+                ? data.difficultyLevels
+                : DEFAULT_DIFFICULTY_LEVELS;
+            const blooms = Array.isArray(data.cognitiveLevels) && data.cognitiveLevels.length > 0
+                ? data.cognitiveLevels
+                : DEFAULT_COGNITIVE_LEVELS;
+            setQuestionTypes(types);
+            setDifficultyLevels(levels);
+            setCognitiveLevels(blooms);
+        } catch (error) {
+            console.error("Error fetching question config:", error);
         }
     };
 
@@ -216,6 +251,7 @@ const QuestionBank = () => {
             if (subject) queryParams.append('subject', subject);
             if (filters.type) queryParams.append('type', filters.type);
             if (filters.difficulty) queryParams.append('difficulty', filters.difficulty);
+            if (filters.bloom_level) queryParams.append('bloom_level', filters.bloom_level);
             if (filters.search) queryParams.append('search', filters.search);
 
             const response = await authFetch(`${apiUrl}/api/question-bank/questions?${queryParams}`, {
@@ -502,9 +538,9 @@ const QuestionBank = () => {
                         onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
                     >
                         <option value="">All Difficulties</option>
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
+                        {difficultyLevels.map((level) => (
+                            <option key={level} value={level}>{humanizeOption(level)}</option>
+                        ))}
                     </select>
                     <select
                         className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
@@ -512,11 +548,19 @@ const QuestionBank = () => {
                         onChange={(e) => setFilters({ ...filters, type: e.target.value })}
                     >
                         <option value="">All Types</option>
-                        <option value="mcq">MCQ</option>
-                        <option value="fillup">Fill-ups</option>
-                        <option value="true_false">True / False</option>
-                        <option value="short_answer">Short Answer</option>
-                        <option value="long_answer">Long Answer</option>
+                        {questionTypes.map((type) => (
+                            <option key={type} value={type}>{humanizeOption(type)}</option>
+                        ))}
+                    </select>
+                    <select
+                        className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
+                        value={filters.bloom_level}
+                        onChange={(e) => setFilters({ ...filters, bloom_level: e.target.value })}
+                    >
+                        <option value="">All Cognitive Levels</option>
+                        {cognitiveLevels.map((level) => (
+                            <option key={level} value={level}>{humanizeOption(level)}</option>
+                        ))}
                     </select>
                 </div>
                 )}

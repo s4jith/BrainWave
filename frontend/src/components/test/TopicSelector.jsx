@@ -239,9 +239,9 @@ export default function TopicSelector({
                       </p>
                     </div>
                   ) : (
-                    subjects.map((subject) => (
+                    subjects.map((subject, idx) => (
                       <button
-                        key={subject.subject}
+                        key={`${subject.subject}-${subject.class_level ?? idx}`}
                         onClick={() => handleSelectSubject(subject)}
                         className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100 hover:border-blue-300 transition-all text-left group"
                       >
@@ -250,7 +250,7 @@ export default function TopicSelector({
                             <BookOpen className="w-8 h-8 text-orange-600 mb-3" />
                             <h3 className="font-semibold text-gray-800 text-lg">{subject.subject}</h3>
                             <p className="text-sm text-gray-500 mt-1">
-                              {subject.total_chapters} Chapters • {subject.total_questions} Questions
+                              {subject.total_chapters} Chapter{subject.total_chapters === 1 ? "" : "s"}
                             </p>
                           </div>
                           <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600" />

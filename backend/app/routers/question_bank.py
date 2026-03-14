@@ -33,9 +33,9 @@ class QuestionCreate(BaseModel):
     class_level: int
     chapter: int
     topic: Optional[str] = None
-    type: str = Field(..., pattern="^(mcq|fillup|true_false|short_answer|long_answer)$")
-    difficulty: str = Field(..., pattern="^(easy|medium|hard)$")
-    bloom_level: Optional[str] = Field(None, pattern="^(remember|understand|apply|analyze|evaluate|create)$", description="Bloom's taxonomy cognitive level")
+    type: str = Field(..., min_length=1)
+    difficulty: str = Field(..., min_length=1)
+    bloom_level: Optional[str] = Field(None, min_length=1, description="Bloom's taxonomy cognitive level")
     marks: int
     options: List[str] = []
     correct_answer: str
@@ -64,7 +64,7 @@ class GenerateRequest(BaseModel):
     subject: str
     chapter: int
     config: Dict[str, Dict[str, int]]
-    bloom_level: Optional[str] = Field(None, pattern="^(remember|understand|apply|analyze|evaluate|create)$", description="Bloom's taxonomy cognitive level for AI generation")
+    bloom_level: Optional[str] = Field(None, min_length=1, description="Bloom's taxonomy cognitive level for AI generation")
 
 class DeleteRequestBody(BaseModel):
     reason: Optional[str] = None

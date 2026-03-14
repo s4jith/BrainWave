@@ -157,7 +157,24 @@ export default function Settings() {
     showSaveMessage('Subject removed!');
   };
 
-  const saveAvatar = () => {
+  const saveAvatar = async () => {
+    try {
+      // Reuse onboarding update path to persist avatar selections for existing students.
+      await authFetch(`${import.meta.env.VITE_API_URL}/api/auth/complete-onboarding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          avatar: {
+            seed: avatarSeed,
+            style: avatarStyle,
+          },
+        }),
+      });
+    } catch {
+      // Keep local save even if network call fails, so UI does not break offline.
+    }
+
     updateProfile({
       avatarSeed,
       avatarStyle,

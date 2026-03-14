@@ -47,6 +47,8 @@ export default function Login() {
           role: userRole,
           classLevel: data.user.class_level || null,
           subjects: data.user.subjects || [],
+          avatarSeed: data.user.avatar_seed || "",
+          avatarStyle: data.user.avatar_style || "avataaars",
           isOnboarded: data.user.is_onboarded !== false,
           permissions: data.user.permissions || []
         }, data.access_token);

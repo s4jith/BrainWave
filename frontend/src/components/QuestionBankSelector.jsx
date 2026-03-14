@@ -4,6 +4,9 @@ import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
+const DEFAULT_QUESTION_TYPES = ["mcq", "fillup", "true_false", "short_answer", "long_answer"];
+
+const humanizeOption = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
 const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultClass = "", defaultSubject = "" }) => {
     const [questions, setQuestions] = useState([]);
@@ -12,6 +15,7 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
 
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
+    const [questionTypes, setQuestionTypes] = useState(DEFAULT_QUESTION_TYPES);
 
     const [filters, setFilters] = useState({
         subject: defaultSubject || "",
@@ -43,6 +47,20 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
             }
         };
         fetchCurriculum();
+
+        const fetchQuestionConfig = async () => {
+            try {
+                const response = await authFetch(`${API_URL}/api/admin/settings`);
+                if (!response.ok) return;
+                const data = await response.json();
+                if (Array.isArray(data.questionTypes) && data.questionTypes.length > 0) {
+                    setQuestionTypes(data.questionTypes);
+                }
+            } catch {
+                // Keep default options if settings fail to load.
+            }
+        };
+        fetchQuestionConfig();
     }, []);
 
     const subjectNames = [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
@@ -152,10 +170,9 @@ const QuestionBankSelector = ({ onSelect, onClose, preSelectedIds = [], defaultC
                         onChange={(e) => setFilters({ ...filters, type: e.target.value })}
                     >
                         <option value="">Type</option>
-                        <option value="mcq">MCQ</option>
-                        <option value="fillup">Fill-up</option>
-                        <option value="short_answer">Short</option>
-                        <option value="long_answer">Long</option>
+                        {questionTypes.map((type) => (
+                            <option key={type} value={type}>{humanizeOption(type)}</option>
+                        ))}
                     </select>
                 </div>
 

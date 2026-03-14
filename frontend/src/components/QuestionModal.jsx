@@ -6,6 +6,10 @@ import authFetch from "../utils/authFetch";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
+const DEFAULT_QUESTION_TYPES = ["mcq", "fillup", "true_false", "short_answer", "long_answer"];
+const DEFAULT_COGNITIVE_LEVELS = ["remember", "understand", "apply", "analyze", "evaluate", "create"];
+const DEFAULT_DIFFICULTY_LEVELS = ["easy", "medium", "hard"];
+
 const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSubjects = [], groups = [] }) => {
     const [activeTab, setActiveTab] = useState(question ? "manual" : "manual");
     const [loading, setLoading] = useState(false);
@@ -18,6 +22,26 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); 
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
     const [loadingSubjectDetail, setLoadingSubjectDetail] = useState(false);
+    const [questionConfig, setQuestionConfig] = useState({
+        questionTypes: DEFAULT_QUESTION_TYPES,
+        cognitiveLevels: DEFAULT_COGNITIVE_LEVELS,
+        difficultyLevels: DEFAULT_DIFFICULTY_LEVELS,
+    });
+
+    const withCurrentValue = (values, current) => {
+        const list = Array.isArray(values) ? values.filter(Boolean) : [];
+        if (current && !list.includes(current)) {
+            return [current, ...list];
+        }
+        return list;
+    };
+
+    const humanizeOption = (value) => {
+        if (!value) return "";
+        return String(value)
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (m) => m.toUpperCase());
+    };
 
     const subjectList = isTeacher ? userSubjects : (availableSubjects.length > 0 ? availableSubjects : []);
 
@@ -98,6 +122,44 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         };
         fetchCurriculum();
     }, []);
+
+    useEffect(() => {
+        const fetchQuestionConfig = async () => {
+            try {
+                const response = await authFetch(`${apiUrl}/api/admin/settings`);
+                if (!response.ok) return;
+                const data = await response.json();
+                setQuestionConfig({
+                    questionTypes: (Array.isArray(data.questionTypes) && data.questionTypes.length > 0)
+                        ? data.questionTypes
+                        : DEFAULT_QUESTION_TYPES,
+                    cognitiveLevels: (Array.isArray(data.cognitiveLevels) && data.cognitiveLevels.length > 0)
+                        ? data.cognitiveLevels
+                        : DEFAULT_COGNITIVE_LEVELS,
+                    difficultyLevels: (Array.isArray(data.difficultyLevels) && data.difficultyLevels.length > 0)
+                        ? data.difficultyLevels
+                        : DEFAULT_DIFFICULTY_LEVELS,
+                });
+            } catch {
+                // Keep defaults when settings are unavailable.
+            }
+        };
+        fetchQuestionConfig();
+    }, []);
+
+    useEffect(() => {
+        if (question) return;
+        setFormData((prev) => ({
+            ...prev,
+            type: questionConfig.questionTypes.includes(prev.type) ? prev.type : (questionConfig.questionTypes[0] || ""),
+            bloom_level: questionConfig.cognitiveLevels.includes(prev.bloom_level) ? prev.bloom_level : (questionConfig.cognitiveLevels[0] || ""),
+            difficulty: questionConfig.difficultyLevels.includes(prev.difficulty) ? prev.difficulty : (questionConfig.difficultyLevels[0] || ""),
+        }));
+        setAiConfig((prev) => ({
+            ...prev,
+            bloom_level: questionConfig.cognitiveLevels.includes(prev.bloom_level) ? prev.bloom_level : (questionConfig.cognitiveLevels[0] || ""),
+        }));
+    }, [questionConfig, question]);
 
     const activeSubject = activeTab === 'ai' ? aiConfig.subject : formData.subject;
     const activeClassLevel = activeTab === 'ai' ? aiConfig.class_level : formData.class_level;
@@ -473,11 +535,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         value={formData.type}
                                         onChange={e => setFormData({ ...formData, type: e.target.value })}
                                     >
-                                        <option value="mcq">MCQ</option>
-                                        <option value="fillup">Fill-in-the-blanks</option>
-                                        <option value="true_false">True / False</option>
-                                        <option value="short_answer">Short Answer</option>
-                                        <option value="long_answer">Long Answer</option>
+                                        {withCurrentValue(questionConfig.questionTypes, formData.type).map(type => (
+                                            <option key={type} value={type}>{humanizeOption(type)}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -487,12 +547,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         value={formData.bloom_level}
                                         onChange={e => setFormData({ ...formData, bloom_level: e.target.value })}
                                     >
-                                        <option value="remember">Remember</option>
-                                        <option value="understand">Understand</option>
-                                        <option value="apply">Apply</option>
-                                        <option value="analyze">Analyze</option>
-                                        <option value="evaluate">Evaluate</option>
-                                        <option value="create">Create</option>
+                                        {withCurrentValue(questionConfig.cognitiveLevels, formData.bloom_level).map(level => (
+                                            <option key={level} value={level}>{humanizeOption(level)}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -502,9 +559,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         value={formData.difficulty}
                                         onChange={e => setFormData({ ...formData, difficulty: e.target.value })}
                                     >
-                                        <option value="easy">Easy</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="hard">Hard</option>
+                                        {withCurrentValue(questionConfig.difficultyLevels, formData.difficulty).map(level => (
+                                            <option key={level} value={level}>{humanizeOption(level)}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -759,12 +816,9 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     value={aiConfig.bloom_level}
                                     onChange={e => setAiConfig({ ...aiConfig, bloom_level: e.target.value })}
                                 >
-                                    <option value="remember">Remember — Recall facts &amp; basic concepts</option>
-                                    <option value="understand">Understand — Explain ideas &amp; concepts</option>
-                                    <option value="apply">Apply — Use info in new situations</option>
-                                    <option value="analyze">Analyze — Draw connections &amp; patterns</option>
-                                    <option value="evaluate">Evaluate — Justify decisions &amp; judgments</option>
-                                    <option value="create">Create — Produce new or original work</option>
+                                    {withCurrentValue(questionConfig.cognitiveLevels, aiConfig.bloom_level).map(level => (
+                                        <option key={level} value={level}>{humanizeOption(level)}</option>
+                                    ))}
                                 </select>
                             </div>
 

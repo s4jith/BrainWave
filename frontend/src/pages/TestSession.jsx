@@ -9,7 +9,6 @@ import {
   Send,
   Mic,
   MicOff,
-  CheckCircle,
   AlertCircle,
   Loader2,
   Target,
@@ -33,7 +32,6 @@ export default function TestSession() {
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isLoading, setIsLoading] = useState(!initialSession);
   const [error, setError] = useState(null);
@@ -222,37 +220,6 @@ export default function TestSession() {
     } else {
       recognition.start();
       setIsRecording(true);
-    }
-  };
-
-  const handleSaveAnswer = async () => {
-    if (!currentAnswer.trim() || !currentQuestion) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      await testService.submitAnswer(
-        session.session_id,
-        currentQuestion.question_id,
-        currentQuestion.question_number,
-        currentAnswer.trim()
-      );
-
-      setAnswers(prev => ({
-        ...prev,
-        [currentQuestion.question_id]: currentAnswer.trim()
-      }));
-
-      if (currentQuestionIndex < session.questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setCurrentAnswer(answers[session.questions[currentQuestionIndex + 1]?.question_id] || "");
-      }
-    } catch (err) {
-      console.error("Failed to save answer:", err);
-      setError("Failed to save answer. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -683,20 +650,6 @@ export default function TestSession() {
             </Button>
 
             <div className="flex items-center gap-2">
-              <Button
-                onClick={handleSaveAnswer}
-                disabled={!currentAnswer.trim() || isSubmitting || testBlocked}
-                className="bg-orange-600 hover:bg-orange-700 text-white gap-2 disabled:opacity-50"
-                title={testBlocked ? "Test blocked due to cheating" : ""}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CheckCircle className="w-4 h-4" />
-                )}
-                Save Answer
-              </Button>
-
               {currentQuestionIndex === session.questions.length - 1 ? (
                 <Button
                   onClick={handleCompleteTest}

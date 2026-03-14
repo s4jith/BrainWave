@@ -39,6 +39,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [isLoading, setIsLoading] = useState(true);
   const [imageUrl, setImageUrl] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState(null);
@@ -55,6 +56,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+  const currentBlobUrlRef = useRef(null);
 
   const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -71,6 +73,27 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     const match = pdfUrl.match(/\/api\/books\/pdf\/(.+)$/);
     return match ? match[1] : null;
   }, [pdfUrl, isCloudinaryUrl]);
+
+  const fetchPageImageBlobUrl = useCallback(async (page, currentScale) => {
+    const backendScale = 1.5 * currentScale;
+
+    let url;
+    if (bookId) {
+      url = `${API_BASE}/api/books/render/${bookId}/page/${page}?scale=${backendScale}&t=${Date.now()}`;
+    } else {
+      const filePath = getFilePath();
+      if (!filePath) return null;
+      url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${page}&scale=${backendScale}&t=${Date.now()}`;
+    }
+
+    const response = await authFetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to load page image (${response.status})`);
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }, [API_BASE, bookId, getFilePath]);
 
   useEffect(() => {
     const fetchPdfInfo = async () => {
@@ -107,28 +130,56 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   }, [pdfUrl, bookId, getFilePath, API_BASE]);
 
   useEffect(() => {
+    let activeObjectUrl = null;
+    let isCancelled = false;
+
     const loadPage = async () => {
       if (!numPages) return;
 
       setIsLoading(true);
-      const backendScale = 1.5 * scale;
 
-      let url;
-      if (bookId) {
-        
-        url = `${API_BASE}/api/books/render/${bookId}/page/${pageNumber}?scale=${backendScale}`;
-      } else {
-        
-        const filePath = getFilePath();
-        if (!filePath) return;
-        url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}`;
+      try {
+        const nextObjectUrl = await fetchPageImageBlobUrl(pageNumber, scale);
+        if (isCancelled || !nextObjectUrl) {
+          if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
+          return;
+        }
+
+        activeObjectUrl = nextObjectUrl;
+        setImageUrl((prev) => {
+          if (prev && prev.startsWith("blob:")) {
+            URL.revokeObjectURL(prev);
+          }
+          currentBlobUrlRef.current = nextObjectUrl;
+          return nextObjectUrl;
+        });
+        setLoadError(null);
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Error loading PDF page image:", error);
+          setLoadError("Failed to load page. Please try again.");
+          setIsLoading(false);
+        }
       }
-
-      setImageUrl(url);
     };
 
     loadPage();
-  }, [pageNumber, scale, numPages, bookId, getFilePath, API_BASE]);
+    return () => {
+      isCancelled = true;
+      if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+      }
+    };
+  }, [pageNumber, scale, numPages, fetchPageImageBlobUrl, reloadTick]);
+
+  useEffect(() => {
+    return () => {
+      if (currentBlobUrlRef.current && currentBlobUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -534,17 +585,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                     onClick={() => {
                       setLoadError(null);
                       setIsLoading(true);
-                      const backendScale = 1.5 * scale;
-                      let url;
-                      if (bookId) {
-                        url = `${API_BASE}/api/books/render/${bookId}/page/${pageNumber}?scale=${backendScale}&t=${Date.now()}`;
-                      } else {
-                        const filePath = getFilePath();
-                        if (filePath) {
-                          url = `${API_BASE}/api/books/pdf-page/${filePath}?page=${pageNumber}&scale=${backendScale}&t=${Date.now()}`;
-                        }
-                      }
-                      if (url) setImageUrl(url);
+                      setReloadTick((v) => v + 1);
                     }}
                   >
                     Retry
@@ -560,7 +601,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                     src={imageUrl}
                     alt={`Page ${pageNumber}`}
                     crossOrigin="anonymous"
-                    className={`pdf-page-shadow rounded-lg max-w-full ${isSelecting ? "cursor-crosshair" : ""
+                    className={`pdf-page-shadow rounded-lg ${isSelecting ? "cursor-crosshair" : ""
                       }`}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
@@ -569,7 +610,9 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
                     onMouseUp={handleMouseUp}
                     style={{
                       display: isLoading ? "none" : "block",
-                      maxHeight: "calc(100vh - 200px)",
+                      width: `${Math.round(scale * 100)}%`,
+                      maxWidth: "none",
+                      height: "auto",
                       userSelect: "none",
                     }}
                     draggable={false}

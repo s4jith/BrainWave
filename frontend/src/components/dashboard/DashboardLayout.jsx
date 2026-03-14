@@ -190,6 +190,14 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
   };
 
   const ThemeIcon = getThemeIcon();
+  const isStudent = user?.role === 'student';
+
+  useEffect(() => {
+    // Student side is locked to light mode.
+    if (isStudent && theme !== 'light') {
+      setTheme('light');
+    }
+  }, [isStudent, theme, setTheme]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
@@ -371,38 +379,40 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
             </h2>
           </div>
           
-          {/* Theme Switcher in Header */}
-          <div className="relative" ref={themeMenuRef}>
-            <button
-              onClick={() => setShowThemeMenu(!showThemeMenu)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-200 dark:border-gray-700"
-              title="Change theme"
-            >
-              <ThemeIcon className="w-5 h-5" />
-              <span className="text-sm font-medium hidden sm:inline">Theme</span>
-            </button>
-            {showThemeMenu && (
-              <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                {themeOptions.map((option) => {
-                  const OptionIcon = option.icon;
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                        theme === option.value
-                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                      }`}
-                    >
-                      <OptionIcon className="w-4 h-4" />
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* Theme Switcher in Header (disabled for students) */}
+          {!isStudent && (
+            <div className="relative" ref={themeMenuRef}>
+              <button
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-200 dark:border-gray-700"
+                title="Change theme"
+              >
+                <ThemeIcon className="w-5 h-5" />
+                <span className="text-sm font-medium hidden sm:inline">Theme</span>
+              </button>
+              {showThemeMenu && (
+                <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                  {themeOptions.map((option) => {
+                    const OptionIcon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                          theme === option.value
+                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        }`}
+                      >
+                        <OptionIcon className="w-4 h-4" />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </header>
         )}
 

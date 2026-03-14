@@ -16,6 +16,32 @@ const DEFAULT_SETTINGS = {
     maintenanceMode: false,
     backupFrequency: "daily",
     retentionDays: 30,
+    questionTypes: ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
+    cognitiveLevels: ["remember", "understand", "apply", "analyze", "evaluate", "create"],
+    difficultyLevels: ["easy", "medium", "hard"],
+};
+
+const normalizeOptionValue = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+
+const normalizeOptionList = (values, fallback) => {
+    if (!Array.isArray(values)) return fallback;
+    const cleaned = [];
+    values.forEach((value) => {
+        const normalized = normalizeOptionValue(value);
+        if (!normalized) return;
+        if (!cleaned.includes(normalized)) cleaned.push(normalized);
+    });
+    return cleaned.length > 0 ? cleaned : fallback;
+};
+
+const sanitizeSettings = (raw = {}) => {
+    const merged = { ...DEFAULT_SETTINGS, ...raw };
+    return {
+        ...merged,
+        questionTypes: normalizeOptionList(merged.questionTypes, DEFAULT_SETTINGS.questionTypes),
+        cognitiveLevels: normalizeOptionList(merged.cognitiveLevels, DEFAULT_SETTINGS.cognitiveLevels),
+        difficultyLevels: normalizeOptionList(merged.difficultyLevels, DEFAULT_SETTINGS.difficultyLevels),
+    };
 };
 
 export default function AdminSettings() {
@@ -25,6 +51,56 @@ export default function AdminSettings() {
     const [saved, setSaved] = useState(false);
     const [loadError, setLoadError] = useState("");
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [newQuestionType, setNewQuestionType] = useState("");
+    const [newCognitiveLevel, setNewCognitiveLevel] = useState("");
+    const [newDifficultyLevel, setNewDifficultyLevel] = useState("");
+
+    const persistSettings = async (nextSettings) => {
+        const payload = sanitizeSettings(nextSettings);
+        const res = await authFetch(`${API_URL}/api/admin/settings`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...getAuthHeader() },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.error || "Failed to save settings.");
+        }
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.error || "Failed to save settings.");
+        }
+        setSettings(payload);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+    };
+
+    const addOption = async (field, value, clear) => {
+        const normalized = normalizeOptionValue(value);
+        if (!normalized) return;
+        const existing = Array.isArray(settings[field]) ? settings[field] : [];
+        if (existing.includes(normalized)) {
+            clear("");
+            return;
+        }
+
+        const nextSettings = {
+            ...settings,
+            [field]: [...existing, normalized]
+        };
+        setSettings(nextSettings);
+        clear("");
+        await persistSettings(nextSettings);
+    };
+
+    const removeOption = async (field, option) => {
+        const nextSettings = {
+            ...settings,
+            [field]: (Array.isArray(settings[field]) ? settings[field] : []).filter(v => v !== option)
+        };
+        setSettings(nextSettings);
+        await persistSettings(nextSettings);
+    };
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -34,7 +110,7 @@ export default function AdminSettings() {
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setSettings({ ...DEFAULT_SETTINGS, ...data });
+                    setSettings(sanitizeSettings(data));
                 }
             } catch (err) {
                 setLoadError("Failed to load settings.");
@@ -46,20 +122,9 @@ export default function AdminSettings() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await authFetch(`${API_URL}/api/admin/settings`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify(settings),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setSaved(true);
-                setTimeout(() => setSaved(false), 3000);
-            } else {
-                alert(data.error || "Failed to save settings.");
-            }
+            await persistSettings(settings);
         } catch (err) {
-            alert("Network error saving settings.");
+            alert(err.message || "Network error saving settings.");
         } finally {
             setSaving(false);
         }
@@ -152,6 +217,37 @@ export default function AdminSettings() {
                                     </p>
                                 </div>
                             )}
+
+                            <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Question Dropdown Options</h3>
+
+                                <OptionEditor
+                                    title="Question Types"
+                                    values={settings.questionTypes || []}
+                                    inputValue={newQuestionType}
+                                    setInputValue={setNewQuestionType}
+                                    onAdd={() => addOption("questionTypes", newQuestionType, setNewQuestionType).catch((err) => alert(err.message || "Failed to save settings."))}
+                                    onRemove={(v) => removeOption("questionTypes", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                />
+
+                                <OptionEditor
+                                    title="Cognitive Levels"
+                                    values={settings.cognitiveLevels || []}
+                                    inputValue={newCognitiveLevel}
+                                    setInputValue={setNewCognitiveLevel}
+                                    onAdd={() => addOption("cognitiveLevels", newCognitiveLevel, setNewCognitiveLevel).catch((err) => alert(err.message || "Failed to save settings."))}
+                                    onRemove={(v) => removeOption("cognitiveLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                />
+
+                                <OptionEditor
+                                    title="Difficulty Levels"
+                                    values={settings.difficultyLevels || []}
+                                    inputValue={newDifficultyLevel}
+                                    setInputValue={setNewDifficultyLevel}
+                                    onAdd={() => addOption("difficultyLevels", newDifficultyLevel, setNewDifficultyLevel).catch((err) => alert(err.message || "Failed to save settings."))}
+                                    onRemove={(v) => removeOption("difficultyLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
@@ -194,6 +290,39 @@ export default function AdminSettings() {
                 )}
             </div>
         </AdminLayout>
+    );
+}
+
+function OptionEditor({ title, values, inputValue, setInputValue, onAdd, onRemove }) {
+    return (
+        <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{title}</label>
+            <div className="flex gap-2 mb-2">
+                <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="Add option (e.g. case_study)"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                />
+                <button
+                    type="button"
+                    onClick={onAdd}
+                    className="px-3 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium"
+                >
+                    Add
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {values.map((v) => (
+                    <span key={v} className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+                        {v}
+                        <button type="button" onClick={() => onRemove(v)} className="text-gray-400 hover:text-red-500">×</button>
+                    </span>
+                ))}
+                {values.length === 0 && <span className="text-xs text-gray-400">No options added</span>}
+            </div>
+        </div>
     );
 }
 

@@ -277,7 +277,7 @@ function TokenValidator({ children }) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         // Treat explicit auth/session failures as invalid login state.
-        if (res.status === 401 || res.status === 403 || res.status === 404) {
+        if (res.status === 401 || res.status === 403) {
           logout();
           window.location.replace("/login");
         }
