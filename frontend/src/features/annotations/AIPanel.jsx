@@ -89,15 +89,6 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     setImageUrl(null);
 
     try {
-      console.log("Calling backend API...", {
-        chapter: currentLesson?.number || 1,
-        text: selectedText?.text,
-        action: action.id,
-        subject: effectiveSubject,
-        classLevel: user.classLevel,
-        hasImageData: !!selectedText?.imageData,
-      });
-
       let queryText = selectedText?.text || "";
 
       if (selectedText?.imageData) {
@@ -114,7 +105,6 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         selectedText?.pageNumber || pageNumber 
       );
 
-      console.log("Backend response received:", result);
       setResponse(result.answer);
       setIsProcessing(false);
     } catch (err) {

@@ -324,63 +324,6 @@ async def get_head_tests(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/student/{student_id}")
-async def get_student_tests(
-    student_id: str,
-    status: Optional[str] = None
-):
-    """
-    Get all tests available for a specific student based on their class level.
-    Also includes submission status for each test.
-    """
-    try:
-        query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
-        student = db.users.find_one(query)
-        
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-        
-        class_level = student.get("class_level", 10)
-        
-        tests = list(db.tests.find({
-            "class_level": class_level,
-            "is_active": True
-        }).sort("created_at", -1))
-        
-        submissions = list(db.test_submissions.find({
-            "student_id": str(student["_id"])
-        }))
-        submitted_test_ids = {str(s.get("test_id")): s for s in submissions}
-        
-        result = []
-        for test in tests:
-            test_data = serialize_test(test)
-            test_id = str(test["_id"])
-            
-            if test_id in submitted_test_ids:
-                sub = submitted_test_ids[test_id]
-                test_data["has_submitted"] = True
-                test_data["submission_id"] = str(sub["_id"])
-                test_data["submission_date"] = sub.get("submitted_at").isoformat() if sub.get("submitted_at") else None
-                test_data["has_feedback"] = bool(sub.get("admin_comment"))
-            else:
-                test_data["has_submitted"] = False
-                test_data["submission_id"] = None
-                test_data["submission_date"] = None
-                test_data["has_feedback"] = False
-            
-            result.append(test_data)
-        
-        if status:
-            result = [t for t in result if t["status"] == status]
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching student tests: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{test_id}")
 async def get_test(test_id: str):
@@ -603,29 +546,6 @@ async def get_test_submissions(test_id: str):
         logger.error(f"Error fetching submissions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/my-submissions/{student_id}")
-async def get_student_submissions(student_id: str):
-    """
-    Get all submissions by a student.
-    """
-    try:
-        query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
-        student = db.users.find_one(query)
-        
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-        
-        submissions = list(db.test_submissions.find({
-            "student_id": str(student["_id"])
-        }).sort("submitted_at", -1))
-        
-        return [serialize_submission(s) for s in submissions]
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching student submissions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/submissions/{submission_id}/comment")
 async def add_comment(submission_id: str, comment_data: CommentCreate):
@@ -692,69 +612,6 @@ async def get_submission(submission_id: str):
         logger.error(f"Error fetching submission: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/notifications/{user_id}")
-async def get_user_notifications(
-    user_id: str,
-    unread_only: bool = False,
-    limit: int = 50
-):
-    """Get notifications for a user."""
-    try:
-        query = {"user_id": user_id}
-        if unread_only:
-            query["is_read"] = False
-        
-        notifications = list(db.notifications.find(query).sort("created_at", -1).limit(limit))
-        
-        return [{
-            "id": str(n["_id"]),
-            "type": n.get("type", ""),
-            "title": n.get("title", ""),
-            "message": n.get("message", ""),
-            "test_id": n.get("test_id"),
-            "submission_id": n.get("submission_id"),
-            "is_read": n.get("is_read", False),
-            "created_at": n.get("created_at", datetime.utcnow()).isoformat()
-        } for n in notifications]
-        
-    except Exception as e:
-        logger.error(f"Error fetching notifications: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str):
-    """Mark a notification as read."""
-    try:
-        result = db.notifications.update_one(
-            {"_id": ObjectId(notification_id)},
-            {"$set": {"is_read": True, "read_at": datetime.utcnow()}}
-        )
-        
-        if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        
-        return {"success": True}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error marking notification read: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/notifications/{user_id}/read-all")
-async def mark_all_notifications_read(user_id: str):
-    """Mark all notifications as read for a user."""
-    try:
-        result = db.notifications.update_many(
-            {"user_id": user_id, "is_read": False},
-            {"$set": {"is_read": True, "read_at": datetime.utcnow()}}
-        )
-        
-        return {"success": True, "marked_read": result.modified_count}
-        
-    except Exception as e:
-        logger.error(f"Error marking all notifications read: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats/overview")
 async def get_test_stats():

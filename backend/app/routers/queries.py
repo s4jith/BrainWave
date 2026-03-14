@@ -86,6 +86,52 @@ async def create_query(
         "created_at": datetime.utcnow(),
     }
     result = db.queries.insert_one(doc)
+
+    # Notify assigned teacher and admins that a new student query was raised.
+    try:
+        teacher_notify_user_id = None
+        if teacher_id:
+            teacher_doc = db.users.find_one({
+                "$or": [
+                    {"user_id": teacher_id},
+                    {"_id": ObjectId(teacher_id) if ObjectId.is_valid(teacher_id) else "invalid"}
+                ]
+            }, {"user_id": 1})
+            if teacher_doc and teacher_doc.get("user_id"):
+                teacher_notify_user_id = teacher_doc["user_id"]
+
+        if teacher_notify_user_id:
+            db.notifications.insert_one({
+                "user_id": teacher_notify_user_id,
+                "role": "teacher",
+                "type": "student_query",
+                "title": "New Student Query",
+                "message": f"{student_name} asked a query in {group.get('name', 'your group')}",
+                "query_id": str(result.inserted_id),
+                "read": False,
+                "is_read": False,
+                "created_at": datetime.utcnow()
+            })
+
+        admins = list(db.users.find({"role": "admin"}, {"user_id": 1}).limit(20))
+        if admins:
+            db.notifications.insert_many([
+                {
+                    "user_id": a.get("user_id"),
+                    "role": "admin",
+                    "type": "student_query",
+                    "title": "Student Query Raised",
+                    "message": f"{student_name} asked a query in {group.get('name', 'a group')}",
+                    "query_id": str(result.inserted_id),
+                    "read": False,
+                    "is_read": False,
+                    "created_at": datetime.utcnow()
+                }
+                for a in admins if a.get("user_id")
+            ])
+    except Exception as ne:
+        logger.error(f"Query notification creation failed: {ne}")
+
     return {"id": str(result.inserted_id), "message": "Query sent successfully"}
 
 
@@ -167,6 +213,30 @@ async def reply_to_query(
             "replied_by": current_user.user_id,
         }}
     )
+
+    # Notify student that their query has been replied to.
+    try:
+        student_notify_id = q.get("student_id")
+        if student_notify_id and ObjectId.is_valid(student_notify_id):
+            stu_doc = db.users.find_one({"_id": ObjectId(student_notify_id)}, {"user_id": 1})
+            if stu_doc and stu_doc.get("user_id"):
+                student_notify_id = stu_doc["user_id"]
+
+        if student_notify_id:
+            db.notifications.insert_one({
+                "user_id": student_notify_id,
+                "role": "student",
+                "type": "query_reply",
+                "title": "Query Answered",
+                "message": f"Your query in {q.get('group_name', 'group')} has been answered.",
+                "query_id": query_id,
+                "read": False,
+                "is_read": False,
+                "created_at": datetime.utcnow()
+            })
+    except Exception as ne:
+        logger.error(f"Query reply notification failed: {ne}")
+
     return {"message": "Reply sent"}
 
 

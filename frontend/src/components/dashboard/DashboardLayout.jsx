@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Menu,
   X,
+  ChevronLeft,
+  ChevronRight,
   BookOpen,
   MessageSquare,
   FileText,
@@ -19,12 +21,13 @@ import {
   Award,
   ClipboardCheck,
   Users,
-  MessageCircle,
   Home,
   Sun,
   Moon,
   Monitor,
   Lock,
+  Check,
+  Trash2,
   Compass
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
@@ -50,29 +53,10 @@ const navItems = [
     path: "/dashboard"
   },
   {
-    id: "ai-chat",
-    label: "AI Chat Helper",
-    icon: MessageSquare,
-    path: "/ai-chat",
-    isChat: true
-  },
-  {
     id: "groups",
     label: "My Groups",
     icon: Users,
     path: "/my-groups"
-  },
-  {
-    id: "grades",
-    label: "My Grades",
-    icon: Award,
-    path: "/my-grades"
-  },
-  {
-    id: "test-center",
-    label: "Test Center",
-    icon: ClipboardCheck,
-    path: "/test"
   },
   {
     id: "book-to-bot",
@@ -81,22 +65,35 @@ const navItems = [
     path: "/book-to-bot"
   },
   {
-    id: "notes",
-    label: "Your Notes",
-    icon: StickyNote,
-    path: "/notes"
+    id: "ai-chat",
+    label: "AI Chat Helper",
+    icon: MessageSquare,
+    path: "/ai-chat",
+    isChat: true
   },
   {
-    id: "suggestions",
-    label: "Suggestions",
-    icon: MessageCircle,
-    path: "/suggestions"
+    id: "test-center",
+    label: "Test Center",
+    icon: ClipboardCheck,
+    path: "/test"
+  },
+  {
+    id: "grades",
+    label: "My Grades",
+    icon: Award,
+    path: "/my-grades"
   },
   {
     id: "career-test",
     label: "Career Analysis",
     icon: Compass,
     path: "/career-test"
+  },
+  {
+    id: "notes",
+    label: "Your Notes",
+    icon: StickyNote,
+    path: "/notes"
   },
   {
     id: "about-you",
@@ -117,11 +114,63 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
   const themeMenuRef = useRef(null);
   const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
   const [featuresLoaded, setFeaturesLoaded] = useState(false);
+  const [pendingTestCount, setPendingTestCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef(null);
 
   useEffect(() => {
     initTheme();
     fetchFeatures();
+    fetchPendingTestsBadge();
+    fetchNotifications();
   }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/api/notifications`, {
+        headers: getAuthHeader()
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(Array.isArray(data?.notifications) ? data.notifications : []);
+      setUnreadCount(Number(data?.unread_count || 0));
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  const markAsRead = async (notificationId) => {
+    try {
+      await authFetch(`${API_URL}/api/notifications/${notificationId}/read`, {
+        method: "POST",
+        headers: getAuthHeader()
+      });
+      fetchNotifications();
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    try {
+      await authFetch(`${API_URL}/api/notifications/read-all`, {
+        method: "POST",
+        headers: getAuthHeader()
+      });
+      fetchNotifications();
+    } catch {}
+  };
+
+  const deleteNotification = async (notificationId) => {
+    try {
+      await authFetch(`${API_URL}/api/notifications/${notificationId}`, {
+        method: "DELETE",
+        headers: getAuthHeader()
+      });
+      fetchNotifications();
+    } catch {}
+  };
 
   const fetchFeatures = async () => {
     try {
@@ -139,16 +188,44 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
     }
   };
 
+  const fetchPendingTestsBadge = async () => {
+    if (user?.role !== "student") {
+      setPendingTestCount(0);
+      return;
+    }
+    try {
+      const res = await authFetch(`${API_URL}/api/student/upcoming-tests`, {
+        headers: getAuthHeader()
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const tests = Array.isArray(data?.tests) ? data.tests : [];
+      const pending = tests.filter(t => (t?.status || "").toLowerCase() === "pending").length;
+      setPendingTestCount(pending);
+    } catch {
+      setPendingTestCount(0);
+    }
+  };
+
   // Mark nav items as locked based on feature flags (show all, don't filter)
-  const displayNavItems = navItems.map(item => ({
-    ...item,
-    isLocked: featureGatedItems[item.id] ? !features[featureGatedItems[item.id]] : false
-  }));
+  const displayNavItems = navItems.map(item => {
+    const badge = item.id === "test-center" && pendingTestCount > 0
+      ? (pendingTestCount > 9 ? "9+" : String(pendingTestCount))
+      : null;
+    return {
+      ...item,
+      badge,
+      isLocked: featureGatedItems[item.id] ? !features[featureGatedItems[item.id]] : false
+    };
+  });
 
   useEffect(() => {
     const handleClick = (e) => {
       if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
         setShowThemeMenu(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(e.target)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -200,7 +277,7 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
   }, [isStudent, theme, setTheme]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950 transition-colors duration-200 relative">
       {}
       <aside
         className={`flex-shrink-0 transition-all duration-300 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col ${sidebarOpen ? "w-64" : "w-20"
@@ -221,7 +298,7 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 title="Collapse sidebar"
               >
-                <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
             </>
           ) : (
@@ -368,6 +445,16 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
         </div>
       </aside >
 
+      {/* Desktop Edge Toggle for Sidebar */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="hidden lg:flex absolute top-1/2 -translate-y-1/2 z-40 w-7 h-14 items-center justify-center rounded-r-xl border border-l-0 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-300 hover:text-orange-600 hover:border-orange-300 transition-all"
+        style={{ left: sidebarOpen ? 256 : 80 }}
+        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+      >
+        {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+      </button>
+
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header with Theme Toggle */}
@@ -378,41 +465,102 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
               {user?.name || 'Student Dashboard'}
             </h2>
           </div>
-          
-          {/* Theme Switcher in Header (disabled for students) */}
-          {!isStudent && (
-            <div className="relative" ref={themeMenuRef}>
+
+          <div className="flex items-center gap-3">
+            <div className="relative" ref={notificationRef}>
               <button
-                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                onClick={() => setShowNotifications(!showNotifications)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-200 dark:border-gray-700"
-                title="Change theme"
+                title="Notifications"
               >
-                <ThemeIcon className="w-5 h-5" />
-                <span className="text-sm font-medium hidden sm:inline">Theme</span>
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
-              {showThemeMenu && (
-                <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                  {themeOptions.map((option) => {
-                    const OptionIcon = option.icon;
-                    return (
-                      <button
-                        key={option.value}
-                        onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          theme === option.value
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                        }`}
-                      >
-                        <OptionIcon className="w-4 h-4" />
-                        {option.label}
-                      </button>
-                    );
-                  })}
+
+              {showNotifications && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-hidden">
+                  <div className="p-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-orange-600 hover:underline">Mark all read</button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto max-h-72">
+                    {notifications.length === 0 ? (
+                      <p className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                    ) : (
+                      notifications.slice(0, 12).map((n) => (
+                        <div key={n.id} className={`p-3 border-b border-gray-100 dark:border-gray-700 last:border-0 ${!n.read ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <button
+                              onClick={() => {
+                                if (!n.read) markAsRead(n.id);
+                                if (n.link) navigate(n.link);
+                                setShowNotifications(false);
+                              }}
+                              className="text-left flex-1 min-w-0"
+                            >
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{n.title}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.message}</p>
+                            </button>
+                            <div className="flex items-center gap-1">
+                              {!n.read && (
+                                <button onClick={() => markAsRead(n.id)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Mark read">
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                </button>
+                              )}
+                              <button onClick={() => deleteNotification(n.id)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete">
+                                <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          )}
+
+            {/* Theme Switcher in Header (disabled for students) */}
+            {!isStudent && (
+              <div className="relative" ref={themeMenuRef}>
+                <button
+                  onClick={() => setShowThemeMenu(!showThemeMenu)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors border border-gray-200 dark:border-gray-700"
+                  title="Change theme"
+                >
+                  <ThemeIcon className="w-5 h-5" />
+                  <span className="text-sm font-medium hidden sm:inline">Theme</span>
+                </button>
+                {showThemeMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                    {themeOptions.map((option) => {
+                      const OptionIcon = option.icon;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            theme === option.value
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                          }`}
+                        >
+                          <OptionIcon className="w-4 h-4" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </header>
         )}
 

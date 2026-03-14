@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.models.schemas import NoteCreateRequest, Note, NotesListResponse, SuccessResponse
 from app.services.notes_service import notes_service
 from typing import Optional
+from pydantic import BaseModel
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,11 @@ router = APIRouter(
     prefix="/notes",
     tags=["Notes"]
 )
+
+
+class NoteUpdateRequest(BaseModel):
+    note_content: Optional[str] = None
+    heading: Optional[str] = None
 
 @router.post("/", response_model=Note)
 async def create_note(request: NoteCreateRequest):
@@ -76,8 +82,7 @@ async def get_notes(
 @router.patch("/{note_id}", response_model=Note)
 async def update_note(
     note_id: str,
-    note_content: Optional[str] = None,
-    heading: Optional[str] = None
+    request: NoteUpdateRequest
 ):
     """
     Update an existing note.
@@ -92,8 +97,8 @@ async def update_note(
         
         note = await notes_service.update_note(
             note_id=note_id,
-            note_content=note_content,
-            heading=heading
+            note_content=request.note_content,
+            heading=request.heading
         )
         
         return note

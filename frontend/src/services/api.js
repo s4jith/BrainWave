@@ -600,6 +600,7 @@ export const testService = {
           subject: params.subject,
           chapter: params.chapter || params.chapter_number,
           difficulty: params.difficulty,
+          bloom_level: params.bloom_level || null,
           mcq_count: params.mcq_count || 0,
           fillup_count: params.fillup_count || 0,
           true_false_count: params.true_false_count || 0,
@@ -1033,60 +1034,6 @@ export const testService = {
     } catch (error) {
       console.error("Staff Tests API Error:", error);
       return [];
-    }
-  },
-
-  async uploadAnswerSheet(testId, studentId, pdfFile) {
-    try {
-      console.log("📤 Upload Answer Sheet:", { testId, studentId, fileName: pdfFile?.name });
-
-      const formData = new FormData();
-      formData.append("test_id", testId);
-      formData.append("student_id", studentId);
-      formData.append("pdf_file", pdfFile);
-
-      const response = await authFetch(`${API_BASE_URL}/api/tests/submit`, {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("🚨 Upload Error Full Response:", JSON.stringify(errorData, null, 2));
-        throw new Error(errorData.detail || JSON.stringify(errorData) || `Upload failed: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Upload Answer Sheet Error:", error);
-      throw error;
-    }
-  },
-
-  getQuestionPaperUrl(filename) {
-    return `${API_BASE_URL}/api/tests/pdf/${filename}`;
-  },
-
-  async uploadAnswerSheet(testId, studentId, file) {
-    try {
-      const formData = new FormData();
-      formData.append("submission_file", file);
-      formData.append("test_id", testId);
-      formData.append("student_id", studentId);
-
-      const response = await authFetch(`${API_BASE_URL}/api/tests/submit`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload Answer API Error: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Upload Answer API Error:", error);
-      throw error;
     }
   },
 

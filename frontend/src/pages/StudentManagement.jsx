@@ -33,7 +33,8 @@ export default function StudentManagement() {
     ai_chatbot: "AI Chatbot",
     test_center: "Test Center",
     my_grades: "My Grades",
-    book_to_bot: "Book to Bot"
+    book_to_bot: "Book to Bot",
+    book_to_bot_doubt: "Book to Bot Doubt Button"
   };
 
   const openFeaturesModal = (student) => {

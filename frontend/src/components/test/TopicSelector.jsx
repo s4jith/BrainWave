@@ -49,6 +49,39 @@ export default function TopicSelector({
   const totalQuestions = (testConfig.mcq || 0) + (testConfig.fillup || 0) + (testConfig.true_false || 0) + (testConfig.short || 0);
   const totalMarks = (testConfig.mcq || 0) * 1 + (testConfig.fillup || 0) * 1 + (testConfig.true_false || 0) * 1 + (testConfig.short || 0) * 2;
 
+  const getAvailableCount = (type) => {
+    if (!selectedChapter || !selectedDifficulty) return 0;
+    const chapter = selectedChapter;
+    const difficulty = selectedDifficulty;
+
+    const typeMap = {
+      mcq: "mcq",
+      fillup: "fillup",
+      true_false: "true_false",
+      short: "short_answer"
+    };
+
+    const keyBase = typeMap[type];
+    if (!keyBase) return 0;
+
+    if (selectedBloomLevel) {
+      const bloomKey = `${keyBase}_${difficulty}_${selectedBloomLevel}`;
+      const bloomCounts = chapter.bloom_counts || {};
+      if (Object.prototype.hasOwnProperty.call(bloomCounts, bloomKey)) {
+        return bloomCounts[bloomKey] || 0;
+      }
+      if (Object.prototype.hasOwnProperty.call(chapter, bloomKey)) {
+        return chapter[bloomKey] || 0;
+      }
+      return 0;
+    }
+
+    return chapter[`${keyBase}_${difficulty}`] || chapter[`${keyBase}_count`] || 0;
+  };
+
+  const totalAvailableForSelection = getAvailableCount("mcq") + getAvailableCount("fillup") + getAvailableCount("true_false") + getAvailableCount("short");
+  const noQuestionsForSelection = step === 4 && selectedDifficulty && selectedBloomLevel && totalAvailableForSelection === 0;
+
   useEffect(() => {
     fetchSubjects();
   }, [classLevel]);
@@ -94,23 +127,25 @@ export default function TopicSelector({
 
   const handleSelectDifficulty = (difficulty) => {
     setSelectedDifficulty(difficulty);
-
-    if (selectedChapter) {
-      const diffSuffix = difficulty ? `_${difficulty}` : '';
-      const maxMcq = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
-      const maxFill = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
-      const maxTF = selectedChapter[`true_false${diffSuffix}`] || selectedChapter.true_false_count || 0;
-      const maxShort = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
-      setTestConfig(prev => ({
-        ...prev,
-        mcq: Math.min(5, maxMcq),
-        fillup: Math.min(5, maxFill),
-        true_false: Math.min(5, maxTF),
-        short: Math.min(5, maxShort)
-      }));
-    }
     // Don't auto-advance — wait for bloom level selection too
   };
+
+  useEffect(() => {
+    if (!selectedChapter || !selectedDifficulty) return;
+
+    const maxMcq = getAvailableCount("mcq");
+    const maxFill = getAvailableCount("fillup");
+    const maxTF = getAvailableCount("true_false");
+    const maxShort = getAvailableCount("short");
+
+    setTestConfig(prev => ({
+      ...prev,
+      mcq: Math.min(prev.mcq, maxMcq),
+      fillup: Math.min(prev.fillup, maxFill),
+      true_false: Math.min(prev.true_false, maxTF),
+      short: Math.min(prev.short, maxShort)
+    }));
+  }, [selectedChapter, selectedDifficulty, selectedBloomLevel]);
 
   const handleStartTest = () => {
     if (!selectedDifficulty || totalQuestions === 0) return;
@@ -136,15 +171,7 @@ export default function TopicSelector({
   };
 
   const handleConfigChange = (type, value) => {
-    
-    let max = 0;
-    if (selectedChapter) {
-      const diffSuffix = selectedDifficulty ? `_${selectedDifficulty}` : '';
-      if (type === 'mcq') max = selectedChapter[`mcq${diffSuffix}`] || selectedChapter.mcq_count || 0;
-      if (type === 'fillup') max = selectedChapter[`fillup${diffSuffix}`] || selectedChapter.fillup_count || 0;
-      if (type === 'true_false') max = selectedChapter[`true_false${diffSuffix}`] || selectedChapter.true_false_count || 0;
-      if (type === 'short') max = selectedChapter[`short_answer${diffSuffix}`] || selectedChapter.short_answer_count || 0;
-    }
+    const max = getAvailableCount(type);
 
     const newValue = Math.max(0, Math.min(value, max));
 
@@ -422,7 +449,7 @@ export default function TopicSelector({
                   </div>
 
                   {/* Continue button */}
-                  {selectedDifficulty && (
+                  {selectedDifficulty && selectedBloomLevel && (
                     <button
                       onClick={() => setStep(4)}
                       className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
@@ -447,13 +474,24 @@ export default function TopicSelector({
                     <div className="text-right">
                       <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Available ({selectedDifficulty})</span>
                       <div className="flex gap-3 mt-1 text-sm font-medium text-gray-600">
-                        <span>MCQ: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}</span>
-                        <span>Fill: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}</span>
-                        <span>T/F: {selectedChapter[`true_false_${selectedDifficulty}`] || 0}</span>
-                        <span>Short: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}</span>
+                        <span>MCQ: {getAvailableCount("mcq")}</span>
+                        <span>Fill: {getAvailableCount("fillup")}</span>
+                        <span>T/F: {getAvailableCount("true_false")}</span>
+                        <span>Short: {getAvailableCount("short")}</span>
                       </div>
                     </div>
                   </div>
+
+                  {noQuestionsForSelection && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-sm text-red-700 font-medium">
+                        No questions are available for this chapter at <span className="capitalize">{selectedDifficulty}</span> difficulty and <span className="capitalize">{selectedBloomLevel}</span> level.
+                      </p>
+                      <p className="text-xs text-red-600 mt-1">
+                        Please contact admin to add questions for this configuration.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
@@ -466,7 +504,7 @@ export default function TopicSelector({
                           </div>
                         </div>
                         <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
-                          Max: {selectedChapter[`mcq_${selectedDifficulty}`] || 0}
+                          Max: {getAvailableCount("mcq")}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -481,8 +519,8 @@ export default function TopicSelector({
                         <Button
                           variant="outline" size="sm"
                           onClick={() => handleConfigChange('mcq', (testConfig.mcq || 0) + 1)}
-                          disabled={(testConfig.mcq || 0) >= (selectedChapter[`mcq_${selectedDifficulty}`] || 0)}
-                          title={(testConfig.mcq || 0) >= (selectedChapter[`mcq_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                          disabled={(testConfig.mcq || 0) >= getAvailableCount("mcq")}
+                          title={(testConfig.mcq || 0) >= getAvailableCount("mcq") ? "Max available questions reached" : ""}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -499,7 +537,7 @@ export default function TopicSelector({
                           </div>
                         </div>
                         <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
-                          Max: {selectedChapter[`fillup_${selectedDifficulty}`] || 0}
+                          Max: {getAvailableCount("fillup")}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -514,8 +552,8 @@ export default function TopicSelector({
                         <Button
                           variant="outline" size="sm"
                           onClick={() => handleConfigChange('fillup', (testConfig.fillup || 0) + 1)}
-                          disabled={(testConfig.fillup || 0) >= (selectedChapter[`fillup_${selectedDifficulty}`] || 0)}
-                          title={(testConfig.fillup || 0) >= (selectedChapter[`fillup_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                          disabled={(testConfig.fillup || 0) >= getAvailableCount("fillup")}
+                          title={(testConfig.fillup || 0) >= getAvailableCount("fillup") ? "Max available questions reached" : ""}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -532,7 +570,7 @@ export default function TopicSelector({
                           </div>
                         </div>
                         <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
-                          Max: {selectedChapter[`true_false_${selectedDifficulty}`] || 0}
+                          Max: {getAvailableCount("true_false")}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -547,8 +585,8 @@ export default function TopicSelector({
                         <Button
                           variant="outline" size="sm"
                           onClick={() => handleConfigChange('true_false', (testConfig.true_false || 0) + 1)}
-                          disabled={(testConfig.true_false || 0) >= (selectedChapter[`true_false_${selectedDifficulty}`] || 0)}
-                          title={(testConfig.true_false || 0) >= (selectedChapter[`true_false_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                          disabled={(testConfig.true_false || 0) >= getAvailableCount("true_false")}
+                          title={(testConfig.true_false || 0) >= getAvailableCount("true_false") ? "Max available questions reached" : ""}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -565,7 +603,7 @@ export default function TopicSelector({
                           </div>
                         </div>
                         <span className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500">
-                          Max: {selectedChapter[`short_answer_${selectedDifficulty}`] || 0}
+                          Max: {getAvailableCount("short")}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -580,8 +618,8 @@ export default function TopicSelector({
                         <Button
                           variant="outline" size="sm"
                           onClick={() => handleConfigChange('short', (testConfig.short || 0) + 1)}
-                          disabled={(testConfig.short || 0) >= (selectedChapter[`short_answer_${selectedDifficulty}`] || 0)}
-                          title={(testConfig.short || 0) >= (selectedChapter[`short_answer_${selectedDifficulty}`] || 0) ? "Max available questions reached" : ""}
+                          disabled={(testConfig.short || 0) >= getAvailableCount("short")}
+                          title={(testConfig.short || 0) >= getAvailableCount("short") ? "Max available questions reached" : ""}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -646,7 +684,7 @@ export default function TopicSelector({
             <Button
               onClick={handleStartTest}
               className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
-              disabled={totalQuestions === 0}
+              disabled={totalQuestions === 0 || noQuestionsForSelection}
             >
               <Brain className="w-4 h-4" />
               Start Test

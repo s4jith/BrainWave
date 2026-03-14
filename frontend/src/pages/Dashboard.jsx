@@ -15,9 +15,9 @@ import {
 import useUserStore from "../stores/userStore";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
-import StickyNotesCard from "../components/dashboard/StickyNotesCard";
 import quotesData from "../data/quotes.json";
 import authFetch from "../utils/authFetch";
+import { testService } from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -30,7 +30,7 @@ const quickActions = [
     color: "bg-orange-600",
     bgColor: "bg-orange-50 dark:bg-orange-900/25",
     textColor: "text-orange-600 dark:text-orange-300",
-    route: "/my-tests",
+    route: "/test",
     featureKey: "test_center"
   },
   {
@@ -84,6 +84,8 @@ export default function Dashboard() {
   const [activityData, setActivityData] = useState([]);
   const [loadingProgress, setLoadingProgress] = useState(true);
   const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(true);
 
   const getDailyQuote = () => {
     
@@ -112,6 +114,7 @@ export default function Dashboard() {
     fetchProgressData();
     logUserActivity();
     fetchFeatures();
+    fetchRecentNotes();
   }, [user.id]);
 
   const fetchFeatures = async () => {
@@ -177,16 +180,44 @@ export default function Dashboard() {
   const fetchPendingTests = async () => {
     try {
       setLoadingTests(true);
-      const response = await authFetch(`${API_BASE}/api/tests/student/${user.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        const pending = (data.tests || []).filter(test => test.status !== 'submitted');
-        setPendingTests(pending.slice(0, 3)); 
-      }
+      const staffTests = await testService.getStaffTests(user.preferredSubject, null, user.id);
+      const now = new Date();
+      const parseDate = (s) => {
+        if (!s) return null;
+        const d = new Date(String(s).replace(" ", "T"));
+        return Number.isNaN(d.valueOf()) ? null : d;
+      };
+
+      const pending = (Array.isArray(staffTests) ? staffTests : []).filter((test) => {
+        const start = parseDate(test.start_date);
+        const due = parseDate(test.due_date);
+        const isActive = (!start || now >= start) && (!due || now <= due);
+        return isActive && !test.has_attempted;
+      });
+
+      setPendingTests(pending.slice(0, 3));
     } catch (err) {
+      setPendingTests([]);
     } finally {
       setLoadingTests(false);
+    }
+  };
+
+  const fetchRecentNotes = async () => {
+    try {
+      setLoadingNotes(true);
+      const res = await authFetch(`${API_BASE}/api/notes/${user.id}`);
+      if (!res.ok) {
+        setRecentNotes([]);
+        return;
+      }
+      const data = await res.json();
+      const notes = Array.isArray(data?.notes) ? data.notes : [];
+      setRecentNotes(notes.slice(0, 3));
+    } catch {
+      setRecentNotes([]);
+    } finally {
+      setLoadingNotes(false);
     }
   };
 
@@ -362,7 +393,40 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <StickyNotesCard />
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Recent Notes</h3>
+                <button
+                  onClick={() => navigate('/notes')}
+                  className="text-sm text-orange-600 dark:text-orange-300 hover:underline"
+                >
+                  Open Notes
+                </button>
+              </div>
+
+              {loadingNotes ? (
+                <div className="text-sm text-gray-500 dark:text-gray-400 py-3">Loading notes...</div>
+              ) : recentNotes.length === 0 ? (
+                <div className="text-sm text-gray-500 dark:text-gray-400 py-3">
+                  No notes yet. Start taking notes in Book to Bot.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentNotes.map((note) => (
+                    <button
+                      key={note.id}
+                      onClick={() => navigate('/notes')}
+                      className="w-full text-left px-3 py-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-gray-800 dark:text-gray-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
+                      title={note.heading || note.note_content || "Untitled Note"}
+                    >
+                      <span className="text-sm font-medium line-clamp-1">
+                        {note.heading || "Untitled Note"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between">
@@ -378,7 +442,7 @@ export default function Dashboard() {
             </div>
 
             <div
-              onClick={() => navigate("/suggestions")}
+              onClick={() => navigate("/about-you?tab=suggestions")}
               className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-2xl p-6 cursor-pointer hover:shadow-lg transition-shadow"
             >
               <div className="flex items-center justify-between text-white">

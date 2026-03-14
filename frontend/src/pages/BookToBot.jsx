@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import PDFViewer from "../features/pdf/PDFViewer";
 import LessonNavigation from "../features/lessons/LessonNavigation";
 import UserSettingsPanel from "../components/UserSettingsPanel";
-import ChatbotPanel from "../components/dashboard/ChatbotPanel";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import { SUBJECTS_WITH_RAG } from "../constants/lessons";
-import { Menu, X, Settings, MessageCircle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
+import { Menu, X, Settings, ArrowLeft, BookOpen, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
@@ -25,21 +23,9 @@ function BookToBot() {
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [chatbotOpen, setChatbotOpen] = useState(false);
-  const [aiChatUnlocked, setAiChatUnlocked] = useState(false);
-
-  const hasAISupport = currentLesson?.has_ai_support || SUBJECTS_WITH_RAG.includes(user.preferredSubject);
 
   useEffect(() => {
     fetchAvailableSubjects();
-    if (user?.role === "student") {
-      authFetch(`${API_BASE}/api/student/my-features`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) setAiChatUnlocked(data.features?.ai_chatbot === true); })
-        .catch(() => {});
-    } else {
-      setAiChatUnlocked(true); // teachers/admins always have access
-    }
   }, [user.classLevel]);
 
   useEffect(() => {
@@ -130,7 +116,7 @@ function BookToBot() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
+    <div className="flex h-full w-full overflow-hidden bg-background relative">
       <div
         className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
           } overflow-hidden border-r`}
@@ -190,6 +176,15 @@ function BookToBot() {
         </div>
       </div>
 
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="hidden lg:flex absolute top-1/2 -translate-y-1/2 z-40 w-7 h-14 items-center justify-center rounded-r-xl border border-l-0 border-gray-200 bg-white text-gray-500 hover:text-orange-600 hover:border-orange-300 transition-all"
+        style={{ left: sidebarOpen ? 320 : 12 }}
+        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+      >
+        {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+      </button>
+
       <div className="flex-1 flex flex-col">
         <div className="px-6 py-4 border-b bg-card flex items-center gap-4">
           <Button
@@ -230,30 +225,6 @@ function BookToBot() {
               <p className="text-xs font-medium">{user.preferredSubject}</p>
             </div>
 
-            {aiChatUnlocked ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setChatbotOpen(true)}
-                className="bg-primary hover:bg-primary/90"
-                disabled={!hasAISupport}
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                AI Chat
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="opacity-50 cursor-not-allowed"
-                title="AI Chat is locked for your account"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                AI Chat
-              </Button>
-            )}
-
             <Button
               variant="outline"
               size="icon"
@@ -288,11 +259,6 @@ function BookToBot() {
       <UserSettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-      />
-
-      <ChatbotPanel
-        isOpen={chatbotOpen && aiChatUnlocked}
-        onClose={() => setChatbotOpen(false)}
       />
     </div>
   );

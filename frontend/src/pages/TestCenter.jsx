@@ -322,7 +322,12 @@ export default function TestCenter() {
                                 </div>
                               ) : test.has_attempted ? (
                                 <button
-                                  onClick={() => navigate(`/assessments/${test.id}`)}
+                                  onClick={() => navigate("/my-grades", {
+                                    state: {
+                                      focusAssessmentId: test.id,
+                                      focusSource: "staff_test"
+                                    }
+                                  })}
                                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-colors"
                                 >
                                   View Results

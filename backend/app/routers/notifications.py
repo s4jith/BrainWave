@@ -39,6 +39,27 @@ def cleanup_old_notifications():
     except Exception as e:
         logger.error(f"Error cleaning up notifications: {e}")
 
+
+def _safe_iso(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _get_user_id_candidates(current_user: TokenData):
+    candidates = [current_user.user_id]
+    try:
+        user_doc = db.users.find_one({"user_id": current_user.user_id}, {"_id": 1})
+        if user_doc:
+            mongo_id = str(user_doc.get("_id"))
+            if mongo_id and mongo_id not in candidates:
+                candidates.append(mongo_id)
+    except Exception:
+        pass
+    return candidates
+
 def is_dismissed(title: str, role: str, user_id: str = None):
     """Check if a notification with this title was dismissed today."""
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -268,10 +289,14 @@ async def get_notifications(
 
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
+        user_ids = _get_user_id_candidates(current_user)
+
         if current_user.role == UserRole.ADMIN:
             query = {
                 "$or": [
-                    {"user_id": current_user.user_id},
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"for_admin": True},
                     {"role": "admin"},
                     {"role": {"$exists": False}, "user_id": {"$exists": False}}
                 ]
@@ -279,20 +304,22 @@ async def get_notifications(
         elif current_user.role == UserRole.TEACHER:
             query = {
                 "$or": [
-                    {"user_id": current_user.user_id},
-                    {"role": "teacher", "target_user_id": current_user.user_id}
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"role": "teacher", "target_user_id": {"$in": user_ids}}
                 ]
             }
         elif current_user.role == UserRole.HEAD:
             query = {
                 "$or": [
-                    {"user_id": current_user.user_id},
-                    {"role": "head", "target_user_id": current_user.user_id},
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"role": "head", "target_user_id": {"$in": user_ids}},
                     {"role": "head", "target_user_id": {"$exists": False}},
                 ]
             }
         else:
-            query = {"user_id": current_user.user_id}
+            query = {"user_id": {"$in": user_ids}}
 
         stored_notifications = list(db.notifications.find(query).sort("created_at", -1).limit(limit))
 
@@ -300,6 +327,7 @@ async def get_notifications(
         for n in stored_notifications:
             created_at = n.get("created_at")
             read_at = n.get("read_at")
+            read_flag = n.get("read", n.get("is_read", False))
 
             result.append({
                 "id": str(n["_id"]),
@@ -307,10 +335,10 @@ async def get_notifications(
                 "message": n.get("message", ""),
                 "type": n.get("type", "info"),
                 "category": n.get("category", "general"),
-                "read": n.get("read", False),
+                "read": bool(read_flag),
                 "saved": n.get("saved", False),
-                "created_at": created_at.isoformat() if created_at else None,
-                "read_at": read_at.isoformat() if read_at else None,
+                "created_at": _safe_iso(created_at),
+                "read_at": _safe_iso(read_at),
                 "expires_in_days": 7 - (datetime.utcnow() - read_at).days if read_at and not n.get("saved") else None
             })
 
@@ -368,7 +396,7 @@ async def get_notifications(
                     "expires_in_days": None
                 })
 
-        unread_count = len([n for n in result if not n.get("read")])
+        unread_count = len([n for n in result if not bool(n.get("read"))])
 
         return {
             "notifications": result[:limit],
@@ -393,7 +421,7 @@ async def mark_notification_read(
 
         result = db.notifications.update_one(
             {"_id": ObjectId(notification_id)},
-            {"$set": {"read": True, "read_at": datetime.utcnow()}}
+            {"$set": {"read": True, "is_read": True, "read_at": datetime.utcnow()}}
         )
 
         return {"success": True, "modified": result.modified_count > 0}
@@ -472,36 +500,43 @@ async def mark_all_notifications_read(
     try:
         now = datetime.utcnow()
 
+        user_ids = _get_user_id_candidates(current_user)
+
+        unread_match = {"$or": [{"read": False}, {"is_read": False}, {"read": {"$exists": False}, "is_read": {"$exists": False}}]}
+
         if current_user.role == UserRole.ADMIN:
-            query = {
+            recipient_match = {
                 "$or": [
-                    {"user_id": current_user.user_id},
-                    {"role": "admin"}
-                ],
-                "read": False
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"role": "admin"},
+                    {"for_admin": True}
+                ]
             }
         elif current_user.role == UserRole.TEACHER:
-            query = {
+            recipient_match = {
                 "$or": [
-                    {"user_id": current_user.user_id},
-                    {"role": "teacher", "target_user_id": current_user.user_id}
-                ],
-                "read": False
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"role": "teacher", "target_user_id": {"$in": user_ids}}
+                ]
             }
         elif current_user.role == UserRole.HEAD:
-            query = {
+            recipient_match = {
                 "$or": [
-                    {"user_id": current_user.user_id},
-                    {"role": "head", "target_user_id": current_user.user_id}
-                ],
-                "read": False
+                    {"user_id": {"$in": user_ids}},
+                    {"target_user_id": {"$in": user_ids}},
+                    {"role": "head", "target_user_id": {"$in": user_ids}}
+                ]
             }
         else:
-            query = {"user_id": current_user.user_id, "read": False}
+            recipient_match = {"user_id": {"$in": user_ids}}
+
+        query = {"$and": [recipient_match, unread_match]}
 
         result = db.notifications.update_many(
             query,
-            {"$set": {"read": True, "read_at": now}}
+            {"$set": {"read": True, "is_read": True, "read_at": now}}
         )
 
         return {"success": True, "modified_count": result.modified_count}

@@ -79,6 +79,8 @@ async def create_suggestion(request: CreateSuggestionRequest):
                 "suggestion_id": str(result.inserted_id),
                 "category": request.category,
                 "for_admin": True,
+                "role": "admin",
+                "read": False,
                 "is_read": False,
                 "created_at": datetime.utcnow(),
                 "created_by": request.student_id,
@@ -95,6 +97,8 @@ async def create_suggestion(request: CreateSuggestionRequest):
                 "message": "Your suggestion has been submitted and will be reviewed by admin.",
                 "suggestion_id": str(result.inserted_id),
                 "for_admin": False,
+                "role": "student",
+                "read": False,
                 "is_read": False,
                 "created_at": datetime.utcnow()
             })
@@ -227,6 +231,8 @@ async def respond_to_suggestion(
                     "message": f"Admin responded to your suggestion: {response[:80]}",
                     "suggestion_id": suggestion_id,
                     "for_admin": False,
+                    "role": "student",
+                    "read": False,
                     "is_read": False,
                     "created_at": datetime.utcnow()
                 })

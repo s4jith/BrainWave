@@ -138,7 +138,7 @@ export default function StudentDashboard() {
             description: "AI & Staff tests",
             icon: CheckCircle,
             color: "bg-purple-500",
-            onClick: () => navigate("/my-tests"),
+            onClick: () => navigate("/test"),
             featureKey: "test_center"
         },
         {
@@ -161,7 +161,7 @@ export default function StudentDashboard() {
             description: "Share feedback",
             icon: MessageCircle,
             color: "bg-rose-500",
-            onClick: () => navigate("/suggestions")
+            onClick: () => navigate("/about-you?tab=suggestions")
         },
         {
             title: "Statistics",

@@ -87,42 +87,125 @@ class AnalyticsService:
                 max_score = sub.get("max_score", 0)
                 sub_status = sub.get("status", "submitted")
 
-                # Determine evaluation_status for the student view
-                if sub_status == "graded":
-                    eval_status = "completed"
-                else:
-                    eval_status = "pending_manual_review"
+                # Determine evaluation_status for the student view.
+                # This may be refined after per-question evaluation synthesis.
+                eval_status = "completed" if sub_status == "graded" else "pending_manual_review"
+
+                def _norm_text(value: Any) -> str:
+                    return str(value or "").strip().lower()
+
+                def _is_truthy_text(value: Any) -> Optional[bool]:
+                    txt = _norm_text(value)
+                    if txt in {"true", "t", "1", "yes", "a"}:
+                        return True
+                    if txt in {"false", "f", "0", "no", "b"}:
+                        return False
+                    return None
+
+                def _auto_eval_objective(question: Dict[str, Any], answer: Dict[str, Any]) -> Optional[bool]:
+                    qtype = _norm_text(question.get("type") or question.get("question_type"))
+                    student_text = _norm_text(answer.get("answer_text"))
+                    student_bool = answer.get("answer_bool")
+
+                    if qtype in {"true_false", "truefalse", "boolean"}:
+                        correct_bool = question.get("correct_answer_bool")
+                        if correct_bool is not None and student_bool is not None:
+                            return bool(student_bool) == bool(correct_bool)
+                        inferred_student = _is_truthy_text(answer.get("answer_text"))
+                        if correct_bool is not None and inferred_student is not None:
+                            return inferred_student == bool(correct_bool)
+                        return None
+
+                    if qtype in {"fillup", "fill_up", "fill_in_the_blank"}:
+                        raw = question.get("correct_answer_text") or question.get("correct_answer") or question.get("answer_text") or ""
+                        options = []
+                        if isinstance(raw, list):
+                            options = [_norm_text(v) for v in raw]
+                        else:
+                            options = [_norm_text(v) for v in str(raw).replace(",", "|").split("|")]
+                        options = [v for v in options if v]
+                        if not options:
+                            return None
+                        return student_text in options
+
+                    if qtype == "mcq":
+                        candidates = set()
+                        for key in ["correct_answer", "correct_answer_text", "answer_text"]:
+                            val = question.get(key)
+                            if val is not None:
+                                candidates.add(_norm_text(val))
+
+                        options = question.get("options")
+                        correct_key = question.get("correct_answer")
+                        if isinstance(options, dict) and correct_key in options:
+                            candidates.add(_norm_text(options.get(correct_key)))
+                        elif isinstance(options, list):
+                            for opt in options:
+                                if isinstance(opt, dict):
+                                    if opt.get("is_correct") is True:
+                                        candidates.add(_norm_text(opt.get("text") or opt.get("value") or opt.get("option")))
+
+                        candidates = {c for c in candidates if c}
+                        if not candidates:
+                            return None
+                        return student_text in candidates
+
+                    return None
 
                 # Build per-question evaluations from answers + question data
                 evaluations = sub.get("evaluation_details", [])
                 if not evaluations and assessment:
-                    questions_map = {q.get("id"): q for q in assessment.get("questions", [])}
+                    questions_map = {str(q.get("id")): q for q in assessment.get("questions", [])}
                     feedback_map = sub.get("feedback", {})  # question_id → score
                     for ans in sub.get("answers", []):
                         qid = ans.get("question_id")
-                        q = questions_map.get(qid, {})
+                        qid_str = str(qid)
+                        q = questions_map.get(qid_str, {})
                         awarded = feedback_map.get(qid)
-                        max_pts = q.get("points", 1)
+                        if awarded is None:
+                            awarded = feedback_map.get(qid_str)
+                        if awarded is None and ans.get("question_number") is not None:
+                            awarded = feedback_map.get(ans.get("question_number"))
+                        max_pts = int(q.get("points", q.get("marks", 1)) or 1)
                         is_correct = None
+                        evaluation_status = "pending"
+
                         if awarded is not None:
-                            is_correct = int(awarded) >= max_pts
+                            awarded = int(awarded)
+                            is_correct = awarded >= max_pts
+                            evaluation_status = "completed"
+                        else:
+                            auto_result = _auto_eval_objective(q, ans)
+                            if auto_result is not None:
+                                is_correct = auto_result
+                                awarded = max_pts if auto_result else 0
+                                evaluation_status = "completed"
+                            else:
+                                awarded = 0
+
                         evaluations.append({
                             "question_id": qid,
                             "question_text": q.get("question_text") or q.get("text", ""),
                             "student_answer": ans.get("answer_text") or str(ans.get("answer_bool", "")) or "",
                             "correct_answer": q.get("correct_answer_text", ""),
-                            "score": int(awarded) if awarded is not None else 0,
+                            "score": int(awarded),
                             "max_score": max_pts,
                             "is_correct": is_correct,
-                            "evaluation_status": "completed" if awarded is not None else "pending",
+                            "evaluation_status": evaluation_status,
                             "topic": q.get("topic") or q.get("chapter_name", ""),
                         })
 
+                if sub_status != "graded":
+                    has_pending = any(ev.get("evaluation_status") == "pending" for ev in evaluations)
+                    eval_status = "pending_manual_review" if has_pending else "completed"
+
                 # Build topic_analytics from submission's saved topic_analytics or derive from evaluations
                 saved_topic_analytics = sub.get("topic_analytics", {})
-                if not saved_topic_analytics and evaluations:
+                if evaluations and (sub_status != "graded" or not saved_topic_analytics):
                     tp: Dict[str, Any] = {}
                     for ev in evaluations:
+                        if ev.get("evaluation_status") == "pending":
+                            continue
                         t = ev.get("topic", "") or "General"
                         if t not in tp:
                             tp[t] = {"correct": 0, "total": 0, "points": 0, "max_points": 0}
@@ -173,22 +256,17 @@ class AnalyticsService:
                 total_score += score
                 total_max += max_score
                 
-                # Feed global topic_performance from answer-level data
-                if assessment:
-                    questions_map = {q.get("id"): q for q in assessment.get("questions", [])}
-                    feedback_map = sub.get("feedback", {})
-                    for ans in sub.get("answers", []):
-                        qid = ans.get("question_id")
-                        q = questions_map.get(qid, {})
-                        topic = q.get("topic") or q.get("chapter_name") or assessment.get("subject", "General")
-                        if topic not in topic_performance:
-                            topic_performance[topic] = {"correct": 0, "total": 0, "scores": []}
-                        topic_performance[topic]["total"] += 1
-                        awarded = feedback_map.get(qid)
-                        max_pts = q.get("points", 1)
-                        if awarded is not None and int(awarded) >= max_pts:
-                            topic_performance[topic]["correct"] += 1
-                        topic_performance[topic]["scores"].append(int(awarded) if awarded is not None else 0)
+                # Feed global topic_performance from completed per-question evaluations only.
+                for ev in evaluations:
+                    if ev.get("evaluation_status") == "pending":
+                        continue
+                    topic = ev.get("topic") or (assessment.get("subject", "General") if assessment else "General")
+                    if topic not in topic_performance:
+                        topic_performance[topic] = {"correct": 0, "total": 0, "scores": []}
+                    topic_performance[topic]["total"] += 1
+                    if ev.get("is_correct") is True:
+                        topic_performance[topic]["correct"] += 1
+                    topic_performance[topic]["scores"].append(ev.get("score", 0))
 
             test_sessions_collection = mongodb.db["test_sessions"]
             ai_student_ids = [student_id]

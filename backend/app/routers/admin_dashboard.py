@@ -1159,7 +1159,7 @@ async def get_groups():
                 "student_ids": g.get("student_ids", []),
                 "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
                 "student_count": len(g.get("student_ids", [])),
-                "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True}, **g.get("feature_flags", {})},
+                "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True, "book_to_bot_doubt": True}, **g.get("feature_flags", {})},
                 "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
             })
         
@@ -1340,6 +1340,7 @@ DEFAULT_FEATURE_FLAGS = {
     "test_center": False,
     "my_grades": False,
     "book_to_bot": True,  # Unlocked by default; admin/group can lock it
+    "book_to_bot_doubt": True,
 }
 
 class FeatureFlagsUpdate(BaseModel):
@@ -1347,6 +1348,7 @@ class FeatureFlagsUpdate(BaseModel):
     test_center: Optional[bool] = None
     my_grades: Optional[bool] = None
     book_to_bot: Optional[bool] = None
+    book_to_bot_doubt: Optional[bool] = None
 
 
 @router.patch("/groups/{group_id}/features")

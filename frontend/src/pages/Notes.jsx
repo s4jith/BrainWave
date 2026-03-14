@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     StickyNote,
@@ -15,11 +15,15 @@ import {
     Save
 } from 'lucide-react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
-import useNotesStore from '../stores/notesStore';
+import useUserStore from '../stores/userStore';
+import { notesService } from '../services/api';
 
 export default function Notes() {
     const navigate = useNavigate();
-    const { notes, addNote, updateNote, deleteNote, searchNotes } = useNotesStore();
+    const { user } = useUserStore();
+    const [notes, setNotes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [apiError, setApiError] = useState('');
 
     const [searchQuery, setSearchQuery] = useState('');
     const [filterSource, setFilterSource] = useState('all');
@@ -27,11 +31,51 @@ export default function Notes() {
     const [editingNote, setEditingNote] = useState(null);
     const [newNote, setNewNote] = useState({ title: '', content: '' });
 
-    const filteredNotes = searchQuery
-        ? searchNotes(searchQuery)
-        : filterSource === 'all'
-            ? notes
-            : notes.filter(n => n.source === filterSource);
+    const normalizeNote = (note) => {
+        const looksManual = (note.highlight_text || '').trim() === '__manual__';
+        const source = looksManual ? 'Manual' : 'Book to Bot';
+        return {
+            id: note.id,
+            title: note.heading || 'Untitled Note',
+            content: note.note_content || '',
+            source,
+            createdAt: note.created_at,
+            sourceDetails: `${note.subject || 'Subject'} • Chapter ${note.chapter || 1} • Page ${note.page_number || 1}`
+        };
+    };
+
+    const fetchNotes = async () => {
+        if (!user?.id) return;
+        setLoading(true);
+        setApiError('');
+        try {
+            const data = await notesService.getNotes(user.id);
+            const mapped = (data?.notes || []).map(normalizeNote);
+            setNotes(mapped);
+        } catch (error) {
+            setApiError(error?.message || 'Failed to load notes');
+            setNotes([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotes();
+    }, [user?.id]);
+
+    const filteredNotes = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+        return notes.filter((n) => {
+            const sourceMatch = filterSource === 'all' ? true : n.source === filterSource;
+            if (!sourceMatch) return false;
+            if (!normalizedQuery) return true;
+            return (
+                (n.title || '').toLowerCase().includes(normalizedQuery) ||
+                (n.content || '').toLowerCase().includes(normalizedQuery)
+            );
+        });
+    }, [notes, searchQuery, filterSource]);
 
     const getSourceIcon = (source) => {
         switch (source) {
@@ -56,24 +100,58 @@ export default function Notes() {
     };
 
     const handleAddNote = () => {
-        if (newNote.title.trim() || newNote.content.trim()) {
-            addNote({
-                title: newNote.title || 'Untitled Note',
-                content: newNote.content,
-                source: 'Manual'
-            });
-            setNewNote({ title: '', content: '' });
-            setShowAddNote(false);
-        }
+        if (!(newNote.title.trim() || newNote.content.trim())) return;
+
+        const create = async () => {
+            try {
+                setApiError('');
+                await notesService.createNote({
+                    student_id: user.id,
+                    class_level: user.classLevel || 10,
+                    subject: user.preferredSubject || 'General',
+                    chapter: 1,
+                    page_number: 1,
+                    highlight_text: '__manual__',
+                    heading: newNote.title || 'Untitled Note',
+                    note_content: newNote.content || ''
+                });
+                setNewNote({ title: '', content: '' });
+                setShowAddNote(false);
+                await fetchNotes();
+            } catch (error) {
+                setApiError(error?.message || 'Failed to create note');
+            }
+        };
+
+        create();
     };
 
     const handleUpdateNote = () => {
         if (editingNote) {
-            updateNote(editingNote.id, {
-                title: editingNote.title,
-                content: editingNote.content
-            });
-            setEditingNote(null);
+            const update = async () => {
+                try {
+                    setApiError('');
+                    await notesService.updateNote(editingNote.id, {
+                        heading: editingNote.title,
+                        note_content: editingNote.content
+                    });
+                    setEditingNote(null);
+                    await fetchNotes();
+                } catch (error) {
+                    setApiError(error?.message || 'Failed to update note');
+                }
+            };
+            update();
+        }
+    };
+
+    const handleDeleteNote = async (noteId) => {
+        try {
+            setApiError('');
+            await notesService.deleteNote(noteId);
+            await fetchNotes();
+        } catch (error) {
+            setApiError(error?.message || 'Failed to delete note');
         }
     };
 
@@ -103,6 +181,12 @@ export default function Notes() {
                     </button>
                 </div>
 
+                {apiError && (
+                    <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700">
+                        {apiError}
+                    </div>
+                )}
+
                 {}
                 <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 relative">
@@ -128,7 +212,11 @@ export default function Notes() {
                 </div>
 
                 {/* Notes Grid */}
-                {filteredNotes.length === 0 ? (
+                {loading ? (
+                    <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+                        <p className="text-gray-500">Loading notes...</p>
+                    </div>
+                ) : filteredNotes.length === 0 ? (
                     <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
                         <StickyNote className="w-16 h-16 mx-auto text-gray-300 mb-4" />
                         <h3 className="text-lg font-semibold text-gray-800 mb-2">No Notes Yet</h3>
@@ -162,7 +250,7 @@ export default function Notes() {
                                             <Edit3 className="w-4 h-4 text-gray-500" />
                                         </button>
                                         <button
-                                            onClick={() => deleteNote(note.id)}
+                                            onClick={() => handleDeleteNote(note.id)}
                                             className="p-1.5 hover:bg-red-50 rounded-lg"
                                         >
                                             <Trash2 className="w-4 h-4 text-red-500" />

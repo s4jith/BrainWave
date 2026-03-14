@@ -4,7 +4,7 @@ Annotation Router - Text annotation with AI assistance (Define, Elaborate, Flow)
 Supports multilingual input/output - responds in the same language as the selected text.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
 from app.services.enhanced_rag_service import enhanced_rag_service
@@ -453,41 +453,3 @@ Current search: "{request.selected_text}" in Class {request.class_level} {reques
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/quick-define")
-async def quick_define(
-    text: str = Query(..., description="Text to define"),
-    class_level: int = Query(..., ge=1, le=12),
-    subject: str = Query(..., description="Subject name")
-):
-    """
-    [FAST] Ultra-fast definition endpoint (optimized for speed).
-    
-    Returns just the definition without extra processing.
-    Perfect for quick lookups while reading.
-    """
-    try:
-        answer, source_chunks = await enhanced_rag_service.answer_question_basic(
-            question=f"What is {text}?",
-            subject=subject,
-            student_class=class_level,
-            chapter=None
-        )
-        
-        if source_chunks:
-            context = source_chunks[0].get('text', '')[:300]
-            
-            prompt = f"""Give a one-sentence definition of "{text}" based on this textbook excerpt:
-
-{context}
-
-Definition:"""
-            
-            definition = gemini_service.generate_response(prompt)
-            
-            return {"definition": definition.strip()}
-        else:
-            return {"definition": f"Term '{text}' not found in textbook."}
-    
-    except Exception as e:
-        logger.error(f"Quick define error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

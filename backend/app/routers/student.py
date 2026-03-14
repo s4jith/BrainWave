@@ -25,6 +25,7 @@ DEFAULT_FEATURE_FLAGS = {
     "test_center": False,
     "my_grades": False,
     "book_to_bot": True,  # Unlocked by default; admin/group can lock it
+    "book_to_bot_doubt": True,  # Extra lock for in-book doubt button
 }
 
 def _get_student_id_variants(current_user: TokenData) -> list:
@@ -43,6 +44,22 @@ def _get_student_id_variants(current_user: TokenData) -> list:
             ids.append(mongo_id)
     
     return ids
+
+
+def _safe_iso(value: Any) -> Optional[str]:
+    """Return ISO string for datetime-like values while tolerating already-string fields."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+    return str(value)
 
 @router.get("/groups")
 async def get_student_groups(current_user: TokenData = Depends(require_role([UserRole.STUDENT]))):
@@ -121,7 +138,7 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
             ),
             "status": {"$in": ["published", "active"]}
         }
-        assessments = list(db.assessments.find(assessment_query).sort("created_at", -1).limit(20))
+        assessments = list(db.assessments.find(assessment_query).sort("created_at", -1).limit(50))
         for a in assessments:
             submission = db.submissions.find_one({
                 "assessment_id": str(a["_id"]),
@@ -135,14 +152,12 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
                 "class_level": a.get("class_level"),
                 "total_marks": a.get("total_points", 0),
                 "duration_minutes": a.get("duration_minutes", 60),
-                "deadline": a.get("end_datetime").isoformat() if a.get("end_datetime") else (
-                    a.get("due_date").isoformat() if a.get("due_date") else None
-                ),
-                "start_datetime": a.get("start_datetime").isoformat() if a.get("start_datetime") else None,
+                "deadline": _safe_iso(a.get("end_datetime")) or _safe_iso(a.get("due_date")),
+                "start_datetime": _safe_iso(a.get("start_datetime")),
                 "status": "submitted" if submission else "pending",
                 "score": submission.get("score") if submission else None,
                 "source": "assessment",
-                "created_at": a.get("created_at").isoformat() if a.get("created_at") else None
+                "created_at": _safe_iso(a.get("created_at"))
             })
 
         # ── 2. Query the legacy `tests` collection ──
@@ -150,13 +165,13 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
             tests_query = {
                 "$or": [
                     {"group_id": {"$in": group_ids}},
-                    {"group_ids": {"$elemMatch": {"$in": group_ids}}},
+                    {"group_ids": {"$in": group_ids}},
                     {"student_ids": {"$in": student_ids}}
                 ],
-                "status": {"$in": ["active", "published", "upcoming"]}
+                "status": {"$in": ["active", "published", "upcoming", "scheduled"]}
             }
             existing_ids = {r["id"] for r in result}
-            tests = list(db.tests.find(tests_query).sort("created_at", -1).limit(20))
+            tests = list(db.tests.find(tests_query).sort("created_at", -1).limit(50))
             for t in tests:
                 tid = str(t["_id"])
                 if tid in existing_ids:
@@ -173,12 +188,12 @@ async def get_upcoming_tests(current_user: TokenData = Depends(require_role([Use
                     "class_level": t.get("class_level"),
                     "total_marks": t.get("total_marks", 0),
                     "duration_minutes": t.get("duration_minutes", 60),
-                    "deadline": t.get("end_date").isoformat() if t.get("end_date") else None,
+                    "deadline": _safe_iso(t.get("end_date")) or _safe_iso(t.get("due_date")),
                     "start_datetime": None,
                     "status": "submitted" if submission else "pending",
                     "score": submission.get("score") if submission else None,
                     "source": "test",
-                    "created_at": t.get("created_at").isoformat() if t.get("created_at") else None
+                    "created_at": _safe_iso(t.get("created_at"))
                 })
 
         # Sort all results by created_at descending

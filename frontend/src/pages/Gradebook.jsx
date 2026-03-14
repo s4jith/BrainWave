@@ -1,6 +1,6 @@
 
-import { useState, useEffect } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
     ArrowLeft,
     Download,
@@ -109,8 +109,8 @@ function EvaluationCard({ ev, index }) {
     );
 }
 
-function GradeRow({ grade }) {
-    const [expanded, setExpanded] = useState(false);
+function GradeRow({ grade, initiallyExpanded = false, isFocused = false, rowRef = null }) {
+    const [expanded, setExpanded] = useState(Boolean(initiallyExpanded));
     const isAI = grade.source === "ai_test";
     const hasEvaluations = grade.evaluations && grade.evaluations.length > 0;
     const hasFeedback = grade.feedback || (grade.strengths && grade.strengths.length > 0) || (grade.improvements && grade.improvements.length > 0);
@@ -135,8 +135,15 @@ function GradeRow({ grade }) {
         return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     };
 
+    useEffect(() => {
+        if (initiallyExpanded) setExpanded(true);
+    }, [initiallyExpanded]);
+
     return (
-        <div className="border-b border-gray-200 dark:border-gray-700 last:border-0">
+        <div
+            ref={rowRef}
+            className={`border-b border-gray-200 dark:border-gray-700 last:border-0 ${isFocused ? "bg-orange-50/60 dark:bg-orange-900/20" : ""}`}
+        >
             <div
                 className={`px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${canExpand ? "cursor-pointer" : ""}`}
                 onClick={() => canExpand && setExpanded(!expanded)}
@@ -340,6 +347,7 @@ function GradeRow({ grade }) {
 export default function Gradebook() {
     const { courseId } = useParams();
     const [searchParams] = useSearchParams();
+    const location = useLocation();
     const navigate = useNavigate();
     const { user, getAuthHeader, isTeacher, isAdmin } = useUserStore();
 
@@ -350,6 +358,8 @@ export default function Gradebook() {
     const [myGrades, setMyGrades] = useState(null);
     const [viewMode, setViewMode] = useState("gradebook");
     const [filter, setFilter] = useState("all");
+    const [focusedGradeId, setFocusedGradeId] = useState(null);
+    const focusedRowRef = useRef(null);
 
     const isInstructor = isTeacher() || isAdmin();
 
@@ -361,6 +371,30 @@ export default function Gradebook() {
             fetchMyGrades();
         }
     }, [courseId]);
+
+    useEffect(() => {
+        const focusAssessmentId = location.state?.focusAssessmentId;
+        const focusSource = location.state?.focusSource;
+        if (!focusAssessmentId || !myGrades?.grades?.length) return;
+
+        const matched = myGrades.grades.find((g) => {
+            if (focusSource && g.source !== focusSource) return false;
+            return String(g.assessment_id || "") === String(focusAssessmentId);
+        });
+
+        if (matched) {
+            setFilter(focusSource || "all");
+            setFocusedGradeId(matched.id);
+        }
+    }, [location.state, myGrades]);
+
+    useEffect(() => {
+        if (!focusedGradeId) return;
+        const timer = setTimeout(() => {
+            focusedRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 120);
+        return () => clearTimeout(timer);
+    }, [focusedGradeId, filter]);
 
     const fetchGradebook = async () => {
         setLoading(true);
@@ -638,7 +672,13 @@ export default function Gradebook() {
                         ) : (
                             <div>
                                 {filteredGrades.map((grade) => (
-                                    <GradeRow key={grade.id} grade={grade} />
+                                    <GradeRow
+                                        key={grade.id}
+                                        grade={grade}
+                                        initiallyExpanded={focusedGradeId === grade.id}
+                                        isFocused={focusedGradeId === grade.id}
+                                        rowRef={focusedGradeId === grade.id ? focusedRowRef : null}
+                                    />
                                 ))}
                             </div>
                         )}

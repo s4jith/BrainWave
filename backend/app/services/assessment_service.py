@@ -140,8 +140,22 @@ class AssessmentService:
                 for s in all_students:
                     if s.get("user_id"):
                         student_ids.add(s["user_id"])
-            
+
+            # Normalize student identifiers (Mongo _id or legacy IDs) to user_id values.
+            resolved_student_ids = set()
             for sid in student_ids:
+                sid_str = str(sid)
+                user_doc = None
+                if ObjectId.is_valid(sid_str):
+                    user_doc = await mongodb.db.users.find_one({"_id": ObjectId(sid_str)}, {"user_id": 1})
+                if not user_doc:
+                    user_doc = await mongodb.db.users.find_one({"user_id": sid_str}, {"user_id": 1})
+                if user_doc and user_doc.get("user_id"):
+                    resolved_student_ids.add(user_doc["user_id"])
+                elif sid_str:
+                    resolved_student_ids.add(sid_str)
+            
+            for sid in resolved_student_ids:
                 notifications.append({
                     "title": f"New Test: {title}",
                     "message": f"A new test '{title}' is available for you.",

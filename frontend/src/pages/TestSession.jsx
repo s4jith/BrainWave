@@ -53,7 +53,7 @@ export default function TestSession() {
       initCalledRef.current = true;
 
       if (!testConfig) {
-        navigate("/test-center");
+        navigate("/test");
         return;
       }
 
@@ -101,7 +101,8 @@ export default function TestSession() {
         }
       } catch (err) {
         console.error("Failed to start test:", err);
-        setError("Failed to start test session. Please try again.");
+        const message = err?.message || "Failed to start test session. Please try again.";
+        setError(message);
       } finally {
         setIsLoading(false);
       }

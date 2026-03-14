@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
+import DashboardLayout from "../components/dashboard/DashboardLayout";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -142,24 +143,27 @@ export default function CareerTest() {
     // Show spinner while checking assignment status
     if (loadingAssignment) {
       return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-        </div>
+        <DashboardLayout>
+          <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center rounded-2xl">
+            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          </div>
+        </DashboardLayout>
       );
     }
 
     // No active assignment — admin has not opened the test yet
     if (!activeAssignment) {
       return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <DashboardLayout>
+        <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 rounded-2xl">
           <div className="w-full max-w-2xl">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg overflow-hidden">
-              <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white">
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-8 text-center text-white">
                 <div className="w-16 h-16 mx-auto mb-4 bg-white/20 rounded-2xl flex items-center justify-center">
                   <Compass className="w-8 h-8" />
                 </div>
                 <h1 className="text-2xl font-bold">Career Analysis Test</h1>
-                <p className="mt-2 text-indigo-100 text-sm">
+                <p className="mt-2 text-orange-100 text-sm">
                   Discover your cognitive strengths and ideal career paths.
                 </p>
               </div>
@@ -201,20 +205,22 @@ export default function CareerTest() {
             </div>
           </div>
         </div>
+        </DashboardLayout>
       );
     }
 
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <DashboardLayout>
+      <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 rounded-2xl">
         <div className="w-full max-w-2xl">
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg overflow-hidden">
             {/* Hero */}
-            <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white">
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-8 text-center text-white">
               <div className="w-16 h-16 mx-auto mb-4 bg-white/20 rounded-2xl flex items-center justify-center">
                 <Compass className="w-8 h-8" />
               </div>
               <h1 className="text-2xl font-bold">Career Analysis Test</h1>
-              <p className="mt-2 text-indigo-100 text-sm">
+              <p className="mt-2 text-orange-100 text-sm">
                 Discover your cognitive strengths and ideal career paths through a 30-question assessment.
               </p>
             </div>
@@ -242,7 +248,7 @@ export default function CareerTest() {
                 </div>
               </div>
 
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 text-sm text-indigo-800 dark:text-indigo-300">
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 text-sm text-orange-800 dark:text-orange-300">
                 <p className="font-semibold mb-1">How it works</p>
                 <ul className="space-y-1 text-xs">
                   <li>• Answer 30 MCQs across multiple subjects</li>
@@ -255,7 +261,7 @@ export default function CareerTest() {
 
               <button
                 onClick={handleStart}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <Brain className="w-5 h-5" /> Start Test
               </button>
@@ -290,6 +296,7 @@ export default function CareerTest() {
           </div>
         </div>
       </div>
+      </DashboardLayout>
     );
   }
 
@@ -298,12 +305,14 @@ export default function CareerTest() {
   // ═══════════════════════════════════════════════════════════════════════
   if (phase === "loading") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <DashboardLayout>
+      <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center rounded-2xl">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto mb-4" />
+          <Loader2 className="w-10 h-10 animate-spin text-orange-500 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400 font-medium">Preparing your test...</p>
         </div>
       </div>
+      </DashboardLayout>
     );
   }
 
@@ -312,13 +321,15 @@ export default function CareerTest() {
   // ═══════════════════════════════════════════════════════════════════════
   if (phase === "submitting") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <DashboardLayout>
+      <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center rounded-2xl">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto mb-4" />
+          <Loader2 className="w-10 h-10 animate-spin text-orange-500 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400 font-medium">Analyzing your cognitive profile...</p>
           <p className="text-sm text-gray-400 mt-1">Computing domain scores & career matches</p>
         </div>
       </div>
+      </DashboardLayout>
     );
   }
 
@@ -327,7 +338,8 @@ export default function CareerTest() {
   // ═══════════════════════════════════════════════════════════════════════
   if (phase === "done") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <DashboardLayout>
+      <div className="min-h-[70vh] bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 rounded-2xl">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
             <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
@@ -338,7 +350,7 @@ export default function CareerTest() {
           </p>
           <button
             onClick={() => navigate(`/career-result/${resultId}`)}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
           >
             View Your Results <ArrowRight className="w-4 h-4" />
           </button>
@@ -350,6 +362,7 @@ export default function CareerTest() {
           </button>
         </div>
       </div>
+      </DashboardLayout>
     );
   }
 
@@ -357,12 +370,13 @@ export default function CareerTest() {
   //  TEST (main question view)
   // ═══════════════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <DashboardLayout noPadding>
+    <div className="min-h-full bg-gray-50 dark:bg-gray-950">
       {/* Top Bar */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Compass className="w-5 h-5 text-indigo-600" />
+            <Compass className="w-5 h-5 text-orange-600" />
             <span className="font-semibold text-gray-900 dark:text-white text-sm">
               Career Test
             </span>
@@ -386,7 +400,7 @@ export default function CareerTest() {
       {/* Progress bar */}
       <div className="w-full h-1 bg-gray-200 dark:bg-gray-800">
         <div
-          className="h-1 bg-indigo-600 transition-all duration-300"
+          className="h-1 bg-orange-600 transition-all duration-300"
           style={{ width: `${((currentIdx + 1) / totalQ) * 100}%` }}
         />
       </div>
@@ -396,7 +410,7 @@ export default function CareerTest() {
         {current && (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-6 sm:p-8">
             <div className="flex items-center gap-2 mb-4">
-              <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full text-xs font-medium">
+              <span className="px-2.5 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs font-medium">
                 {current.subject}
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -426,21 +440,21 @@ export default function CareerTest() {
                     onClick={() => handleSelect(current.id, oi)}
                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                       isSelected
-                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-600"
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-600"
                         : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
                         isSelected
-                          ? "bg-indigo-600 text-white"
+                          ? "bg-orange-600 text-white"
                           : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                       }`}>
                         {String.fromCharCode(65 + oi)}
                       </span>
                       <span className={`text-sm ${
                         isSelected
-                          ? "text-indigo-900 dark:text-indigo-200 font-medium"
+                          ? "text-orange-900 dark:text-orange-200 font-medium"
                           : "text-gray-700 dark:text-gray-300"
                       }`}>
                         {opt}
@@ -466,7 +480,7 @@ export default function CareerTest() {
           {currentIdx < totalQ - 1 ? (
             <button
               onClick={() => setCurrentIdx((i) => Math.min(totalQ - 1, i + 1))}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center gap-2 transition-colors"
+              className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium flex items-center gap-2 transition-colors"
             >
               Next <ChevronRight className="w-4 h-4" />
             </button>
@@ -495,7 +509,7 @@ export default function CareerTest() {
                   onClick={() => setCurrentIdx(qi)}
                   className={`w-9 h-9 rounded-lg text-xs font-semibold transition-all ${
                     isCurrent
-                      ? "bg-indigo-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-800"
+                      ? "bg-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-800"
                       : isAnswered
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                       : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -516,5 +530,6 @@ export default function CareerTest() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }

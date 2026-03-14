@@ -18,6 +18,7 @@ import {
   StickyNote,
   Loader2,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import useAnnotationStore from "../../stores/annotationStore";
 import AIPanel from "../annotations/AIPanel";
@@ -26,6 +27,7 @@ import HistoryPanel from "../annotations/HistoryPanel";
 import HighlightOverlay from "../annotations/HighlightOverlay";
 import NoteTaker from "./NoteTaker";
 import authFetch from "../../utils/authFetch";
+import useUserStore from "../../stores/userStore";
 
 export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [numPages, setNumPages] = useState(null);
@@ -53,12 +55,14 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [summaryData, setSummaryData] = useState(null); 
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [doubtButtonEnabled, setDoubtButtonEnabled] = useState(true);
 
   const imageRef = useRef(null);
   const containerRef = useRef(null);
   const currentBlobUrlRef = useRef(null);
 
   const API_BASE = import.meta.env.VITE_API_URL;
+  const { user } = useUserStore();
 
   const setSelectedText = useAnnotationStore((state) => state.setSelectedText);
   const activePanel = useAnnotationStore((state) => state.activePanel);
@@ -94,6 +98,35 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   }, [API_BASE, bookId, getFilePath]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDoubtFeature = async () => {
+      if (user?.role !== "student") {
+        setDoubtButtonEnabled(true);
+        return;
+      }
+      try {
+        const res = await authFetch(`${API_BASE}/api/student/my-features`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+        const enabled = data?.features?.book_to_bot_doubt;
+        setDoubtButtonEnabled(enabled !== false);
+      } catch {
+        if (isMounted) {
+          setDoubtButtonEnabled(true);
+        }
+      }
+    };
+
+    fetchDoubtFeature();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [API_BASE, user?.role]);
 
   useEffect(() => {
     const fetchPdfInfo = async () => {
@@ -749,7 +782,7 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         )}
 
         {/* Floating "Doubt?" Button */}
-        {currentLesson && !isLoading && !loadError && !isSelecting && !showActionPopup && (
+        {currentLesson && !isLoading && !loadError && !isSelecting && !showActionPopup && doubtButtonEnabled && (
           <Button
             className="fixed bottom-6 right-6 h-14 px-6 rounded-full shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 z-40 gap-2"
             onClick={startSelectionMode}
@@ -757,6 +790,17 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
           >
             <HelpCircle className="h-5 w-5" />
             <span className="font-medium">Doubt?</span>
+          </Button>
+        )}
+
+        {currentLesson && !isLoading && !loadError && !isSelecting && !showActionPopup && !doubtButtonEnabled && (
+          <Button
+            className="fixed bottom-6 right-6 h-14 px-6 rounded-full shadow-lg bg-gray-500 cursor-not-allowed z-40 gap-2"
+            disabled
+            title="Doubt button is locked by admin"
+          >
+            <Lock className="h-5 w-5" />
+            <span className="font-medium">Doubt Locked</span>
           </Button>
         )}
 

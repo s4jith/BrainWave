@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   User,
   Palette,
@@ -15,7 +15,13 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
+  Lightbulb,
+  MessageSquare,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Send
 } from 'lucide-react';
 import useUserStore from '../stores/userStore';
 import { Button } from '../components/ui/button';
@@ -28,6 +34,7 @@ const TABS = [
   { id: 'avatar', label: 'Avatar', icon: Palette },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'security', label: 'Security', icon: Lock },
+  { id: 'suggestions', label: 'Suggestions', icon: Lightbulb },
 ];
 
 const AVATAR_STYLES = [
@@ -47,6 +54,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function Settings() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     user,
     academics,
@@ -56,7 +64,9 @@ export default function Settings() {
     updateCalendar
   } = useUserStore();
 
-  const [activeTab, setActiveTab] = useState('profile');
+  const requestedTab = searchParams.get('tab');
+  const isValidTab = TABS.some((t) => t.id === requestedTab);
+  const [activeTab, setActiveTab] = useState(isValidTab ? requestedTab : 'profile');
   const [saveMessage, setSaveMessage] = useState('');
 
   const [profileData, setProfileData] = useState({
@@ -86,10 +96,110 @@ export default function Settings() {
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
 
+  const [suggestionSubject, setSuggestionSubject] = useState('');
+  const [suggestionText, setSuggestionText] = useState('');
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [suggestionHistoryLoading, setSuggestionHistoryLoading] = useState(false);
+  const [suggestionMessage, setSuggestionMessage] = useState('');
+  const [mySuggestions, setMySuggestions] = useState([]);
+
+  const API_BASE = import.meta.env.VITE_API_URL;
+
 
   const showSaveMessage = (message) => {
     setSaveMessage(message);
     setTimeout(() => setSaveMessage(''), 2000);
+  };
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && TABS.some((t) => t.id === tab) && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'suggestions') {
+      fetchMySuggestions();
+    }
+  }, [activeTab]);
+
+  const setTab = (tabId) => {
+    setActiveTab(tabId);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tabId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const fetchMySuggestions = async () => {
+    try {
+      setSuggestionHistoryLoading(true);
+      const response = await authFetch(`${API_BASE}/api/suggestions/student/${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMySuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch suggestions:', err);
+    } finally {
+      setSuggestionHistoryLoading(false);
+    }
+  };
+
+  const submitSuggestion = async (e) => {
+    e.preventDefault();
+    if (!suggestionSubject.trim() || !suggestionText.trim()) return;
+
+    try {
+      setSuggestionLoading(true);
+      setSuggestionMessage('');
+      const response = await authFetch(`${API_BASE}/api/suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: user.id,
+          student_name: user.name || 'Anonymous',
+          class_level: user.classLevel || 10,
+          category: 'general',
+          subject: suggestionSubject,
+          content: suggestionText,
+          email: user.email || ''
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to submit suggestion');
+      setSuggestionSubject('');
+      setSuggestionText('');
+      setSuggestionMessage('Suggestion submitted successfully.');
+      fetchMySuggestions();
+    } catch (err) {
+      console.error('Error submitting suggestion:', err);
+      setSuggestionMessage('Failed to submit suggestion. Please try again.');
+    } finally {
+      setSuggestionLoading(false);
+    }
+  };
+
+  const getSuggestionStatusIcon = (status) => {
+    switch (status) {
+      case 'reviewed':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'pending':
+        return <Clock className="w-4 h-4 text-yellow-600" />;
+      default:
+        return <AlertCircle className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getSuggestionStatusColor = (status) => {
+    switch (status) {
+      case 'reviewed':
+        return 'bg-green-50 text-green-700 border-green-200';
+      case 'pending':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
   };
 
   const getAvatarUrl = (style, seed) => {
@@ -704,6 +814,107 @@ export default function Settings() {
           </div>
         );
 
+      case 'suggestions':
+        return (
+          <div className="space-y-6">
+            <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Lightbulb className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Suggestions</h3>
+                  <p className="text-sm text-gray-600">Share ideas and feedback with the admin team</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-orange-600" />
+                Submit Suggestion
+              </h4>
+              <form onSubmit={submitSuggestion} className="space-y-3">
+                <input
+                  type="text"
+                  value={suggestionSubject}
+                  onChange={(e) => setSuggestionSubject(e.target.value)}
+                  placeholder="Subject"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+                <textarea
+                  value={suggestionText}
+                  onChange={(e) => setSuggestionText(e.target.value)}
+                  placeholder="Describe your suggestion..."
+                  rows={5}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={suggestionLoading || !suggestionSubject.trim() || !suggestionText.trim()}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {suggestionLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Submit Suggestion
+                    </>
+                  )}
+                </button>
+              </form>
+              {suggestionMessage && (
+                <p className="text-sm mt-3 text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                  {suggestionMessage}
+                </p>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">My Suggestions</h4>
+              {suggestionHistoryLoading ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : mySuggestions.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4">No suggestions yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {mySuggestions.map((item) => (
+                    <div key={item.id} className="border border-gray-100 rounded-lg p-3 bg-gray-50/70">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{item.subject || item.category || 'General'}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${getSuggestionStatusColor(item.status)}`}>
+                            {getSuggestionStatusIcon(item.status)}
+                            {item.status}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700">{item.content}</p>
+                      {item.admin_response && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
+                          <p className="text-xs font-medium text-green-800 mb-0.5">Admin Response</p>
+                          <p className="text-sm text-green-700">{item.admin_response}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -739,7 +950,7 @@ export default function Settings() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => setTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
                       ? 'bg-gray-900 text-white shadow-lg'
                       : 'text-gray-600 hover:bg-gray-100'

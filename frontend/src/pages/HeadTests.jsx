@@ -116,12 +116,12 @@ export default function HeadTests() {
   const fetchSubmissions = async (testId) => {
     try {
       setLoadingSubmissions(true);
-      const res = await authFetch(`${API_URL}/api/tests/submissions/${testId}`, {
+      const res = await authFetch(`${API_URL}/api/assessments/${testId}/submissions`, {
         headers: getAuthHeader()
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      setSubmissions(Array.isArray(data) ? data : []);
+      setSubmissions(Array.isArray(data?.submissions) ? data.submissions : []);
     } catch {
       setSubmissions([]);
     } finally {
@@ -244,7 +244,7 @@ export default function HeadTests() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-4">
             <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
               <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -259,8 +259,17 @@ export default function HeadTests() {
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Active / Upcoming</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalActive + totalUpcoming}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalActive}</p>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-4">
+            <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Upcoming</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalUpcoming}</p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-4">
@@ -390,7 +399,7 @@ export default function HeadTests() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <a
-                      href={`${API_URL}${test.pdf_url}`}
+                      href={`${API_URL}/api/assessments/${test.id}/download?mode=questions`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
@@ -436,7 +445,7 @@ export default function HeadTests() {
                                 </td>
                                 <td className="py-2">
                                   <a
-                                    href={`${API_URL}${sub.pdf_url}`}
+                                    href={`${API_URL}/api/assessments/${test.id}/download?mode=both&submission_id=${sub.id}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline text-xs"

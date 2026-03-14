@@ -13,7 +13,7 @@ Key Features:
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 from datetime import datetime, timedelta
 from app.db.mongo import mongodb
 from app.services.topic_question_bank_service import topic_question_bank_service
@@ -985,6 +985,7 @@ class StartQBTestRequest(BaseModel):
     subject: str = Field(..., description="Subject name")
     chapter: int = Field(..., description="Chapter number")
     difficulty: str = Field(default="medium", description="Difficulty level (easy, medium, hard)")
+    bloom_level: Optional[str] = Field(default=None, description="Bloom cognitive level (remember, understand, apply, analyze, evaluate, create)")
     mcq_count: int = Field(default=0, ge=0, le=50, description="Number of MCQ questions")
     fillup_count: int = Field(default=0, ge=0, le=50, description="Number of fill-up questions")
     true_false_count: int = Field(default=0, ge=0, le=50, description="Number of true/false questions")
@@ -1035,7 +1036,12 @@ async def get_qb_chapters(class_level: int, subject: str):
             },
             {
                 "$group": {
-                    "_id": {"chapter": "$chapter", "type": "$type", "difficulty": "$difficulty"},
+                    "_id": {
+                        "chapter": "$chapter",
+                        "type": "$type",
+                        "difficulty": "$difficulty",
+                        "bloom_level": {"$ifNull": ["$bloom_level", "unspecified"]}
+                    },
                     "count": {"$sum": 1},
                     "chapter_name": {"$first": "$chapter_name"}
                 }
@@ -1048,6 +1054,7 @@ async def get_qb_chapters(class_level: int, subject: str):
                         "$push": {
                             "type": "$_id.type",
                             "difficulty": "$_id.difficulty",
+                            "bloom_level": "$_id.bloom_level",
                             "count": "$count"
                         }
                     },
@@ -1057,6 +1064,37 @@ async def get_qb_chapters(class_level: int, subject: str):
             {"$sort": {"_id": 1}}
         ]
         results = await mongodb.db.questions.aggregate(pipeline).to_list(100)
+
+        def normalize_type(raw: Any) -> str:
+            value = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+            alias = {
+                "truefalse": "true_false",
+                "tf": "true_false",
+                "fill_up": "fillup",
+                "fill_in_the_blank": "fillup",
+                "shortanswer": "short_answer",
+                "longanswer": "long_answer",
+            }
+            return alias.get(value, value)
+
+        def normalize_difficulty(raw: Any) -> str:
+            value = str(raw or "medium").strip().lower()
+            if value in {"easy", "medium", "hard"}:
+                return value
+            return "medium"
+
+        def normalize_bloom(raw: Any) -> str:
+            value = str(raw or "unspecified").strip().lower().replace("-", "_").replace(" ", "_")
+            alias = {
+                "remembering": "remember",
+                "understanding": "understand",
+                "applying": "apply",
+                "analysing": "analyze",
+                "analyzing": "analyze",
+                "evaluating": "evaluate",
+                "creating": "create",
+            }
+            return alias.get(value, value)
 
         chapters = []
         for r in results:
@@ -1068,10 +1106,12 @@ async def get_qb_chapters(class_level: int, subject: str):
                 "short_answer_easy": 0, "short_answer_medium": 0, "short_answer_hard": 0,
                 "long_answer_easy": 0, "long_answer_medium": 0, "long_answer_hard": 0,
             }
+            bloom_counts = {}
 
             for item in r.get("type_difficulty_counts", []):
-                q_type = item.get("type")
-                difficulty = item.get("difficulty", "medium").lower()
+                q_type = normalize_type(item.get("type"))
+                difficulty = normalize_difficulty(item.get("difficulty"))
+                bloom_level = normalize_bloom(item.get("bloom_level"))
                 count = item.get("count", 0)
 
                 if q_type in ["mcq", "fillup", "true_false", "short_answer", "long_answer"]:
@@ -1079,6 +1119,8 @@ async def get_qb_chapters(class_level: int, subject: str):
                     key = f"{q_type}_{difficulty}"
                     if key in counts:
                         counts[key] += count
+                    bloom_key = f"{q_type}_{difficulty}_{bloom_level}"
+                    bloom_counts[bloom_key] = bloom_counts.get(bloom_key, 0) + count
 
             chapters.append({
                 "chapter": r["_id"],
@@ -1104,6 +1146,7 @@ async def get_qb_chapters(class_level: int, subject: str):
                 "long_answer_easy": counts["long_answer_easy"],
                 "long_answer_medium": counts["long_answer_medium"],
                 "long_answer_hard": counts["long_answer_hard"],
+                "bloom_counts": bloom_counts,
             })
 
         return chapters
@@ -1128,6 +1171,41 @@ async def start_qb_test(request: StartQBTestRequest):
         raise HTTPException(status_code=400, detail="Please select at least one question")
 
     try:
+        def normalize_type(raw: Any) -> str:
+            value = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+            alias = {
+                "truefalse": "true_false",
+                "tf": "true_false",
+                "fill_up": "fillup",
+                "fill_in_the_blank": "fillup",
+                "shortanswer": "short_answer",
+                "longanswer": "long_answer",
+            }
+            return alias.get(value, value)
+
+        def type_variants(canonical: str) -> list[str]:
+            mapping = {
+                "mcq": ["mcq", "multiple_choice", "multiple choice"],
+                "fillup": ["fillup", "fill_up", "fill up", "fill-in-the-blank", "fill_in_the_blank"],
+                "true_false": ["true_false", "true false", "true-false", "truefalse", "tf"],
+                "short_answer": ["short_answer", "short answer", "short-answer", "shortanswer"],
+                "long_answer": ["long_answer", "long answer", "long-answer", "longanswer"],
+            }
+            return mapping.get(canonical, [canonical])
+
+        def normalize_bloom(raw: Any) -> str:
+            value = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+            alias = {
+                "remembering": "remember",
+                "understanding": "understand",
+                "applying": "apply",
+                "analysing": "analyze",
+                "analyzing": "analyze",
+                "evaluating": "evaluate",
+                "creating": "create",
+            }
+            return alias.get(value, value)
+
         base_query = {
             "class_level": request.class_level,
             "subject": {"$regex": f"^{request.subject}$", "$options": "i"},
@@ -1137,9 +1215,27 @@ async def start_qb_test(request: StartQBTestRequest):
 
         if request.difficulty and request.difficulty.lower() not in ("mixed", "all"):
             base_query["difficulty"] = {"$regex": f"^{request.difficulty}$", "$options": "i"}
+        if request.bloom_level and request.bloom_level.lower() not in ("mixed", "all"):
+            bloom = normalize_bloom(request.bloom_level)
+            bloom_variants = [bloom]
+            if bloom == "analyze":
+                bloom_variants.extend(["analysing", "analyzing"])
+            if bloom == "remember":
+                bloom_variants.append("remembering")
+            if bloom == "understand":
+                bloom_variants.append("understanding")
+            if bloom == "apply":
+                bloom_variants.append("applying")
+            if bloom == "evaluate":
+                bloom_variants.append("evaluating")
+            if bloom == "create":
+                bloom_variants.append("creating")
+            bloom_pattern = "|".join([f"^{v}$" for v in bloom_variants])
+            base_query["bloom_level"] = {"$regex": bloom_pattern, "$options": "i"}
 
         all_questions = []
         notes = []
+        missing_types = []
 
         type_configs = [
             ("mcq", request.mcq_count, 1),
@@ -1153,12 +1249,19 @@ async def start_qb_test(request: StartQBTestRequest):
             if requested_count <= 0:
                 continue
 
-            query = {**base_query, "type": q_type}
+            canonical_type = normalize_type(q_type)
+            variants = type_variants(canonical_type)
+            type_pattern = "|".join([f"^{v}$" for v in variants])
+            query = {**base_query, "type": {"$regex": type_pattern, "$options": "i"}}
             cursor = mongodb.db.questions.find(query)
             available = await cursor.to_list(500)
 
+            if len(available) == 0:
+                missing_types.append(q_type)
+                continue
+
             if len(available) < requested_count:
-                notes.append(f"Requested {requested_count} {q_type} questions but only {len(available)} available")
+                notes.append(f"Requested {requested_count} {canonical_type} questions but only {len(available)} available")
                 selected = available
             else:
                 selected = random.sample(available, requested_count)
@@ -1169,7 +1272,7 @@ async def start_qb_test(request: StartQBTestRequest):
                     "question_id": str(q["_id"]),
                     "question_text": q.get("text", ""),
                     "difficulty": q.get("difficulty", "medium"),
-                    "question_type": q_type,
+                    "question_type": canonical_type,
                     "marks": q.get("marks", marks),
                     "time_estimate": marks * 60,
                     "expected_answer": q.get("correct_answer", ""),
@@ -1180,16 +1283,31 @@ async def start_qb_test(request: StartQBTestRequest):
                     "chapter_name": q.get("chapter_name", f"Chapter {request.chapter}"),
                     "keywords": []
                 }
-                if q_type == "true_false":
+                if canonical_type == "true_false":
                     question_data["options"] = {"A": "True", "B": "False"}
                     correct = q.get("correct_answer", "").strip().lower()
                     question_data["correct_option"] = "A" if correct in ("true", "a") else "B"
                 all_questions.append(question_data)
 
+        if missing_types:
+            difficulty_text = (request.difficulty or "mixed").lower()
+            bloom_text = (request.bloom_level or "unspecified").lower()
+            type_text = ", ".join([t.replace("_", " ") for t in missing_types])
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No approved questions available for {type_text} in {difficulty_text} difficulty"
+                    f" and {bloom_text} level. Please contact admin to add questions for this configuration."
+                )
+            )
+
         if not all_questions:
             raise HTTPException(
                 status_code=404,
-                detail="No approved questions found for this configuration. The question bank may need more questions for this chapter and difficulty."
+                detail=(
+                    "No approved questions found for this configuration. "
+                    "Please contact admin to add questions for this chapter, difficulty, and cognitive level."
+                )
             )
 
         for i, q in enumerate(all_questions):
@@ -1212,6 +1330,7 @@ async def start_qb_test(request: StartQBTestRequest):
             "chapter_number": request.chapter,
             "chapter_name": chapter_name,
             "difficulty": request.difficulty,
+            "bloom_level": request.bloom_level,
             "test_type": "qb_test",
             "num_questions": len(all_questions),
             "total_marks": total_marks,

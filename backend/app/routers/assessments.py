@@ -599,6 +599,35 @@ async def grade_submission(
         
         if not result:
             raise HTTPException(status_code=404, detail="Submission not found or access denied")
+
+        # Notify the student that grading has been completed.
+        try:
+            submission = await mongodb.get_collection("submissions").find_one({"_id": ObjectId(submission_id)})
+            assessment = None
+            if submission and submission.get("assessment_id"):
+                assessment = await mongodb.get_collection("assessments").find_one({"_id": ObjectId(submission.get("assessment_id"))})
+
+            student_id = submission.get("student_id") if submission else None
+            if student_id and ObjectId.is_valid(str(student_id)):
+                student_doc = db.users.find_one({"_id": ObjectId(str(student_id))}, {"user_id": 1})
+                if student_doc and student_doc.get("user_id"):
+                    student_id = student_doc.get("user_id")
+
+            if student_id:
+                db.notifications.insert_one({
+                    "user_id": student_id,
+                    "role": "student",
+                    "type": "test_graded",
+                    "title": "Test Reviewed",
+                    "message": f"Your submission for '{assessment.get('title', 'test') if assessment else 'test'}' has been reviewed.",
+                    "assessment_id": submission.get("assessment_id") if submission else None,
+                    "submission_id": submission_id,
+                    "read": False,
+                    "is_read": False,
+                    "created_at": datetime.utcnow()
+                })
+        except Exception as ne:
+            logger.error(f"Failed to create grading notification for submission {submission_id}: {ne}")
         
         return result
         
@@ -707,6 +736,8 @@ async def add_submission_comment(
             "message": f"You received feedback on '{test_title}'",
             "assessment_id": submission.get("assessment_id"),
             "submission_id": submission_id,
+            "role": "student",
+            "read": False,
             "is_read": False,
             "for_admin": False,
             "created_at": datetime.utcnow()

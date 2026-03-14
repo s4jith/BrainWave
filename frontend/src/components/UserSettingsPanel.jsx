@@ -54,8 +54,8 @@ export default function UserSettingsPanel({ open, onClose }) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-[400px] max-w-[90vw]">
+    <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <SheetContent side="right" className="w-[400px] max-w-[90vw]" onClose={onClose}>
         <SheetHeader className="mb-6">
           <SheetTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />

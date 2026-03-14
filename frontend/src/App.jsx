@@ -21,9 +21,7 @@ import TeacherQueries from "./pages/TeacherQueries";
 import StudentManagement from "./pages/StudentManagement";
 import CreateTest from "./pages/CreateTest";
 import TestManagement from "./pages/TestManagement";
-import StudentTests from "./pages/StudentTests";
 import Notes from "./pages/Notes";
-import Suggestions from "./pages/Suggestions";
 import BookManagement from "./pages/BookManagementHierarchical";
 import SubjectsManagement from "./pages/SubjectsManagement";
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -88,10 +86,7 @@ function ProtectedRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
   const { maintenance, checked } = useMaintenanceMode();
 
-  console.log("ProtectedRoute - isAuth:", isAuthenticated, "user:", user);
-
   if (!isAuthenticated) {
-    console.log("Not authenticated, redirecting to /login");
     return <Navigate to="/login" replace />;
   }
 
@@ -105,7 +100,6 @@ function ProtectedRoute({ children }) {
     const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries", "/career-questions"];
     const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
     if (!isAdminRoute) {
-      console.log("Admin trying to access non-admin route, redirecting to /admin-dashboard");
       return <Navigate to="/admin-dashboard" replace />;
     }
   }
@@ -115,7 +109,6 @@ function ProtectedRoute({ children }) {
     const headRoutes = ["/head-dashboard", "/question-bank", "/question-papers", "/head-groups", "/head-reports", "/head-tests"];
     const isHeadRoute = headRoutes.some(route => path.startsWith(route));
     if (!isHeadRoute) {
-      console.log("Head trying to access non-head route, redirecting to /head-dashboard");
       return <Navigate to="/head-dashboard" replace />;
     }
   }
@@ -130,7 +123,6 @@ function ProtectedRoute({ children }) {
     ];
     const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
     if (!isTeacherRoute) {
-      console.log("Teacher trying to access non-teacher route, redirecting to /teacher-dashboard");
       return <Navigate to="/teacher-dashboard" replace />;
     }
   }
@@ -141,26 +133,20 @@ function ProtectedRoute({ children }) {
 function PublicRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
 
-  console.log("PublicRoute - isAuth:", isAuthenticated, "user:", user);
-
   if (isAuthenticated) {
     
     if (user.role === "admin") {
-      console.log("Admin logged in, redirecting to /admin-dashboard");
       return <Navigate to="/admin-dashboard" replace />;
     }
 
     if (user.role === "head") {
-      console.log("Head logged in, redirecting to /head-dashboard");
       return <Navigate to="/head-dashboard" replace />;
     }
 
     if (user.role === "teacher") {
-      console.log("Teacher logged in, redirecting to /teacher-dashboard");
       return <Navigate to="/teacher-dashboard" replace />;
     }
 
-    console.log("Student logged in, redirecting to /dashboard");
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -171,15 +157,11 @@ function StaffRoute({ children }) {
   const { isAuthenticated, user } = useUserStore();
   const { maintenance, checked } = useMaintenanceMode();
 
-  console.log("StaffRoute - isAuth:", isAuthenticated, "user:", user);
-
   if (!isAuthenticated) {
-    console.log("Not authenticated, redirecting to /login");
     return <Navigate to="/login" replace />;
   }
 
   if (user.role !== "admin" && user.role !== "teacher" && user.role !== "head") {
-    console.log("Not admin/teacher/head, redirecting to /dashboard");
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -411,7 +393,7 @@ function App() {
           path="/suggestions"
           element={
             <ProtectedRoute>
-              <Suggestions />
+              <Navigate to="/about-you?tab=suggestions" replace />
             </ProtectedRoute>
           }
         />
@@ -695,18 +677,6 @@ function App() {
           element={
             <ProtectedRoute>
               <AssessmentTaker />
-            </ProtectedRoute>
-          }
-        />
-
-        {}
-        <Route
-          path="/my-tests"
-          element={
-            <ProtectedRoute>
-              <FeatureGatedRoute featureKey="test_center">
-                <StudentTests />
-              </FeatureGatedRoute>
             </ProtectedRoute>
           }
         />

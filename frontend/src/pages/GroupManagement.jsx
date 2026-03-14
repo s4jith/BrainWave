@@ -40,7 +40,16 @@ export default function GroupManagement() {
         ai_chatbot: "AI Chatbot",
         test_center: "Test Center",
         my_grades: "My Grades",
-        book_to_bot: "Book to Bot"
+        book_to_bot: "Book to Bot",
+        book_to_bot_doubt: "Book to Bot Doubt Button"
+    };
+
+    const featureDefaults = {
+        ai_chatbot: false,
+        test_center: false,
+        my_grades: false,
+        book_to_bot: true,
+        book_to_bot_doubt: true
     };
 
     const handleToggleGroupFeature = async (groupId, featureKey, newValue) => {
@@ -790,7 +799,8 @@ export default function GroupManagement() {
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         {Object.entries(featureLabels).map(([key, label]) => {
-                                                            const enabled = editingGroup?.feature_flags?.[key] || false;
+                                                            const rawValue = editingGroup?.feature_flags?.[key];
+                                                            const enabled = rawValue === undefined ? (featureDefaults[key] ?? false) : rawValue === true;
                                                             return (
                                                                 <button
                                                                     key={key}
