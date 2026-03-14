@@ -788,6 +788,14 @@ async def get_submission_detail(
         answers_map = {}
         for ans in submission.get("answers", []):
             answers_map[ans.get("question_id")] = ans
+
+        percentage = submission.get("percentage", 0)
+        try:
+            percentage = float(percentage)
+        except Exception:
+            percentage = 0.0
+
+        passed = percentage >= 40
         
         return {
             "id": str(submission["_id"]),
@@ -800,8 +808,8 @@ async def get_submission_detail(
             "auto_score": submission.get("auto_score", 0),
             "manual_score": submission.get("manual_score", 0),
             "max_score": submission.get("max_score", 0),
-            "percentage": submission.get("percentage", 0),
-            "passed": submission.get("passed", False),
+            "percentage": percentage,
+            "passed": passed,
             "submitted_at": submission.get("submitted_at"),
             "time_spent_seconds": submission.get("time_spent_seconds", 0),
             "admin_comment": submission.get("admin_comment", ""),

@@ -763,7 +763,7 @@ export default function TestManagement() {
                   </div>
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
                     <p className="text-lg font-bold text-gray-900 dark:text-white">
-                      {submissionDetail.passed ? "Passed" : "Failed"}
+                      {(Number(submissionDetail.percentage) || 0) >= 40 ? "Passed" : "Failed"}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Result</p>
                   </div>

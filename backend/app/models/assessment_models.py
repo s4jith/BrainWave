@@ -78,7 +78,7 @@ class AssessmentSettings(BaseModel):
     shuffle_options: bool = False
     show_correct_answers: bool = True
     show_feedback_immediately: bool = True
-    passing_score_percent: int = Field(default=60, ge=0, le=100)
+    passing_score_percent: int = Field(default=40, ge=0, le=100)
     allow_late_submission: bool = False
     late_penalty_percent: int = Field(default=0, ge=0, le=100)
     require_webcam: bool = False

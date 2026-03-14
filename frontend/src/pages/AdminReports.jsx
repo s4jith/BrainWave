@@ -60,6 +60,94 @@ export default function AdminReports() {
         }
     };
 
+    const toCsvCell = (value) => {
+        if (value === null || value === undefined) return "";
+        const raw = String(value);
+        if (raw.includes('"') || raw.includes(',') || raw.includes('\n')) {
+            return `"${raw.replace(/"/g, '""')}"`;
+        }
+        return raw;
+    };
+
+    const downloadCsv = (rows, filename) => {
+        const csv = rows.map((row) => row.map(toCsvCell).join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportReport = () => {
+        if (!analytics) {
+            alert("No analytics data available to export.");
+            return;
+        }
+
+        const rows = [
+            ["Section", "Metric", "Value"],
+            ["User Stats", "Total Students", userStats.total_students || 0],
+            ["User Stats", "Active This Week", userStats.active_this_week || 0],
+            ["Test Stats", "Average Score (%)", testStats.average_score || 0],
+            ["Test Stats", "Tests This Week", testStats.tests_this_week || 0],
+            [],
+            ["Top Performers"],
+            ["Rank", "Student", "Tests Completed", "Average Score (%)"],
+        ];
+
+        topPerformers.forEach((student, idx) => {
+            rows.push([
+                idx + 1,
+                student.name || "Unknown",
+                student.tests_completed || 0,
+                student.avg_score || 0,
+            ]);
+        });
+
+        rows.push([]);
+        rows.push(["Students Needing Attention"]);
+        rows.push(["Student", "Days Inactive", "Average Score (%)"]);
+        weakStudents.forEach((student) => {
+            rows.push([
+                student.name || "Unknown",
+                student.days_inactive || 0,
+                student.avg_score || 0,
+            ]);
+        });
+
+        rows.push([]);
+        rows.push(["Subject Performance"]);
+        rows.push(["Subject", "Total Tests", "Total Students", "Average Score (%)"]);
+        subjectStats.forEach((subject) => {
+            rows.push([
+                subject.subject || "Unknown",
+                subject.total_tests || 0,
+                subject.total_students || 0,
+                subject.avg_score || 0,
+            ]);
+        });
+
+        rows.push([]);
+        rows.push(["Recent Test Completions (Filtered View)"]);
+        rows.push(["Student", "Class", "Subject", "Score (%)", "Date"]);
+        filteredActivities.forEach((activity) => {
+            rows.push([
+                activity.student_name || "Unknown",
+                activity.class_level || "",
+                activity.subject || "",
+                activity.score || 0,
+                activity.created_at ? new Date(activity.created_at).toISOString() : "",
+            ]);
+        });
+
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        downloadCsv(rows, `admin-analytics-${stamp}.csv`);
+    };
+
     if (loading) {
         return (
             <AdminLayout title="Reports & Analytics" icon={BarChart3}>
@@ -269,7 +357,10 @@ export default function AdminReports() {
 
             {/* Export Button */}
             <div className="mt-6 flex justify-end">
-                <button className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition flex items-center gap-2 font-medium">
+                <button
+                    onClick={handleExportReport}
+                    className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition flex items-center gap-2 font-medium"
+                >
                     <Download className="w-4 h-4" /> Export Report
                 </button>
             </div>

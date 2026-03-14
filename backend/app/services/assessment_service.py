@@ -1347,7 +1347,7 @@ class AssessmentService:
             max_score = assessment.get("total_points", 0)
             total_score = auto_score
             percentage = (total_score / max_score * 100) if max_score > 0 else 0
-            passing = assessment.get("settings", {}).get("passing_score_percent", 60)
+            passing = 40
             passed = percentage >= passing
             
             status = SubmissionStatus.GRADED.value if not needs_manual else SubmissionStatus.SUBMITTED.value
@@ -1558,7 +1558,7 @@ class AssessmentService:
             total_score = auto_score + manual_score
             max_score = submission.get("max_score", 0)
             percentage = (total_score / max_score * 100) if max_score > 0 else 0
-            passing = assessment.get("settings", {}).get("passing_score_percent", 60)
+            passing = 40
             passed = percentage >= passing
             
             update_data = {

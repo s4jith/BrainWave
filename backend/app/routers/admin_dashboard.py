@@ -245,8 +245,8 @@ async def get_analytics():
         new_tests_taken = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}})
         total_tests_taken = old_tests_taken + new_tests_taken
 
-        old_passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 60}})
-        new_passed = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}, "percentage": {"$gte": 60}})
+        old_passed = test_sessions.count_documents({"status": "completed", "score": {"$gte": 40}})
+        new_passed = submissions_col.count_documents({"status": {"$in": ["submitted", "graded"]}, "percentage": {"$gte": 40}})
         pass_rate = round(((old_passed + new_passed) / total_tests_taken * 100), 1) if total_tests_taken > 0 else 0
 
         test_stats = {

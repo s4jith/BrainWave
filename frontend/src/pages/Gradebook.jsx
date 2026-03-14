@@ -441,18 +441,66 @@ export default function Gradebook() {
     };
 
     const handleExport = async () => {
+        const escapeCsv = (value) => {
+            const text = value == null ? "" : String(value);
+            if (/[",\n]/.test(text)) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        };
+
+        const downloadCsvText = (csvText, filename) => {
+            const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        };
+
         try {
             const res = await authFetch(`${API_URL}/api/gradebook/course/${courseId}/export`, {
                 headers: getAuthHeader()
             });
-            if (!res.ok) throw new Error("Export failed");
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `gradebook_${courseId}.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `gradebook_${courseId}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+
+            // Fallback: generate CSV from already-loaded gradebook data.
+            if (!gradebook?.students?.length || !gradebook?.assessments?.length) {
+                throw new Error("Export failed and no gradebook data available for fallback.");
+            }
+
+            const header = ["Student Name", "Email", ...gradebook.assessments.map((a) => `${a.title} (${a.max_points} pts)`), "Total Score", "Total Max", "Overall %"];
+            const rows = gradebook.students.map((student) => {
+                const assessmentCells = gradebook.assessments.map((a) => {
+                    const g = student.grades?.[a.id];
+                    return g ? `${g.score}/${g.max_score}` : "-";
+                });
+                return [
+                    student.student_name || "",
+                    student.email || "",
+                    ...assessmentCells,
+                    student.total_score ?? 0,
+                    student.total_max ?? 0,
+                    `${student.overall_percentage ?? 0}%`
+                ];
+            });
+
+            const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+            downloadCsvText(csv, `gradebook_${courseId}.csv`);
         } catch (err) {
             console.error("Export error:", err);
         }

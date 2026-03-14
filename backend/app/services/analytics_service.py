@@ -16,6 +16,23 @@ from app.db.mongo import mongodb
 
 logger = logging.getLogger(__name__)
 
+PASSING_PERCENTAGE = 40.0
+
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_passed(percentage: Any, stored_flag: Any = None) -> bool:
+    # Always enforce platform pass rule first; stored flag is fallback for legacy docs.
+    pct = _to_float(percentage, default=-1)
+    if pct >= 0:
+        return pct >= PASSING_PERCENTAGE
+    return bool(stored_flag)
+
 class AnalyticsService:
     """Service for analytics and gradebook functionality."""
     
@@ -242,7 +259,7 @@ class AnalyticsService:
                     "score": score,
                     "max_score": max_score,
                     "percentage": sub.get("percentage", 0),
-                    "passed": sub.get("passed", False),
+                    "passed": _is_passed(sub.get("percentage", 0), sub.get("passed", False)),
                     "completed_at": sub.get("graded_at") or sub.get("submitted_at"),
                     "evaluation_type": assessment.get("evaluation_type", "manual") if assessment else "manual",
                     "evaluation_status": eval_status,
@@ -300,7 +317,7 @@ class AnalyticsService:
                     "score": earned,
                     "max_score": max_marks,
                     "percentage": round(session_score, 1),
-                    "passed": session_score >= 40,
+                    "passed": session_score >= PASSING_PERCENTAGE,
                     "completed_at": session.get("completed_at"),
                     "total_questions": total_q,
                     "correct_count": correct,
@@ -427,7 +444,7 @@ class AnalyticsService:
             
             scores = [s.get("percentage", 0) for s in all_submissions]
             average_score = sum(scores) / len(scores)
-            pass_count = sum(1 for s in all_submissions if s.get("passed", False))
+            pass_count = sum(1 for s in all_submissions if _is_passed(s.get("percentage", 0), s.get("passed", False)))
             pass_rate = (pass_count / total_submissions * 100)
             
             distribution = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
@@ -537,7 +554,7 @@ class AnalyticsService:
                 "highest_score": max(scores),
                 "lowest_score": min(scores),
                 "pass_rate": round(
-                    sum(1 for s in submissions if s.get("passed", False)) / len(submissions) * 100,
+                    sum(1 for s in submissions if _is_passed(s.get("percentage", 0), s.get("passed", False))) / len(submissions) * 100,
                     2
                 ),
                 "question_stats": question_stats
@@ -593,7 +610,7 @@ class AnalyticsService:
                             "score": submission.get("total_score", 0),
                             "max_score": submission.get("max_score", 0),
                             "percentage": submission.get("percentage", 0),
-                            "passed": submission.get("passed", False)
+                            "passed": _is_passed(submission.get("percentage", 0), submission.get("passed", False))
                         }
                         total_score += submission.get("total_score", 0)
                         total_max += submission.get("max_score", 0)
