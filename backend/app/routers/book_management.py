@@ -13,7 +13,7 @@ Student endpoints:
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import datetime
@@ -22,12 +22,16 @@ import uuid
 import shutil
 import logging
 import asyncio
+import io
 from bson import ObjectId
 
 from app.db.mongo import db
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+import fitz  # PyMuPDF
+import PyPDF2
 
 router = APIRouter(prefix="/api/books", tags=["Book Management"])
 
@@ -896,6 +900,137 @@ async def serve_pdf(file_path: str):
         logger.error(f"❌ Serve PDF failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==================== PDF RENDERING & INFO ====================
+
+@router.get("/pdf-info/{file_path:path}")
+async def get_pdf_info(file_path: str):
+    """Get basic info about a PDF (number of pages)."""
+    try:
+        full_path = os.path.join(BOOKS_UPLOAD_DIR, file_path)
+        
+        # Security check
+        real_books_dir = os.path.realpath(BOOKS_UPLOAD_DIR)
+        real_file_path = os.path.realpath(full_path)
+        if not real_file_path.startswith(real_books_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+            
+        if not os.path.exists(full_path):
+            # Also check public folder as fallback for legacy math books
+            public_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "public", file_path.lstrip("/"))
+            if os.path.exists(public_path):
+                full_path = public_path
+            else:
+                raise HTTPException(status_code=404, detail="PDF not found")
+
+        with open(full_path, 'rb') as f:
+            pdf = PyPDF2.PdfReader(f)
+            num_pages = len(pdf.pages)
+            
+        return {"numPages": num_pages}
+    except Exception as e:
+        logger.error(f"Error getting PDF info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/render/{book_id}/info")
+async def get_book_render_info(book_id: str):
+    """Get info for a specific book object."""
+    try:
+        book = db.books.find_one({"_id": ObjectId(book_id)})
+        if not book:
+            # Try book_id field if _id lookup fails (legacy)
+            book = db.books.find_one({"book_id": book_id})
+            
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+            
+        # If total_pages is cached, use it
+        if "total_pages" in book and book["total_pages"] > 0:
+            return {"numPages": book["total_pages"]}
+            
+        # Otherwise get it from the file
+        pdf_path = book.get("pdf_path") or book.get("pdf_filename")
+        if not pdf_path:
+             raise HTTPException(status_code=404, detail="PDF path missing for book")
+             
+        return await get_pdf_info(pdf_path)
+    except Exception as e:
+        logger.error(f"Error getting book render info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pdf-page/{file_path:path}")
+async def get_pdf_page(
+    file_path: str, 
+    page: int = Query(1, ge=1),
+    scale: float = Query(1.5, ge=0.1, le=5.0)
+):
+    """Render a specific page of a PDF as an image."""
+    try:
+        full_path = os.path.join(BOOKS_UPLOAD_DIR, file_path)
+        
+        # Security check
+        real_books_dir = os.path.realpath(BOOKS_UPLOAD_DIR)
+        real_file_path = os.path.realpath(full_path)
+        if not real_file_path.startswith(real_books_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+            
+        if not os.path.exists(full_path):
+            # Fallback for public folder
+            public_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "public", file_path.lstrip("/"))
+            if os.path.exists(public_path):
+                full_path = public_path
+            else:
+                raise HTTPException(status_code=404, detail="PDF not found")
+
+        # Convert specific page to image using PyMuPDF (fitz)
+        try:
+            # DPI = 72 * scale (default scale 1.5 = 108 DPI)
+            zoom = scale
+            mat = fitz.Matrix(zoom, zoom)
+            
+            doc = fitz.open(full_path)
+            if page < 1 or page > len(doc):
+                raise HTTPException(status_code=404, detail=f"Page {page} not found (Total: {len(doc)})")
+                
+            # fitz uses 0-indexed pages
+            page_obj = doc.load_page(page - 1)
+            pix = page_obj.get_pixmap(matrix=mat, alpha=False)
+            
+            img_byte_arr = io.BytesIO(pix.tobytes("png"))
+            doc.close()
+            
+            return StreamingResponse(img_byte_arr, media_type="image/png")
+        except Exception as fe:
+            logger.error(f"PyMuPDF rendering error: {fe}")
+            raise HTTPException(status_code=500, detail=f"PDF rendering error: {str(fe)}")
+
+    except Exception as e:
+        logger.error(f"Error rendering PDF page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/render/{book_id}/page/{page_number}")
+async def render_book_page(
+    book_id: str, 
+    page_number: int,
+    scale: float = Query(1.5, ge=0.1, le=5.0)
+):
+    """Render a page for a specific book id."""
+    try:
+        book = db.books.find_one({"_id": ObjectId(book_id)})
+        if not book:
+            book = db.books.find_one({"book_id": book_id})
+            
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found")
+            
+        pdf_path = book.get("pdf_path") or book.get("pdf_filename")
+        if not pdf_path:
+             raise HTTPException(status_code=404, detail="PDF path missing for book")
+             
+        return await get_pdf_page(pdf_path, page=page_number, scale=scale)
+    except Exception as e:
+        logger.error(f"Error rendering book page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== SYNC EXISTING DATA ====================
 

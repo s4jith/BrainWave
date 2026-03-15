@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 class LoginRequest(BaseModel):
     user_id: str
     password: str
-    role: str
+    role: str = None  # Optional role
 
 
 class PasswordChangeRequest(BaseModel):
@@ -53,16 +53,18 @@ async def login(request: LoginRequest):
     Returns user data and session token
     """
     try:
-        # Find user by user_id and role
-        user = db.users.find_one({
-            "user_id": request.user_id,
-            "role": request.role
-        })
+        # Find user by user_id
+        query = {"user_id": request.user_id}
+        if request.role:
+            query["role"] = request.role
+            
+        user = db.users.find_one(query)
         
         if not user:
+            role_msg = f" as {request.role}" if request.role else ""
             return {
                 "success": False,
-                "error": f"No {request.role} found with this user ID"
+                "error": f"No user found with this user ID{role_msg}"
             }
         
         # Verify password
@@ -92,12 +94,13 @@ async def login(request: LoginRequest):
         # Generate session ID
         session_id = str(uuid.uuid4())
         
-        # Return user data
+        # Return user data in format expected by frontend
         return {
             "success": True,
+            "access_token": session_id,  # Map session_id to access_token
+            "token_type": "bearer",
             "first_login": is_first_login,
             "user_id": user["user_id"],
-            "session_id": session_id,
             "user": {
                 "id": str(user["_id"]),
                 "user_id": user["user_id"],
@@ -105,7 +108,8 @@ async def login(request: LoginRequest):
                 "email": user.get("email", ""),
                 "role": user["role"],
                 "class_level": user.get("class_level"),
-                "is_onboarded": user.get("isOnboarded", False)
+                "is_onboarded": user.get("isOnboarded", False),
+                "permissions": [] # Default empty permissions to match TS interface
             }
         }
     

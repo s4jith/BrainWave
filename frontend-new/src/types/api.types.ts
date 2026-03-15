@@ -188,9 +188,17 @@ export interface StudentGroup {
     name: string;
     subject: string;
     class_level: number;
-    teacher_id: string;
+    teacher_id?: string;
     student_count?: number;
     teacher_name?: string;
+    teacher?: {
+        name: string;
+        email?: string;
+    };
+    description?: string;
+    batch_year?: string;
+    created_at?: string;
+    test_count?: number;
 }
 
 export interface StudentLevelResponse {
@@ -198,6 +206,24 @@ export interface StudentLevelResponse {
     level: 'beginner' | 'intermediate' | 'advanced';
     explanation_mode: string;
     updated_at: string;
+}
+
+export interface StudentTopic {
+    name?: string;
+}
+
+export interface StudentChapter {
+    chapter_number: number;
+    title: string;
+    topics?: string[];
+}
+
+export interface StudentSubject {
+    id: string;
+    subject_name: string;
+    class_level: number;
+    total_chapters: number;
+    chapters: StudentChapter[];
 }
 
 // ─── Teacher (/api/teacher) ────────────────────────────────────────────────────
@@ -310,11 +336,7 @@ export interface TestSubmission {
 
 
 
-export interface StudentGroup {
-    id: string;
-    name: string;
-    students: any[];
-}
+
 
 export interface CourseDetailResponse {
     id: string;
@@ -489,6 +511,54 @@ export interface AdminDashboardStats {
     [key: string]: any;
 }
 
+export interface AdminAnalyticsData {
+    user_stats: {
+        total_users: number;
+        total_students: number;
+        total_teachers: number;
+        active_today: number;
+        active_this_week: number;
+        active_this_month: number;
+        inactive_users: number;
+        new_users_today: number;
+        new_users_this_week: number;
+        new_users_this_month: number;
+    };
+    test_stats: {
+        total_tests_created: number;
+        total_tests_taken: number;
+        tests_completed: number;
+        tests_in_progress: number;
+        average_score: number;
+        pass_rate: number;
+        tests_today: number;
+        tests_this_week: number;
+    };
+    activity_trend: {
+        date: string;
+        active_users: number;
+        tests_taken: number;
+    }[];
+    subject_stats: {
+        subject: string;
+        avg_score: number;
+        total_tests: number;
+        total_students: number;
+    }[];
+    top_performers: {
+        student_id: string;
+        name: string;
+        avg_score: number;
+        tests_completed: number;
+    }[];
+    weak_students: {
+        student_id: string;
+        name: string;
+        avg_score: number;
+        days_inactive: number;
+    }[];
+}
+
 export interface TestSubmission {
     id: string;
     test_id: string;
@@ -540,6 +610,7 @@ export interface Suggestion {
     email?: string;
     status: 'pending' | 'reviewed' | 'implemented' | 'rejected';
     response?: string;
+    admin_response?: string;
     created_at: string;
 }
 

@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, Users, TrendingUp, Award, HelpCircle, Clock, FileText } from 'lucide-react';
+import { ClipboardList, Users, TrendingUp, Award, HelpCircle, Clock, FileText, BarChart2, CheckCircle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { DashboardLayout } from '@/components/common/DashboardLayout';
 import { StatCard } from '@/components/ui/Card';
 import { AlertBanner } from '@/components/ui/AlertBanner';
@@ -17,7 +18,32 @@ import { formatDate } from '@/utils/formatters';
 import type { TeacherStats } from '@/types/api.types';
 
 interface TestReport { name: string; taken_by: number; avg_score?: number; status: string; date?: string }
-interface ReportsShape { avg_score?: number; pass_rate?: number; total_students?: number; total_assessments?: number; test_reports?: TestReport[] }
+interface ReportsShape { 
+    avg_score?: number; 
+    pass_rate?: number; 
+    total_students?: number; 
+    total_assessments?: number; 
+    test_reports?: TestReport[];
+    recent_performance?: { name: string; avg: number }[];
+    distribution?: { name: string; value: number }[];
+}
+
+const DIST_COLORS = [
+    { fill: "#6366f1", light: "#ede9fe" },
+    { fill: "#10b981", light: "#d1fae5" },
+    { fill: "#f59e0b", light: "#fef3c7" },
+    { fill: "#ef4444", light: "#fee2e2" },
+];
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl">
+            <p className="font-medium mb-1">{label}</p>
+            <p className="text-indigo-300">{payload[0].name}: <span className="font-bold text-white">{payload[0].value}%</span></p>
+        </div>
+    );
+};
 
 async function loadDashboard() {
     const [statsRes, reportsRes] = await Promise.allSettled([
@@ -55,6 +81,12 @@ export default function TeacherDashboardPage() {
     const pending = stats?.pending ?? 0;
     const testReports = reports?.test_reports ?? [];
 
+    const perfData = reports?.recent_performance || [];
+    const distData = reports?.distribution || [];
+    const hasPerf = perfData.length > 0;
+    const hasDist = distData.length > 0 && distData.some(d => d.value > 0);
+    const totalDist = distData.reduce((s, d) => s + d.value, 0);
+
     return (
         <DashboardLayout>
             <div className="mb-8">
@@ -86,6 +118,86 @@ export default function TeacherDashboardPage() {
                         </div>
                     </div>
                 ))}
+            </div>
+
+            <div className="mb-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* Bar Chart — Recent Performance */}
+                <div className="lg:col-span-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="mb-4">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Recent Test Performance</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Average score per test</p>
+                    </div>
+                    {hasPerf ? (
+                        <div className="h-[220px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={perfData} barSize={32} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                                            <stop offset="100%" stopColor="#818cf8" stopOpacity={0.7} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(99,102,241,0.07)" }} />
+                                    <Bar dataKey="avg" name="Avg Score" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-[220px] text-gray-400 dark:text-gray-600">
+                            <BarChart2 className="w-10 h-10 mb-2" />
+                            <p className="text-sm">No performance data yet</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Donut — Score Distribution */}
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="mb-4">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Score Distribution</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Student performance bands</p>
+                    </div>
+                    {hasDist ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="h-[160px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={distData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" strokeWidth={0}>
+                                            {distData.map((_, i) => (
+                                                <Cell key={i} fill={DIST_COLORS[i % DIST_COLORS.length].fill} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(v: any, n: any) => [`${v} students`, n]} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="w-full space-y-2">
+                                {distData.map((d, i) => {
+                                    const pct = totalDist > 0 ? Math.round((d.value / totalDist) * 100) : 0;
+                                    const c = DIST_COLORS[i % DIST_COLORS.length];
+                                    return (
+                                        <div key={i} className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.fill }} />
+                                                <span className="text-gray-600 dark:text-gray-400">{d.name}</span>
+                                            </div>
+                                            <span className="font-semibold text-gray-900 dark:text-white">
+                                                {d.value} <span className="text-gray-400 font-normal">({pct}%)</span>
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-[220px] text-gray-400 dark:text-gray-600">
+                            <CheckCircle className="w-10 h-10 mb-2" />
+                            <p className="text-sm">No distribution data yet</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">

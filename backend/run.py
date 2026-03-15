@@ -16,9 +16,9 @@ if __name__ == "__main__":
     print(f"   Docs: http://{settings.HOST}:{settings.PORT}/docs")
     print("=" * 60)
     
-    # You can also run: `uvicorn run:app --reload --port 8000`
+    # Use import string "app.main:app" instead of the object to support reload
     uvicorn.run(
-        app,
+        "app.main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,

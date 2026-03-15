@@ -22,6 +22,8 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
 
             setAuth: (user, token) => {
+                if (!user) return;
+
                 if (typeof window !== 'undefined') {
                     localStorage.setItem(JWT_STORAGE_KEY, token);
                     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));

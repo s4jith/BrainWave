@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, FileText, BookOpen, Users, ClipboardList, TrendingUp } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, BookOpen, Users, ClipboardList, TrendingUp, GraduationCap } from 'lucide-react';
 import { DashboardLayout } from '@/components/common/DashboardLayout';
 import { StatCard } from '@/components/ui/Card';
 import { TabStrip } from '@/components/ui/TabStrip';
@@ -16,17 +16,25 @@ import apiClient from '@/lib/axios';
 import { formatDate } from '@/utils/formatters';
 import type { QuestionBankItem, HeadStats, QuestionPaper } from '@/types/api.types';
 
+interface HeadAssignment {
+    assignment_type: 'subject' | 'class';
+    assigned_subjects?: string[];
+    assigned_classes?: number[];
+}
+
 async function loadHeadDashboard() {
-    const [statsRes, pendingQRes, pendingPapersRes] = await Promise.allSettled([
-        apiClient.get<{ stats: HeadStats }>('/api/head/stats'),
+    const [statsRes, pendingQRes, pendingPapersRes, assignmentRes] = await Promise.allSettled([
+        apiClient.get<{ stats: HeadStats }>('/api/head/dashboard-stats'),
         apiClient.get<{ questions: QuestionBankItem[] }>('/api/head/pending-questions'),
         apiClient.get<{ papers: QuestionPaper[] }>('/api/head/pending-papers'),
+        apiClient.get<HeadAssignment>('/api/head/my-assignment').catch(() => null),
     ]);
 
     return {
         stats: statsRes.status === 'fulfilled' ? statsRes.value.data.stats : null,
         pendingQuestions: pendingQRes.status === 'fulfilled' ? pendingQRes.value.data.questions : [],
         pendingPapers: pendingPapersRes.status === 'fulfilled' ? pendingPapersRes.value.data.papers : [],
+        assignment: assignmentRes.status === 'fulfilled' && assignmentRes.value ? assignmentRes.value.data : null,
     };
 }
 
@@ -46,21 +54,22 @@ export default function HeadDashboardPage() {
     const stats = data?.stats ?? null;
     const pendingQuestions = data?.pendingQuestions ?? [];
     const pendingPapers = data?.pendingPapers ?? [];
+    const assignment = data?.assignment ?? null;
 
     const handleApproveQuestion = async (id: string) => {
-        await apiClient.put(`/api/head/questions/${id}/approve`);
+        await apiClient.post(`/api/head/approve-question/${id}`);
         run();
     };
     const handleRejectQuestion = async (id: string) => {
-        await apiClient.put(`/api/head/questions/${id}/reject`);
+        await apiClient.post(`/api/head/reject-question/${id}`);
         run();
     };
     const handleApprovePaper = async (id: string) => {
-        await apiClient.put(`/api/head/papers/${id}/approve`);
+        await apiClient.post(`/api/head/approve-paper/${id}`);
         run();
     };
     const handleRejectPaper = async (id: string) => {
-        await apiClient.put(`/api/head/papers/${id}/reject`);
+        await apiClient.post(`/api/head/reject-paper/${id}`);
         run();
     };
 
@@ -79,6 +88,40 @@ export default function HeadDashboardPage() {
                 <StatCard icon={XCircle} label="Rejected" value={stats?.total_rejected ?? 0} description="Questions rejected" />
                 <StatCard icon={FileText} label="Papers" value={stats?.total_papers ?? 0} description="Question papers" />
             </div>
+
+            {assignment && (
+                <div className="mb-8 rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-wrap items-center gap-3 dark:border-gray-700 dark:bg-gray-800">
+                    {assignment.assignment_type === "subject" ? (
+                        <>
+                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-100 px-3 py-1.5 text-sm font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                <BookOpen className="h-4 w-4" /> Assigned by Subject
+                            </span>
+                            {(assignment.assigned_subjects || []).map(s => (
+                                <span key={s} className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-sm text-purple-600 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
+                                    {s}
+                                </span>
+                            ))}
+                            {(!assignment.assigned_subjects || assignment.assigned_subjects.length === 0) && (
+                                <span className="text-sm text-gray-400">No subjects assigned yet</span>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                <GraduationCap className="h-4 w-4" /> Assigned by Class
+                            </span>
+                            {(assignment.assigned_classes || []).map(c => (
+                                <span key={c} className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-sm text-blue-600 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                                    Class {c}
+                                </span>
+                            ))}
+                            {(!assignment.assigned_classes || assignment.assigned_classes.length === 0) && (
+                                <span className="text-sm text-gray-400">No classes assigned yet</span>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             <TabStrip
                 tabs={[

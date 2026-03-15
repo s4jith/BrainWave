@@ -6,18 +6,18 @@ import {
     BookOpen, Award, TrendingUp, Calendar, Users, CheckCircle,
     BarChart3, MessageCircle, FileText, GraduationCap,
 } from 'lucide-react';
-import { DashboardLayout } from '@/components/common/DashboardLayout';
-import { StatCard } from '@/components/ui/Card';
-import { QuickActionCard } from '@/components/ui/QuickActionCard';
-import { AlertBanner } from '@/components/ui/AlertBanner';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { PageLoader, TableLoader } from '@/components/ui/Spinner';
-import { Badge } from '@/components/ui/Badge';
-import { useAsync } from '@/hooks/useAsync';
-import { useAuthStore } from '@/stores/authStore';
-import { studentService } from '@/services/student.service';
-import { gradebookService } from '@/services/gradebook.service';
-import { formatDate } from '@/utils/formatters';
+import { DashboardLayout } from '../../../components/common/DashboardLayout';
+import { StatCard } from '../../../components/ui/Card';
+import { QuickActionCard } from '../../../components/ui/QuickActionCard';
+import { AlertBanner } from '../../../components/ui/AlertBanner';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { PageLoader, TableLoader } from '../../../components/ui/Spinner';
+import { Badge } from '../../../components/ui/Badge';
+import { useAsync } from '../../../hooks/useAsync';
+import { useAuthStore } from '../../../stores/authStore';
+import { studentService } from '../../../services/student.service';
+import { gradebookService } from '../../../services/gradebook.service';
+import { formatDate } from '../../../utils/formatters';
 
 // ── Local types matching API shapes ─────────────────────────────────────────
 interface StudentStats { completed_assessments: number; average_score: number; upcoming_deadlines: number }

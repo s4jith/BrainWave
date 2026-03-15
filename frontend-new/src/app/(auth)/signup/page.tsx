@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Eye, EyeOff, Loader2, Slack } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { SignupRequest } from '@/types/auth.types';
+import { AnimatedCharacters } from '@/components/ui/animated-characters';
 
 // ── Signup Page – replicates old frontend split-panel design ─────────────────
 export default function SignupPage() {
@@ -67,31 +68,8 @@ export default function SignupPage() {
                     </p>
                 </div>
 
-                {/* Owl avatar reacts to password field focus */}
-                <div className={`flex flex-col items-center gap-4 transition-all duration-300 ${isTypingPwd ? 'scale-110' : 'scale-100'}`}>
-                    <svg width="160" height="160" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <ellipse cx="90" cy="110" rx="55" ry="60" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="2" />
-                        <ellipse cx="90" cy="65" rx="45" ry="42" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="2" />
-                        <polygon points="60,30 50,10 70,25" fill="#e2e8f0" />
-                        <polygon points="120,30 130,10 110,25" fill="#e2e8f0" />
-                        <circle cx="72" cy="62" r="14" fill="white" stroke="#94a3b8" strokeWidth="1.5" />
-                        <circle cx="72" cy={showPwd ? '58' : '62'} r="7" fill="#1e293b" className="transition-all duration-200" />
-                        <circle cx="108" cy="62" r="14" fill="white" stroke="#94a3b8" strokeWidth="1.5" />
-                        <circle cx="108" cy={showPwd ? '58' : '62'} r="7" fill="#1e293b" className="transition-all duration-200" />
-                        {isTypingPwd && !showPwd && (
-                            <>
-                                <rect x="48" y="54" width="34" height="14" rx="7" fill="#cbd5e1" />
-                                <rect x="98" y="54" width="34" height="14" rx="7" fill="#cbd5e1" />
-                            </>
-                        )}
-                        <polygon points="90,72 83,82 97,82" fill="#fbbf24" />
-                        <ellipse cx="90" cy="120" rx="30" ry="35" fill="#e2e8f0" />
-                        <ellipse cx="72" cy="166" rx="18" ry="8" fill="#fbbf24" />
-                        <ellipse cx="108" cy="166" rx="18" ry="8" fill="#fbbf24" />
-                    </svg>
-                    <p className="text-sm text-slate-400 italic">
-                        {isTypingPwd && !showPwd ? "I'm not peeking! 🙈" : 'Join the learning journey!'}
-                    </p>
+                <div className="mb-10 w-full flex justify-center transform scale-90 xxl:scale-100">
+                    <AnimatedCharacters password={password} showPassword={showPwd} isTyping={isTypingPwd} />
                 </div>
             </div>
 

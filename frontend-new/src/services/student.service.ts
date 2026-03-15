@@ -1,5 +1,5 @@
 import apiClient from '../lib/axios';
-import type { StudentGroup, StudentLevelResponse } from '../types';
+import type { StudentGroup, StudentLevelResponse, StudentSubject } from '../types';
 
 export const studentService = {
     async getGroups(): Promise<{ groups: StudentGroup[] }> {
@@ -17,8 +17,8 @@ export const studentService = {
         return data;
     },
 
-    async getSubjects(): Promise<{ subjects: string[]; total: number }> {
-        const { data } = await apiClient.get('/api/student/my-subjects');
+    async getSubjects(): Promise<{ subjects: StudentSubject[]; total: number }> {
+        const { data } = await apiClient.get<{ subjects: StudentSubject[]; total: number }>('/api/student/my-subjects');
         return data;
     },
 

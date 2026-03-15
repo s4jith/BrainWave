@@ -13,7 +13,7 @@ import logging
 
 from app.core.config import settings
 from app.db.mongo import init_databases, close_databases
-from app.routers import chat, mcq, evaluate, notes, assessment, annotation
+from app.routers import chat, mcq, evaluate, notes, assessment, annotation, assessments
 
 # Configure logging
 logging.basicConfig(
@@ -99,22 +99,40 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(mcq.router, prefix="/api")
 app.include_router(evaluate.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
-app.include_router(assessment.router, prefix="/api")  # ✅ Voice Assessment
+app.include_router(assessment.router, prefix="/api")  # ✅ AI Voice Assessment
+app.include_router(assessments.router, prefix="/api") # ✅ Teacher Assessment & Submissions
 app.include_router(annotation.router, prefix="/api")  # ✅ Annotation Chatbot
 
 # Import admin and user routers
 from app.routers import admin, user, test, auth
 from app.routers import admin_dashboard, support, support_tickets, test_management
-from app.routers import book_management
-app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
-app.include_router(user.router, prefix="/api")   # ✅ User Stats (Dashboard)
-app.include_router(test.router, prefix="/api")   # ✅ Tests (Staff + AI)
-app.include_router(auth.router)                  # ✅ Authentication (Login/Password)
-app.include_router(admin_dashboard.router)       # ✅ Admin Dashboard & Student Management
-app.include_router(support.router)               # ✅ Support (FAQs, Contact, Feedback)
-app.include_router(support_tickets.router)       # ✅ Support Tickets
-app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
-app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
+from app.routers import book_management, teacher, student, head_approval, notifications
+from app.routers import staff_tests, courses, curriculum, gradebook, question_bank
+from app.routers import question_papers, top_questions, suggestions, queries, history
+
+app.include_router(admin.router, prefix="/api")        # ✅ Admin & Monitoring
+app.include_router(user.router, prefix="/api")         # ✅ User Stats (Dashboard)
+app.include_router(test.router, prefix="/api")         # ✅ Tests (Staff + AI)
+app.include_router(auth.router)                        # ✅ Authentication (Login/Password)
+app.include_router(admin_dashboard.router)             # ✅ Admin Dashboard & Student Management
+app.include_router(support.router)                     # ✅ Support (FAQs, Contact, Feedback)
+app.include_router(support_tickets.router)             # ✅ Support Tickets
+app.include_router(test_management.router)             # ✅ Test Management (PDF Tests, Submissions, Feedback)
+app.include_router(book_management.router)             # ✅ Book Management (Admin upload, Student view)
+app.include_router(teacher.router, prefix="/api")      # ✅ Teacher Portal
+app.include_router(student.router, prefix="/api")      # ✅ Student Profile & Level
+app.include_router(head_approval.router, prefix="/api") # ✅ Head Approval Flow
+app.include_router(notifications.router, prefix="/api") # ✅ System Notifications
+app.include_router(staff_tests.router)                 # ✅ Legacy Staff Tests
+app.include_router(courses.router, prefix="/api")      # ✅ Course Management
+app.include_router(curriculum.router, prefix="/api")   # ✅ Curriculum Management
+app.include_router(gradebook.router, prefix="/api")    # ✅ Gradebook & Results
+app.include_router(question_bank.router, prefix="/api") # ✅ Question Bank
+app.include_router(question_papers.router, prefix="/api") # ✅ Question Papers
+app.include_router(top_questions.router, prefix="/api") # ✅ Top Questions
+app.include_router(suggestions.router, prefix="/api")   # ✅ AI Suggestions
+app.include_router(queries.router, prefix="/api")       # ✅ User Queries
+app.include_router(history.router, prefix="/api")       # ✅ Learning History
 
 
 # Root endpoint

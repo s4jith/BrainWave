@@ -1,0 +1,129 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+venv_311/
+temp_env/
+*_env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment files (API KEYS - NEVER COMMIT!)
+.env
+.env.local
+.env.*.local
+*.env
+**/.env
+backend/.env
+**/backend/.env
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Large files and datasets (DO NOT COMMIT)
+backend/models/
+backend/ncert-working-dataset/
+backend/uploads/
+backend/app/uploads/books/*
+backend/app/uploads/question_images/*
+backend/app/uploads/submissions/*
+backend/app/uploads/tests/*
+!backend/app/uploads/**/.gitkeep
+backend/extracted_images/
+backend/Books/
+/Books/
+*.pdf
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model files
+*.h5
+*.pkl
+*.bin
+*.onnx
+*.pt
+*.pth
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+~*
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dependencies (Binary & Cache)
+poppler/
+backend/poppler/
+
+# Python cache
+backend/app/cache/
+backend/app/__pycache__/
+backend/app/**/__pycache__/
+backend/scripts/__pycache__/
+
+# Frontend cache
+frontend/.vite/
+frontend/node_modules/.cache/
+
+# Legacy Frontend Gitignore patterns (Consolidated)
+lerna-debug.log*
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+backend/Books/

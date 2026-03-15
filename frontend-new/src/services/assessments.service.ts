@@ -1,61 +1,77 @@
 import apiClient from '../lib/axios';
-import type { TestSubmission, Assessment, AssessmentSubmission } from '../types';
+
+/** Assessment Question structure */
+export interface AssessmentQuestion {
+    question: string;
+    type?: 'direct' | 'concept';
+    difficulty?: string;
+    expected_keywords?: string[];
+    page_range?: string;
+}
+
+/** Voice Assessment Response from backend */
+export interface AssessmentResponse {
+    questions: string[] | AssessmentQuestion[];
+    chapter: number;
+    subject: string;
+    total?: number;
+    page_range?: string;
+    cached?: boolean;
+}
+
+export interface VoiceAnswer {
+    question: string;
+    answer: string;
+    timestamp?: string;
+}
+
+export interface AssessmentEvaluationResponse {
+    score: number;
+    feedback: string;
+    strengths: string[];
+    improvements: string[];
+    question_scores: {
+        question_num: number;
+        score: number;
+        hint: string;
+    }[];
+    topics_to_study: string[];
+}
 
 export const assessmentsService = {
-    async listAssessments(courseId?: string, page = 1, pageSize = 20): Promise<{ assessments: Assessment[]; total: number }> {
-        const { data } = await apiClient.get('/api/assessments', {
-            params: { course_id: courseId, page, page_size: pageSize },
+    /** Generate simple assessment questions (1-5 questions) */
+    async generateQuestions(classLevel: number, subject: string, chapter: number, numQuestions = 3): Promise<AssessmentResponse> {
+        const { data } = await apiClient.post<AssessmentResponse>('/api/assessment/questions', {
+            class_level: classLevel,
+            subject,
+            chapter,
+            num_questions: numQuestions
         });
         return data;
     },
 
-    async getAssessment(assessmentId: string): Promise<Assessment> {
-        const { data } = await apiClient.get<Assessment>(`/api/assessments/${assessmentId}`);
+    /** Generate enhanced assessment questions (15 questions for 10-page interval) */
+    async generateEnhancedQuestions(payload: {
+        class_level: number;
+        subject: string;
+        chapter: number;
+        lesson_name: string;
+        page_range: string;
+        student_id: string;
+        force_regenerate?: boolean;
+    }): Promise<any> {
+        const { data } = await apiClient.post('/api/assessment/questions/enhanced', payload);
         return data;
     },
 
-    async createAssessment(payload: Omit<Assessment, 'id' | 'is_published'>): Promise<Assessment> {
-        const { data } = await apiClient.post<Assessment>('/api/assessments', payload);
+    /** Evaluate voice assessment answers */
+    async evaluateAnswers(payload: {
+        class_level: number;
+        subject: string;
+        chapter: number;
+        answers: VoiceAnswer[];
+    }): Promise<AssessmentEvaluationResponse> {
+        const { data } = await apiClient.post<AssessmentEvaluationResponse>('/api/assessment/evaluate', payload);
         return data;
-    },
-
-    async updateAssessment(assessmentId: string, payload: Partial<Assessment>): Promise<Assessment> {
-        const { data } = await apiClient.put<Assessment>(`/api/assessments/${assessmentId}`, payload);
-        return data;
-    },
-
-    async publishAssessment(assessmentId: string): Promise<void> {
-        await apiClient.post(`/api/assessments/${assessmentId}/publish`);
-    },
-
-    async deleteAssessment(assessmentId: string): Promise<void> {
-        await apiClient.delete(`/api/assessments/${assessmentId}`);
-    },
-
-    async startAssessment(assessmentId: string): Promise<unknown> {
-        const { data } = await apiClient.get(`/api/assessments/${assessmentId}/start`);
-        return data;
-    },
-
-    async submitAssessment(assessmentId: string, answers: { question_id: string; answer: string }[]): Promise<AssessmentSubmission> {
-        const { data } = await apiClient.post<AssessmentSubmission>(`/api/assessments/${assessmentId}/submit`, { answers });
-        return data;
-    },
-
-    async getSubmissions(assessmentId: string): Promise<AssessmentSubmission[]> {
-        const { data } = await apiClient.get<AssessmentSubmission[]>(`/api/assessments/${assessmentId}/submissions`);
-        return data;
-    },
-
-    async getMySubmissions(): Promise<AssessmentSubmission[]> {
-        const { data } = await apiClient.get<AssessmentSubmission[]>('/api/assessments/submissions/my');
-        return data;
-    },
-
-    async gradeSubmission(submissionId: string, payload: {
-        grades: { question_id: string; points_awarded: number }[];
-        feedback?: string;
-    }): Promise<void> {
-        await apiClient.post(`/api/assessments/submissions/${submissionId}/grade`, payload);
     },
 };
