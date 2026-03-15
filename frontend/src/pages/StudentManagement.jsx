@@ -6,9 +6,11 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp, Shield } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function StudentManagement() {
+  const { toast } = useToast();
   const { getAuthHeader } = useUserStore();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export default function StudentManagement() {
     } catch (err) {
       // Revert
       setStudentFeatures(prev => ({ ...prev, [key]: !value }));
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     }
   };
 
@@ -146,7 +148,7 @@ export default function StudentManagement() {
       
       setStudents(prev => prev.filter(s => s.id !== tempId));
       setShowAddModal(true);
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     } finally {
       setSaving(false);
     }
@@ -168,7 +170,7 @@ export default function StudentManagement() {
       setSelectedStudent(null);
       resetForm();
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     } finally {
       setSaving(false);
     }
@@ -190,7 +192,7 @@ export default function StudentManagement() {
       }
     } catch (err) {
       
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
       setStudents([...updatedStudents, deletedStudent]);
     }
   };
@@ -210,7 +212,7 @@ export default function StudentManagement() {
       });
       setShowCredentialsModal(true);
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     }
   };
 
@@ -248,7 +250,7 @@ export default function StudentManagement() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+    toast.info("Copied to clipboard!")
   };
 
   const filteredStudents = students.filter(s =>

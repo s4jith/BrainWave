@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 const DEFAULT_SETTINGS = {
@@ -19,7 +20,7 @@ const DEFAULT_SETTINGS = {
     questionTypes: ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     cognitiveLevels: ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     difficultyLevels: ["easy", "medium", "hard"],
-    studentUserIdPattern: "class_level_counter5_age",
+    studentUserIdPattern: "class_level_counter_age",
     studentPasswordPattern: "nameage",
     teacherUserIdPattern: "staff_counter_name",
     teacherPasswordPattern: "name@123",
@@ -49,6 +50,7 @@ const sanitizeSettings = (raw = {}) => {
 };
 
 export default function AdminSettings() {
+  const { toast } = useToast();
     const { user, getAuthHeader } = useUserStore();
     const [activeSection, setActiveSection] = useState("general_settings");
     const [saving, setSaving] = useState(false);
@@ -59,7 +61,7 @@ export default function AdminSettings() {
     const [newCognitiveLevel, setNewCognitiveLevel] = useState("");
     const [newDifficultyLevel, setNewDifficultyLevel] = useState("");
 
-    const credentialTokens = ["name", "age", "class_level", "counter", "counter5"];
+    const credentialTokens = ["name", "age", "class_level", "counter"];
 
     const appendToken = (field, token) => {
         const current = settings[field] || "";
@@ -135,7 +137,7 @@ export default function AdminSettings() {
         try {
             await persistSettings(settings);
         } catch (err) {
-            alert(err.message || "Network error saving settings.");
+            toast.error(err.message || "Network error saving settings.")
         } finally {
             setSaving(false);
         }
@@ -242,8 +244,8 @@ export default function AdminSettings() {
                                 values={settings.questionTypes || []}
                                 inputValue={newQuestionType}
                                 setInputValue={setNewQuestionType}
-                                onAdd={() => addOption("questionTypes", newQuestionType, setNewQuestionType).catch((err) => alert(err.message || "Failed to save settings."))}
-                                onRemove={(v) => removeOption("questionTypes", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onAdd={() => addOption("questionTypes", newQuestionType, setNewQuestionType).catch((err) => toast.error(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("questionTypes", v).catch((err) => toast.error(err.message || "Failed to save settings."))}
                             />
 
                             <OptionEditor
@@ -251,8 +253,8 @@ export default function AdminSettings() {
                                 values={settings.cognitiveLevels || []}
                                 inputValue={newCognitiveLevel}
                                 setInputValue={setNewCognitiveLevel}
-                                onAdd={() => addOption("cognitiveLevels", newCognitiveLevel, setNewCognitiveLevel).catch((err) => alert(err.message || "Failed to save settings."))}
-                                onRemove={(v) => removeOption("cognitiveLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onAdd={() => addOption("cognitiveLevels", newCognitiveLevel, setNewCognitiveLevel).catch((err) => toast.error(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("cognitiveLevels", v).catch((err) => toast.error(err.message || "Failed to save settings."))}
                             />
 
                             <OptionEditor
@@ -260,8 +262,8 @@ export default function AdminSettings() {
                                 values={settings.difficultyLevels || []}
                                 inputValue={newDifficultyLevel}
                                 setInputValue={setNewDifficultyLevel}
-                                onAdd={() => addOption("difficultyLevels", newDifficultyLevel, setNewDifficultyLevel).catch((err) => alert(err.message || "Failed to save settings."))}
-                                onRemove={(v) => removeOption("difficultyLevels", v).catch((err) => alert(err.message || "Failed to save settings."))}
+                                onAdd={() => addOption("difficultyLevels", newDifficultyLevel, setNewDifficultyLevel).catch((err) => toast.error(err.message || "Failed to save settings."))}
+                                onRemove={(v) => removeOption("difficultyLevels", v).catch((err) => toast.error(err.message || "Failed to save settings."))}
                             />
                         </div>
                     </div>
@@ -287,7 +289,7 @@ export default function AdminSettings() {
                                 onChange={(v) => setSettings({ ...settings, studentUserIdPattern: v })}
                                 onTokenClick={(t) => appendToken("studentUserIdPattern", t)}
                                 tokens={credentialTokens}
-                                help="Example: class_level_counter5_age"
+                                help="Example: class_level_counter_age"
                             />
 
                             <PatternField

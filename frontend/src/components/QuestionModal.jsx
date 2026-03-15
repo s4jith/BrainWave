@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Sparkles, Loader2, Plus, Trash } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import QuestionImageUploadPanel from "./QuestionImageUploadPanel";
+import BookCaptureModal from "./BookCaptureModal";
 import authFetch from "../utils/authFetch";
+import { useToast } from "../contexts/ToastContext";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -14,9 +16,12 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
     const [activeTab, setActiveTab] = useState(question ? "manual" : "manual");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const { toast } = useToast();
 
     // Tracks which images have been attached to this question
     const [uploadedImages, setUploadedImages] = useState([]);
+    const [captureModalOpen, setCaptureModalOpen] = useState(false);
+    const captureUploadHandlerRef = useRef(null);
 
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [selectedCurrSubject, setSelectedCurrSubject] = useState(null); 
@@ -244,6 +249,26 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
         setUploadedImages(newIds.map(id => ({ image_id: id, filename: id })));
     };
 
+    const openCaptureForPanel = (uploadHandler) => {
+        if (!formData.class_level || !formData.subject || !formData.chapter) {
+            toast.error("Select class, subject, and chapter before capturing from book.");
+            return;
+        }
+        captureUploadHandlerRef.current = uploadHandler;
+        setCaptureModalOpen(true);
+    };
+
+    const handleCaptureFromBook = async (file) => {
+        if (!captureUploadHandlerRef.current) return false;
+        const ok = await captureUploadHandlerRef.current(file);
+        if (ok) {
+            toast.success("Captured image attached.");
+        } else {
+            toast.error("Capture upload failed. Please try again.");
+        }
+        return ok;
+    };
+
     const handleManualSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -364,7 +389,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
             const result = await response.json();
             if (!result.success) throw new Error(result.error || "Generation failed");
 
-            alert(result.message); 
+            toast.success(result.message);
             onClose(true);
         } catch (err) {
             setError(err.message);
@@ -595,6 +620,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                     onTextChange={(newText) => setFormData(prev => ({ ...prev, text: newText }))}
                                     imageIds={uploadedImages.map(img => img.image_id)}
                                     onImageIdsChange={handleImageIdsChange}
+                                    onCaptureRequest={openCaptureForPanel}
                                 />
                                 {!['mcq','fillup','true_false'].includes(formData.type) && (
                                     <QuestionImageUploadPanel
@@ -602,6 +628,7 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                                         placeholder="Click to upload answer ref"
                                         imageIds={formData.answer_image_ids || []}
                                         onImageIdsChange={(ids) => setFormData(prev => ({ ...prev, answer_image_ids: ids }))}
+                                        onCaptureRequest={openCaptureForPanel}
                                     />
                                 )}
                             </div>
@@ -872,6 +899,15 @@ const QuestionModal = ({ question, onClose, isTeacher, userSubjects, availableSu
                     )}
                 </div>
             </div>
+
+            <BookCaptureModal
+                open={captureModalOpen}
+                onClose={() => setCaptureModalOpen(false)}
+                classLevel={formData.class_level}
+                subject={formData.subject}
+                chapter={formData.chapter}
+                onCapture={handleCaptureFromBook}
+            />
         </div>
     );
 };

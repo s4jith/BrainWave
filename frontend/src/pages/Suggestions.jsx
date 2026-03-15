@@ -13,9 +13,11 @@ import {
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function Suggestions() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useUserStore();
   const [subject, setSubject] = useState("");
@@ -67,13 +69,13 @@ export default function Suggestions() {
         setSubject("");
         setSuggestion("");
         fetchMySuggestions();
-        alert("Suggestion submitted successfully!");
+        toast.success("Suggestion submitted successfully!")
       } else {
-        alert(" Failed to submit suggestion. Please try again.");
+        toast.error(" Failed to submit suggestion. Please try again.")
       }
     } catch (err) {
       console.error("Error submitting suggestion:", err);
-      alert(" Failed to submit suggestion. Please try again.");
+      toast.error(" Failed to submit suggestion. Please try again.")
     } finally {
       setLoading(false);
     }

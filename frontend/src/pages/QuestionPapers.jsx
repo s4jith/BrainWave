@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 const PAPER_TYPES = [
@@ -55,6 +56,7 @@ const STATUS_COLORS = {
 };
 
 export default function QuestionPapers() {
+  const { toast } = useToast();
   const { getAuthHeader, user } = useUserStore();
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
@@ -163,7 +165,7 @@ export default function QuestionPapers() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (isTeacher && data.message) alert(data.message);
+        if (isTeacher && data.message) toast.info(data.message)
         fetchPapers();
         if (expandedPaper === paperId) {
           setExpandedPaper(null);
@@ -171,7 +173,7 @@ export default function QuestionPapers() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.detail || "Failed to delete paper");
+        toast.error(data.detail || "Failed to delete paper")
       }
     } catch (err) {
       //
@@ -187,10 +189,10 @@ export default function QuestionPapers() {
       });
       if (res.ok) {
         const data = await res.json();
-        alert(data.message);
+        toast.info(data.message)
       } else {
         const data = await res.json();
-        alert(data.detail || "Failed to add to bank");
+        toast.error(data.detail || "Failed to add to bank")
       }
     } catch (err) {
       //
@@ -279,14 +281,14 @@ export default function QuestionPapers() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data?.message) alert(data.message);
+        if (data?.message) toast.info(data.message)
         fetchPapers();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.detail || "Failed to send paper to pending");
+        toast.error(data.detail || "Failed to send paper to pending")
       }
     } catch (err) {
-      alert("Failed to send paper to pending");
+      toast.error("Failed to send paper to pending")
     }
   };
 

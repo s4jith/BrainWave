@@ -1,26 +1,11 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { Settings, User, Mail, Phone, Key, IdCard, Save, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import { Settings, User, Mail, Phone, Key, IdCard, Save, Eye, EyeOff } from "lucide-react";
 import authFetch from "../utils/authFetch";
+import { useToast } from "../contexts/ToastContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
-
-function Alert({ type, message, onClose }) {
-    if (!message) return null;
-    const isSuccess = type === "success";
-    return (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium ${
-            isSuccess
-                ? "bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
-                : "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
-        }`}>
-            {isSuccess ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-            <span className="flex-1">{message}</span>
-            <button onClick={onClose} className="text-current opacity-60 hover:opacity-100 text-lg leading-none">&times;</button>
-        </div>
-    );
-}
 
 function Section({ title, icon: Icon, children }) {
     return (
@@ -58,11 +43,11 @@ function InputField({ label, id, type = "text", value, onChange, placeholder, hi
 
 export default function TeacherSettings() {
     const { user, getAuthHeader, setUser } = useUserStore();
+    const { toast } = useToast();
 
     // Profile state
     const [profile, setProfile] = useState({ name: "", email: "", phone: "", user_id: "" });
     const [profileLoading, setProfileLoading] = useState(false);
-    const [profileAlert, setProfileAlert] = useState({ type: "", message: "" });
 
     // Password state
     const [passwords, setPasswords] = useState({ current: "", new_password: "", confirm: "" });
@@ -70,7 +55,6 @@ export default function TeacherSettings() {
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
-    const [passwordAlert, setPasswordAlert] = useState({ type: "", message: "" });
 
     useEffect(() => {
         if (user) {
@@ -85,9 +69,8 @@ export default function TeacherSettings() {
 
     // ── Profile Update ─────────────────────────────────────────────────────────
     const handleProfileSave = async () => {
-        setProfileAlert({ type: "", message: "" });
-        if (!profile.name.trim()) return setProfileAlert({ type: "error", message: "Name cannot be empty." });
-        if (!profile.email.trim()) return setProfileAlert({ type: "error", message: "Email cannot be empty." });
+        if (!profile.name.trim()) return toast.error("Name cannot be empty.");
+        if (!profile.email.trim()) return toast.error("Email cannot be empty.");
 
         setProfileLoading(true);
         try {
@@ -102,16 +85,16 @@ export default function TeacherSettings() {
             });
             const data = await res.json();
             if (data.success) {
-                setProfileAlert({ type: "success", message: "Profile updated successfully." });
+                toast.success("Profile updated successfully.");
                 // Update local user store
                 if (setUser) {
                     setUser({ ...user, name: profile.name.trim(), email: profile.email.trim(), phone: profile.phone.trim() });
                 }
             } else {
-                setProfileAlert({ type: "error", message: data.error || "Failed to update profile." });
+                toast.error(data.error || "Failed to update profile.");
             }
         } catch (err) {
-            setProfileAlert({ type: "error", message: "Network error. Please try again." });
+            toast.error("Network error. Please try again.");
         } finally {
             setProfileLoading(false);
         }
@@ -119,11 +102,10 @@ export default function TeacherSettings() {
 
     // ── Password Change ────────────────────────────────────────────────────────
     const handlePasswordChange = async () => {
-        setPasswordAlert({ type: "", message: "" });
-        if (!passwords.current) return setPasswordAlert({ type: "error", message: "Enter your current password." });
-        if (passwords.new_password.length < 8) return setPasswordAlert({ type: "error", message: "New password must be at least 8 characters." });
-        if (passwords.new_password !== passwords.confirm) return setPasswordAlert({ type: "error", message: "New passwords do not match." });
-        if (passwords.current === passwords.new_password) return setPasswordAlert({ type: "error", message: "New password must differ from current password." });
+        if (!passwords.current) return toast.error("Enter your current password.");
+        if (passwords.new_password.length < 8) return toast.error("New password must be at least 8 characters.");
+        if (passwords.new_password !== passwords.confirm) return toast.error("New passwords do not match.");
+        if (passwords.current === passwords.new_password) return toast.error("New password must differ from current password.");
 
         setPasswordLoading(true);
         try {
@@ -139,13 +121,13 @@ export default function TeacherSettings() {
             });
             const data = await res.json();
             if (data.success) {
-                setPasswordAlert({ type: "success", message: "Password changed successfully." });
+                toast.success("Password changed successfully.");
                 setPasswords({ current: "", new_password: "", confirm: "" });
             } else {
-                setPasswordAlert({ type: "error", message: data.error || "Failed to change password." });
+                toast.error(data.error || "Failed to change password.");
             }
         } catch (err) {
-            setPasswordAlert({ type: "error", message: "Network error. Please try again." });
+            toast.error("Network error. Please try again.");
         } finally {
             setPasswordLoading(false);
         }
@@ -172,11 +154,6 @@ export default function TeacherSettings() {
                 {/* ── Profile Info ── */}
                 <Section title="Profile Information" icon={User}>
                     <div className="space-y-4">
-                        {profileAlert.message && (
-                            <Alert type={profileAlert.type} message={profileAlert.message}
-                                onClose={() => setProfileAlert({ type: "", message: "" })} />
-                        )}
-
                         <InputField
                             label="Full Name"
                             id="name"
@@ -226,11 +203,6 @@ export default function TeacherSettings() {
                 {/* ── Change Password ── */}
                 <Section title="Change Password" icon={Key}>
                     <div className="space-y-4">
-                        {passwordAlert.message && (
-                            <Alert type={passwordAlert.type} message={passwordAlert.message}
-                                onClose={() => setPasswordAlert({ type: "", message: "" })} />
-                        )}
-
                         <div className="relative">
                             <label htmlFor="cur-pw" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Current Password</label>
                             <input

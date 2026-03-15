@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Sparkles,
   Bell,
   HelpCircle,
   LayoutGrid,
@@ -36,6 +35,7 @@ import ChatbotPanel from "./ChatbotPanel";
 import authFetch from "../../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
+const BRAND_LOGO_SRC = "/image.png";
 
 // Map nav item IDs to their required feature flag
 const featureGatedItems = {
@@ -288,10 +288,12 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
           {sidebarOpen ? (
             <>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <span className="font-bold text-gray-900 dark:text-white text-lg">The brainwave</span>
+                <img
+                  src={BRAND_LOGO_SRC}
+                  alt="Brainwave logo"
+                  className="w-9 h-9 object-contain"
+                />
+                <span className="font-bold text-gray-900 dark:text-white text-lg">Brainwave</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
@@ -304,10 +306,14 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
           ) : (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mx-auto"
+              className="w-9 h-9 rounded-lg flex items-center justify-center mx-auto"
               title="Expand sidebar"
             >
-              <Sparkles className="w-5 h-5 text-white" />
+              <img
+                src={BRAND_LOGO_SRC}
+                alt="Brainwave logo"
+                className="w-8 h-8 object-contain"
+              />
             </button>
           )}
         </div>

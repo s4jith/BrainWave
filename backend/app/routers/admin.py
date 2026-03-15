@@ -2,17 +2,20 @@
 Admin Router - System management and monitoring endpoints.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, List
 from app.services.gemini_key_manager import gemini_key_manager
+from app.core.permissions import require_role
+from app.models.rbac_models import UserRole
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/admin",
-    tags=["Admin"]
+    tags=["Admin"],
+    dependencies=[Depends(require_role([UserRole.ADMIN]))],
 )
 
 class QuotaStatusResponse(BaseModel):

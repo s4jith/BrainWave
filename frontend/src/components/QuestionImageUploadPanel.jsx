@@ -14,9 +14,10 @@
  */
 
 import { useState, useRef } from "react";
-import { Upload, Copy, CheckCheck, Trash2, Loader2, Plus } from "lucide-react";
+import { Upload, Copy, CheckCheck, Trash2, Loader2, Plus, Scissors } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
+import AuthImage from "./AuthImage";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -27,18 +28,57 @@ export default function QuestionImageUploadPanel({
   onTextChange,
   imageIds = [],
   onImageIdsChange,
+  onCaptureRequest,
+  captureDisabled = false,
 }) {
   const { accessToken } = useUserStore();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [copiedId, setCopiedId] = useState(null);
   const [dragging, setDragging] = useState(false);
+  const [pendingEmbedTag, setPendingEmbedTag] = useState("");
   const fileInputRef = useRef(null);
 
+  const hasPendingPlacement = Boolean(onTextChange && pendingEmbedTag);
+
+  const applyEmbedPlacement = (baseText, embedTag, placement) => {
+    const currentText = typeof baseText === "string" ? baseText : "";
+    switch (placement) {
+      case "below": {
+        const trimmed = currentText.trimEnd();
+        return trimmed ? `${trimmed}\n${embedTag}` : embedTag;
+      }
+      case "top": {
+        const trimmed = currentText.trimStart();
+        return trimmed ? `${embedTag}\n${trimmed}` : embedTag;
+      }
+      case "end": {
+        const sep = currentText && !currentText.endsWith(" ") ? " " : "";
+        return `${currentText}${sep}${embedTag}`;
+      }
+      case "none":
+      default:
+        return currentText;
+    }
+  };
+
+  const handlePlacementChoice = (placement) => {
+    if (onTextChange && pendingEmbedTag) {
+      const nextText = applyEmbedPlacement(text, pendingEmbedTag, placement);
+      onTextChange(nextText);
+    }
+    setPendingEmbedTag("");
+  };
+
   const doUpload = async (file) => {
-    if (!file) return;
+    if (!file) return false;
+    if (hasPendingPlacement) {
+      setUploadError("Choose where to place the previous image before uploading another.");
+      return false;
+    }
     setUploading(true);
     setUploadError("");
+    let success = false;
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -53,17 +93,18 @@ export default function QuestionImageUploadPanel({
       }
       const data = await res.json();
       onImageIdsChange([...imageIds, data.image_id]);
-      // Only embed tag when this panel is tied to question text
+      // Ask placement only when this panel is tied to question text.
       if (onTextChange && typeof text === "string") {
-        const sep = text && !text.endsWith(" ") ? " " : "";
-        onTextChange(text + sep + data.embed_tag);
+        setPendingEmbedTag(data.embed_tag || `[img:${data.image_id}]`);
       }
+      success = true;
     } catch (err) {
       setUploadError(err.message);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+    return success;
   };
 
   const handleDrop = (e) => {
@@ -90,18 +131,32 @@ export default function QuestionImageUploadPanel({
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-700 p-4 space-y-3">
       {/* Card title */}
-      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+        {typeof onCaptureRequest === "function" && (
+          <button
+            type="button"
+            disabled={uploading || captureDisabled || hasPendingPlacement}
+            onClick={() => onCaptureRequest(doUpload)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-zinc-600 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Scissors size={12} /> Capture
+          </button>
+        )}
+      </div>
 
       {/* Drop zone — hidden when images present, replaced by thumbnail list + add-more */}
       {imageIds.length === 0 && (
         <div
-          onClick={() => !uploading && fileInputRef.current?.click()}
+          onClick={() => !uploading && !hasPendingPlacement && fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 px-4 cursor-pointer select-none transition-colors ${
             uploading
               ? "border-blue-300 bg-blue-50 dark:bg-blue-900/10 cursor-not-allowed"
+              : hasPendingPlacement
+              ? "border-amber-300 bg-amber-50 dark:bg-amber-900/10 cursor-not-allowed"
               : dragging
               ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
               : "border-gray-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-zinc-800/50"
@@ -113,7 +168,7 @@ export default function QuestionImageUploadPanel({
             <Upload size={24} className="text-gray-400 dark:text-gray-500" />
           )}
           <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            {uploading ? "Uploading…" : placeholder}
+            {uploading ? "Uploading…" : hasPendingPlacement ? "Choose placement for uploaded image" : placeholder}
           </span>
           {!uploading && (
             <span className="text-xs text-gray-300 dark:text-gray-600">
@@ -132,11 +187,10 @@ export default function QuestionImageUploadPanel({
                 key={id}
                 className="flex items-center gap-2 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg p-2"
               >
-                <img
+                <AuthImage
                   src={`${API_URL}/api/question-bank/images/${id}`}
                   alt=""
                   className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-zinc-600 flex-shrink-0"
-                  onError={(e) => { e.target.style.display = "none"; }}
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate">{id.slice(0, 12)}…</p>
@@ -170,13 +224,15 @@ export default function QuestionImageUploadPanel({
 
           {/* Add-more button (smaller zone) */}
           <div
-            onClick={() => !uploading && fileInputRef.current?.click()}
+            onClick={() => !uploading && !hasPendingPlacement && fileInputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             className={`flex items-center justify-center gap-2 rounded-lg border-2 border-dashed py-3 px-3 cursor-pointer select-none transition-colors ${
               uploading
                 ? "border-blue-300 bg-blue-50 dark:bg-blue-900/10 cursor-not-allowed"
+                : hasPendingPlacement
+                ? "border-amber-300 bg-amber-50 dark:bg-amber-900/10 cursor-not-allowed"
                 : dragging
                 ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
                 : "border-gray-200 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-zinc-800/50"
@@ -186,8 +242,46 @@ export default function QuestionImageUploadPanel({
               ? <Loader2 size={14} className="animate-spin text-blue-400" />
               : <Plus size={14} className="text-gray-400" />}
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              {uploading ? "Uploading…" : "Add another image"}
+              {uploading ? "Uploading…" : hasPendingPlacement ? "Choose placement first" : "Add another image"}
             </span>
+          </div>
+        </div>
+      )}
+
+      {hasPendingPlacement && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
+          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            Where should this image be placed in question text?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handlePlacementChoice("below")}
+              className="px-2.5 py-1.5 text-xs rounded-md border border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+            >
+              Below text
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePlacementChoice("end")}
+              className="px-2.5 py-1.5 text-xs rounded-md border border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+            >
+              End of line
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePlacementChoice("top")}
+              className="px-2.5 py-1.5 text-xs rounded-md border border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+            >
+              Top of text
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePlacementChoice("none")}
+              className="px-2.5 py-1.5 text-xs rounded-md border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Keep as attachment only
+            </button>
           </div>
         </div>
       )}

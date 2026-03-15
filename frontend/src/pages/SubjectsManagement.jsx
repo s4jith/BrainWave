@@ -11,9 +11,11 @@ import {
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function SubjectsManagement() {
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [subjects, setSubjects] = useState([]);
@@ -163,7 +165,7 @@ export default function SubjectsManagement() {
       });
 
       if (response.ok) {
-        alert("Subject created successfully!");
+        toast.success("Subject created successfully!")
         setShowAddSubjectModal(false);
         setSubjectForm({
           subject_name: "",
@@ -175,10 +177,10 @@ export default function SubjectsManagement() {
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to create subject");
+      toast.error("Failed to create subject")
     } finally {
       setSubmitting(false);
     }
@@ -201,7 +203,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        alert("Chapter added successfully!");
+        toast.success("Chapter added successfully!")
         setChapterForm({
           chapter_number: 1,
           chapter_name: "",
@@ -215,10 +217,10 @@ export default function SubjectsManagement() {
         }
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to add chapter");
+      toast.error("Failed to add chapter")
     } finally {
       setSubmitting(false);
     }
@@ -226,7 +228,7 @@ export default function SubjectsManagement() {
 
   const handleAddTopic = async (subjectId, chapterId) => {
     if (!topicForm.topic_name.trim()) {
-      alert("Please enter a topic name");
+      toast.warning("Please enter a topic name")
       return;
     }
 
@@ -243,7 +245,7 @@ export default function SubjectsManagement() {
       );
 
       if (response.ok) {
-        alert("Topic added successfully!");
+        toast.success("Topic added successfully!")
         setTopicForm({
           topic_name: "",
           description: "",
@@ -260,10 +262,10 @@ export default function SubjectsManagement() {
         }
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to add topic");
+      toast.error("Failed to add topic")
     } finally {
       setSubmitting(false);
     }
@@ -288,16 +290,16 @@ export default function SubjectsManagement() {
           setShowChapterModal(false);
         }
 
-        alert("Subject deleted successfully!");
+        toast.success("Subject deleted successfully!")
         
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Failed to delete subject: ${error.detail || 'Unknown error'}`);
+        toast.error(`Failed to delete subject: ${error.detail || 'Unknown error'}`)
       }
     } catch (err) {
       console.error("Delete subject error:", err);
-      alert("Failed to delete subject");
+      toast.error("Failed to delete subject")
     }
   };
 
@@ -340,14 +342,14 @@ export default function SubjectsManagement() {
           setSelectedSubject(updated);
         }
         setEditingChapter(null);
-        alert("Chapter updated successfully!");
+        toast.success("Chapter updated successfully!")
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to update chapter");
+      toast.error("Failed to update chapter")
     } finally {
       setSubmitting(false);
     }
@@ -373,14 +375,14 @@ export default function SubjectsManagement() {
         if (updated) {
           setSelectedSubject(updated);
         }
-        alert("Chapter deleted successfully!");
+        toast.success("Chapter deleted successfully!")
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to delete chapter");
+      toast.error("Failed to delete chapter")
     } finally {
       setSubmitting(false);
     }
@@ -424,14 +426,14 @@ export default function SubjectsManagement() {
           setSelectedSubject(updated);
         }
         setEditingTopic(null);
-        alert("Topic updated successfully!");
+        toast.success("Topic updated successfully!")
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to update topic");
+      toast.error("Failed to update topic")
     } finally {
       setSubmitting(false);
     }
@@ -457,14 +459,14 @@ export default function SubjectsManagement() {
         if (updated) {
           setSelectedSubject(updated);
         }
-        alert("Topic deleted successfully!");
+        toast.success("Topic deleted successfully!")
         fetchSubjects();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`)
       }
     } catch (err) {
-      alert("Failed to delete topic");
+      toast.error("Failed to delete topic")
     } finally {
       setSubmitting(false);
     }

@@ -5,7 +5,7 @@ Admin Dashboard Router
 - User statistics
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List, Union
 from datetime import datetime, timedelta
@@ -17,13 +17,19 @@ import re
 
 from app.db.mongo import db
 from app.utils.email import send_credentials_email
+from app.core.permissions import require_role
+from app.models.rbac_models import UserRole
 
 logger = logging.getLogger(__name__)
 
 _analytics_cache = {"data": None, "timestamp": 0}
 ANALYTICS_CACHE_TTL = 60
 
-router = APIRouter(prefix="/api/admin", tags=["Admin Dashboard"])
+router = APIRouter(
+    prefix="/api/admin",
+    tags=["Admin Dashboard"],
+    dependencies=[Depends(require_role([UserRole.ADMIN]))],
+)
 
 class StudentCreate(BaseModel):
     """Model for creating a new student."""
@@ -1581,7 +1587,7 @@ async def save_admin_settings(settings: PlatformSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/public/maintenance", tags=["Public"])
+@router.get("/internal/maintenance", tags=["Internal"])
 async def get_maintenance_status():
     """Public endpoint: returns maintenance mode status. No auth required."""
     try:

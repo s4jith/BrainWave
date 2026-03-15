@@ -7,6 +7,7 @@ import { Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle, Clipboard, Bo
 import { CLASSES } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 function parseApiError(detail, fallback) {
@@ -23,6 +24,7 @@ function parseApiError(detail, fallback) {
 }
 
 export default function HeadManagement() {
+  const { toast } = useToast();
     const { getAuthHeader } = useUserStore();
     const [heads, setHeads] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -118,9 +120,9 @@ export default function HeadManagement() {
 
     const handleAddHead = async (e) => {
         e.preventDefault();
-        if (!addForm.teacher_id) return alert("Please select a teacher to designate as head.");
+        if (!addForm.teacher_id) return toast.info("Please select a teacher to designate as head.")
         if (addForm.assigned_classes.length === 0 && addForm.assigned_subjects.length === 0) {
-            return alert("Please assign at least one class or subject to this head.");
+            return toast.warning("Please assign at least one class or subject to this head.")
         }
         try {
             setSaving(true);
@@ -157,7 +159,7 @@ export default function HeadManagement() {
             // Reload teachers to exclude the promoted one
             loadTeachers();
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -166,7 +168,7 @@ export default function HeadManagement() {
     const handleEditHead = async (e) => {
         e.preventDefault();
         if (editForm.assigned_classes.length === 0 && editForm.assigned_subjects.length === 0) {
-            return alert("Please assign at least one class or subject.");
+            return toast.warning("Please assign at least one class or subject.")
         }
         try {
             setSaving(true);
@@ -185,7 +187,7 @@ export default function HeadManagement() {
             setShowEditModal(false);
             setSelectedHead(null);
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -210,7 +212,7 @@ export default function HeadManagement() {
             setHeads(heads.filter(h => h.id !== head.id));
             if (result.demoted) loadTeachers(); // Back to teacher pool
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 
@@ -232,7 +234,7 @@ export default function HeadManagement() {
             });
             setShowInfoModal(true);
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 

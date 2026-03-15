@@ -9,6 +9,7 @@ import useUserStore from "../stores/userStore";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const DEFAULT_QUESTION_TYPES = ["mcq", "fillup", "true_false", "short_answer", "long_answer"];
 const DEFAULT_DIFFICULTY_LEVELS = ["easy", "medium", "hard"];
 const DEFAULT_COGNITIVE_LEVELS = ["remember", "understand", "apply", "analyze", "evaluate", "create"];
@@ -297,7 +298,7 @@ const QuestionBank = () => {
             }
             fetchQuestions();
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         }
     };
 
@@ -315,9 +316,9 @@ const QuestionBank = () => {
                 throw new Error(err.detail || "Failed to send request");
             }
             setShowRequestModal(false);
-            alert("Delete request sent to head.");
+            toast.info("Delete request sent to head.")
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         } finally {
             setRequestSubmitting(false);
         }
@@ -333,7 +334,7 @@ const QuestionBank = () => {
             if (!res.ok) throw new Error((await res.json()).detail || "Failed");
             loadDeleteRequests();
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         } finally {
             setDrActionId(null);
         }
@@ -350,7 +351,7 @@ const QuestionBank = () => {
             if (!res.ok) throw new Error((await res.json()).detail || "Failed");
             loadDeleteRequests();
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         } finally {
             setDrActionId(null);
         }
@@ -365,7 +366,7 @@ const QuestionBank = () => {
             if (!response.ok) throw new Error("Failed to approve");
             fetchQuestions();
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         }
     };
 
@@ -379,7 +380,7 @@ const QuestionBank = () => {
             if (!response.ok) throw new Error("Failed to reject");
             fetchQuestions();
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         }
     };
 
@@ -397,9 +398,9 @@ const QuestionBank = () => {
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.detail || "Failed to send question to pending");
             fetchQuestions();
-            alert(data.message || "Question sent to pending approval");
+            toast.info(data.message || "Question sent to pending approval")
         } catch (err) {
-            alert(err.message);
+            toast.info(err.message)
         }
     };
 

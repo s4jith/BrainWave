@@ -161,6 +161,12 @@ async def public_maintenance_alias():
         return {"maintenance_mode": False, "platform_name": "NCERT Learning Platform"}
 
 
+@app.get("/api/admin/public/maintenance", tags=["Public"])
+async def public_maintenance_legacy_alias():
+    """Legacy public maintenance endpoint for backward compatibility."""
+    return await public_maintenance_alias()
+
+
 @app.get("/", tags=["Health Check"])
 async def root():
     """Root endpoint - API health check."""

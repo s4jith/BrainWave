@@ -8,11 +8,13 @@ Maps student level to explanation mode:
 - advanced → deepdive mode
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Literal
 import logging
 from datetime import datetime
+from app.core.permissions import get_current_user
+from app.models.rbac_models import TokenData, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,10 @@ LEVEL_TO_MODE = {
 }
 
 @router.get("/level/{student_id}")
-async def get_student_level(student_id: str) -> StudentLevelResponse:
+async def get_student_level(
+    student_id: str,
+    current_user: TokenData = Depends(get_current_user),
+) -> StudentLevelResponse:
     """
     Get student's proficiency level and corresponding explanation mode.
     
@@ -52,6 +57,8 @@ async def get_student_level(student_id: str) -> StudentLevelResponse:
         Student level and mapped explanation mode
     """
     try:
+        if current_user.role != UserRole.ADMIN and current_user.user_id != student_id:
+            raise HTTPException(status_code=403, detail="Access denied")
         from app.db.mongo import get_database
         db = get_database()
         
@@ -91,7 +98,11 @@ async def get_student_level(student_id: str) -> StudentLevelResponse:
         )
 
 @router.put("/level/{student_id}")
-async def update_student_level(student_id: str, level_data: StudentLevel) -> StudentLevelResponse:
+async def update_student_level(
+    student_id: str,
+    level_data: StudentLevel,
+    current_user: TokenData = Depends(get_current_user),
+) -> StudentLevelResponse:
     """
     Update student's proficiency level.
     
@@ -106,6 +117,8 @@ async def update_student_level(student_id: str, level_data: StudentLevel) -> Stu
         Updated student level and explanation mode
     """
     try:
+        if current_user.role != UserRole.ADMIN and current_user.user_id != student_id:
+            raise HTTPException(status_code=403, detail="Access denied")
         from app.db.mongo import get_database
         db = get_database()
         

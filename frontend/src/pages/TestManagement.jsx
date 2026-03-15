@@ -7,9 +7,11 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { ClipboardList, Plus, Trash2, Edit2, FileText, MessageSquare, ExternalLink, Download } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function TestManagement() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const { getAuthHeader } = useUserStore();
   const [tests, setTests] = useState([]);
@@ -217,7 +219,7 @@ export default function TestManagement() {
       }
     } catch (err) {
       
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
       const revertedTests = [...updatedTests, deletedTest].sort((a, b) => 
         new Date(b.created_at) - new Date(a.created_at)
       );
@@ -227,7 +229,7 @@ export default function TestManagement() {
   };
 
   const handleSaveComment = async () => {
-    if (!comment.trim()) return alert("Please enter a comment");
+    if (!comment.trim()) return toast.warning("Please enter a comment")
     setSavingComment(true);
     try {
       const response = await authFetch(`${API_URL}/api/assessments/submissions/${selectedSubmission.id}/comment`, {
@@ -238,9 +240,9 @@ export default function TestManagement() {
       if (!response.ok) throw new Error("Failed");
       setSubmissions(submissions.map(s => s.id === selectedSubmission.id ? { ...s, admin_comment: comment, is_reviewed: true } : s));
       setShowCommentModal(false); setSelectedSubmission(null); setComment("");
-      alert("Comment saved and student notified!");
+      toast.success("Comment saved and student notified!")
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     } finally {
       setSavingComment(false);
     }
@@ -267,7 +269,7 @@ export default function TestManagement() {
       setQuestionGrades(grades);
       setGradingFeedback(data.admin_comment || "");
     } catch (err) {
-      alert("Error loading submission details");
+      toast.error("Error loading submission details")
       setShowDetailModal(false);
     } finally {
       setLoadingDetail(false);
@@ -322,10 +324,10 @@ export default function TestManagement() {
         setTopicNotes("");
         setShowTopicQuiz(true);
       } else {
-        alert("Grades submitted successfully!");
+        toast.success("Grades submitted successfully!")
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     } finally {
       setSavingGrades(false);
     }
@@ -342,7 +344,7 @@ export default function TestManagement() {
       });
     } catch (_) { /* non-critical */ }
     setShowTopicQuiz(false);
-    alert("Grades and topic insights saved!");
+    toast.success("Grades and topic insights saved!")
     setSavingTopicAnalytics(false);
   };
 
@@ -396,7 +398,7 @@ export default function TestManagement() {
       setTests(prev => prev.map(t => t.id === testId ? { ...t, status: "published" } : t));
       if (selectedTest?.id === testId) setSelectedTest(prev => ({ ...prev, status: "published" }));
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     }
   };
 
@@ -424,7 +426,7 @@ export default function TestManagement() {
       window.URL.revokeObjectURL(url);
       setDownloadMenuTestId(null);
     } catch (err) {
-      alert(err.message || "Failed to download PDF");
+      toast.error(err.message || "Failed to download PDF")
     } finally {
       setDownloading(null);
     }
@@ -455,7 +457,7 @@ export default function TestManagement() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err.message || "Failed to download submission PDF");
+      toast.error(err.message || "Failed to download submission PDF")
     } finally {
       setDownloadingSubmissionPdf(false);
     }
@@ -1029,7 +1031,7 @@ export default function TestManagement() {
             </div>
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
               <button
-                onClick={() => { setShowTopicQuiz(false); alert("Grades submitted successfully!"); }}
+                onClick={() => { setShowTopicQuiz(false); toast.success("Grades submitted successfully!") }}
                 className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Skip

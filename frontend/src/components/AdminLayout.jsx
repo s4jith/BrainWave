@@ -12,6 +12,7 @@ import {
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
+const BRAND_LOGO_SRC = "/image.png";
 
 export default function AdminLayout({ children, title, icon: Icon }) {
     const navigate = useNavigate();
@@ -196,12 +197,14 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 {}
                 <div className="h-16 flex items-center px-4 border-b border-gray-100 dark:border-zinc-800">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-xl flex items-center justify-center">
-                            <span className="text-white dark:text-gray-900 font-bold text-lg">S</span>
-                        </div>
+                        <img
+                            src={BRAND_LOGO_SRC}
+                            alt="Brainwave logo"
+                            className="w-9 h-9 object-contain"
+                        />
                         <div>
-                            <h1 className="font-semibold text-gray-900 dark:text-white text-sm">Smart Assessment</h1>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Platform</p>
+                            <h1 className="font-semibold text-gray-900 dark:text-white text-sm">Brainwave</h1>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Learning Platform</p>
                         </div>
                     </div>
                 </div>

@@ -18,7 +18,7 @@ import uuid
 import logging
 import shutil
 
-from app.core.permissions import require_role
+from app.core.permissions import require_role, get_current_user
 from app.models.rbac_models import UserRole, TokenData
 
 from app.db.mongo import db
@@ -144,8 +144,8 @@ async def create_test(
     start_datetime: str = Form(None),
     end_datetime: str = Form(None),
     duration_minutes: int = Form(None),
-    created_by: str = Form("admin"),
-    pdf_file: UploadFile = File(...)
+    pdf_file: UploadFile = File(...),
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
     """
     Create a new test with PDF upload.
@@ -186,7 +186,7 @@ async def create_test(
             "end_datetime": end_dt,
             "duration_minutes": duration_minutes,
             "is_active": True,
-            "created_by": created_by,
+            "created_by": current_user.user_id,
             "created_at": datetime.utcnow(),
             "submission_count": 0
         }
@@ -238,7 +238,8 @@ async def get_admin_tests(
     subject: Optional[str] = None,
     status: Optional[str] = None,
     skip: int = 0,
-    limit: int = 50
+    limit: int = 50,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
     """
     Get all tests for admin view.
@@ -344,7 +345,11 @@ async def get_test(test_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{test_id}")
-async def update_test(test_id: str, test: TestUpdate):
+async def update_test(
+    test_id: str,
+    test: TestUpdate,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
     """Update a test."""
     try:
         update_doc = {}
@@ -386,7 +391,10 @@ async def update_test(test_id: str, test: TestUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{test_id}")
-async def delete_test(test_id: str):
+async def delete_test(
+    test_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
     """Delete a test, its PDF file, and all related submissions."""
     try:
         test = db.tests.find_one({"_id": ObjectId(test_id)})
@@ -435,8 +443,14 @@ async def get_test_pdf(filename: str):
     return FileResponse(file_path, media_type="application/pdf", filename=filename)
 
 @router.get("/submission-pdf/{filename}")
-async def get_submission_pdf(filename: str):
+async def get_submission_pdf(
+    filename: str,
+    current_user: TokenData = Depends(get_current_user)
+):
     """Serve submission PDF file."""
+    if current_user.role not in [UserRole.ADMIN, UserRole.HEAD]:
+        if current_user.role != UserRole.STUDENT or f"_{current_user.user_id}_" not in filename:
+            raise HTTPException(status_code=403, detail="Access denied")
     file_path = os.path.join(SUBMISSION_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="PDF not found")
@@ -445,8 +459,9 @@ async def get_submission_pdf(filename: str):
 @router.post("/submit")
 async def submit_test(
     test_id: str = Form(...),
-    student_id: str = Form(...),
-    pdf_file: UploadFile = File(...)
+    student_id: Optional[str] = Form(None),
+    pdf_file: UploadFile = File(...),
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN, UserRole.HEAD]))
 ):
     """
     Student submits their test answers as PDF.
@@ -463,10 +478,18 @@ async def submit_test(
         if not test:
             raise HTTPException(status_code=404, detail="Test not found")
         
-        query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
+        if current_user.role == UserRole.STUDENT:
+            query = {"user_id": current_user.user_id}
+        else:
+            if not student_id:
+                raise HTTPException(status_code=400, detail="student_id is required")
+            query = {"_id": ObjectId(student_id)} if ObjectId.is_valid(student_id) else {"user_id": student_id}
+
         student = db.users.find_one(query)
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
+        if student.get("role") != "student":
+            raise HTTPException(status_code=400, detail="Invalid student account")
         
         existing = db.test_submissions.find_one({
             "test_id": test_id,
@@ -534,7 +557,10 @@ async def submit_test(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/submissions/{test_id}")
-async def get_test_submissions(test_id: str):
+async def get_test_submissions(
+    test_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
     """
     Get all submissions for a specific test (admin view).
     """
@@ -548,7 +574,11 @@ async def get_test_submissions(test_id: str):
 
 
 @router.post("/submissions/{submission_id}/comment")
-async def add_comment(submission_id: str, comment_data: CommentCreate):
+async def add_comment(
+    submission_id: str,
+    comment_data: CommentCreate,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
     """
     Admin adds a comment/feedback to a student's submission.
     Creates notification for the student.
@@ -596,13 +626,20 @@ async def add_comment(submission_id: str, comment_data: CommentCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/submission/{submission_id}")
-async def get_submission(submission_id: str):
+async def get_submission(
+    submission_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
     """Get a specific submission."""
     try:
         submission = db.test_submissions.find_one({"_id": ObjectId(submission_id)})
         
         if not submission:
             raise HTTPException(status_code=404, detail="Submission not found")
+
+        if current_user.role not in [UserRole.ADMIN, UserRole.HEAD]:
+            if current_user.role != UserRole.STUDENT or submission.get("student_user_id") != current_user.user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
         
         return serialize_submission(submission)
         
@@ -614,7 +651,9 @@ async def get_submission(submission_id: str):
 
 
 @router.get("/stats/overview")
-async def get_test_stats():
+async def get_test_stats(
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
+):
     """Get overall test statistics for admin dashboard."""
     try:
         total_tests = db.tests.count_documents({})

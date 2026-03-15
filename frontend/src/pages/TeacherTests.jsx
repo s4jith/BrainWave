@@ -9,9 +9,11 @@ import {
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function TeacherTests() {
+  const { toast } = useToast();
     const navigate = useNavigate();
     const { getAuthHeader } = useUserStore();
     const [tests, setTests] = useState([]);
@@ -112,7 +114,7 @@ export default function TeacherTests() {
             if (!response.ok) throw new Error('Failed');
         } catch (err) {
             setTests(previousTests);
-            alert("Failed to delete test.");
+            toast.error("Failed to delete test.")
         }
     };
 

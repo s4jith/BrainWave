@@ -19,7 +19,9 @@ import { Button } from "../components/ui/button";
 import { testService } from "../services/api";
 import QuestionImageRenderer from "../components/QuestionImageRenderer";
 
+import { useToast } from "../contexts/ToastContext";
 export default function TestSession() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useUserStore();
@@ -245,7 +247,7 @@ export default function TestSession() {
 
   const handleCompleteTest = async () => {
     if (testBlocked) {
-      alert("Test blocked due to suspected cheating. Please contact your teacher.");
+      toast.warning("Test blocked due to suspected cheating. Please contact your teacher.")
       return;
     }
     

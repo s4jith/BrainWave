@@ -8,9 +8,11 @@ import {
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function AdminReports() {
+  const { toast } = useToast();
     const { getAuthHeader } = useUserStore();
     const [loading, setLoading] = useState(true);
     const [analytics, setAnalytics] = useState(null);
@@ -84,7 +86,7 @@ export default function AdminReports() {
 
     const handleExportReport = () => {
         if (!analytics) {
-            alert("No analytics data available to export.");
+            toast.info("No analytics data available to export.")
             return;
         }
 

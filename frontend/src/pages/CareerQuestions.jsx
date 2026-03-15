@@ -8,6 +8,7 @@ import {
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 const ALL_DOMAINS = [
@@ -27,6 +28,7 @@ const SUBJECTS = [
 ];
 
 export default function CareerQuestions() {
+  const { toast } = useToast();
   const { accessToken } = useUserStore();
   const headers = {
     "Content-Type": "application/json",
@@ -159,7 +161,7 @@ export default function CareerQuestions() {
       if (!res.ok) throw new Error("Failed to deactivate");
       fetchAssignments();
     } catch (e) {
-      alert(e.message);
+      toast.info(e.message)
     }
   };
 
@@ -252,7 +254,7 @@ export default function CareerQuestions() {
       fetchQuestions();
       fetchStats();
     } catch (e) {
-      alert(e.message);
+      toast.info(e.message)
     }
   };
 

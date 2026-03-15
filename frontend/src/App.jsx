@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import useUserStore from "./stores/userStore";
 import LandingPage from "./pages/LandingPage";
@@ -56,6 +56,7 @@ import CareerResult from "./pages/CareerResult";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import "./App.css";
 import authFetch from "./utils/authFetch";
+import { ToastProvider } from "./contexts/ToastContext";
 
 function useMaintenanceMode() {
   const [maintenance, setMaintenance] = useState(false);
@@ -278,6 +279,7 @@ function TokenValidator({ children }) {
 
 function App() {
   return (
+    <ToastProvider>
     <BrowserRouter>
       <TokenValidator>
       <Routes>
@@ -753,7 +755,8 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes >
       </TokenValidator>
-    </BrowserRouter >
+    </BrowserRouter>
+    </ToastProvider>
   );
 }
 

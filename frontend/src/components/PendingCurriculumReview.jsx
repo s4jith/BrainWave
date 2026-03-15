@@ -3,11 +3,13 @@ import { useState, useEffect } from "react";
 import { Clock, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, FileText, User, Calendar, Sparkles, Edit2, Save, X } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
+import { useToast } from "../contexts/ToastContext";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function PendingCurriculumReview({ isOpen, onClose, onApproved }) {
   const { user } = useUserStore();
+  const { toast } = useToast();
   
   const [pendingItems, setPendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
 
       if (response.ok) {
         const result = await response.json();
-        alert(`Subject created successfully!\n\n${result.total_chapters} chapters, ${result.total_topics} topics`);
+        toast.success(`Subject created! ${result.total_chapters} chapters, ${result.total_topics} topics`);
         
         setPendingItems(prev => prev.filter(i => i.pending_id !== pendingId));
         
@@ -95,11 +97,11 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
         }
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`);
       }
     } catch (err) {
       console.error("Approve error:", err);
-      alert("Failed to approve item");
+      toast.error("Failed to approve item");
     } finally {
       setProcessing(prev => ({ ...prev, [pendingId]: false }));
     }
@@ -126,15 +128,15 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
       );
 
       if (response.ok) {
-        alert("Item rejected");
+        toast.info("Item rejected");
         setPendingItems(prev => prev.filter(i => i.pending_id !== pendingId));
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`);
       }
     } catch (err) {
       console.error("Reject error:", err);
-      alert("Failed to reject item");
+      toast.error("Failed to reject item");
     } finally {
       setProcessing(prev => ({ ...prev, [pendingId]: false }));
     }
@@ -155,11 +157,11 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
       if (response.ok) {
         setPendingItems(prev => prev.filter(i => i.pending_id !== pendingId));
       } else {
-        alert("Failed to delete item");
+        toast.error("Failed to delete item");
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete item");
+      toast.error("Failed to delete item");
     } finally {
       setProcessing(prev => ({ ...prev, [pendingId]: false }));
     }
@@ -206,14 +208,14 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
           item.pending_id === pendingId ? updated : item
         ));
         setEditingItem(null);
-        alert("Changes saved successfully!");
+        toast.success("Changes saved successfully!");
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        toast.error(`Error: ${error.detail}`);
       }
     } catch (err) {
       console.error("Save edit error:", err);
-      alert("Failed to save changes");
+      toast.error("Failed to save changes");
     } finally {
       setProcessing(prev => ({ ...prev, [pendingId]: false }));
     }

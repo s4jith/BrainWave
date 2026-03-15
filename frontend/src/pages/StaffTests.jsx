@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function StaffTests() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const { user, logout } = useUserStore();
   const [tests, setTests] = useState([]);
@@ -43,7 +45,7 @@ export default function StaffTests() {
       if (!response.ok) throw new Error("Failed to update test");
       setTests(tests.map(t => t.id === testId ? { ...t, is_active: !currentStatus } : t));
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     }
   };
 
@@ -54,7 +56,7 @@ export default function StaffTests() {
       if (!response.ok) throw new Error("Failed to delete test");
       setTests(tests.filter(t => t.id !== testId));
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message)
     }
   };
 

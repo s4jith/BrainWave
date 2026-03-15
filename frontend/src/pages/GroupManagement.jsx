@@ -8,9 +8,11 @@ import { Trash2, Users, UserPlus, FolderKanban, Search, X, Check, Plus, BookOpen
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function GroupManagement() {
+  const { toast } = useToast();
     const navigate = useNavigate();
     const { getAuthHeader } = useUserStore();
     const [groups, setGroups] = useState([]);
@@ -88,7 +90,7 @@ export default function GroupManagement() {
                     feature_flags: { ...prev.feature_flags, [featureKey]: !newValue }
                 }));
             }
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 
@@ -173,11 +175,11 @@ export default function GroupManagement() {
 
     const handleCreateGroup = async (e) => {
         e.preventDefault();
-        if (groupForm.teacher_ids.length === 0) return alert("Please select at least one teacher for this group");
-        if (selectedStudentIds.length === 0) return alert("Please select at least one student");
+        if (groupForm.teacher_ids.length === 0) return toast.info("Please select at least one teacher for this group")
+        if (selectedStudentIds.length === 0) return toast.info("Please select at least one student")
         
         const { class: classLevel, subject } = parseCombinedValue(groupForm.classSubject);
-        if (!classLevel || !subject || !groupForm.batch_year) return alert("Please fill all required fields");
+        if (!classLevel || !subject || !groupForm.batch_year) return toast.info("Please fill all required fields")
 
         const tempId = `temp_${Date.now()}`;
         const teacherNames = teachers
@@ -224,7 +226,7 @@ export default function GroupManagement() {
             
             setGroups(prev => prev.filter(g => g.id !== tempId));
             setShowAddGroup(true);
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -298,7 +300,7 @@ export default function GroupManagement() {
             }
             setShowEditGroup(false);
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -322,7 +324,7 @@ export default function GroupManagement() {
             }
         } catch (err) {
             
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
             setGroups([...updatedGroups, deletedGroup]);
         }
     };
@@ -342,7 +344,7 @@ export default function GroupManagement() {
             });
             setGroups(groups.map(g => g.id === selectedGroup.id ? { ...g, student_count: g.student_count - 1 } : g));
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 
@@ -362,7 +364,7 @@ export default function GroupManagement() {
             setShowAssignStudents(false);
             setSelectedStudentIds([]);
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }

@@ -12,11 +12,12 @@
  */
 
 import React from "react";
+import AuthImage from "./AuthImage";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
-// Matches [img:<valid-uuid>]
-const IMG_TAG_REGEX = /\[img:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+// Matches [img:<image-id>] where ID may be UUID or another backend-safe token.
+const IMG_TAG_REGEX = /\[img:\s*([A-Za-z0-9._-]+)\s*\]/gi;
 
 const QuestionImageRenderer = ({ text, className = "", imgClassName = "" }) => {
     if (!text) return null;
@@ -39,7 +40,7 @@ const QuestionImageRenderer = ({ text, className = "", imgClassName = "" }) => {
         // The image
         const imageId = match[1];
         parts.push(
-            <img
+            <AuthImage
                 key={key++}
                 src={`${apiUrl}/api/question-bank/images/${imageId}`}
                 alt="Question illustration"
@@ -47,9 +48,6 @@ const QuestionImageRenderer = ({ text, className = "", imgClassName = "" }) => {
                     imgClassName ||
                     "inline-block max-w-full max-h-72 my-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm"
                 }
-                onError={(e) => {
-                    e.target.style.display = "none";
-                }}
             />
         );
         lastIndex = match.index + match[0].length;

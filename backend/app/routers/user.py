@@ -2,11 +2,13 @@
 User Stats Router - Dashboard data endpoints (progress, streaks, activity)
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timedelta
 from app.db.mongo import mongodb
+from app.core.permissions import require_role
+from app.models.rbac_models import TokenData, UserRole
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,6 +17,11 @@ router = APIRouter(
     prefix="/user",
     tags=["User Stats"]
 )
+
+
+def _ensure_self_or_admin(student_id: str, current_user: TokenData) -> None:
+    if current_user.role != UserRole.ADMIN and current_user.user_id != student_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
 class DailyActivity(BaseModel):
     """Daily activity entry."""
@@ -55,13 +62,17 @@ class DashboardData(BaseModel):
     total_notes: int
 
 @router.get("/streak/{student_id}", response_model=StreakData)
-async def get_streak_data(student_id: str):
+async def get_streak_data(
+    student_id: str,
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN]))
+):
     """
     Get user's activity streak and weekly activity.
     
     Calculates streak based on daily login/activity records in MongoDB.
     """
     try:
+        _ensure_self_or_admin(student_id, current_user)
         logger.info(f"📊 Fetching streak data for student: {student_id}")
         
         activities_col = mongodb.db["user_activities"]
@@ -145,7 +156,8 @@ async def get_streak_data(student_id: str):
 @router.get("/progress/{student_id}", response_model=ProgressData)
 async def get_progress_data(
     student_id: str,
-    subject: Optional[str] = Query(None, description="Filter by subject")
+    subject: Optional[str] = Query(None, description="Filter by subject"),
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN]))
 ):
     """
     Get user's learning progress.
@@ -153,6 +165,7 @@ async def get_progress_data(
     Calculates progress from completed tests and chapters.
     """
     try:
+        _ensure_self_or_admin(student_id, current_user)
         logger.info(f"📊 Fetching progress data for student: {student_id}")
         
         eval_col = mongodb.db["evaluations"]
@@ -209,7 +222,8 @@ async def get_progress_data(
 @router.get("/dashboard/{student_id}", response_model=DashboardData)
 async def get_dashboard_data(
     student_id: str,
-    subject: Optional[str] = Query(None, description="Filter by subject")
+    subject: Optional[str] = Query(None, description="Filter by subject"),
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN]))
 ):
     """
     Get all dashboard data in one call.
@@ -217,10 +231,11 @@ async def get_dashboard_data(
     Returns streak, progress, and recent notes for efficiency.
     """
     try:
+        _ensure_self_or_admin(student_id, current_user)
         logger.info(f"📊 Fetching dashboard data for student: {student_id}")
         
-        streak = await get_streak_data(student_id)
-        progress = await get_progress_data(student_id, subject)
+        streak = await get_streak_data(student_id, current_user)
+        progress = await get_progress_data(student_id, subject, current_user)
         
         notes_col = mongodb.db["notes"]
         notes_filter = {"student_id": student_id}
@@ -260,8 +275,9 @@ async def get_dashboard_data(
 
 @router.post("/activity/log")
 async def log_activity(
-    student_id: str,
-    hours: float = 0.5
+    student_id: Optional[str] = None,
+    hours: float = 0.5,
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN]))
 ):
     """
     Log user activity for streak tracking.
@@ -269,12 +285,14 @@ async def log_activity(
     Call this when user performs any action (opens PDF, uses chatbot, etc.)
     """
     try:
+        effective_student_id = student_id or current_user.user_id
+        _ensure_self_or_admin(effective_student_id, current_user)
         today = datetime.utcnow().strftime("%Y-%m-%d")
         
         activities_col = mongodb.db["user_activities"]
         
         result = await activities_col.update_one(
-            {"student_id": student_id, "date": today},
+            {"student_id": effective_student_id, "date": today},
             {
                 "$inc": {"hours": hours},
                 "$set": {"last_updated": datetime.utcnow()}
@@ -282,7 +300,7 @@ async def log_activity(
             upsert=True
         )
         
-        logger.info(f"Logged activity for {student_id}: +{hours}h on {today}")
+        logger.info(f"Logged activity for {effective_student_id}: +{hours}h on {today}")
         
         return {"message": "Activity logged", "date": today, "hours_added": hours}
         
@@ -293,7 +311,8 @@ async def log_activity(
 @router.get("/analytics/{student_id}")
 async def get_student_analytics(
     student_id: str,
-    period: str = Query("week", description="Period: week, month, or all")
+    period: str = Query("week", description="Period: week, month, or all"),
+    current_user: TokenData = Depends(require_role([UserRole.STUDENT, UserRole.ADMIN]))
 ):
     """
     Get comprehensive analytics for charts and progress tracking.
@@ -305,6 +324,7 @@ async def get_student_analytics(
     - Daily/weekly activity data for charts
     """
     try:
+        _ensure_self_or_admin(student_id, current_user)
         logger.info(f"📊 Fetching analytics for student: {student_id}, period: {period}")
         
         db = mongodb.db

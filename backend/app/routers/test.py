@@ -10,7 +10,7 @@ Key Features:
 5. Real-time performance tracking
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional, Dict
@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 from app.db.mongo import mongodb
 from app.services.topic_question_bank_service import topic_question_bank_service
 from app.services.rag_evaluation_service import rag_evaluation_service
+from app.core.permissions import require_role
+from app.models.rbac_models import UserRole, TokenData
 from bson import ObjectId
 import logging
 import os
@@ -1819,7 +1821,10 @@ async def get_question_bank_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/debug/pinecone/{namespace}")
-async def debug_pinecone_namespace(namespace: str):
+async def debug_pinecone_namespace(
+    namespace: str,
+    current_user: TokenData = Depends(require_role([UserRole.ADMIN])),
+):
     """Debug endpoint to check Pinecone metadata structure."""
     try:
         from app.db.mongo import namespace_db

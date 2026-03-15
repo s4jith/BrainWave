@@ -7,6 +7,7 @@ import { GraduationCap, Shield, Search, UserPlus, Edit, Trash2, Key, CheckCircle
 import { CLASSES } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 function parseApiError(detail, fallback) {
@@ -23,6 +24,7 @@ function parseApiError(detail, fallback) {
 }
 
 export default function TeacherManagement() {
+  const { toast } = useToast();
     const { getAuthHeader } = useUserStore();
     const [teachers, setTeachers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -128,7 +130,7 @@ export default function TeacherManagement() {
             setShowAddModal(false);
             resetForm();
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -153,7 +155,7 @@ export default function TeacherManagement() {
             setSelectedTeacher(null);
             resetForm();
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -188,7 +190,7 @@ export default function TeacherManagement() {
                 throw new Error(errorData.detail?.message || errorData.detail || "Failed to delete teacher");
             }
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
             setTeachers(prev => [...prev.filter(t => t.id !== teacherId), deletedTeacher]);
         }
     };
@@ -209,7 +211,7 @@ export default function TeacherManagement() {
             });
             setShowCredentialsModal(true);
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 
@@ -225,7 +227,7 @@ export default function TeacherManagement() {
 
     const handlePromoteToHead = async () => {
         if (!promoteForm.assigned_classes.length && !promoteForm.assigned_subjects.length) {
-            alert("Please assign at least one class or subject.");
+            toast.warning("Please assign at least one class or subject.")
             return;
         }
         try {
@@ -253,7 +255,7 @@ export default function TeacherManagement() {
             setPromoteTeacher(null);
             fetchTeachers();
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         } finally {
             setSaving(false);
         }
@@ -272,7 +274,7 @@ export default function TeacherManagement() {
             }
             fetchTeachers();
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message)
         }
     };
 
@@ -316,7 +318,7 @@ export default function TeacherManagement() {
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert("Copied to clipboard!");
+        toast.info("Copied to clipboard!")
     };
 
     const filteredTeachers = teachers.filter(t =>

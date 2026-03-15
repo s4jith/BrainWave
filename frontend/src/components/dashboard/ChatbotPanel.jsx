@@ -2,12 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Send, Plus, Clock, Search, Share2, LayoutGrid, ArrowUp,
   ChevronLeft, Settings, Sparkles, Zap, Brain,
-  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon, XCircle,
-  Sun, Moon, Monitor
+  FileText, TrendingUp, HelpCircle
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import useUserStore from "../../stores/userStore";
-import useThemeStore from "../../stores/themeStore";
 import { chatService, userStatsService, topQuestionsService } from "../../services/api";
 import { exportChatAsDoc } from "../../utils/chatExport";
 import remarkMath from 'remark-math';
@@ -16,20 +14,14 @@ import 'katex/dist/katex.min.css';
 
 export default function ChatbotPanel({ isOpen, onClose }) {
   const { user } = useUserStore();
-  const { theme, setTheme } = useThemeStore();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatMode, setChatMode] = useState("quick");
   const messagesEndRef = useRef(null);
-  const imageInputRef = useRef(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
   const abortStreamRef = useRef(null);
   const textareaRef = useRef(null);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const themeMenuRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -38,32 +30,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
       }
     };
   }, []);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
-        setShowThemeMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const themeOptions = [
-    { value: 'light', label: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark', icon: Moon },
-    { value: 'system', label: 'System', icon: Monitor },
-  ];
-
-  const getThemeIcon = () => {
-    switch (theme) {
-      case 'dark': return Moon;
-      case 'light': return Sun;
-      default: return Sun;
-    }
-  };
-
-  const ThemeIcon = getThemeIcon();
 
   const [subjects, setSubjects] = useState([]);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
@@ -182,132 +148,106 @@ export default function ChatbotPanel({ isOpen, onClose }) {
   };
 
   const handleSend = async () => {
-    if ((!message.trim() && !selectedImage) || isLoading) return;
+    if (!message.trim() || isLoading) return;
 
     const userMessage = {
       role: 'user',
       content: message,
       timestamp: new Date(),
-      imagePreview: selectedImage ? URL.createObjectURL(selectedImage) : null
     };
 
     setMessages(prev => [...prev, userMessage]);
     const currentMessage = message;
-    const currentImage = selectedImage;
 
     setMessage("");
-    setSelectedImage(null);
     setIsLoading(true);
     
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
-      if (currentImage) {
-        
-        const result = await chatService.imageChat(
-          currentImage,
-          user.classLevel || 6,
-          activeSubject,
-          1,
-          chatMode,
-          currentMessage
-        );
+      const messageId = Date.now();
+      setStreamingMessageId(messageId);
 
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          role: "assistant",
-          content: result.answer,
-          timestamp: new Date(),
-          mode: chatMode,
-          imageAnalysis: result.imageAnalysis,
-        }]);
-        setIsLoading(false);
-      } else {
-        
-        const messageId = Date.now();
-        setStreamingMessageId(messageId);
+      setMessages(prev => [...prev, {
+        id: messageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        mode: chatMode,
+        isStreaming: true
+      }]);
+      setIsLoading(false);
 
-        setMessages(prev => [...prev, {
-          id: messageId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-          mode: chatMode,
-          isStreaming: true
-        }]);
-        setIsLoading(false); 
+      let fullAnswer = "";
 
-        let fullAnswer = "";
-
-        if (abortStreamRef.current) {
-          abortStreamRef.current();
-        }
-
-        const abort = chatService.studentChatStream(
-          currentMessage,
-          user.classLevel || 6,
-          activeSubject,
-          1,
-          chatMode,
-          
-          (text) => {
-            fullAnswer += text;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, content: fullAnswer }
-                : msg
-            ));
-          },
-          
-          (data) => {
-            setStreamingMessageId(null);
-            abortStreamRef.current = null;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, isStreaming: false }
-                : msg
-            ));
-
-            topQuestionsService.trackQuestion({
-              question: currentMessage,
-              answer: fullAnswer,
-              subject: activeSubject,
-              class_level: user.classLevel || 7,
-              mode: chatMode === "deepdive" ? "deep" : "quick",
-              user_id: user.id || "guest",
-              session_id: `${user.id || "guest"}_${Date.now()}`
-            }).then(() => {
-              
-              const mode = chatMode === "deepdive" ? "deep" : "quick";
-              return topQuestionsService.getTopQuestions(activeSubject, user.classLevel || 7, mode, 5);
-            }).then(response => {
-              if (response?.success && response.questions) {
-                const formattedQuestions = response.questions.map((q, index) => ({
-                  id: index + 1,
-                  text: q.question,
-                  category: q.subject ? q.subject.charAt(0).toUpperCase() + q.subject.slice(1) : activeSubject,
-                  askCount: q.ask_count || 0,
-                  chapter: q.chapter
-                }));
-                setTopQuestions(formattedQuestions);
-              }
-            }).catch(err => console.log("Question tracking/refresh failed:", err));
-          },
-          
-          (error) => {
-            console.error("Stream error:", error);
-            setStreamingMessageId(null);
-            abortStreamRef.current = null;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, content: fullAnswer || "Sorry, I couldn't process that.", isStreaming: false, isError: !fullAnswer }
-                : msg
-            ));
-          }
-        );
-
-        abortStreamRef.current = abort;
+      if (abortStreamRef.current) {
+        abortStreamRef.current();
       }
+
+      const abort = chatService.studentChatStream(
+        currentMessage,
+        user.classLevel || 6,
+        activeSubject,
+        1,
+        chatMode,
+
+        (text) => {
+          fullAnswer += text;
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, content: fullAnswer }
+              : msg
+          ));
+        },
+
+        (data) => {
+          setStreamingMessageId(null);
+          abortStreamRef.current = null;
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, isStreaming: false }
+              : msg
+          ));
+
+          topQuestionsService.trackQuestion({
+            question: currentMessage,
+            answer: fullAnswer,
+            subject: activeSubject,
+            class_level: user.classLevel || 7,
+            mode: chatMode === "deepdive" ? "deep" : "quick",
+            user_id: user.id || "guest",
+            session_id: `${user.id || "guest"}_${Date.now()}`
+          }).then(() => {
+
+            const mode = chatMode === "deepdive" ? "deep" : "quick";
+            return topQuestionsService.getTopQuestions(activeSubject, user.classLevel || 7, mode, 5);
+          }).then(response => {
+            if (response?.success && response.questions) {
+              const formattedQuestions = response.questions.map((q, index) => ({
+                id: index + 1,
+                text: q.question,
+                category: q.subject ? q.subject.charAt(0).toUpperCase() + q.subject.slice(1) : activeSubject,
+                askCount: q.ask_count || 0,
+                chapter: q.chapter
+              }));
+              setTopQuestions(formattedQuestions);
+            }
+          }).catch(err => console.log("Question tracking/refresh failed:", err));
+        },
+
+        (error) => {
+          console.error("Stream error:", error);
+          setStreamingMessageId(null);
+          abortStreamRef.current = null;
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, content: fullAnswer || "Sorry, I couldn't process that.", isStreaming: false, isError: !fullAnswer }
+              : msg
+          ));
+        }
+      );
+
+      abortStreamRef.current = abort;
 
       userStatsService.logActivity(user.id || "guest", 0.1);
     } catch (error) {
@@ -317,39 +257,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
       }]);
       setIsLoading(false);
     }
-  };
-
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!validTypes.includes(file.type)) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Please upload a valid image (JPG, PNG, or WebP).</span>),
-        timestamp: new Date(),
-        isError: true
-      }]);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Image is too large. Maximum size is 5MB.</span>),
-        timestamp: new Date(),
-        isError: true
-      }]);
-      return;
-    }
-
-    setSelectedImage(file);
-    event.target.value = '';
-  };
-
-  const removeSelectedImage = () => {
-    setSelectedImage(null);
   };
 
   const renderMarkdown = (content) => (
@@ -455,40 +362,6 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 <div className="text-center py-6">
                   <p className="text-sm text-gray-400 mb-2">No questions asked yet</p>
                   <p className="text-xs text-gray-300 dark:text-gray-500">Be the first to ask about {activeSubject || 'this subject'}!</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Theme Toggle */}
-          <div className="p-3 border-t border-gray-100 dark:border-gray-800">
-            <div className="relative" ref={themeMenuRef}>
-              <button
-                onClick={() => setShowThemeMenu(!showThemeMenu)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
-              >
-                <ThemeIcon className="w-4 h-4" />
-                <span>Theme</span>
-              </button>
-              {showThemeMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                  {themeOptions.map((option) => {
-                    const OptionIcon = option.icon;
-                    return (
-                      <button
-                        key={option.value}
-                        onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          theme === option.value
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                        }`}
-                      >
-                        <OptionIcon className="w-4 h-4" />
-                        {option.label}
-                      </button>
-                    );
-                  })}
                 </div>
               )}
             </div>
@@ -620,49 +493,7 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           {/* Input - Fixed at Bottom */}
           <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-[#fafafa] dark:from-gray-950 via-[#fafafa] dark:via-gray-950 to-transparent pt-12">
             <div className="max-w-3xl mx-auto">
-              {/* Image Preview */}
-              {selectedImage && (
-                <div className="mb-2 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 w-fit shadow-sm">
-                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
-                    <img
-                      src={URL.createObjectURL(selectedImage)}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]">
-                      {selectedImage.name}
-                    </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                      {(selectedImage.size / 1024).toFixed(1)} KB
-                    </span>
-                  </div>
-                  <button
-                    onClick={removeSelectedImage}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
               <div className="flex items-end gap-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 px-4 py-2 shadow-sm">
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={handleImageUpload}
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isLoading || uploadingImage}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 disabled:opacity-50 mb-0.5"
-                  title="Upload image of textbook/question"
-                >
-                  <Camera className="w-5 h-5" />
-                </button>
                 <textarea
                   ref={textareaRef}
                   value={message}
@@ -677,13 +508,13 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                       handleSend();
                     }
                   }}
-                  placeholder={selectedImage ? "Add a question about this image..." : "Write a message here..."}
+                  placeholder="Write a message here..."
                   className="flex-1 bg-transparent border-none outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-sm resize-none overflow-y-auto"
                   style={{ minHeight: '36px', maxHeight: '120px' }}
                   rows={1}
                   disabled={isLoading}
                 />
-                <button onClick={handleSend} disabled={(!message.trim() && !selectedImage) || isLoading}
+                <button onClick={handleSend} disabled={!message.trim() || isLoading}
                   className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600 mb-0.5 flex-shrink-0">
                   <ArrowUp className="w-5 h-5" />
                 </button>

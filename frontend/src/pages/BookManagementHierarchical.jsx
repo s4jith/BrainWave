@@ -9,9 +9,11 @@ import {
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
+import { useToast } from "../contexts/ToastContext";
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function BookManagement() {
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [structure, setStructure] = useState(null);
@@ -86,11 +88,11 @@ export default function BookManagement() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!uploadForm.pdf_file) return alert("Please select a PDF file");
-    if (!uploadForm.title.trim()) return alert("Please enter a title");
+    if (!uploadForm.pdf_file) return toast.info("Please select a PDF file")
+    if (!uploadForm.title.trim()) return toast.warning("Please enter a title")
 
     const { class: classLevel, subject } = parseCombinedValue(uploadForm.classSubject);
-    if (!classLevel || !subject) return alert("Please select class and subject");
+    if (!classLevel || !subject) return toast.info("Please select class and subject")
 
     setUploading(true);
     setUploadProgress({ stage: "uploading", message: "Uploading...", percent: 10 });
@@ -111,7 +113,7 @@ export default function BookManagement() {
 
       if (response.ok) {
         setUploadProgress({ stage: "complete", message: "Done!", percent: 100 });
-        alert("Chapter uploaded successfully!");
+        toast.success("Chapter uploaded successfully!")
         setShowUploadModal(false);
         setUploadForm({ title: "", classSubject: "6-Maths", chapter_number: 1, description: "", pdf_file: null });
         setUploadProgress(null);
@@ -119,10 +121,10 @@ export default function BookManagement() {
         fetchPineconeStats();
       } else {
         const error = await response.json();
-        alert(`Upload failed: ${error.detail}`);
+        toast.error(`Upload failed: ${error.detail}`)
       }
     } catch (err) {
-      alert("Upload failed.");
+      toast.error("Upload failed.")
     } finally { setUploading(false); }
   };
 
@@ -159,15 +161,15 @@ export default function BookManagement() {
       }
       const response = await authFetch(`${url}?confirmation=${encodeURIComponent(confirmParam)}`, { method: "DELETE" });
       if (response.ok) {
-        alert("Deleted successfully!");
+        toast.success("Deleted successfully!")
         setShowDeleteModal(false);
         setDeleteTarget(null);
         fetchHierarchicalStructure();
         fetchPineconeStats();
       } else {
-        alert("Delete failed");
+        toast.error("Delete failed")
       }
-    } catch (err) { alert("Delete failed"); }
+    } catch (err) { toast.error("Delete failed") }
     finally { setDeleting(false); }
   };
 
