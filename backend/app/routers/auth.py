@@ -1,6 +1,6 @@
 """
 Authentication Router
-- Login with user_id and password (JWT-based)
+- Login with email and password (JWT-based)
 - Password change for first-time login
 - Session management
 - Admin endpoints for user creation
@@ -8,7 +8,7 @@ Authentication Router
 
 from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional, List
 from app.db.mongo import db
 from app.core.config import settings
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 class LoginRequest(BaseModel):
-    user_id: str
+    email: str
     password: str
     role: Optional[str] = None
 
@@ -48,8 +48,25 @@ class CreateTeacherRequest(BaseModel):
     email: str = Field(..., description="Teacher's email")
     subjects: List[str] = Field(..., description="Subjects the teacher will teach")
     mobile: str = Field(..., min_length=10, max_length=15, description="Teacher's mobile number")
-    age: int = Field(..., ge=18, le=100, description="Teacher's age")
-    user_id: str = Field(None, description="Custom user ID (optional, auto-generated if not provided)")
+    dob: str = Field(..., description="Date of birth in YYYY-MM-DD format")
+
+
+def parse_dob(value: str) -> date:
+    try:
+        dob = datetime.fromisoformat(str(value).split("T")[0]).date()
+    except Exception:
+        raise HTTPException(status_code=400, detail="dob must be in YYYY-MM-DD format")
+    if dob > date.today():
+        raise HTTPException(status_code=400, detail="dob cannot be in the future")
+    return dob
+
+
+def age_from_dob(dob: date) -> int:
+    today = date.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if age < 18 or age > 120:
+        raise HTTPException(status_code=400, detail="Derived age is out of allowed range")
+    return age
 
 def hash_password(password: str) -> str:
     """Hash password using SHA-256"""
@@ -132,19 +149,17 @@ def generate_teacher_id() -> str:
 @router.post("/login")
 async def login(request: LoginRequest):
     """
-    Login with user_id and password.
+    Login with email and password.
     Returns user data, session token, and JWT access token.
     """
     try:
-        normalized_user_id = (request.user_id or "").strip()
-        if not normalized_user_id:
-            return {"success": False, "error": "User ID is required"}
+        normalized_email = (request.email or "").strip().lower()
+        if not normalized_email:
+            return {"success": False, "error": "Email is required"}
 
         ADMIN_EMAIL = "admin1@gmail.com"
         ADMIN_PASSWORD = "admin1234"
-        ADMIN_IDS = ["admin1", ADMIN_EMAIL, "ADMIN_ROOT"]
-        
-        if normalized_user_id in ADMIN_IDS and request.password == ADMIN_PASSWORD:
+        if normalized_email == ADMIN_EMAIL and request.password == ADMIN_PASSWORD:
             access_token = create_access_token(
                 user_id="ADMIN_ROOT",
                 email=ADMIN_EMAIL,
@@ -174,36 +189,21 @@ async def login(request: LoginRequest):
                 }
             }
         
-        # Primary: exact user_id match.
-        query = {"user_id": normalized_user_id}
+        email_query = {
+            "$or": [
+                {"email_normalized": normalized_email},
+                {"email": {"$regex": f"^{normalized_email}$", "$options": "i"}},
+            ]
+        }
         if request.role:
-            query["role"] = request.role
-        user = db.users.find_one(query)
-
-        # Fallback 1: case-insensitive user_id exact match.
-        if not user:
-            ci_query = {"user_id": {"$regex": f"^{normalized_user_id}$", "$options": "i"}}
-            if request.role:
-                ci_query["role"] = request.role
-            user = db.users.find_one(ci_query)
-
-        # Fallback 2: allow email login when user enters email in the same field.
-        if not user and "@" in normalized_user_id:
-            email_query = {
-                "$or": [
-                    {"email_normalized": normalized_user_id.lower()},
-                    {"email": {"$regex": f"^{normalized_user_id}$", "$options": "i"}},
-                ]
-            }
-            if request.role:
-                email_query["role"] = request.role
-            user = db.users.find_one(email_query)
+            email_query["role"] = request.role
+        user = db.users.find_one(email_query)
         
         if not user:
             role_msg = f"No {request.role}" if request.role else "No user"
             return {
                 "success": False,
-                "error": f"{role_msg} found with this user ID"
+                "error": f"{role_msg} found with this email"
             }
         
         if not verify_password(request.password, user.get("password", "")):
@@ -234,7 +234,7 @@ async def login(request: LoginRequest):
                 default_password = f"{clean_name}{age}"
                 is_first_login = request.password == default_password
             else:
-                default_password = f"{request.user_id}@123"
+                default_password = f"{normalized_email}@123"
                 is_first_login = request.password == default_password
         except Exception as e:
             logger.warning(f"Error checking first login: {e}")
@@ -379,7 +379,7 @@ async def create_teacher(
     Admin-only: Create a new teacher account.
     
     - Generates unique teacher ID (TCH2026XXX)
-    - Sets default password: {teacher_id}@123
+    - Sets default password based on name
     - Teacher must change password on first login
     """
     try:
@@ -387,13 +387,16 @@ async def create_teacher(
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        teacher_id = request.user_id if request.user_id else generate_teacher_id()
+        teacher_id = generate_teacher_id()
         
         existing_id = db.users.find_one({"user_id": teacher_id})
         if existing_id:
             raise HTTPException(status_code=400, detail="User ID already exists")
         
-        default_password = f"{teacher_id}@123"
+        clean_name = request.name.lower().replace(" ", "").replace(".", "")
+        default_password = f"{clean_name}@123"
+        dob = parse_dob(request.dob)
+        age = age_from_dob(dob)
         
         teacher_doc = {
             "user_id": teacher_id,
@@ -403,7 +406,8 @@ async def create_teacher(
             "role": UserRole.TEACHER.value,
             "subjects": request.subjects,
             "mobile": request.mobile,
-            "age": request.age,
+            "dob": dob.isoformat(),
+            "age": age,
             "is_active": True,
             "created_at": datetime.utcnow(),
             "created_by": current_user.user_id
@@ -411,7 +415,7 @@ async def create_teacher(
         
         result = db.users.insert_one(teacher_doc)
         
-        email_sent = send_credentials_email(request.email, teacher_id, default_password, request.name)
+        email_sent = send_credentials_email(request.email, default_password, request.name)
         
         logger.info(f"Teacher created: {teacher_id} by admin {current_user.email}")
         

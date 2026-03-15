@@ -87,6 +87,7 @@ class CreateSubjectRequest(BaseModel):
 class UpdateSubjectRequest(BaseModel):
     """Request to update subject details"""
     subject_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    class_level: Optional[int] = Field(None, ge=1, le=12)
     description: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None

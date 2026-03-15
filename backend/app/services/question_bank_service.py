@@ -186,35 +186,40 @@ class QuestionBankService:
 
     def _is_question_used_in_tests(self, question_id: str):
         """Check if question is currently referenced by any active test structure."""
+        id_candidates = [question_id]
+        if ObjectId.is_valid(question_id):
+            id_candidates.append(ObjectId(question_id))
+
+        ref_conditions = []
+        for ref_id in id_candidates:
+            ref_conditions.extend([
+                {"id": ref_id},
+                {"question_id": ref_id},
+                {"question_bank_id": ref_id},
+                {"source_question_id": ref_id},
+            ])
+
         assessment_count = db.assessments.count_documents({
-            "questions": {
-                "$elemMatch": {
-                    "$or": [
-                        {"id": question_id},
-                        {"question_id": question_id},
-                        {"question_bank_id": question_id},
-                        {"source_question_id": question_id},
-                    ]
-                }
-            }
+            "questions": {"$elemMatch": {"$or": ref_conditions}}
         })
 
         legacy_tests_count = db.tests.count_documents({
-            "questions": {
-                "$elemMatch": {
-                    "$or": [
-                        {"id": question_id},
-                        {"question_id": question_id},
-                        {"question_bank_id": question_id},
-                        {"source_question_id": question_id},
-                    ]
-                }
-            }
+            "$or": [
+                {"questions": {"$elemMatch": {"$or": ref_conditions}}},
+                {"question_ids": {"$in": id_candidates}},
+            ]
         })
 
-        total_refs = assessment_count + legacy_tests_count
+        test_sessions_count = db.test_sessions.count_documents({
+            "$or": [
+                {"questions_served": {"$elemMatch": {"$or": ref_conditions}}},
+                {"questions_served": {"$elemMatch": {"question_id": {"$in": id_candidates}}}},
+            ]
+        })
+
+        total_refs = assessment_count + legacy_tests_count + test_sessions_count
         if total_refs > 0:
-            return True, "Question is used in one or more tests. First remove it from tests, then delete."
+            return True, "Question can't be deleted because it is used in a test. Remove it from the test first."
 
         return False, ""
 

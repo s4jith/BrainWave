@@ -6,7 +6,7 @@ import AIExtractionModal from "../components/AIExtractionModal";
 import PendingCurriculumReview from "../components/PendingCurriculumReview";
 import SubjectIcon from "../components/SubjectIcon";
 import {
-  BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight,
+  BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, ChevronUp,
   Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle, Sparkles, Clock
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
@@ -153,34 +153,49 @@ export default function SubjectsManagement() {
     return null;
   };
 
-  const handleAddSubject = async (e) => {
+  const handleEditSubject = (subject) => {
+    setEditingSubject(subject);
+    setSubjectForm({
+      subject_name: subject.subject_name,
+      class_level: subject.class_level,
+      description: subject.description || ""
+    });
+    setShowAddSubjectModal(true);
+  };
+
+  const handleSaveSubject = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      const response = await authFetch(`${API_URL}/api/curriculum/subjects`, {
-        method: "POST",
+      const isEditing = Boolean(editingSubject);
+      const url = isEditing
+        ? `${API_URL}/api/curriculum/subjects/${editingSubject.subject_id}`
+        : `${API_URL}/api/curriculum/subjects`;
+      const method = isEditing ? "PUT" : "POST";
+
+      const response = await authFetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subjectForm)
       });
 
-      if (response.ok) {
-        toast.success("Subject created successfully!")
-        setShowAddSubjectModal(false);
-        setSubjectForm({
-          subject_name: "",
-          class_level: 10,
-          description: "",
-          icon: "book",
-          color: "#3B82F6"
-        });
-        fetchSubjects();
-      } else {
+      if (!response.ok) {
         const error = await response.json();
-        toast.error(`Error: ${error.detail}`)
+        throw new Error(error.detail || "Failed to save subject");
+      }
+
+      toast.success(isEditing ? "Subject updated successfully!" : "Subject created successfully!")
+      setShowAddSubjectModal(false);
+      setEditingSubject(null);
+      setSubjectForm({ subject_name: "", class_level: 10, description: "" });
+      await fetchSubjects();
+      if (isEditing && selectedSubject?.subject_id === editingSubject.subject_id) {
+        const updated = await fetchSubjectDetails(editingSubject.subject_id);
+        if (updated) setSelectedSubject(updated);
       }
     } catch (err) {
-      toast.error("Failed to create subject")
+      toast.error(err.message || "Failed to save subject")
     } finally {
       setSubmitting(false);
     }
@@ -476,6 +491,78 @@ export default function SubjectsManagement() {
     setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
   };
 
+  const handleMoveChapter = async (chapter, direction) => {
+    if (!selectedSubject?.chapters?.length) return;
+    const chapters = [...selectedSubject.chapters].sort((a, b) => (a.order ?? a.chapter_number) - (b.order ?? b.chapter_number));
+    const idx = chapters.findIndex((ch) => ch.chapter_id === chapter.chapter_id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= chapters.length) return;
+
+    const current = chapters[idx];
+    const target = chapters[swapIdx];
+
+    try {
+      setSubmitting(true);
+      const [resp1, resp2] = await Promise.all([
+        authFetch(`${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${current.chapter_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: target.order ?? target.chapter_number })
+        }),
+        authFetch(`${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${target.chapter_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: current.order ?? current.chapter_number })
+        })
+      ]);
+
+      if (!resp1.ok || !resp2.ok) throw new Error("Failed to reorder chapters");
+      const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+      if (updated) setSelectedSubject(updated);
+      fetchSubjects();
+    } catch (err) {
+      toast.error("Failed to reorder chapters")
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleMoveTopic = async (chapterId, topics, topic, direction) => {
+    const idx = topics.findIndex((t) => t.topic_id === topic.topic_id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= topics.length) return;
+
+    const current = topics[idx];
+    const target = topics[swapIdx];
+    const currentOrder = current.order ?? idx + 1;
+    const targetOrder = target.order ?? swapIdx + 1;
+
+    try {
+      setSubmitting(true);
+      const [resp1, resp2] = await Promise.all([
+        authFetch(`${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}/topics/${current.topic_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: targetOrder })
+        }),
+        authFetch(`${API_URL}/api/curriculum/subjects/${selectedSubject.subject_id}/chapters/${chapterId}/topics/${target.topic_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: currentOrder })
+        })
+      ]);
+
+      if (!resp1.ok || !resp2.ok) throw new Error("Failed to reorder topics");
+      const updated = await fetchSubjectDetails(selectedSubject.subject_id);
+      if (updated) setSelectedSubject(updated);
+      fetchSubjects();
+    } catch (err) {
+      toast.error("Failed to reorder topics")
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleViewChapters = async (subject) => {
     const details = await fetchSubjectDetails(subject.subject_id);
     if (details) {
@@ -577,6 +664,13 @@ export default function SubjectsManagement() {
                 </div>
 
                 <button
+                  onClick={() => handleEditSubject(subject)}
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+
+                <button
                   onClick={() => handleDeleteSubject(subject.subject_id)}
                   className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
                 >
@@ -609,16 +703,19 @@ export default function SubjectsManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Add New Subject</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{editingSubject ? "Edit Subject" : "Add New Subject"}</h2>
               <button
-                onClick={() => setShowAddSubjectModal(false)}
+                onClick={() => {
+                  setShowAddSubjectModal(false);
+                  setEditingSubject(null);
+                }}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <form onSubmit={handleAddSubject} className="space-y-4">
+            <form onSubmit={handleSaveSubject} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Subject Name
@@ -664,7 +761,10 @@ export default function SubjectsManagement() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddSubjectModal(false)}
+                  onClick={() => {
+                    setShowAddSubjectModal(false);
+                    setEditingSubject(null);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                 >
                   Cancel
@@ -675,7 +775,7 @@ export default function SubjectsManagement() {
                   className="flex-1 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2 hover:bg-gray-800 dark:hover:bg-gray-100"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  Create Subject
+                  {editingSubject ? "Save Subject" : "Create Subject"}
                 </button>
               </div>
             </form>
@@ -751,7 +851,9 @@ export default function SubjectsManagement() {
                     <p>No chapters yet. Add your first chapter above.</p>
                   </div>
                 ) : (
-                  selectedSubject.chapters?.map((chapter) => (
+                  [...(selectedSubject.chapters || [])]
+                    .sort((a, b) => (a.order ?? a.chapter_number) - (b.order ?? b.chapter_number))
+                    .map((chapter) => (
                     <div key={chapter.chapter_id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                       {editingChapter?.chapter_id === chapter.chapter_id ? (
                         <div className="p-4 bg-white dark:bg-gray-800">
@@ -834,6 +936,26 @@ export default function SubjectsManagement() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  handleMoveChapter(chapter, "up");
+                                }}
+                                className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                title="Move chapter up"
+                              >
+                                <ChevronUp className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveChapter(chapter, "down");
+                                }}
+                                className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                title="Move chapter down"
+                              >
+                                <ChevronDown className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleDeleteChapter(chapter.chapter_id);
                                 }}
                                 className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
@@ -891,7 +1013,9 @@ export default function SubjectsManagement() {
                             </p>
                           ) : (
                             <div className="space-y-2">
-                              {chapter.topics?.map((topic, idx) => (
+                              {[...(chapter.topics || [])]
+                                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                                .map((topic, idx, orderedTopics) => (
                                 <div key={topic.topic_id}>
                                   {editingTopic?.topic_id === topic.topic_id ? (
                                     <div className="p-3 bg-white dark:bg-gray-800 rounded-lg space-y-3">
@@ -982,6 +1106,20 @@ export default function SubjectsManagement() {
                                           title="Edit topic"
                                         >
                                           <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleMoveTopic(chapter.chapter_id, orderedTopics, topic, "up")}
+                                          className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                          title="Move topic up"
+                                        >
+                                          <ChevronUp className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleMoveTopic(chapter.chapter_id, orderedTopics, topic, "down")}
+                                          className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                          title="Move topic down"
+                                        >
+                                          <ChevronDown className="w-3.5 h-3.5" />
                                         </button>
                                         <button
                                           onClick={() => handleDeleteTopic(topic.topic_id, chapter.chapter_id)}

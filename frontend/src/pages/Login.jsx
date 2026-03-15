@@ -12,7 +12,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useUserStore();
 
-  const [userId, setUserId] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,8 +21,8 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const normalizedUserId = userId.trim();
-    if (!normalizedUserId || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
       setError("Please fill in all fields");
       return;
     }
@@ -33,7 +33,7 @@ export default function Login() {
       const res = await authFetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: normalizedUserId, password: password })
+        body: JSON.stringify({ email: normalizedEmail, password: password })
       });
       const data = await res.json();
 
@@ -98,14 +98,14 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="text-center mb-10">
             <h1 className="text-4xl font-bold text-gray-900 mb-3">Welcome back!</h1>
-            <p className="text-gray-500">Sign in with your User ID and password to continue.</p>
+            <p className="text-gray-500">Sign in with your email and password to continue.</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
-              type="text"
-              placeholder="Your User ID or Email"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              type="email"
+              placeholder="Your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full h-14 px-5 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             />
             <div className="relative">

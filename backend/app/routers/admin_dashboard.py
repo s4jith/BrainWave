@@ -8,12 +8,13 @@ Admin Dashboard Router
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from bson import ObjectId
 import hashlib
 import logging
 import time
 import re
+from pymongo.errors import DuplicateKeyError
 
 from app.db.mongo import db
 from app.utils.email import send_credentials_email
@@ -34,7 +35,7 @@ router = APIRouter(
 class StudentCreate(BaseModel):
     """Model for creating a new student."""
     name: str = Field(..., min_length=2, max_length=100)
-    age: int = Field(..., ge=1, le=25)
+    dob: str = Field(..., description="Date of birth in YYYY-MM-DD format")
     class_level: int = Field(..., ge=1, le=12)
     email: str = Field(..., description="Gmail address")
     mobile: str = Field(..., min_length=10, max_length=15)
@@ -42,7 +43,7 @@ class StudentCreate(BaseModel):
 class StudentUpdate(BaseModel):
     """Model for updating a student."""
     name: Optional[str] = None
-    age: Optional[int] = None
+    dob: Optional[str] = None
     class_level: Optional[int] = None
     email: Optional[str] = None
     mobile: Optional[str] = None
@@ -53,6 +54,7 @@ class StudentResponse(BaseModel):
     id: str
     user_id: str
     name: str
+    dob: Optional[str] = None
     age: int
     email: str
     mobile: str
@@ -73,41 +75,24 @@ def _clean_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
 
 
-def _credential_settings() -> dict:
-    defaults = {
-        "studentUserIdPattern": "class_level_counter5_age",
-        "studentPasswordPattern": "nameage",
-        "teacherUserIdPattern": "staff_counter_name",
-        "teacherPasswordPattern": "name@123",
-    }
+def _parse_dob(value: str) -> date:
+    """Parse DOB from ISO-like string and ensure it is not in the future."""
     try:
-        doc = db.get_collection("platform_settings").find_one({"_id": "global"}) or {}
-        return {**defaults, **{k: v for k, v in doc.items() if isinstance(v, str)}}
+        dob = datetime.fromisoformat(str(value).split("T")[0]).date()
     except Exception:
-        return defaults
+        raise HTTPException(status_code=400, detail="dob must be in YYYY-MM-DD format")
+
+    if dob > date.today():
+        raise HTTPException(status_code=400, detail="dob cannot be in the future")
+    return dob
 
 
-def _format_credential(pattern: str, values: dict, fallback: str) -> str:
-    try:
-        rendered = str(pattern or "")
-        token_values = {
-            **{k: str(v) for k, v in values.items()},
-            "counter5": f"{int(values.get('counter', 1)):05d}",
-            "counter4": f"{int(values.get('counter', 1)):04d}",
-        }
-
-        for key, val in token_values.items():
-            # Backward compatible placeholders with braces.
-            rendered = rendered.replace(f"{{{key}}}", val)
-            # Simpler tokens without braces (case-insensitive).
-            rendered = re.sub(rf"(?<![a-zA-Z0-9]){re.escape(key)}(?![a-zA-Z0-9])", val, rendered, flags=re.IGNORECASE)
-
-        rendered = rendered.strip()
-        if rendered:
-            return rendered
-    except Exception:
-        pass
-    return fallback
+def _age_from_dob(dob: date) -> int:
+    today = date.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if age < 1 or age > 120:
+        raise HTTPException(status_code=400, detail="Derived age is out of allowed range")
+    return age
 
 
 def _ensure_unique_user_id(base_user_id: str) -> str:
@@ -117,6 +102,29 @@ def _ensure_unique_user_id(base_user_id: str) -> str:
         candidate = f"{base_user_id}_{suffix}"
         suffix += 1
     return candidate
+
+
+def _normalize_email(value: Optional[str]) -> str:
+    return str(value or "").strip().lower()
+
+
+def _validate_mobile(value: Optional[str], field_name: str = "mobile") -> str:
+    mobile = re.sub(r"\D", "", str(value or ""))
+    if len(mobile) != 10:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be exactly 10 digits")
+    return mobile
+
+
+def _ensure_email_unique_index() -> None:
+    """Best-effort unique index for normalized email values."""
+    try:
+        db.users.create_index(
+            "email_normalized",
+            unique=True,
+            partialFilterExpression={"email_normalized": {"$exists": True, "$ne": ""}}
+        )
+    except Exception as exc:
+        logger.warning(f"Unable to ensure unique email index: {exc}")
 
 def generate_student_id(class_level: int, age: int, name: str = "") -> str:
     """
@@ -134,18 +142,7 @@ def generate_student_id(class_level: int, age: int, name: str = "") -> str:
         )
         student_number = counter.get("count", 1)
         
-        settings = _credential_settings()
-        fallback = f"{class_level}_{student_number:05d}_{age}"
-        user_id = _format_credential(
-            settings.get("studentUserIdPattern", fallback),
-            {
-                "class_level": class_level,
-                "age": age,
-                "name": _clean_name(name),
-                "counter": student_number,
-            },
-            fallback,
-        )
+        user_id = f"{class_level}_{student_number:05d}_{age}"
         return _ensure_unique_user_id(user_id)
     except Exception as e:
         logger.error(f"Error generating student ID: {e}")
@@ -158,21 +155,15 @@ def generate_password(name: str, age: int) -> str:
     Format: {name_lowercase}{age}
     Example: sajith14
     """
-    settings = _credential_settings()
     clean_name = _clean_name(name)
-    fallback = f"{clean_name}{age}"
-    return _format_credential(
-        settings.get("studentPasswordPattern", fallback),
-        {"name": clean_name, "age": age, "class_level": "", "counter": 1},
-        fallback,
-    )
+    return f"{clean_name}{age}"
 
 def serialize_student(student: dict) -> dict:
     """Convert MongoDB document to response dict."""
     return {
         "id": str(student.get("_id", "")),
-        "user_id": student.get("user_id", ""),
         "name": student.get("name", ""),
+        "dob": student.get("dob"),
         "age": student.get("age", 0),
         "email": student.get("email", ""),
         "mobile": student.get("mobile", ""),
@@ -638,26 +629,40 @@ async def get_students(
 async def create_student(student: StudentCreate):
     """
     Create a new student account.
-    Auto-generates user_id and password based on name and age.
+    Auto-generates user_id and password based on name and derived age.
     
     ID Format: {class_level}_{sequential_number:05d}_{age} (e.g., 12_00001_16)
     Password: {name_lowercase}{age} (e.g., sajith16)
     """
     try:
-        existing = db.users.find_one({"email": student.email})
+        _ensure_email_unique_index()
+
+        cleaned_email = (student.email or "").strip()
+        normalized_email = _normalize_email(cleaned_email)
+        existing = db.users.find_one({
+            "$or": [
+                {"email_normalized": normalized_email},
+                {"email": {"$regex": f"^{re.escape(cleaned_email)}$", "$options": "i"}},
+            ]
+        })
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        user_id = generate_student_id(student.class_level, student.age, student.name)
-        password = generate_password(student.name, student.age)
+        dob = _parse_dob(student.dob)
+        age = _age_from_dob(dob)
+
+        user_id = generate_student_id(student.class_level, age, student.name)
+        password = generate_password(student.name, age)
         hashed_password = hash_password(password)
         
         student_doc = {
             "user_id": user_id,
             "name": student.name,
-            "age": student.age,
-            "email": student.email,
-            "mobile": student.mobile,
+            "dob": dob.isoformat(),
+            "age": age,
+            "email": cleaned_email,
+            "email_normalized": normalized_email,
+            "mobile": _validate_mobile(student.mobile),
             "password": hashed_password,
             "role": "student",
             "class_level": student.class_level,
@@ -675,23 +680,25 @@ async def create_student(student: StudentCreate):
         
         response = serialize_student(student_doc)
         response["generated_credentials"] = {
-            "user_id": user_id,
+            "email": cleaned_email,
             "password": password,
-            "note": "Share these credentials with the student. They will be prompted to change password on first login."
+            "note": "Share these credentials with the student."
         }
         
-        email_sent = send_credentials_email(student.email, user_id, password, student.name)
+        email_sent = send_credentials_email(cleaned_email, password, student.name)
         if email_sent:
             response["generated_credentials"]["email_status"] = "sent"
         else:
             response["generated_credentials"]["email_status"] = "failed"
-            logger.warning(f"Failed to send email to {student.email}")
+            logger.warning(f"Failed to send email to {cleaned_email}")
         
         logger.info(f"Created student: {user_id} ({student.name})")
         return response
         
     except HTTPException:
         raise
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Email already registered")
     except Exception as e:
         logger.error(f"Error creating student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -729,12 +736,34 @@ async def update_student(student_id: str, student: StudentUpdate):
         update_doc = {}
         if student.name is not None:
             update_doc["name"] = student.name
-        if student.age is not None:
-            update_doc["age"] = student.age
+        if student.dob is not None:
+            dob = _parse_dob(student.dob)
+            update_doc["dob"] = dob.isoformat()
+            update_doc["age"] = _age_from_dob(dob)
         if student.email is not None:
-            update_doc["email"] = student.email
+            cleaned_email = student.email.strip()
+            normalized_email = _normalize_email(cleaned_email)
+            email_conflict = db.users.find_one({
+                "$and": [
+                    {
+                        "$or": [
+                            {"email_normalized": normalized_email},
+                            {"email": {"$regex": f"^{re.escape(cleaned_email)}$", "$options": "i"}},
+                        ]
+                    },
+                    {
+                        "$or": [
+                            {"_id": {"$ne": ObjectId(student_id)}} if ObjectId.is_valid(student_id) else {"user_id": {"$ne": student_id}},
+                        ]
+                    }
+                ]
+            })
+            if email_conflict:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            update_doc["email"] = cleaned_email
+            update_doc["email_normalized"] = normalized_email
         if student.mobile is not None:
-            update_doc["mobile"] = student.mobile
+            update_doc["mobile"] = _validate_mobile(student.mobile)
         if student.class_level is not None:
             update_doc["class_level"] = student.class_level
         if student.is_active is not None:
@@ -760,6 +789,8 @@ async def update_student(student_id: str, student: StudentUpdate):
         
     except HTTPException:
         raise
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Email already registered")
     except Exception as e:
         logger.error(f"Error updating student: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -821,6 +852,7 @@ async def reset_student_password(student_id: str):
         return {
             "success": True,
             "message": "Password reset successfully",
+            "email": student.get("email", ""),
             "new_password": new_password,
             "note": "Share this password with the student"
         }
@@ -883,11 +915,13 @@ async def get_teachers(
             
             teachers.append({
                 "id": teacher_id_str,
-                "user_id": teacher_user_id,
                 "name": t.get("name", ""),
                 "email": t.get("email", ""),
                 "mobile": t.get("mobile", ""),
+                "dob": t.get("dob"),
+                "age": t.get("age"),
                 "subjects": t.get("subjects", []),
+                "preferred_subject": (t.get("subjects") or [""])[0] if t.get("subjects") else "",
                 "group_count": group_count,
                 "group_names": group_names,
                 "is_active": t.get("is_active", True),
@@ -907,7 +941,7 @@ class TeacherCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., description="Email address")
     mobile: Optional[str] = None
-    age: Optional[int] = Field(None, ge=18, le=100)
+    dob: str = Field(..., description="Date of birth in YYYY-MM-DD format")
     subjects: List[str] = []
 
 class TeacherUpdate(BaseModel):
@@ -915,7 +949,7 @@ class TeacherUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     mobile: Optional[str] = None
-    age: Optional[int] = None
+    dob: Optional[str] = None
     subjects: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
@@ -929,14 +963,8 @@ def generate_teacher_id(name: str) -> str:
             return_document=True
         )
         teacher_number = counter.get("count", 1)
-        settings = _credential_settings()
         clean_name = _clean_name(name)[:10]
-        fallback = f"staff_{teacher_number}_{clean_name}"
-        user_id = _format_credential(
-            settings.get("teacherUserIdPattern", fallback),
-            {"name": clean_name, "counter": teacher_number, "class_level": "", "age": ""},
-            fallback,
-        )
+        user_id = f"staff_{teacher_number}_{clean_name}"
         return _ensure_unique_user_id(user_id)
     except Exception as e:
         logger.error(f"Error generating teacher ID: {e}")
@@ -946,19 +974,14 @@ def generate_teacher_id(name: str) -> str:
 
 def generate_teacher_password(name: str) -> str:
     """Generate default teacher password."""
-    settings = _credential_settings()
     clean_name = _clean_name(name)
-    fallback = f"{clean_name}@123"
-    return _format_credential(
-        settings.get("teacherPasswordPattern", fallback),
-        {"name": clean_name, "counter": 1, "class_level": "", "age": ""},
-        fallback,
-    )
+    return f"{clean_name}@123"
 
 @router.post("/teachers")
 async def create_teacher(teacher: TeacherCreate):
     """Create a new teacher account."""
     try:
+        _ensure_email_unique_index()
         normalized_email = (teacher.email or "").strip().lower()
         existing = db.users.find_one({
             "$or": [
@@ -972,14 +995,17 @@ async def create_teacher(teacher: TeacherCreate):
         user_id = generate_teacher_id(teacher.name)
         password = generate_teacher_password(teacher.name)
         hashed_password = hash_password(password)
+        dob = _parse_dob(teacher.dob)
+        age = _age_from_dob(dob)
         
         teacher_doc = {
             "user_id": user_id,
             "name": teacher.name,
             "email": (teacher.email or "").strip(),
             "email_normalized": normalized_email,
-            "mobile": teacher.mobile or "",
-            "age": teacher.age,
+            "mobile": _validate_mobile(teacher.mobile),
+            "dob": dob.isoformat(),
+            "age": age,
             "subjects": teacher.subjects,
             "password": hashed_password,
             "role": "teacher",
@@ -994,22 +1020,19 @@ async def create_teacher(teacher: TeacherCreate):
         
         response = {
             "id": str(teacher_doc["_id"]),
-            "user_id": user_id,
             "name": teacher.name,
             "email": teacher.email,
-            "mobile": teacher.mobile or "",
+            "mobile": teacher_doc["mobile"],
             "subjects": teacher.subjects,
             "is_active": True,
             "generated_credentials": {
-                "user_id": user_id,
-                "password": password,
-                "user_id": user_id,
+                "email": teacher.email,
                 "password": password,
                 "note": "Share these credentials with the teacher."
             }
         }
         
-        email_sent = send_credentials_email(teacher.email, user_id, password, teacher.name)
+        email_sent = send_credentials_email(teacher.email, password, teacher.name)
         if email_sent:
             response["generated_credentials"]["email_status"] = "sent"
         else:
@@ -1021,6 +1044,8 @@ async def create_teacher(teacher: TeacherCreate):
         
     except HTTPException:
         raise
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Email already registered")
     except Exception as e:
         logger.error(f"Error creating teacher: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1056,9 +1081,11 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
             update_doc["email"] = cleaned_email
             update_doc["email_normalized"] = normalized_email
         if teacher.mobile is not None:
-            update_doc["mobile"] = teacher.mobile
-        if teacher.age is not None:
-            update_doc["age"] = teacher.age
+            update_doc["mobile"] = _validate_mobile(teacher.mobile)
+        if teacher.dob is not None:
+            dob = _parse_dob(teacher.dob)
+            update_doc["dob"] = dob.isoformat()
+            update_doc["age"] = _age_from_dob(dob)
         if teacher.subjects is not None:
             update_doc["subjects"] = teacher.subjects
         if teacher.is_active is not None:
@@ -1082,16 +1109,20 @@ async def update_teacher(teacher_id: str, teacher: TeacherUpdate):
         logger.info(f"Updated teacher: {teacher_id}")
         return {
             "id": str(result["_id"]),
-            "user_id": result.get("user_id", ""),
             "name": result.get("name", ""),
             "email": result.get("email", ""),
             "mobile": result.get("mobile", ""),
+            "dob": result.get("dob"),
+            "age": result.get("age"),
             "subjects": result.get("subjects", []),
+            "preferred_subject": (result.get("subjects") or [""])[0] if result.get("subjects") else "",
             "is_active": result.get("is_active", True)
         }
         
     except HTTPException:
         raise
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Email already registered")
     except Exception as e:
         logger.error(f"Error updating teacher: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1179,6 +1210,7 @@ async def reset_teacher_password(teacher_id: str):
         return {
             "success": True,
             "message": "Password reset successfully",
+            "email": teacher.get("email", ""),
             "new_password": new_password,
             "note": "Share this password with the teacher"
         }
@@ -1399,6 +1431,11 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
         if result.get("teacher_id"):
             teacher = db.users.find_one({"_id": ObjectId(result["teacher_id"])} if ObjectId.is_valid(result["teacher_id"]) else {"user_id": result["teacher_id"]})
             teacher_name = teacher.get("name") if teacher else None
+
+        students = [
+            serialize_student(s)
+            for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in result.get("student_ids", []) if ObjectId.is_valid(sid)]}})
+        ]
         
         logger.info(f"Updated group students: {group_id} - {len(data.student_ids)} students")
         return {
@@ -1408,7 +1445,8 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
             "teacher_id": result.get("teacher_id", ""),
             "teacher_name": teacher_name,
             "student_ids": result.get("student_ids", []),
-            "student_count": len(result.get("student_ids", []))
+            "student_count": len(result.get("student_ids", [])),
+            "students": students
         }
         
     except HTTPException:
@@ -1501,10 +1539,6 @@ _DEFAULT_SETTINGS = {
     "questionTypes": ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     "cognitiveLevels": ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     "difficultyLevels": ["easy", "medium", "hard"],
-    "studentUserIdPattern": "class_level_counter5_age",
-    "studentPasswordPattern": "nameage",
-    "teacherUserIdPattern": "staff_counter_name",
-    "teacherPasswordPattern": "name@123",
 }
 
 
@@ -1544,10 +1578,6 @@ class PlatformSettings(BaseModel):
     questionTypes: Optional[List[str]] = None
     cognitiveLevels: Optional[List[str]] = None
     difficultyLevels: Optional[List[str]] = None
-    studentUserIdPattern: Optional[str] = None
-    studentPasswordPattern: Optional[str] = None
-    teacherUserIdPattern: Optional[str] = None
-    teacherPasswordPattern: Optional[str] = None
 
 
 @router.get("/settings")

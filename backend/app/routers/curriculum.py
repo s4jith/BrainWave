@@ -247,11 +247,32 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
     """
     try:
         collection = mongodb.db[SUBJECTS_COLLECTION]
+
+        current = await collection.find_one({"subject_id": subject_id})
+        if not current:
+            raise HTTPException(status_code=404, detail="Subject not found")
+
+        target_subject_name = request.subject_name or current.get("subject_name")
+        target_class_level = request.class_level if request.class_level is not None else current.get("class_level")
+
+        duplicate = await collection.find_one({
+            "subject_id": {"$ne": subject_id},
+            "subject_name": target_subject_name,
+            "class_level": target_class_level,
+            "is_active": {"$ne": False}
+        })
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Subject '{target_subject_name}' already exists for Class {target_class_level}"
+            )
         
         update_data = {"updated_at": datetime.utcnow()}
         
         if request.subject_name:
             update_data["subject_name"] = request.subject_name
+        if request.class_level is not None:
+            update_data["class_level"] = request.class_level
         if request.description is not None:
             update_data["description"] = request.description
         if request.icon:

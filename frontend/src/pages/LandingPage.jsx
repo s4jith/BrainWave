@@ -128,9 +128,6 @@ const Navbar = () => {
                     <button onClick={() => navigate('/login')} className="px-5 py-2 text-sm font-medium text-neutral-700 hover:text-neutral-900">
                         Login
                     </button>
-                    <button onClick={() => navigate('/signup')} className="px-5 py-2 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800">
-                        Sign Up
-                    </button>
                 </div>
             </div>
         </motion.nav>

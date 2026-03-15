@@ -71,11 +71,19 @@ export default function StudentManagement() {
 
   const [formData, setFormData] = useState({
     name: "",
-    age: 14,
+    dob: "",
     email: "",
     mobile: "",
     class_level: 10
   });
+
+  const sanitizeMobile = (value) => value.replace(/\D/g, "").slice(0, 10);
+
+  const hasDuplicateEmail = (email, excludeId = null) => {
+    const target = (email || "").trim().toLowerCase();
+    if (!target) return false;
+    return students.some((s) => s.id !== excludeId && (s.email || "").trim().toLowerCase() === target);
+  };
 
   useEffect(() => {
     fetchStudents();
@@ -110,6 +118,14 @@ export default function StudentManagement() {
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
+    if (formData.mobile && sanitizeMobile(formData.mobile).length !== 10) {
+      toast.warning("Mobile number must be exactly 10 digits")
+      return;
+    }
+    if (hasDuplicateEmail(formData.email)) {
+      toast.warning("Email already exists")
+      return;
+    }
     
     const tempId = `temp_${Date.now()}`;
     const optimisticStudent = {
@@ -156,6 +172,14 @@ export default function StudentManagement() {
 
   const handleEditStudent = async (e) => {
     e.preventDefault();
+    if (formData.mobile && sanitizeMobile(formData.mobile).length !== 10) {
+      toast.warning("Mobile number must be exactly 10 digits")
+      return;
+    }
+    if (hasDuplicateEmail(formData.email, selectedStudent?.id)) {
+      toast.warning("Email already exists")
+      return;
+    }
     try {
       setSaving(true);
       const response = await authFetch(`${API_URL}/api/admin/students/${selectedStudent.id}`, {
@@ -206,7 +230,7 @@ export default function StudentManagement() {
       if (!response.ok) throw new Error("Failed to reset password");
       const result = await response.json();
       setNewCredentials({
-        user_id: student.user_id,
+        email: result.email || student.email,
         password: result.new_password,
         note: "Password has been reset"
       });
@@ -217,14 +241,14 @@ export default function StudentManagement() {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", age: 14, email: "", mobile: "", class_level: 10 });
+    setFormData({ name: "", dob: "", email: "", mobile: "", class_level: 10 });
   };
 
   const openEditModal = (student) => {
     setSelectedStudent(student);
     setFormData({
       name: student.name,
-      age: student.age || 14,
+      dob: student.dob || "",
       email: student.email,
       mobile: student.mobile || "",
       class_level: student.class_level
@@ -233,9 +257,9 @@ export default function StudentManagement() {
   };
 
   const exportCSV = () => {
-    const headers = ["Name", "User ID", "Email", "Class", "Mobile", "Status", "Last Login"];
+    const headers = ["Name", "Email", "Class", "Mobile", "Status", "Last Login"];
     const rows = students.map(s => [
-      s.name, s.user_id, s.email, s.class_level, s.mobile || "",
+      s.name, s.email, s.class_level, s.mobile || "",
       s.is_active ? "Active" : "Inactive",
       s.last_login ? new Date(s.last_login).toLocaleDateString() : "Never"
     ]);
@@ -255,8 +279,7 @@ export default function StudentManagement() {
 
   const filteredStudents = students.filter(s =>
     s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.user_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    s.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const stats = {
@@ -379,7 +402,6 @@ export default function StudentManagement() {
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Email</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Role</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Assigned Groups</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Created</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
@@ -393,11 +415,6 @@ export default function StudentManagement() {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-600 dark:text-gray-300">{student.email}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                        <Users className="w-3 h-3" /> Student
-                      </span>
                     </td>
                     <td className="px-6 py-4">
                       {student.group_names && student.group_names.length > 0 ? (
@@ -472,7 +489,7 @@ export default function StudentManagement() {
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Add New Student</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex items-start gap-2">
               <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
-              <span>User ID and Password will be auto-generated based on name.</span>
+              <span>Email and password will be generated automatically.</span>
             </p>
             <form onSubmit={handleAddStudent} className="space-y-4">
               <div>
@@ -488,14 +505,12 @@ export default function StudentManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Date of Birth *</label>
                   <input
-                    type="number"
+                    type="date"
                     required
-                    min={5}
-                    max={25}
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
+                    value={formData.dob}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   />
                 </div>
@@ -528,9 +543,12 @@ export default function StudentManagement() {
                 <input
                   type="tel"
                   value={formData.mobile}
-                  onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, mobile: sanitizeMobile(e.target.value) })}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   placeholder="1234567890"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
                 />
               </div>
               <div className="flex gap-3 pt-4">
@@ -572,13 +590,11 @@ export default function StudentManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Date of Birth</label>
                   <input
-                    type="number"
-                    min={5}
-                    max={25}
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
+                    type="date"
+                    value={formData.dob}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                     className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                   />
                 </div>
@@ -610,8 +626,11 @@ export default function StudentManagement() {
                 <input
                   type="tel"
                   value={formData.mobile}
-                  onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, mobile: sanitizeMobile(e.target.value) })}
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
                 />
               </div>
               <div className="flex gap-3 pt-4">
@@ -648,10 +667,10 @@ export default function StudentManagement() {
             </div>
             <div className="space-y-4 mb-6">
               <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">User ID</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Email</p>
                 <div className="flex items-center justify-between">
-                  <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.user_id}</code>
-                  <button onClick={() => copyToClipboard(newCredentials.user_id)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+                  <code className="font-mono text-sm font-semibold text-gray-900 dark:text-white">{newCredentials.email}</code>
+                  <button onClick={() => copyToClipboard(newCredentials.email)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
                     <Clipboard className="w-4 h-4" />
                   </button>
                 </div>

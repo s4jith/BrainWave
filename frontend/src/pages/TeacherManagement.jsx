@@ -48,9 +48,17 @@ export default function TeacherManagement() {
         name: "",
         email: "",
         mobile: "",
-        age: "",
+        dob: "",
         preferred_subject: ""
     });
+
+    const sanitizeMobile = (value) => value.replace(/\D/g, "").slice(0, 10);
+
+    const hasDuplicateEmail = (email, excludeId = null) => {
+        const target = (email || "").trim().toLowerCase();
+        if (!target) return false;
+        return teachers.some((t) => t.id !== excludeId && (t.email || "").trim().toLowerCase() === target);
+    };
 
     const [curriculumSubjects, setCurriculumSubjects] = useState([]);
     const [loadingCurriculum, setLoadingCurriculum] = useState(true);
@@ -109,9 +117,23 @@ export default function TeacherManagement() {
 
     const handleAddTeacher = async (e) => {
         e.preventDefault();
+        if (sanitizeMobile(formData.mobile).length !== 10) {
+            toast.warning("Mobile number must be exactly 10 digits")
+            return;
+        }
+        if (hasDuplicateEmail(formData.email)) {
+            toast.warning("Email already exists")
+            return;
+        }
         try {
             setSaving(true);
-            const dataToSend = { ...formData, age: parseInt(formData.age, 10) };
+            const dataToSend = {
+                name: formData.name,
+                email: formData.email,
+                mobile: sanitizeMobile(formData.mobile),
+                dob: formData.dob,
+                subjects: formData.preferred_subject ? [formData.preferred_subject] : []
+            };
             const response = await authFetch(`${API_URL}/api/admin/teachers`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
@@ -138,10 +160,23 @@ export default function TeacherManagement() {
 
     const handleEditTeacher = async (e) => {
         e.preventDefault();
+        if (sanitizeMobile(formData.mobile).length !== 10) {
+            toast.warning("Mobile number must be exactly 10 digits")
+            return;
+        }
+        if (hasDuplicateEmail(formData.email, selectedTeacher?.id)) {
+            toast.warning("Email already exists")
+            return;
+        }
         try {
             setSaving(true);
-            const dataToSend = { ...formData };
-            if (dataToSend.age) dataToSend.age = parseInt(dataToSend.age, 10);
+            const dataToSend = {
+                name: formData.name,
+                email: formData.email,
+                mobile: sanitizeMobile(formData.mobile),
+                dob: formData.dob,
+                subjects: formData.preferred_subject ? [formData.preferred_subject] : []
+            };
 
             const response = await authFetch(`${API_URL}/api/admin/teachers/${selectedTeacher.id}`, {
                 method: "PUT",
@@ -205,7 +240,7 @@ export default function TeacherManagement() {
             if (!response.ok) throw new Error("Failed to reset password");
             const result = await response.json();
             setNewCredentials({
-                user_id: teacher.user_id,
+                email: result.email || teacher.email,
                 password: result.new_password,
                 note: "Password has been reset"
             });
@@ -216,7 +251,7 @@ export default function TeacherManagement() {
     };
 
     const resetForm = () => {
-        setFormData({ name: "", email: "", mobile: "", age: "", preferred_subject: "" });
+        setFormData({ name: "", email: "", mobile: "", dob: "", preferred_subject: "" });
     };
 
     const openPromoteModal = (teacher) => {
@@ -310,8 +345,8 @@ export default function TeacherManagement() {
             name: teacher.name,
             email: teacher.email,
             mobile: teacher.mobile || "",
-            age: teacher.age || "",
-            preferred_subject: teacher.preferred_subject || ""
+            dob: teacher.dob || "",
+            preferred_subject: teacher.preferred_subject || teacher.subjects?.[0] || ""
         });
         setShowEditModal(true);
     };
@@ -530,7 +565,7 @@ export default function TeacherManagement() {
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Add New Teacher</h2>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex items-start gap-2">
                             <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
-                            <span>User ID and Password will be auto-generated based on name.</span>
+                            <span>Email and password will be generated automatically.</span>
                         </p>
                         <form onSubmit={handleAddTeacher} className="space-y-4">
                             <div>
@@ -562,7 +597,7 @@ export default function TeacherManagement() {
                                         type="tel"
                                         required
                                         value={formData.mobile}
-                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                        onChange={(e) => setFormData({ ...formData, mobile: sanitizeMobile(e.target.value) })}
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                                         placeholder="10-digit number"
                                         pattern="[0-9]{10}"
@@ -570,16 +605,13 @@ export default function TeacherManagement() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age *</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Date of Birth *</label>
                                     <input
-                                        type="number"
+                                        type="date"
                                         required
-                                        min={18}
-                                        max={100}
-                                        value={formData.age}
-                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                        value={formData.dob}
+                                        onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="Age"
                                     />
                                 </div>
                             </div>
@@ -652,7 +684,7 @@ export default function TeacherManagement() {
                                         type="tel"
                                         required
                                         value={formData.mobile}
-                                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                        onChange={(e) => setFormData({ ...formData, mobile: sanitizeMobile(e.target.value) })}
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
                                         placeholder="10-digit number"
                                         pattern="[0-9]{10}"
@@ -660,16 +692,13 @@ export default function TeacherManagement() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Date of Birth</label>
                                     <input
-                                        type="number"
+                                        type="date"
                                         required
-                                        min={18}
-                                        max={100}
-                                        value={formData.age}
-                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                        value={formData.dob}
+                                        onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                                         className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 text-gray-900 dark:text-white"
-                                        placeholder="Age"
                                     />
                                 </div>
                             </div>
@@ -851,10 +880,10 @@ export default function TeacherManagement() {
                         </div>
                         <div className="space-y-4 mb-6">
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">User ID</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Email</p>
                                 <div className="flex items-center justify-between">
-                                    <code className="font-mono text-lg font-semibold text-gray-900 dark:text-white">{newCredentials.user_id}</code>
-                                    <button onClick={() => copyToClipboard(newCredentials.user_id)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+                                    <code className="font-mono text-sm font-semibold text-gray-900 dark:text-white">{newCredentials.email}</code>
+                                    <button onClick={() => copyToClipboard(newCredentials.email)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
                                         <Clipboard className="w-4 h-4" />
                                     </button>
                                 </div>

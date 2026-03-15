@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import useUserStore from "./stores/userStore";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import TeacherPlaceholder from "./pages/TeacherPlaceholder";
 
 import Dashboard from "./pages/Dashboard";
@@ -293,14 +292,6 @@ function App() {
             </PublicRoute>
           }
         />
-        <Route
-          path="/signup"
-          element={
-            <PublicRoute>
-              <Signup />
-            </PublicRoute>
-          }
-        />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/teacher" element={<TeacherPlaceholder />} />
 
@@ -379,7 +370,9 @@ function App() {
           path="/about-you"
           element={
             <ProtectedRoute>
-              <Settings />
+              <DashboardLayout>
+                <Settings />
+              </DashboardLayout>
             </ProtectedRoute>
           }
         />

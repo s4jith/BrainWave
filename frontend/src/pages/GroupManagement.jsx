@@ -116,6 +116,23 @@ export default function GroupManagement() {
         return () => window.removeEventListener('focus', handleFocus);
     }, []);
 
+    const refreshGroupsAndSelection = async (groupId = null) => {
+        try {
+            const response = await authFetch(`${API_URL}/api/admin/groups`, { headers: getAuthHeader() });
+            if (!response.ok) return;
+            const data = await response.json();
+            const nextGroups = data.groups || [];
+            setGroups(nextGroups);
+            const targetId = groupId || selectedGroup?.id;
+            if (targetId) {
+                const fresh = nextGroups.find(g => g.id === targetId);
+                setSelectedGroup(fresh || null);
+            }
+        } catch (err) {
+            console.error("Failed to refresh groups:", err);
+        }
+    };
+
     const fetchGroups = async () => {
         try {
             setLoading(true);
@@ -270,34 +287,18 @@ export default function GroupManagement() {
                 })
             });
             if (!response.ok) throw new Error("Failed to update group");
-            const updatedGroup = await response.json();
+            const currentIds = editGroupStudents
+                .map(s => s.id)
+                .filter(id => !editRemovedStudentIds.includes(id));
+            const finalStudentIds = [...new Set([...currentIds, ...editPendingAddStudentIds])];
+            const studentUpdate = await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                body: JSON.stringify({ student_ids: finalStudentIds })
+            });
+            if (!studentUpdate.ok) throw new Error("Failed to update group students");
 
-            // Remove students
-            for (const sid of editRemovedStudentIds) {
-                await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students/${sid}`, {
-                    method: "DELETE", headers: getAuthHeader()
-                });
-            }
-            // Add students
-            if (editPendingAddStudentIds.length > 0) {
-                await authFetch(`${API_URL}/api/admin/groups/${editGroupForm.id}/students`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                    body: JSON.stringify({ student_ids: editPendingAddStudentIds })
-                });
-            }
-
-            const finalStudents = [
-                ...editGroupStudents.filter(s => !editRemovedStudentIds.includes(s.id)),
-                ...availableStudents.filter(s => editPendingAddStudentIds.includes(s.id))
-            ];
-
-            setGroups(groups.map(g => g.id === updatedGroup.id ? {
-                ...g, ...updatedGroup, students: finalStudents, student_count: finalStudents.length
-            } : g));
-            if (selectedGroup?.id === updatedGroup.id) {
-                setSelectedGroup(prev => ({ ...prev, ...updatedGroup, students: finalStudents }));
-            }
+            await refreshGroupsAndSelection(editGroupForm.id);
             setShowEditGroup(false);
         } catch (err) {
             toast.error("Error: " + err.message)
@@ -333,16 +334,15 @@ export default function GroupManagement() {
         if (!selectedGroup) return;
         if (!confirm("Remove this student from the group?")) return;
         try {
-            const response = await authFetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students/${studentId}`, {
-                method: "DELETE",
-                headers: getAuthHeader()
+            const remainingIds = (selectedGroup.student_ids || selectedGroup.students?.map(s => s.id) || [])
+                .filter(id => id !== studentId);
+            const response = await authFetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                body: JSON.stringify({ student_ids: remainingIds })
             });
             if (!response.ok) throw new Error("Failed to remove student");
-            setSelectedGroup({
-                ...selectedGroup,
-                students: selectedGroup.students.filter(s => s.id !== studentId)
-            });
-            setGroups(groups.map(g => g.id === selectedGroup.id ? { ...g, student_count: g.student_count - 1 } : g));
+            await refreshGroupsAndSelection(selectedGroup.id);
         } catch (err) {
             toast.error("Error: " + err.message)
         }
@@ -352,15 +352,14 @@ export default function GroupManagement() {
         if (!selectedGroup || selectedStudentIds.length === 0) return;
         setSaving(true);
         try {
+            const mergedIds = [...new Set([...(selectedGroup.student_ids || selectedGroup.students?.map(s => s.id) || []), ...selectedStudentIds])];
             const response = await authFetch(`${API_URL}/api/admin/groups/${selectedGroup.id}/students`, {
-                method: "POST",
+                method: "PUT",
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
-                body: JSON.stringify({ student_ids: selectedStudentIds })
+                body: JSON.stringify({ student_ids: mergedIds })
             });
             if (!response.ok) throw new Error("Failed to assign students");
-            const data = await response.json();
-            setSelectedGroup({ ...selectedGroup, students: data.students || [] });
-            setGroups(groups.map(g => g.id === selectedGroup.id ? { ...g, student_count: data.students?.length || 0 } : g));
+            await refreshGroupsAndSelection(selectedGroup.id);
             setShowAssignStudents(false);
             setSelectedStudentIds([]);
         } catch (err) {
@@ -377,19 +376,16 @@ export default function GroupManagement() {
     };
 
     const filteredGroups = groups.filter(g => g.name?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const currentGroupStudentIds = selectedGroup?.students?.map(s => s.id) || [];
 
     const filteredAvailableStudents = availableStudents.filter(student => {
         const matchesSearch = student.name?.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
             student.email?.toLowerCase().includes(studentSearchTerm.toLowerCase());
         const matchesClass = !studentClassFilter || student.class_level?.toString() === studentClassFilter;
-        const notInGroup = !currentGroupStudentIds.includes(student.id);
-        return matchesSearch && matchesClass && (showAssignStudents ? notInGroup : true);
+        return matchesSearch && matchesClass;
     });
 
     const filteredTeachers = teachers.filter(teacher => {
         const matchesSearch = teacher.name?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
-            teacher.user_id?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
             teacher.email?.toLowerCase().includes(teacherSearchTerm.toLowerCase());
         return matchesSearch;
     });
@@ -497,7 +493,11 @@ export default function GroupManagement() {
                                     <p className="text-gray-500 dark:text-gray-400 text-sm">Teacher: {selectedGroup.teacher_name}</p>
                                 </div>
                                 <button
-                                    onClick={() => { setShowAssignStudents(true); setSelectedStudentIds([]); }}
+                                    onClick={() => {
+                                        const existingIds = selectedGroup.student_ids || selectedGroup.students?.map(s => s.id) || [];
+                                        setShowAssignStudents(true);
+                                        setSelectedStudentIds(existingIds);
+                                    }}
                                     className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 flex items-center gap-2 text-sm font-medium"
                                 >
                                     <UserPlus className="w-4 h-4" /> Add Students
@@ -638,7 +638,7 @@ export default function GroupManagement() {
                                                 />
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-medium text-gray-900 dark:text-white truncate">{teacher.name}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.user_id} {teacher.email ? `• ${teacher.email}` : ""}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.email || "No email"}</p>
                                                 </div>
                                             </label>
                                         ))
@@ -712,7 +712,7 @@ export default function GroupManagement() {
                         </div>
                         <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-72 overflow-y-auto mb-4">
                             {filteredAvailableStudents.length === 0 ? (
-                                <div className="p-4 text-center text-gray-500 dark:text-gray-400">No available students</div>
+                                <div className="p-4 text-center text-gray-500 dark:text-gray-400">No students found</div>
                             ) : (
                                 filteredAvailableStudents.slice(0, 50).map(student => (
                                     <label key={student.id}
@@ -744,7 +744,6 @@ export default function GroupManagement() {
             {showEditGroup && (() => {
                 const editFilteredTeachers = teachers.filter(t =>
                     t.name?.toLowerCase().includes(editTeacherSearch.toLowerCase()) ||
-                    t.user_id?.toLowerCase().includes(editTeacherSearch.toLowerCase()) ||
                     t.email?.toLowerCase().includes(editTeacherSearch.toLowerCase())
                 );
                 const currentEditStudents = editGroupStudents.filter(s => !editRemovedStudentIds.includes(s.id));
@@ -863,7 +862,7 @@ export default function GroupManagement() {
                                                             />
                                                             <div className="flex-1 min-w-0">
                                                                 <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{teacher.name}</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.user_id}{teacher.email ? ` · ${teacher.email}` : ""}</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{teacher.email || "No email"}</p>
                                                             </div>
                                                             {selected && <Check className="w-4 h-4 text-green-500 shrink-0" />}
                                                         </label>

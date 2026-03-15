@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from app.db.mongo import mongodb
 from app.core.permissions import require_role
 from app.models.rbac_models import TokenData, UserRole
+from bson import ObjectId
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,27 @@ router = APIRouter(
 def _ensure_self_or_admin(student_id: str, current_user: TokenData) -> None:
     if current_user.role != UserRole.ADMIN and current_user.user_id != student_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+async def _resolve_student_user_id(student_id: str) -> str:
+    """Accept either app user_id or Mongo _id and resolve to canonical user_id."""
+    users_col = mongodb.db["users"]
+
+    if ObjectId.is_valid(student_id):
+        user_doc = await users_col.find_one({"_id": ObjectId(student_id)})
+        if user_doc and user_doc.get("user_id"):
+            return user_doc["user_id"]
+
+    user_doc = await users_col.find_one({
+        "$or": [
+            {"user_id": student_id},
+            {"student_id": student_id},
+        ]
+    })
+    if user_doc and user_doc.get("user_id"):
+        return user_doc["user_id"]
+
+    return student_id
 
 class DailyActivity(BaseModel):
     """Daily activity entry."""
@@ -72,15 +94,16 @@ async def get_streak_data(
     Calculates streak based on daily login/activity records in MongoDB.
     """
     try:
-        _ensure_self_or_admin(student_id, current_user)
-        logger.info(f"📊 Fetching streak data for student: {student_id}")
+        effective_student_id = await _resolve_student_user_id(student_id)
+        _ensure_self_or_admin(effective_student_id, current_user)
+        logger.info(f"📊 Fetching streak data for student: {effective_student_id}")
         
         activities_col = mongodb.db["user_activities"]
         
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         
         activities = await activities_col.find({
-            "student_id": student_id,
+            "student_id": effective_student_id,
             "date": {"$gte": thirty_days_ago.strftime("%Y-%m-%d")}
         }).sort("date", -1).to_list(length=30)
         
@@ -95,13 +118,18 @@ async def get_streak_data(
             check_date -= timedelta(days=1)
         
         user_col = mongodb.db["users"]
-        user = await user_col.find_one({"student_id": student_id})
+        user = await user_col.find_one({
+            "$or": [
+                {"user_id": effective_student_id},
+                {"student_id": effective_student_id}
+            ]
+        })
         longest_streak = user.get("longest_streak", current_streak) if user else current_streak
         
         if current_streak > longest_streak:
             longest_streak = current_streak
             await user_col.update_one(
-                {"student_id": student_id},
+                {"_id": user["_id"]} if user else {"user_id": effective_student_id},
                 {"$set": {"longest_streak": longest_streak}},
                 upsert=True
             )
@@ -131,6 +159,9 @@ async def get_streak_data(
             weekly_activity=weekly_activity,
             last_activity_date=last_activity
         )
+
+    except HTTPException:
+        raise
         
     except Exception as e:
         logger.error(f" Get streak error: {e}")
@@ -165,12 +196,13 @@ async def get_progress_data(
     Calculates progress from completed tests and chapters.
     """
     try:
-        _ensure_self_or_admin(student_id, current_user)
-        logger.info(f"📊 Fetching progress data for student: {student_id}")
+        effective_student_id = await _resolve_student_user_id(student_id)
+        _ensure_self_or_admin(effective_student_id, current_user)
+        logger.info(f"📊 Fetching progress data for student: {effective_student_id}")
         
         eval_col = mongodb.db["evaluations"]
         
-        filter_query = {"student_id": student_id}
+        filter_query = {"student_id": effective_student_id}
         if subject:
             filter_query["subject"] = subject
         
@@ -186,7 +218,7 @@ async def get_progress_data(
             average_score = 0
         
         notes_col = mongodb.db["notes"]
-        notes_filter = {"student_id": student_id}
+        notes_filter = {"student_id": effective_student_id}
         if subject:
             notes_filter["subject"] = subject
         
@@ -207,6 +239,9 @@ async def get_progress_data(
             completed_chapters=completed_chapters,
             average_score=round(average_score, 1)
         )
+
+    except HTTPException:
+        raise
         
     except Exception as e:
         logger.error(f" Get progress error: {e}")
@@ -231,14 +266,15 @@ async def get_dashboard_data(
     Returns streak, progress, and recent notes for efficiency.
     """
     try:
-        _ensure_self_or_admin(student_id, current_user)
-        logger.info(f"📊 Fetching dashboard data for student: {student_id}")
+        effective_student_id = await _resolve_student_user_id(student_id)
+        _ensure_self_or_admin(effective_student_id, current_user)
+        logger.info(f"📊 Fetching dashboard data for student: {effective_student_id}")
         
-        streak = await get_streak_data(student_id, current_user)
-        progress = await get_progress_data(student_id, subject, current_user)
+        streak = await get_streak_data(effective_student_id, current_user)
+        progress = await get_progress_data(effective_student_id, subject, current_user)
         
         notes_col = mongodb.db["notes"]
-        notes_filter = {"student_id": student_id}
+        notes_filter = {"student_id": effective_student_id}
         if subject:
             notes_filter["subject"] = subject
         
@@ -268,6 +304,9 @@ async def get_dashboard_data(
             recent_notes=recent_notes,
             total_notes=total_notes
         )
+
+    except HTTPException:
+        raise
         
     except Exception as e:
         logger.error(f" Get dashboard error: {e}")
@@ -285,7 +324,7 @@ async def log_activity(
     Call this when user performs any action (opens PDF, uses chatbot, etc.)
     """
     try:
-        effective_student_id = student_id or current_user.user_id
+        effective_student_id = await _resolve_student_user_id(student_id) if student_id else current_user.user_id
         _ensure_self_or_admin(effective_student_id, current_user)
         today = datetime.utcnow().strftime("%Y-%m-%d")
         
@@ -303,6 +342,9 @@ async def log_activity(
         logger.info(f"Logged activity for {effective_student_id}: +{hours}h on {today}")
         
         return {"message": "Activity logged", "date": today, "hours_added": hours}
+
+    except HTTPException:
+        raise
         
     except Exception as e:
         logger.error(f" Log activity error: {e}")
@@ -324,8 +366,9 @@ async def get_student_analytics(
     - Daily/weekly activity data for charts
     """
     try:
-        _ensure_self_or_admin(student_id, current_user)
-        logger.info(f"📊 Fetching analytics for student: {student_id}, period: {period}")
+        effective_student_id = await _resolve_student_user_id(student_id)
+        _ensure_self_or_admin(effective_student_id, current_user)
+        logger.info(f"📊 Fetching analytics for student: {effective_student_id}, period: {period}")
         
         db = mongodb.db
         today = datetime.utcnow().date()
@@ -341,7 +384,7 @@ async def get_student_analytics(
         
         activities_col = db["user_activities"]
         activities = await activities_col.find({
-            "student_id": student_id,
+            "student_id": effective_student_id,
             "date": {"$gte": start_str}
         }).sort("date", 1).to_list(length=100)
         
@@ -356,7 +399,7 @@ async def get_student_analytics(
         
         questions_col = db["top_questions"]
         questions = await questions_col.find({
-            "user_id": student_id
+            "user_id": effective_student_id
         }).to_list(length=500)
         
         subject_questions = {}
@@ -366,7 +409,7 @@ async def get_student_analytics(
         
         tests_col = db["test_submissions"]
         tests = await tests_col.find({
-            "student_id": student_id
+            "student_id": effective_student_id
         }).to_list(length=100)
         
         subject_tests = {}
@@ -401,6 +444,9 @@ async def get_student_analytics(
             "subject_breakdown": subject_breakdown,
             "active_days": len(activities)
         }
+
+    except HTTPException:
+        raise
         
     except Exception as e:
         logger.error(f" Get analytics error: {e}")

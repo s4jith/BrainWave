@@ -64,7 +64,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> bool:
 
     return False
 
-def send_credentials_email(to_email: str, user_id: str, password: str, name: str) -> bool:
+def send_credentials_email(to_email: str, password: str, name: str) -> bool:
     """
     Send welcome email with login credentials to a new user.
     """
@@ -78,13 +78,13 @@ def send_credentials_email(to_email: str, user_id: str, password: str, name: str
       </div>
       <h2 style="color: #111827; font-size: 18px;">Welcome, {name}!</h2>
       <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-        Your account has been created. Use the credentials below to sign in:
+        Your account has been created. Use your email and the password below to sign in:
       </p>
       <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
         <table style="width: 100%; font-size: 14px;">
           <tr>
-            <td style="color: #6b7280; padding: 4px 0;">User ID</td>
-            <td style="color: #111827; font-weight: 600; text-align: right;">{user_id}</td>
+            <td style="color: #6b7280; padding: 4px 0;">Email</td>
+            <td style="color: #111827; font-weight: 600; text-align: right;">{to_email}</td>
           </tr>
           <tr>
             <td style="color: #6b7280; padding: 4px 0;">Password</td>

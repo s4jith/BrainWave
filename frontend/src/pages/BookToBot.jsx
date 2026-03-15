@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PDFViewer from "../features/pdf/PDFViewer";
 import LessonNavigation from "../features/lessons/LessonNavigation";
-import UserSettingsPanel from "../components/UserSettingsPanel";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import { Menu, X, Settings, ArrowLeft, BookOpen, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Menu, X, ArrowLeft, BookOpen, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
@@ -22,7 +21,6 @@ function BookToBot() {
   const [loadingLessons, setLoadingLessons] = useState(false);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     fetchAvailableSubjects();
@@ -41,7 +39,9 @@ function BookToBot() {
 
       if (response.ok) {
         const data = await response.json();
-        const subjects = data.subjects || [];
+        const allSubjects = data.subjects || [];
+        const pineconeSubjects = allSubjects.filter((s) => s?.has_ai_support === true);
+        const subjects = pineconeSubjects.length > 0 ? pineconeSubjects : allSubjects;
         setAvailableSubjects(subjects);
 
         if (subjects.length === 0) {
@@ -49,7 +49,7 @@ function BookToBot() {
           setCurrentLesson(null);
         } else {
           
-          const subjectNames = subjects.map(s => s.name);
+          const subjectNames = subjects.map((s) => s?.name).filter(Boolean);
           if (!subjectNames.includes(user.preferredSubject)) {
             
             setPreferredSubject(subjectNames[0]);
@@ -127,36 +127,23 @@ function BookToBot() {
               <BookOpen className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm font-medium">Select Subject</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <select
+              value={user.preferredSubject || ""}
+              onChange={(e) => handleSubjectChange(e.target.value)}
+              className="w-full text-sm rounded-md border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
               {availableSubjects.length > 0 ? (
                 availableSubjects.map((subject) => (
-                  <Button
-                    key={subject.name}
-                    variant={user.preferredSubject === subject.name ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSubjectChange(subject.name)}
-                    className="text-xs"
-                  >
+                  <option key={subject.name} value={subject.name}>
                     {subject.name}
-                    {subject.has_ai_support && (
-                      <span className="ml-1 text-[10px] bg-green-500/20 text-green-700 px-1 rounded">AI</span>
-                    )}
-                  </Button>
+                  </option>
                 ))
               ) : (
-                ["Maths", "Social Science"].map((subject) => (
-                  <Button
-                    key={subject}
-                    variant={user.preferredSubject === subject ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSubjectChange(subject)}
-                    className="text-xs"
-                  >
-                    {subject}
-                  </Button>
-                ))
+                <option value="" disabled>
+                  No AI-ready subjects available
+                </option>
               )}
-            </div>
+            </select>
             <p className="text-xs text-muted-foreground mt-2">
               Class {user.classLevel} • {lessons.length} Lessons Available
             </p>
@@ -224,15 +211,6 @@ function BookToBot() {
               <p className="text-xs text-muted-foreground">Class {user.classLevel}</p>
               <p className="text-xs font-medium">{user.preferredSubject}</p>
             </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSettingsOpen(true)}
-              className="hover:bg-primary/10"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
           </div>
         </div>
 
@@ -256,10 +234,6 @@ function BookToBot() {
         </div>
       </div>
 
-      <UserSettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
     </div>
   );
 }
