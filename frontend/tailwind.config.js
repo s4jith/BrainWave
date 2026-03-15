@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
@@ -38,23 +37,12 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        gray: {
-          950: "#0a0a0a",
-          900: "#0f0f0f",
-          800: "#171717",
-          700: "#262626",
-          600: "#404040",
-          500: "#525252",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
-      animation: {
-        'spin-slow': 'spin 2s linear infinite',
-      }
     },
   },
   plugins: [],

@@ -260,19 +260,12 @@ class PineconeUploader:
             Embedding vector (768 dimensions)
         """
         try:
-            import requests as req
-            api_key = os.getenv("GEMINI_API_KEY")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
-            payload = {
-                "model": "models/gemini-embedding-001",
-                "content": {"parts": [{"text": text}]},
-                "taskType": "RETRIEVAL_DOCUMENT",
-                "outputDimensionality": 768
-            }
-            resp = req.post(url, json=payload, timeout=30)
-            if resp.status_code != 200:
-                raise Exception(f"API error: {resp.text}")
-            return resp.json()["embedding"]["values"]
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=text,
+                task_type="retrieval_document"
+            )
+            return result['embedding']
         except Exception as e:
             print(f"    ✗ Embedding error: {str(e)}")
             raise
@@ -285,7 +278,7 @@ class PineconeUploader:
             chunks: List of text chunks with metadata
             batch_size: Number of vectors per batch
         """
-        print(f"\nUploading {len(chunks)} chunks to Pinecone...")
+        print(f"\n🚀 Uploading {len(chunks)} chunks to Pinecone...")
         
         vectors = []
         
@@ -375,7 +368,7 @@ async def main():
     """Main function to process PDFs and upload to Pinecone"""
     
     print("=" * 70)
-    print("  NCERT PDF to Pinecone Upload with OCR")
+    print("  📚 NCERT PDF to Pinecone Upload with OCR")
     print("=" * 70)
     
     # Initialize processors
@@ -427,7 +420,7 @@ async def main():
         # Show final stats
         stats = uploader.index.describe_index_stats()
         print("\n" + "=" * 70)
-        print(f"  SUCCESS! Uploaded {stats.total_vector_count} vectors to Pinecone")
+        print(f"  ✅ SUCCESS! Uploaded {stats.total_vector_count} vectors to Pinecone")
         print("=" * 70)
     else:
         print("\n✗ No chunks to upload")

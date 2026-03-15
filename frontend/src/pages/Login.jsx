@@ -6,14 +6,17 @@ import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
+const ADMIN_EMAIL = "admin1@gmail.com";
+const ADMIN_PASSWORD = "admin1234";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useUserStore();
-
+  const { setUser } = useUserStore();
+  
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("student");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isTypingPassword, setIsTypingPassword] = useState(false);
@@ -31,56 +34,96 @@ export default function Login() {
     setIsLoading(true);
     setError("");
 
+    // Check for hardcoded admin credentials (admin can use email or user_id)
+    if ((userId === ADMIN_EMAIL || userId === "admin1") && password === ADMIN_PASSWORD) {
+      setUser({
+        id: "admin-root",
+        user_id: "ADMIN_ROOT",
+        name: "Administrator",
+        email: ADMIN_EMAIL,
+        role: "admin",
+        classLevel: null,
+        isOnboarded: true
+      });
+      navigate("/admin-dashboard");
+      setIsLoading(false);
+      return;
+    }
+
+    // For teacher role, try backend
+    if (selectedRole === "teacher") {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, password: password, role: "teacher" })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (data.first_login) {
+            setTempUserId(data.user_id);
+            setShowPasswordChange(true);
+            setIsLoading(false);
+            return;
+          }
+          setUser({
+            id: data.user.id,
+            user_id: data.user.user_id,
+            name: data.user.name,
+            email: data.user.email,
+            role: "teacher",
+            classLevel: null,
+            isOnboarded: true,
+            session_id: data.session_id
+          });
+          navigate("/staff-tests");
+        } else {
+          setError(data.error || "Invalid teacher credentials");
+        }
+      } catch (err) {
+        console.error("Teacher login error:", err);
+        setError("Login failed. Please check your credentials.");
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    // For student, try backend with user_id
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, password: password })
+        body: JSON.stringify({ user_id: userId, password: password, role: "student" })
       });
       const data = await res.json();
-
       if (data.success) {
-        
         if (data.first_login) {
           setTempUserId(data.user_id);
           setShowPasswordChange(true);
           setIsLoading(false);
           return;
         }
-
-        const userRole = data.user.role || "student";
-
-        login({
+        setUser({
           id: data.user.id,
           user_id: data.user.user_id,
           name: data.user.name,
           email: data.user.email,
-          role: userRole,
-          classLevel: data.user.class_level || null,
-          subjects: data.user.subjects || [],
-          isOnboarded: data.user.is_onboarded !== false,
-          permissions: data.user.permissions || []
-        }, data.access_token);
-
-        if (userRole === "admin") {
-          navigate("/admin-dashboard");
-        } else if (userRole === "teacher") {
-          navigate("/teacher-dashboard");
-        } else if (userRole === "head") {
-          navigate("/head-dashboard");
+          role: "student",
+          classLevel: data.user.class_level || 10,
+          isOnboarded: data.user.is_onboarded || false,
+          session_id: data.session_id
+        });
+        // Navigate based on onboarding status
+        if (data.user.is_onboarded) {
+          navigate("/dashboard");
         } else {
-          
-          if (data.user.is_onboarded) {
-            navigate("/dashboard");
-          } else {
-            navigate("/onboarding");
-          }
+          navigate("/onboarding");
         }
       } else {
-        setError(data.error || "Invalid credentials");
+        setError(data.error || "Invalid student credentials");
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Student login error:", err);
       setError("Login failed. Please check your credentials and ensure the server is running.");
     }
     setIsLoading(false);
@@ -107,7 +150,7 @@ export default function Login() {
       if (data.success) {
         setPassword(newPassword);
         setShowPasswordChange(false);
-        alert("Password changed successfully! Please sign in again.");
+        alert("Password changed successfully!");
         setNewPassword("");
         setConfirmPassword("");
       } else {
@@ -141,30 +184,21 @@ export default function Login() {
             <h1 className="text-4xl font-bold text-gray-900 mb-3">Welcome back!</h1>
             <p className="text-gray-500">Sign in with your User ID and password to continue.</p>
           </div>
+          <div className="flex justify-center gap-6 mb-8">
+            <button type="button" onClick={() => setSelectedRole("student")} className={`text-sm font-medium transition-colors ${selectedRole === "student" ? "text-green-500" : "text-gray-400 hover:text-gray-600"}`}>Student</button>
+            <span className="text-gray-300">|</span>
+            <button type="button" onClick={() => setSelectedRole("teacher")} className={`text-sm font-medium transition-colors ${selectedRole === "teacher" ? "text-green-500" : "text-gray-400 hover:text-gray-600"}`}>Teacher</button>
+          </div>
           <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Your User ID or Email"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="w-full h-14 px-5 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-            />
+            <input type="text" placeholder="Your User ID (e.g., varun141)" value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full h-14 px-5 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all" />
             <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => setIsTypingPassword(true)}
-                onBlur={() => setIsTypingPassword(false)}
-                className="w-full h-14 px-5 pr-12 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-              />
+              <input type={showPassword ? "text" : "password"} placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={() => setIsTypingPassword(true)} onBlur={() => setIsTypingPassword(false)} className="w-full h-14 px-5 pr-12 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all" />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
             <div className="text-left">
-              <button type="button" onClick={() => navigate("/forgot-password")} className="text-sm text-green-500 hover:text-green-600">Forgot password?</button>
+              <button type="button" className="text-sm text-green-500 hover:text-green-600">Forgot password?</button>
             </div>
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
             <button type="submit" disabled={isLoading} className="w-full h-14 mt-4 font-semibold rounded-2xl bg-gray-900 hover:bg-gray-800 text-white transition-colors">

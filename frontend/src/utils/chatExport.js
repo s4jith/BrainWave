@@ -1,4 +1,15 @@
+/**
+ * Chat Export Utilities
+ * 
+ * Converts chat messages to downloadable document formats
+ */
 
+/**
+ * Convert chat messages to formatted text document
+ * @param {Array} messages - Array of message objects with role, content, timestamp
+ * @param {Object} options - Export options
+ * @returns {string} Formatted text content
+ */
 export function formatChatToText(messages, options = {}) {
   const { 
     title = "Chat Conversation",
@@ -10,11 +21,13 @@ export function formatChatToText(messages, options = {}) {
 
   let content = "";
   
+  // Header
   content += `${"=".repeat(50)}\n`;
   content += `${title}\n`;
   content += `Exported on: ${new Date().toLocaleString()}\n`;
   content += `${"=".repeat(50)}\n\n`;
 
+  // Messages
   messages.forEach((msg, index) => {
     const role = msg.role === "user" ? userName : aiName;
     const timestamp = includeTimestamp 
@@ -31,6 +44,7 @@ export function formatChatToText(messages, options = {}) {
     }
   });
 
+  // Footer
   content += `\n${"=".repeat(50)}\n`;
   content += `End of conversation\n`;
   content += `${"=".repeat(50)}\n`;
@@ -38,6 +52,12 @@ export function formatChatToText(messages, options = {}) {
   return content;
 }
 
+/**
+ * Convert chat messages to HTML document
+ * @param {Array} messages - Array of message objects
+ * @param {Object} options - Export options
+ * @returns {string} HTML content
+ */
 export function formatChatToHTML(messages, options = {}) {
   const { 
     title = "Chat Conversation",
@@ -139,6 +159,7 @@ export function formatChatToHTML(messages, options = {}) {
       minute: "2-digit" 
     });
     
+    // Convert markdown-like content to HTML
     let content = msg.content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -166,6 +187,12 @@ export function formatChatToHTML(messages, options = {}) {
   return html;
 }
 
+/**
+ * Download content as a file
+ * @param {string} content - File content
+ * @param {string} filename - File name with extension
+ * @param {string} mimeType - MIME type of the file
+ */
 export function downloadAsFile(content, filename, mimeType = "text/plain") {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -178,18 +205,34 @@ export function downloadAsFile(content, filename, mimeType = "text/plain") {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Export chat as text document
+ * @param {Array} messages - Chat messages
+ * @param {Object} options - Export options
+ */
 export function exportChatAsText(messages, options = {}) {
   const { filename = "chat-conversation.txt" } = options;
   const content = formatChatToText(messages, options);
   downloadAsFile(content, filename, "text/plain");
 }
 
+/**
+ * Export chat as HTML document
+ * @param {Array} messages - Chat messages
+ * @param {Object} options - Export options
+ */
 export function exportChatAsHTML(messages, options = {}) {
   const { filename = "chat-conversation.html" } = options;
   const content = formatChatToHTML(messages, options);
   downloadAsFile(content, filename, "text/html");
 }
 
+/**
+ * Export chat as Word-compatible document (.doc)
+ * Uses HTML with Word-specific headers for better compatibility
+ * @param {Array} messages - Chat messages
+ * @param {Object} options - Export options
+ */
 export function exportChatAsDoc(messages, options = {}) {
   const { 
     filename = "chat-conversation.doc",
@@ -198,6 +241,7 @@ export function exportChatAsDoc(messages, options = {}) {
     aiName = "AI said"
   } = options;
 
+  // Word-compatible HTML with MSO headers
   let doc = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
@@ -239,6 +283,7 @@ export function exportChatAsDoc(messages, options = {}) {
       minute: "2-digit" 
     });
     
+    // Convert markdown to simple HTML
     let content = msg.content
       .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
       .replace(/\*(.*?)\*/g, '<i>$1</i>')

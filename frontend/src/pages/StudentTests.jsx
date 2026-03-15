@@ -37,21 +37,26 @@ export default function StudentTests() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("all"); 
+  const [activeTab, setActiveTab] = useState("all"); // all, available, submitted, closed
 
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const testsPerPage = 6;
 
+  // Upload state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  // View feedback modal
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
 
+  // Notifications
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  // Detail view
   const [viewingTest, setViewingTest] = useState(null);
 
   useEffect(() => {
@@ -166,6 +171,7 @@ export default function StudentTests() {
     setShowFeedbackModal(true);
   };
 
+  // Filter tests based on active tab
   const getFilteredTests = () => {
     switch (activeTab) {
       case "available":
@@ -186,6 +192,7 @@ export default function StudentTests() {
     currentPage * testsPerPage
   );
 
+  // Get test statistics
   const getTestStats = (test) => {
     const submission = submissions.find(s => s.test_id === test.id);
     return {
@@ -196,13 +203,14 @@ export default function StudentTests() {
     };
   };
 
+  // Detail View Component
   const TestDetailView = ({ test }) => {
     const submission = submissions.find(s => s.test_id === test.id);
     const stats = getTestStats(test);
 
     return (
       <div className="space-y-6">
-        {}
+        {/* Back Button */}
         <button
           onClick={() => setViewingTest(null)}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition"
@@ -211,7 +219,7 @@ export default function StudentTests() {
           <span className="text-sm font-medium">Back to Tests</span>
         </button>
 
-        {}
+        {/* Test Header */}
         <div className="bg-white rounded-2xl p-8 border border-gray-100">
           <div className="flex items-start justify-between mb-6">
             <div>
@@ -219,10 +227,10 @@ export default function StudentTests() {
               <p className="text-gray-500">{test.description || "No description available"}</p>
             </div>
             <div className={`px-4 py-2 rounded-full text-sm font-medium ${test.has_submitted
-              ? "bg-orange-100 text-orange-700"
-              : test.status === "closed"
-                ? "bg-gray-100 text-gray-600"
-                : "bg-orange-100 text-orange-700"
+                ? "bg-green-100 text-green-700"
+                : test.status === "closed"
+                  ? "bg-gray-100 text-gray-600"
+                  : "bg-blue-100 text-blue-700"
               }`}>
               {stats.status}
             </div>
@@ -265,7 +273,7 @@ export default function StudentTests() {
             {!test.has_submitted && test.status !== "closed" && (
               <button
                 onClick={() => openSubmitModal(test)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition text-sm font-medium"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-medium"
               >
                 <Upload className="w-4 h-4" />
                 Submit Answer
@@ -279,7 +287,7 @@ export default function StudentTests() {
                     href={`${API_URL}${submission.pdf_url}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-5 py-2.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition text-sm font-medium"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm font-medium"
                   >
                     <FileText className="w-4 h-4" />
                     View Submission
@@ -288,7 +296,7 @@ export default function StudentTests() {
                 {test.has_feedback && (
                   <button
                     onClick={() => viewFeedback(submission)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition text-sm font-medium"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm font-medium"
                   >
                     <MessageSquare className="w-4 h-4" />
                     View Feedback
@@ -326,7 +334,7 @@ export default function StudentTests() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Status</span>
-                  <span className="font-medium text-orange-600">Completed</span>
+                  <span className="font-medium text-green-600">Completed</span>
                 </div>
               </div>
             </div>
@@ -334,8 +342,8 @@ export default function StudentTests() {
             {test.has_feedback && (
               <div className="bg-white rounded-2xl p-6 border border-gray-100">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 text-orange-600" />
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <MessageSquare className="w-5 h-5 text-purple-600" />
                   </div>
                   <h3 className="font-semibold text-gray-900">Teacher Feedback</h3>
                 </div>
@@ -350,6 +358,7 @@ export default function StudentTests() {
     );
   };
 
+  // If viewing a specific test, show detail view
   if (viewingTest) {
     return (
       <DashboardLayout>
@@ -415,7 +424,7 @@ export default function StudentTests() {
                             </span>
                             <button
                               onClick={() => markNotificationRead(n.id)}
-                              className="text-xs text-orange-600 hover:underline"
+                              className="text-xs text-blue-600 hover:underline"
                             >
                               Mark as read
                             </button>
@@ -442,8 +451,8 @@ export default function StudentTests() {
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setCurrentPage(1); }}
               className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === tab.id
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
                 }`}
             >
               {tab.label}
@@ -472,7 +481,7 @@ export default function StudentTests() {
           <>
             {/* Tests List - Like Image 1 */}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-              {}
+              {/* Table Header */}
               <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="col-span-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Test</div>
                 <div className="col-span-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-center">Subject</div>
@@ -481,7 +490,7 @@ export default function StudentTests() {
                 <div className="col-span-1"></div>
               </div>
 
-              {}
+              {/* Test Rows */}
               {paginatedTests.map(test => {
                 const stats = getTestStats(test);
                 const submission = submissions.find(s => s.test_id === test.id);
@@ -492,19 +501,19 @@ export default function StudentTests() {
                     className="grid grid-cols-12 gap-4 px-6 py-5 border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer"
                     onClick={() => setViewingTest(test)}
                   >
-                    {}
+                    {/* Test Info */}
                     <div className="col-span-5 flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${test.has_submitted
-                        ? "bg-orange-100"
-                        : test.status === "closed"
-                          ? "bg-gray-100"
-                          : "bg-orange-100"
+                          ? "bg-green-100"
+                          : test.status === "closed"
+                            ? "bg-gray-100"
+                            : "bg-blue-100"
                         }`}>
                         <FileText className={`w-5 h-5 ${test.has_submitted
-                          ? "text-orange-600"
-                          : test.status === "closed"
-                            ? "text-gray-500"
-                            : "text-orange-600"
+                            ? "text-green-600"
+                            : test.status === "closed"
+                              ? "text-gray-500"
+                              : "text-blue-600"
                           }`} />
                       </div>
                       <div>
@@ -518,24 +527,24 @@ export default function StudentTests() {
                       <span className="text-sm text-gray-600">{test.subject || "General"}</span>
                     </div>
 
-                    {}
+                    {/* Due Date */}
                     <div className="col-span-2 flex items-center justify-center">
                       <span className="text-sm text-gray-600">{stats.dueDate}</span>
                     </div>
 
-                    {}
+                    {/* Status */}
                     <div className="col-span-2 flex items-center justify-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${test.has_submitted
-                        ? "bg-orange-100 text-orange-700"
-                        : test.status === "closed"
-                          ? "bg-gray-100 text-gray-600"
-                          : "bg-orange-100 text-orange-700"
+                          ? "bg-green-100 text-green-700"
+                          : test.status === "closed"
+                            ? "bg-gray-100 text-gray-600"
+                            : "bg-blue-100 text-blue-700"
                         }`}>
                         {stats.status}
                       </span>
                     </div>
 
-                    {}
+                    {/* Actions */}
                     <div className="col-span-1 flex items-center justify-end">
                       <button
                         onClick={(e) => { e.stopPropagation(); }}
@@ -549,7 +558,7 @@ export default function StudentTests() {
               })}
             </div>
 
-            {}
+            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -565,8 +574,8 @@ export default function StudentTests() {
                       key={page}
                       onClick={() => setCurrentPage(page)}
                       className={`w-8 h-8 rounded-lg text-sm font-medium transition ${currentPage === page
-                        ? "bg-orange-600 text-white"
-                        : "text-gray-600 hover:bg-gray-100"
+                          ? "bg-gray-900 text-white"
+                          : "text-gray-600 hover:bg-gray-100"
                         }`}
                     >
                       {page}
@@ -644,7 +653,7 @@ export default function StudentTests() {
               <button
                 onClick={handleSubmitTest}
                 disabled={uploading || !uploadFile}
-                className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 font-medium transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 font-medium transition flex items-center justify-center gap-2"
               >
                 {uploading ? (
                   <>
@@ -686,21 +695,21 @@ export default function StudentTests() {
                 href={`${API_URL}${selectedSubmission.pdf_url}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-orange-600 hover:underline text-sm mb-4"
+                className="flex items-center gap-2 text-blue-600 hover:underline text-sm mb-4"
               >
                 <FileText className="w-4 h-4" />
                 View Your Submission
               </a>
             )}
 
-            <div className="bg-orange-50 p-4 rounded-xl mb-6">
+            <div className="bg-purple-50 p-4 rounded-xl mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="w-4 h-4 text-orange-600" />
-                <h3 className="font-medium text-orange-900">Teacher's Feedback</h3>
+                <MessageSquare className="w-4 h-4 text-purple-600" />
+                <h3 className="font-medium text-purple-900">Teacher's Feedback</h3>
               </div>
-              <p className="text-orange-800">{selectedSubmission.admin_comment || "No comment yet"}</p>
+              <p className="text-purple-800">{selectedSubmission.admin_comment || "No comment yet"}</p>
               {selectedSubmission.comment_at && (
-                <p className="text-xs text-orange-600 mt-2">
+                <p className="text-xs text-purple-600 mt-2">
                   Received: {new Date(selectedSubmission.comment_at).toLocaleString()}
                 </p>
               )}
@@ -708,7 +717,7 @@ export default function StudentTests() {
 
             <button
               onClick={() => { setShowFeedbackModal(false); setSelectedSubmission(null); }}
-              className="w-full px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition"
+              className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium transition"
             >
               Close
             </button>

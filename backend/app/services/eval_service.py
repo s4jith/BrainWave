@@ -9,6 +9,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class EvaluationService:
     """Service for evaluating student answers and saving results."""
     
@@ -36,6 +37,7 @@ class EvaluationService:
             Tuple of (EvaluationResult, evaluation_id)
         """
         try:
+            # Step 1: Calculate scores
             total = len(mcqs)
             correct = 0
             question_results = []
@@ -62,8 +64,10 @@ class EvaluationService:
             
             percentage = (correct / total * 100) if total > 0 else 0
             
+            # Step 2: Generate feedback
             feedback = self._generate_feedback(correct, total, percentage)
             
+            # Step 3: Create evaluation result
             result = EvaluationResult(
                 total_questions=total,
                 correct_answers=correct,
@@ -72,6 +76,7 @@ class EvaluationService:
                 question_results=question_results
             )
             
+            # Step 4: Save to MongoDB
             evaluation_id = await self._save_evaluation(
                 student_id=student_id,
                 class_level=class_level,
@@ -80,11 +85,11 @@ class EvaluationService:
                 result=result
             )
             
-            logger.info(f"Evaluation completed: {correct}/{total} ({percentage:.1f}%)")
+            logger.info(f"✅ Evaluation completed: {correct}/{total} ({percentage:.1f}%)")
             return result, evaluation_id
         
         except Exception as e:
-            logger.error(f" Evaluation failed: {e}")
+            logger.error(f"❌ Evaluation failed: {e}")
             raise
     
     def _generate_feedback(self, correct: int, total: int, percentage: float) -> str:
@@ -127,7 +132,9 @@ class EvaluationService:
             return str(result_doc.inserted_id)
         
         except Exception as e:
-            logger.error(f" Failed to save evaluation: {e}")
+            logger.error(f"❌ Failed to save evaluation: {e}")
             raise
 
+
+# Global evaluation service instance
 eval_service = EvaluationService()

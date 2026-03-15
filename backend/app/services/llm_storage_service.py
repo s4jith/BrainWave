@@ -1,16 +1,16 @@
 """
 LLM Storage Service
 Stores high-quality LLM-generated answers for reuse and knowledge building.
-Uses Gemini embedding-001 for consistency with textbook index.
 """
 
+from sentence_transformers import SentenceTransformer
 from app.db.mongo import pinecone_llm_db
-from app.utils.embedding_helper import generate_embedding as _embed_rest, EMBEDDING_MODEL
 import hashlib
 import logging
 import re
 
 logger = logging.getLogger(__name__)
+
 
 class LLMStorageService:
     """
@@ -19,18 +19,9 @@ class LLMStorageService:
     """
     
     def __init__(self):
-        """Initialize LLM storage service with Gemini embedding model."""
-        logger.info(f"LLM Storage Service initialized with {EMBEDDING_MODEL}")
-    
-    def _generate_embedding(self, text: str) -> list:
-        """Generate embedding using same Gemini model as textbook index."""
-        from app.services.gemini_key_manager import gemini_key_manager
-        api_key = gemini_key_manager.get_available_key()
-        return _embed_rest(
-            text=text,
-            api_key=api_key,
-            task_type="RETRIEVAL_DOCUMENT"
-        )
+        """Initialize LLM storage service with embedding model."""
+        self.embedding_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+        logger.info("✅ LLM Storage Service initialized with sentence-transformers")
     
     def store_answer(
         self,
@@ -39,8 +30,7 @@ class LLMStorageService:
         subject: str,
         class_level: int,
         topic: str = None,
-        quality_score: float = 0.9,
-        textbook_chunks: list = None
+        quality_score: float = 0.9
     ) -> bool:
         """
         Store LLM-generated answer if it meets quality criteria.
@@ -52,26 +42,28 @@ class LLMStorageService:
             class_level: Student's class level
             topic: Specific topic extracted from question (optional)
             quality_score: Answer quality score (0-1)
-            textbook_chunks: Source textbook chunks for verification (optional)
         
         Returns:
             True if stored successfully, False otherwise
         """
         try:
-            if not self._should_store_answer(answer, textbook_chunks):
+            # Check if answer should be stored
+            if not self._should_store_answer(answer):
                 logger.debug(f"Answer not stored - quality check failed")
                 return False
             
+            # Extract topic if not provided
             if not topic:
                 topic = self._extract_topic(question)
             
-            question_embedding = self._generate_embedding(question)
+            # Generate embedding from question
+            question_embedding = self.embedding_model.encode(question).tolist()
             
+            # Create unique ID
             question_hash = hashlib.md5(question.lower().strip().encode()).hexdigest()[:16]
             vector_id = f"llm_{subject.lower()}_{class_level}_{topic.lower()}_{question_hash}"
             
-            source_fingerprint = self._generate_source_fingerprint(textbook_chunks) if textbook_chunks else None
-            
+            # Store in Pinecone LLM DB
             success = pinecone_llm_db.store_llm_response(
                 vector_id=vector_id,
                 question=question,
@@ -84,8 +76,7 @@ class LLMStorageService:
             )
             
             if success:
-                grounded_status = "GROUNDED" if textbook_chunks else "UNVERIFIED"
-                logger.info(f"Stored LLM answer [{grounded_status}] for: {topic} (Class {class_level}, {subject})")
+                logger.info(f"✅ Stored LLM answer for: {topic} (Class {class_level}, {subject})")
             
             return success
             
@@ -93,100 +84,76 @@ class LLMStorageService:
             logger.error(f"Failed to store LLM answer: {e}")
             return False
     
-    def _generate_source_fingerprint(self, textbook_chunks: list) -> str:
-        """
-        Generate a fingerprint from source textbook chunks.
-        Used to verify answer grounding.
-        
-        Args:
-            textbook_chunks: List of textbook chunk dictionaries
-        
-        Returns:
-            MD5 hash of combined chunk texts
-        """
-        if not textbook_chunks:
-            return None
-        
-        combined_text = " ".join([
-            c.get('text', '')[:200] for c in textbook_chunks[:5]
-        ])
-        return hashlib.md5(combined_text.encode()).hexdigest()[:16]
-    
-    def _should_store_answer(self, answer: str, textbook_chunks: list = None) -> bool:
+    def _should_store_answer(self, answer: str) -> bool:
         """
         Check if answer meets quality criteria for storage.
         
-        Simplified criteria for better cache reuse:
-        - Sufficient length (>100 characters)
+        Criteria:
+        - Sufficient length (>200 characters)
+        - No hallucination markers
+        - Contains educational content
         - Not error messages
-        - Not obvious failure responses
         
         Args:
             answer: Generated answer text
-            textbook_chunks: Optional textbook chunks (not required for storage)
         
         Returns:
             True if answer should be stored
         """
-        if not answer or len(answer) < 100:
+        if not answer or len(answer) < 200:
             return False
         
-        failure_markers = [
-            "i cannot",
-            "i'm unable to",
-            "error occurred",
-            "failed to",
-            "exception",
-            "something went wrong"
+        # Check for hallucination markers
+        hallucination_markers = [
+            "i don't have information",
+            "i cannot find",
+            "no information available",
+            "not mentioned in the context",
+            "according to my knowledge",
+            "as an ai",
+            "i apologize",
+            "i'm sorry"
         ]
         
         answer_lower = answer.lower()
-        for marker in failure_markers:
+        for marker in hallucination_markers:
             if marker in answer_lower:
                 return False
         
-        return True
-    
-    def _verify_textbook_grounding(self, answer: str, textbook_chunks: list) -> float:
-        """
-        Verify that answer content is grounded in textbook chunks.
-        
-        Args:
-            answer: Generated answer text
-            textbook_chunks: Source textbook chunks
-        
-        Returns:
-            Grounding score (0-1), higher = more grounded
-        """
-        if not textbook_chunks:
-            return 0.0
-        
-        textbook_text = " ".join([
-            c.get('text', '') for c in textbook_chunks
-        ]).lower()
-        
-        textbook_words = set(re.findall(r'\b\w{4,}\b', textbook_text))
-        
-        answer_lower = answer.lower()
-        answer_words = set(re.findall(r'\b\w{4,}\b', answer_lower))
-        
-        if not answer_words:
-            return 0.0
-        
-        overlap = answer_words & textbook_words
-        grounding_score = len(overlap) / len(answer_words)
-        
-        key_concepts = [
-            'definition', 'formula', 'theorem', 'law', 'principle',
-            'equation', 'method', 'process', 'example'
+        # Check for error patterns
+        error_patterns = [
+            "error",
+            "failed",
+            "exception",
+            "not found"
         ]
         
-        concept_matches = sum(1 for concept in key_concepts 
-                            if concept in textbook_text and concept in answer_lower)
+        # Allow if error patterns are in educational context
+        has_errors = any(pattern in answer_lower for pattern in error_patterns)
+        if has_errors and len(answer) < 500:
+            return False
         
-        concept_bonus = min(concept_matches * 0.05, 0.2)
+        # Check for educational content indicators
+        educational_indicators = [
+            "formula",
+            "theorem",
+            "definition",
+            "example",
+            "step",
+            "method",
+            "property",
+            "rule",
+            "concept",
+            "understand",
+            "calculate",
+            "solve",
+            "equation"
+        ]
         
-        return min(grounding_score + concept_bonus, 1.0)
+        has_educational_content = any(indicator in answer_lower for indicator in educational_indicators)
+        
+        # Must have educational content
+        return has_educational_content
     
     def _extract_topic(self, question: str) -> str:
         """
@@ -200,6 +167,7 @@ class LLMStorageService:
         """
         question_lower = question.lower()
         
+        # Common math topics
         math_topics = {
             'algebra': ['algebra', 'equation', 'variable', 'expression'],
             'geometry': ['geometry', 'triangle', 'circle', 'angle', 'area', 'perimeter'],
@@ -212,11 +180,13 @@ class LLMStorageService:
             'ratio': ['ratio', 'proportion', 'percentage']
         }
         
+        # Check for topic keywords
         for topic, keywords in math_topics.items():
             for keyword in keywords:
                 if keyword in question_lower:
                     return topic
         
+        # Extract first significant word as topic
         words = re.findall(r'\b\w+\b', question_lower)
         significant_words = [w for w in words if len(w) > 4 and w not in ['what', 'where', 'when', 'which', 'explain', 'define', 'calculate']]
         
@@ -245,20 +215,24 @@ class LLMStorageService:
             List of matching stored answers with scores
         """
         try:
-            query_embedding = self._generate_embedding(question)
+            # Generate query embedding
+            query_embedding = self.embedding_model.encode(question).tolist()
             
+            # Query Pinecone LLM DB
             results = pinecone_llm_db.query(
                 vector=query_embedding,
                 subject=subject,
                 top_k=top_k
             )
             
+            # Filter by score and format results
             matching_answers = []
             for match in results.get('matches', []):
                 score = match.get('score', 0)
                 if score >= min_score:
                     metadata = match.get('metadata', {})
                     
+                    # Increment usage count
                     pinecone_llm_db.increment_usage(match['id'], subject)
                     
                     matching_answers.append({
@@ -272,7 +246,7 @@ class LLMStorageService:
             
             if matching_answers:
                 scores_list = [f"{a['score']:.2f}" for a in matching_answers]
-                logger.info(f" Found {len(matching_answers)} stored LLM answers (scores: {scores_list})")
+                logger.info(f"🔍 Found {len(matching_answers)} stored LLM answers (scores: {scores_list})")
             
             return matching_answers
             
@@ -312,4 +286,6 @@ class LLMStorageService:
             logger.error(f"Failed to get storage stats: {e}")
             return {"error": str(e)}
 
+
+# Global instance
 llm_storage_service = LLMStorageService()

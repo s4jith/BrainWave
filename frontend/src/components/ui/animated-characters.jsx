@@ -60,6 +60,9 @@ export const Pupil = ({
   );
 };
 
+/**
+ * EyeBall Component - Eye with pupil that tracks mouse position
+ */
 export const EyeBall = ({ 
   size = 58, 
   pupilSize = 16, 
@@ -135,6 +138,12 @@ export const EyeBall = ({
   );
 };
 
+/**
+ * AnimatedCharacters Component
+ * 
+ * Displays 6 animated characters that follow mouse movement
+ * and react to password visibility state.
+ */
 export function AnimatedCharacters({ password = "", showPassword = false, isTyping = false }) {
   const [mouseX, setMouseX] = useState(0);
   const [mouseY, setMouseY] = useState(0);
@@ -161,6 +170,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
+  // Purple character blinking
   useEffect(() => {
     const getRandomBlinkInterval = () => Math.random() * 4000 + 3000;
 
@@ -180,6 +190,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
     return () => clearTimeout(timeout);
   }, []);
 
+  // Black character blinking
   useEffect(() => {
     const getRandomBlinkInterval = () => Math.random() * 4000 + 3000;
 
@@ -199,6 +210,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
     return () => clearTimeout(timeout);
   }, []);
 
+  // Look at each other when typing starts
   useEffect(() => {
     if (isTyping) {
       setIsLookingAtEachOther(true);
@@ -211,6 +223,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
     }
   }, [isTyping]);
 
+  // Purple sneaky peeking when password visible
   useEffect(() => {
     if (password.length > 0 && showPassword) {
       const schedulePeek = () => {
@@ -258,7 +271,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
 
   return (
     <div className="relative flex items-end justify-center" style={{ width: '600px', height: '450px' }}>
-      {}
+      {/* Pink tall character - Back layer */}
       <div 
         ref={purpleRef}
         className="absolute bottom-0 transition-all duration-700 ease-in-out"
@@ -353,7 +366,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
           />
         </div>
       </div>
-      {}
+      {/* Yellow tall character - Middle layer */}
       <div 
         ref={blackRef}
         className="absolute bottom-0 transition-all duration-700 ease-in-out"
@@ -404,7 +417,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
         </div>
       </div>
 
-      {}
+      {/* Lime green semi-circle character - Front left */}
       <div 
         ref={orangeRef}
         className="absolute bottom-0 transition-all duration-700 ease-in-out"
@@ -431,7 +444,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
         </div>
       </div>
 
-      {}
+      {/* Cyan tall rounded character - Front right */}
       <div 
         ref={yellowRef}
         className="absolute bottom-0 transition-all duration-700 ease-in-out"
@@ -494,7 +507,7 @@ export function AnimatedCharacters({ password = "", showPassword = false, isTypi
         </div>
       </div>
 
-      {}
+      {/* Blue wavy character - New character 2 */}
       
     </div>
   );

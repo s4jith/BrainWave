@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/support-tickets", tags=["Support Tickets"])
 
+
+# ==================== PYDANTIC MODELS ====================
+
 class TicketCreate(BaseModel):
     """Model for creating a support ticket."""
     title: str = Field(..., min_length=5, max_length=200)
@@ -25,19 +28,22 @@ class TicketCreate(BaseModel):
     category: str = Field(default="general", description="Category: general, technical, content, account, other")
     priority: str = Field(default="medium", description="Priority: low, medium, high, urgent")
 
+
 class TicketUpdate(BaseModel):
     """Model for updating a ticket."""
     title: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
     priority: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[str] = None  # open, in_progress, resolved, closed
+
 
 class TicketReply(BaseModel):
     """Model for adding a reply to a ticket."""
     message: str = Field(..., min_length=1, max_length=5000)
     is_admin: bool = Field(default=False)
     author_name: str = Field(default="Admin")
+
 
 class TicketResponse(BaseModel):
     """Response model for a ticket."""
@@ -55,6 +61,9 @@ class TicketResponse(BaseModel):
     replies: List[dict] = []
     assigned_to: Optional[str] = None
 
+
+# ==================== HELPER FUNCTIONS ====================
+
 def generate_ticket_number() -> str:
     """Generate a unique ticket number."""
     try:
@@ -65,11 +74,12 @@ def generate_ticket_number() -> str:
             return_document=True
         )
         ticket_num = counter.get("count", 1)
-        return f"TKT{ticket_num:05d}"
+        return f"TKT{ticket_num:05d}"  # TKT00001, TKT00002, etc.
     except Exception as e:
         logger.error(f"Error generating ticket number: {e}")
         import time
         return f"TKT{int(time.time()) % 100000:05d}"
+
 
 def serialize_ticket(ticket: dict) -> dict:
     """Convert MongoDB document to response dict."""
@@ -91,6 +101,9 @@ def serialize_ticket(ticket: dict) -> dict:
         "read_at": ticket.get("read_at").isoformat() if ticket.get("read_at") else None
     }
 
+
+# ==================== TICKET ENDPOINTS ====================
+
 @router.get("/")
 async def get_tickets(
     user_id: Optional[str] = None,
@@ -109,6 +122,7 @@ async def get_tickets(
     try:
         filter_query = {}
         
+        # If not admin, filter by user_id
         if not is_admin and user_id:
             filter_query["created_by"] = user_id
         
@@ -124,6 +138,7 @@ async def get_tickets(
         cursor = db.support_tickets.find(filter_query).sort("created_at", -1).skip(skip).limit(limit)
         tickets = [serialize_ticket(t) for t in cursor]
         
+        # Get counts
         total_count = db.support_tickets.count_documents(filter_query)
         open_count = db.support_tickets.count_documents({**filter_query, "status": "open"})
         in_progress_count = db.support_tickets.count_documents({**filter_query, "status": "in_progress"})
@@ -140,6 +155,7 @@ async def get_tickets(
     except Exception as e:
         logger.error(f"Error fetching tickets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/")
 async def create_ticket(
@@ -173,6 +189,7 @@ async def create_ticket(
         result = db.support_tickets.insert_one(ticket_doc)
         ticket_doc["_id"] = result.inserted_id
         
+        # Create notification for admin
         try:
             notification_doc = {
                 "type": "support_ticket",
@@ -200,16 +217,19 @@ async def create_ticket(
         logger.error(f"Error creating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/{ticket_id}")
 async def get_ticket(ticket_id: str):
     """
     Get a single ticket by ID or ticket number.
     """
     try:
+        # Try by ObjectId
         ticket = None
         if ObjectId.is_valid(ticket_id):
             ticket = db.support_tickets.find_one({"_id": ObjectId(ticket_id)})
         
+        # Try by ticket number
         if not ticket:
             ticket = db.support_tickets.find_one({"ticket_number": ticket_id})
         
@@ -223,6 +243,7 @@ async def get_ticket(ticket_id: str):
     except Exception as e:
         logger.error(f"Error fetching ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.put("/{ticket_id}")
 async def update_ticket(ticket_id: str, ticket: TicketUpdate):
@@ -248,6 +269,7 @@ async def update_ticket(ticket_id: str, ticket: TicketUpdate):
         
         update_doc["updated_at"] = datetime.utcnow()
         
+        # Find and update
         query = {"_id": ObjectId(ticket_id)} if ObjectId.is_valid(ticket_id) else {"ticket_number": ticket_id}
         result = db.support_tickets.find_one_and_update(
             query,
@@ -267,6 +289,7 @@ async def update_ticket(ticket_id: str, ticket: TicketUpdate):
         logger.error(f"Error updating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/{ticket_id}/reply")
 async def add_reply(ticket_id: str, reply: TicketReply):
     """
@@ -274,6 +297,7 @@ async def add_reply(ticket_id: str, reply: TicketReply):
     Creates notification for the appropriate party (admin reply -> student, student reply -> admin).
     """
     try:
+        # First get the ticket to know who to notify
         query = {"_id": ObjectId(ticket_id)} if ObjectId.is_valid(ticket_id) else {"ticket_number": ticket_id}
         ticket = db.support_tickets.find_one(query)
         
@@ -292,6 +316,7 @@ async def add_reply(ticket_id: str, reply: TicketReply):
             "updated_at": datetime.utcnow()
         }
         
+        # If admin replies, mark as read by admin and update status
         if reply.is_admin:
             update_fields["is_read_by_admin"] = True
             update_fields["status"] = "in_progress"
@@ -305,20 +330,23 @@ async def add_reply(ticket_id: str, reply: TicketReply):
             return_document=True
         )
         
+        # Create notification
         try:
             if reply.is_admin:
+                # Admin replied -> Notify student
                 notification_doc = {
                     "type": "ticket_reply",
                     "title": f"Reply to your ticket {ticket.get('ticket_number', '')}",
                     "message": f"Admin replied to your support ticket: {ticket.get('title', '')}",
                     "ticket_id": str(ticket["_id"]),
                     "ticket_number": ticket.get("ticket_number", ""),
-                    "user_id": ticket.get("created_by"),
+                    "user_id": ticket.get("created_by"),  # Student who created the ticket
                     "for_admin": False,
                     "is_read": False,
                     "created_at": datetime.utcnow()
                 }
             else:
+                # Student replied -> Notify admin
                 notification_doc = {
                     "type": "ticket_reply",
                     "title": f"New reply on ticket {ticket.get('ticket_number', '')}",
@@ -344,6 +372,7 @@ async def add_reply(ticket_id: str, reply: TicketReply):
         logger.error(f"Error adding reply: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.delete("/{ticket_id}")
 async def delete_ticket(ticket_id: str):
     """
@@ -364,6 +393,7 @@ async def delete_ticket(ticket_id: str):
     except Exception as e:
         logger.error(f"Error deleting ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/{ticket_id}/close")
 async def close_ticket(ticket_id: str):
@@ -390,6 +420,7 @@ async def close_ticket(ticket_id: str):
         logger.error(f"Error closing ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/{ticket_id}/resolve")
 async def resolve_ticket(ticket_id: str):
     """
@@ -406,6 +437,7 @@ async def resolve_ticket(ticket_id: str):
         if not result:
             raise HTTPException(status_code=404, detail="Ticket not found")
         
+        # Notify student that ticket is resolved
         try:
             notification_doc = {
                 "type": "ticket_resolved",
@@ -431,6 +463,7 @@ async def resolve_ticket(ticket_id: str):
         logger.error(f"Error resolving ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/{ticket_id}/mark-read")
 async def mark_ticket_read(ticket_id: str, by_admin: bool = Query(True)):
     """
@@ -444,12 +477,14 @@ async def mark_ticket_read(ticket_id: str, by_admin: bool = Query(True)):
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
         
+        # Update ticket
         result = db.support_tickets.find_one_and_update(
             query,
             {"$set": {"is_read_by_admin": True, "read_at": datetime.utcnow()}},
             return_document=True
         )
         
+        # Notify student that admin has seen their ticket
         if by_admin and not ticket.get("is_read_by_admin"):
             try:
                 notification_doc = {
@@ -476,6 +511,9 @@ async def mark_ticket_read(ticket_id: str, by_admin: bool = Query(True)):
         logger.error(f"Error marking ticket as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==================== STATS ENDPOINTS ====================
+
 @router.get("/stats/summary")
 async def get_ticket_stats():
     """
@@ -488,8 +526,10 @@ async def get_ticket_stats():
         resolved = db.support_tickets.count_documents({"status": "resolved"})
         closed = db.support_tickets.count_documents({"status": "closed"})
         
+        # Priority breakdown
         high_priority = db.support_tickets.count_documents({"priority": {"$in": ["high", "urgent"]}, "status": {"$in": ["open", "in_progress"]}})
         
+        # Category breakdown
         category_pipeline = [
             {"$group": {"_id": "$category", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}
@@ -509,6 +549,9 @@ async def get_ticket_stats():
     except Exception as e:
         logger.error(f"Error getting ticket stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== NOTIFICATION ENDPOINTS ====================
 
 @router.get("/notifications/admin")
 async def get_admin_notifications(
@@ -550,6 +593,7 @@ async def get_admin_notifications(
         logger.error(f"Error getting admin notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/notifications/user/{user_id}")
 async def get_user_notifications(
     user_id: str,
@@ -590,6 +634,7 @@ async def get_user_notifications(
         logger.error(f"Error getting user notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/notifications/{notification_id}/mark-read")
 async def mark_notification_read(notification_id: str):
     """
@@ -611,6 +656,7 @@ async def mark_notification_read(notification_id: str):
     except Exception as e:
         logger.error(f"Error marking notification as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/notifications/mark-all-read")
 async def mark_all_notifications_read(
@@ -635,49 +681,4 @@ async def mark_all_notifications_read(
         
     except Exception as e:
         logger.error(f"Error marking all notifications as read: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/notifications/{notification_id}")
-async def delete_notification(notification_id: str):
-    """
-    Delete a single notification by ID.
-    """
-    try:
-        result = db.notifications.delete_one({"_id": ObjectId(notification_id)})
-        
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        
-        return {"success": True, "message": "Notification deleted"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting notification: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/notifications/all")
-async def delete_all_notifications(
-    user_id: Optional[str] = None,
-    is_admin: bool = Query(False)
-):
-    """
-    Delete all notifications for a user or admin.
-    """
-    try:
-        if is_admin:
-            filter_query = {"for_admin": True}
-        else:
-            if not user_id:
-                raise HTTPException(status_code=400, detail="user_id is required for non-admin")
-            filter_query = {"user_id": user_id, "for_admin": False}
-        
-        result = db.notifications.delete_many(filter_query)
-        
-        return {"success": True, "deleted_count": result.deleted_count}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting all notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))

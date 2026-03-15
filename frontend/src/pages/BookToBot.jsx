@@ -4,43 +4,48 @@ import PDFViewer from "../features/pdf/PDFViewer";
 import LessonNavigation from "../features/lessons/LessonNavigation";
 import UserSettingsPanel from "../components/UserSettingsPanel";
 import ChatbotPanel from "../components/dashboard/ChatbotPanel";
-import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { SUBJECTS_WITH_RAG } from "../constants/lessons";
-import { Menu, X, Settings, MessageCircle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
+import { Menu, X, Settings, MessageCircle, AlertTriangle, ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import useUserStore from "../stores/userStore";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+/**
+ * BookToBot Component
+ *
+ * PDF viewer interface with lesson navigation and AI chatbot.
+ * Dynamically loads lessons/books from MongoDB based on user's class level.
+ * Student can only select subject (class is fixed based on profile).
+ * 
+ * AI features (chatbot, annotations) only work for subjects with embeddings in Pinecone.
+ */
+
 function BookToBot() {
   const navigate = useNavigate();
-  const { user, setPreferredSubject, getAuthHeader } = useUserStore();
+  const { user, setPreferredSubject } = useUserStore();
 
+  // State for available subjects and lessons from DB
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [currentLesson, setCurrentLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingLessons, setLoadingLessons] = useState(false);
-
+  
+  // UI State
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatbotOpen, setChatbotOpen] = useState(false);
-  const [aiChatUnlocked, setAiChatUnlocked] = useState(false);
 
+  // Check if current subject has AI/RAG support
   const hasAISupport = currentLesson?.has_ai_support || SUBJECTS_WITH_RAG.includes(user.preferredSubject);
 
+  // Fetch available subjects for student's class level
   useEffect(() => {
     fetchAvailableSubjects();
-    if (user?.role === "student") {
-      fetch(`${API_BASE}/api/student/my-features`, { headers: getAuthHeader() })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) setAiChatUnlocked(data.features?.ai_chatbot === true); })
-        .catch(() => {});
-    } else {
-      setAiChatUnlocked(true); // teachers/admins always have access
-    }
   }, [user.classLevel]);
 
+  // Fetch lessons when subject changes
   useEffect(() => {
     if (user.preferredSubject) {
       fetchLessons(user.preferredSubject);
@@ -51,31 +56,32 @@ function BookToBot() {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE}/api/books/student/subjects?class_level=${user.classLevel}`);
-
+      
       if (response.ok) {
         const data = await response.json();
         const subjects = data.subjects || [];
         setAvailableSubjects(subjects);
-
+        
+        // If no subjects from DB, show empty state
         if (subjects.length === 0) {
           setLessons([]);
           setCurrentLesson(null);
         } else {
-          
+          // Check if user's preferred subject is available
           const subjectNames = subjects.map(s => s.name);
           if (!subjectNames.includes(user.preferredSubject)) {
-            
+            // Switch to first available subject
             setPreferredSubject(subjectNames[0]);
           }
         }
       } else {
-        
+        // API failed - show empty state, don't use static fallback
         setLessons([]);
         setCurrentLesson(null);
       }
     } catch (err) {
-
-      
+      console.error("Failed to fetch subjects:", err);
+      // Error - show empty state, don't use static fallback
       setLessons([]);
       setCurrentLesson(null);
     } finally {
@@ -89,26 +95,28 @@ function BookToBot() {
       const response = await fetch(
         `${API_BASE}/api/books/student/lessons?class_level=${user.classLevel}&subject=${encodeURIComponent(subject)}`
       );
-
+      
       if (response.ok) {
         const data = await response.json();
         const fetchedLessons = data.lessons || [];
-
+        
+        // Convert relative PDF URLs to absolute URLs
         const lessonsWithAbsoluteUrls = fetchedLessons.map(lesson => ({
           ...lesson,
           pdfUrl: lesson.pdfUrl?.startsWith('http') ? lesson.pdfUrl : `${API_BASE}${lesson.pdfUrl}`
         }));
-
+        
+        // Always use fetched lessons - never fall back to static data
         setLessons(lessonsWithAbsoluteUrls);
         setCurrentLesson(lessonsWithAbsoluteUrls.length > 0 ? lessonsWithAbsoluteUrls[0] : null);
       } else {
-        
+        // API failed - show empty state
         setLessons([]);
         setCurrentLesson(null);
       }
     } catch (err) {
-
-      
+      console.error("Failed to fetch lessons:", err);
+      // Error - show empty state
       setLessons([]);
       setCurrentLesson(null);
     } finally {
@@ -125,16 +133,26 @@ function BookToBot() {
   };
 
   if (loading) {
-    return <LoadingSpinner message="Loading your books..." submessage="Preparing your learning materials" />;
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading books...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+      {/* Sidebar - Lesson Navigation */}
       <div
-        className={`flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarOpen ? "w-80" : "w-0"
-          } overflow-hidden border-r`}
+        className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "w-80" : "w-0"
+        } overflow-hidden border-r`}
       >
         <div className="h-full flex flex-col">
+          {/* Subject Selector - Only show available subjects from DB */}
           <div className="p-4 border-b bg-muted/30">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -157,7 +175,7 @@ function BookToBot() {
                   </Button>
                 ))
               ) : (
-                ["Maths", "Social Science"].map((subject) => (
+                ["Mathematics", "Social Science"].map((subject) => (
                   <Button
                     key={subject}
                     variant={user.preferredSubject === subject ? "default" : "outline"}
@@ -174,7 +192,8 @@ function BookToBot() {
               Class {user.classLevel} • {lessons.length} Lessons Available
             </p>
           </div>
-
+          
+          {/* Lessons List */}
           {loadingLessons ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -189,7 +208,20 @@ function BookToBot() {
         </div>
       </div>
 
+      {/* Main Content - PDF Viewer */}
       <div className="flex-1 flex flex-col">
+        {/* AI Support Warning Banner */}
+        {!hasAISupport && (
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <p className="text-sm text-amber-800">
+              AI features are not available for {user.preferredSubject} yet.
+              Switch to a subject with AI support for full features.
+            </p>
+          </div>
+        )}
+
+        {/* Header */}
         <div className="px-6 py-4 border-b bg-card flex items-center gap-4">
           <Button
             variant="ghost"
@@ -229,29 +261,16 @@ function BookToBot() {
               <p className="text-xs font-medium">{user.preferredSubject}</p>
             </div>
 
-            {aiChatUnlocked ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setChatbotOpen(true)}
-                className="bg-primary hover:bg-primary/90"
-                disabled={!hasAISupport}
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                AI Chat
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="opacity-50 cursor-not-allowed"
-                title="AI Chat is locked for your account"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                AI Chat
-              </Button>
-            )}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setChatbotOpen(true)}
+              className="bg-primary hover:bg-primary/90"
+              disabled={!hasAISupport}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              AI Chat
+            </Button>
 
             <Button
               variant="outline"
@@ -264,6 +283,7 @@ function BookToBot() {
           </div>
         </div>
 
+        {/* PDF Viewer */}
         <div className="flex-1 overflow-hidden">
           {currentLesson ? (
             <PDFViewer
@@ -290,7 +310,7 @@ function BookToBot() {
       />
 
       <ChatbotPanel
-        isOpen={chatbotOpen && aiChatUnlocked}
+        isOpen={chatbotOpen}
         onClose={() => setChatbotOpen(false)}
       />
     </div>

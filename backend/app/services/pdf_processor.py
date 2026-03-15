@@ -24,27 +24,24 @@ from typing import List, Dict, Tuple, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
+# PDF Processing
 import PyPDF2
 from pdf2image import convert_from_path
 from PIL import Image
+import pytesseract
 import cv2
 import numpy as np
 
-from app.services.gemini_service import gemini_service
-
+# Google Gemini for embeddings and image understanding
 import google.generativeai as genai
 
+# Pinecone
 from pinecone import Pinecone
-
-from app.utils.embedding_helper import (
-    generate_embedding as _generate_embedding_rest,
-    generate_embeddings_batch as _generate_embeddings_batch_rest,
-    EMBEDDING_MODEL
-)
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class PageContent:
@@ -59,6 +56,7 @@ class PageContent:
     has_images: bool = False
     has_formulas: bool = False
 
+
 @dataclass
 class ProcessingResult:
     """Result of PDF processing"""
@@ -70,6 +68,7 @@ class ProcessingResult:
     errors: List[str] = field(default_factory=list)
     processing_time: float = 0.0
     pages: List[PageContent] = field(default_factory=list)
+
 
 class AdvancedPDFProcessor:
     """
@@ -104,12 +103,12 @@ class AdvancedPDFProcessor:
         self.dpi = dpi
         self.use_gemini_vision = use_gemini_vision
         
+        # Initialize Gemini
         genai.configure(api_key=settings.GEMINI_API_KEY)
         
-        self.embedding_model = EMBEDDING_MODEL
+        # Gemini models - Updated to use latest available models
+        self.embedding_model = "models/text-embedding-004"
         self.vision_model = genai.GenerativeModel("gemini-2.5-flash")  
-        
-        self.vision_api_enabled = True
         
         logger.info("✓ AdvancedPDFProcessor initialized")
     
@@ -142,6 +141,7 @@ class AdvancedPDFProcessor:
         try:
             logger.info(f"📄 Processing: {Path(pdf_path).name}")
             
+            # Step 1: Get page count
             with open(pdf_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 result.total_pages = len(pdf_reader.pages)
@@ -151,14 +151,16 @@ class AdvancedPDFProcessor:
             if progress_callback:
                 progress_callback(0, result.total_pages, "Starting PDF processing...")
             
-            logger.info(" Converting PDF to images...")
+            # Step 2: Convert PDF to images for OCR
+            logger.info("🖼️ Converting PDF to images...")
             images = convert_from_path(
                 pdf_path,
                 dpi=self.dpi,
                 fmt='png',
-                thread_count=4
+                thread_count=4  # Parallel conversion
             )
             
+            # Step 3: Process each page
             for page_num in range(result.total_pages):
                 try:
                     page_content = self._process_single_page(
@@ -185,6 +187,7 @@ class AdvancedPDFProcessor:
                     result.errors.append(error_msg)
                     logger.error(f"  ✗ {error_msg}")
                     
+                    # Create empty page content to maintain page count
                     result.pages.append(PageContent(
                         page_number=page_num + 1,
                         text_content="",
@@ -195,14 +198,14 @@ class AdvancedPDFProcessor:
             result.success = result.processed_pages > 0
             result.processing_time = time.time() - start_time
             
-            logger.info(f"PDF processing complete: {result.processed_pages}/{result.total_pages} pages in {result.processing_time:.2f}s")
+            logger.info(f"✅ PDF processing complete: {result.processed_pages}/{result.total_pages} pages in {result.processing_time:.2f}s")
             
             return result
             
         except Exception as e:
             result.errors.append(f"PDF processing failed: {str(e)}")
             result.processing_time = time.time() - start_time
-            logger.error(f" PDF processing failed: {e}")
+            logger.error(f"❌ PDF processing failed: {e}")
             return result
     
     def _process_single_page(
@@ -227,6 +230,7 @@ class AdvancedPDFProcessor:
             ocr_content=""
         )
         
+        # 1. Extract text using PyPDF2
         try:
             with open(pdf_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
@@ -236,25 +240,24 @@ class AdvancedPDFProcessor:
         except Exception as e:
             logger.warning(f"PyPDF2 extraction failed for page {page_number}: {e}")
         
+        # 2. OCR extraction from page image
         if page_image:
             try:
+                # Convert to numpy array for OpenCV processing
                 img_array = np.array(page_image)
                 
+                # Preprocess image for better OCR
                 processed_img = self._preprocess_for_ocr(img_array)
                 
-                import base64
-                from io import BytesIO
-                pil_img = Image.fromarray(processed_img) if isinstance(processed_img, np.ndarray) else processed_img
-                buffer = BytesIO()
-                pil_img.save(buffer, format='PNG')
-                pil_img.save(buffer, format='PNG')
+                # Run Tesseract OCR with configuration for math/science content
+                ocr_config = '--psm 6 --oem 3'  # Assume uniform text block, use LSTM OCR engine
+                page_content.ocr_content = pytesseract.image_to_string(
+                    processed_img,
+                    lang='eng',
+                    config=ocr_config
+                )
                 
-                page_content.ocr_content = gemini_service.generate_response_with_image(
-                    prompt="Extract all text from this page image. Return only the text content.",
-                    image_bytes=buffer.getvalue(),
-                    mime_type="image/png"
-                ) or ""
-                
+                # Detect if page has significant visual content
                 page_content.has_images = self._detect_images_in_page(img_array)
                 page_content.has_formulas = self._detect_formulas(
                     page_content.text_content + " " + page_content.ocr_content
@@ -263,6 +266,7 @@ class AdvancedPDFProcessor:
             except Exception as e:
                 logger.warning(f"OCR extraction failed for page {page_number}: {e}")
         
+        # 3. If page has images/diagrams and Gemini Vision is enabled, get descriptions
         if page_image and self.use_gemini_vision and page_content.has_images:
             try:
                 descriptions = self._describe_page_visuals(
@@ -273,11 +277,13 @@ class AdvancedPDFProcessor:
             except Exception as e:
                 logger.warning(f"Vision analysis failed for page {page_number}: {e}")
         
+        # 4. Detect and preserve formulas
         if page_content.has_formulas:
             page_content.formulas = self._extract_formulas(
                 page_content.text_content + " " + page_content.ocr_content
             )
         
+        # 5. Combine all content intelligently
         page_content.combined_content = self._combine_page_content(page_content, book_metadata)
         page_content.word_count = len(page_content.combined_content.split())
         
@@ -293,11 +299,13 @@ class AdvancedPDFProcessor:
         - Noise reduction
         - Contrast enhancement
         """
+        # Convert to grayscale if needed
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         else:
             gray = image
         
+        # Apply adaptive thresholding for better text extraction
         binary = cv2.adaptiveThreshold(
             gray, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -305,6 +313,7 @@ class AdvancedPDFProcessor:
             11, 2
         )
         
+        # Denoise
         denoised = cv2.fastNlMeansDenoising(binary, None, 10, 7, 21)
         
         return denoised
@@ -316,22 +325,26 @@ class AdvancedPDFProcessor:
         Uses edge detection and contour analysis.
         """
         try:
+            # Convert to grayscale
             if len(image.shape) == 3:
                 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             else:
                 gray = image
             
+            # Edge detection
             edges = cv2.Canny(gray, 50, 150)
             
+            # Find contours
             contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
+            # Count significant contours (likely diagrams/images)
             significant_contours = 0
             for contour in contours:
                 area = cv2.contourArea(contour)
-                if area > 5000:
+                if area > 5000:  # Minimum area threshold
                     significant_contours += 1
             
-            return significant_contours > 2
+            return significant_contours > 2  # More than 2 significant shapes
             
         except Exception:
             return False
@@ -341,16 +354,16 @@ class AdvancedPDFProcessor:
         Detect if text contains mathematical formulas or equations.
         """
         formula_patterns = [
-            r'[=+\-*/^]',
-            r'\d+\s*[+\-*/^]\s*\d+',
-            r'[a-z]\s*=\s*',
-            r'\([^)]+\)',
-            r'√|∑|∫|∏|∂|∆',
-            r'\^[0-9]+',
-            r'sin|cos|tan|log|ln',
-            r'→|←|↔|⇒',
-            r'[A-Z][a-z]?\d*[+\-]?',
-            r'\d+\s*×\s*10\^',
+            r'[=+\-*/^]',  # Basic math operators
+            r'\d+\s*[+\-*/^]\s*\d+',  # Simple expressions
+            r'[a-z]\s*=\s*',  # Variable assignments
+            r'\([^)]+\)',  # Parentheses
+            r'√|∑|∫|∏|∂|∆',  # Math symbols
+            r'\^[0-9]+',  # Exponents
+            r'sin|cos|tan|log|ln',  # Trig and log functions
+            r'→|←|↔|⇒',  # Arrow symbols (chemical reactions)
+            r'[A-Z][a-z]?\d*[+\-]?',  # Chemical formulas (e.g., H2O, Na+)
+            r'\d+\s*×\s*10\^',  # Scientific notation
         ]
         
         for pattern in formula_patterns:
@@ -364,10 +377,12 @@ class AdvancedPDFProcessor:
         """
         formulas = []
         
+        # Pattern for equations (anything with = in it)
         equation_pattern = r'[A-Za-z0-9\s\+\-\*/\^√∑∫\(\)]+\s*=\s*[A-Za-z0-9\s\+\-\*/\^√∑∫\(\)]+'
         equations = re.findall(equation_pattern, text)
-        formulas.extend(equations[:10])
+        formulas.extend(equations[:10])  # Limit to prevent too many
         
+        # Pattern for chemical equations
         chemical_pattern = r'[A-Z][a-z]?\d*(?:\s*\+\s*[A-Z][a-z]?\d*)*\s*→\s*[A-Z][a-z]?\d*(?:\s*\+\s*[A-Z][a-z]?\d*)*'
         chemicals = re.findall(chemical_pattern, text)
         formulas.extend(chemicals[:10])
@@ -377,16 +392,14 @@ class AdvancedPDFProcessor:
     def _describe_page_visuals(self, page_image: Image.Image, subject: str) -> List[str]:
         """
         Use Gemini Vision to describe diagrams, figures, and visual content.
-        Includes circuit breaker for API quotas.
         """
-        if not self.use_gemini_vision or not getattr(self, 'vision_api_enabled', True):
-            return []
-
         try:
+            # Resize image if too large (to reduce token usage)
             max_size = 1024
             if page_image.width > max_size or page_image.height > max_size:
                 page_image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
             
+            # Create prompt based on subject
             subject_context = {
                 "Mathematics": "mathematical diagrams, graphs, geometric figures, or visual representations of concepts",
                 "Physics": "physics diagrams, circuit diagrams, ray diagrams, force diagrams, or experimental setups",
@@ -407,36 +420,14 @@ class AdvancedPDFProcessor:
             
             Keep descriptions educational and helpful for understanding the content."""
             
-            max_retries = 2
-            for attempt in range(max_retries):
-                try:
-                    response = self.vision_model.generate_content([prompt, page_image])
-                    
-                    if response.text and "TEXT_ONLY" not in response.text:
-                        return [response.text.strip()]
-                    return []
-                    
-                except Exception as e:
-                    error_str = str(e)
-                    
-                    if "429" in error_str or "quota" in error_str.lower():
-                        logger.warning(f" Vision API quota exceeded. Disabling Vision features for remaining pages.")
-                        self.vision_api_enabled = False
-                        return []
-                    
-                    if "503" in error_str or "504" in error_str or "overloaded" in error_str.lower():
-                        if attempt < max_retries - 1:
-                            time.sleep(2 * (attempt + 1))
-                            continue
-                    
-                    logger.warning(f"Vision API error (attempt {attempt+1}): {e}")
-                    if attempt == max_retries - 1:
-                        return []
-
+            response = self.vision_model.generate_content([prompt, page_image])
+            
+            if response.text and "TEXT_ONLY" not in response.text:
+                return [response.text.strip()]
             return []
             
         except Exception as e:
-            logger.warning(f"Vision analysis failed: {e}")
+            logger.warning(f"Vision API error: {e}")
             return []
     
     def _combine_page_content(self, page: PageContent, metadata: Dict) -> str:
@@ -451,19 +442,18 @@ class AdvancedPDFProcessor:
         """
         parts = []
         
+        # Add page header
         parts.append(f"[Page {page.page_number}]")
         
+        # Combine text and OCR content (avoiding duplicates)
         text = page.text_content.strip()
         ocr = page.ocr_content.strip()
         
         if text and ocr:
-            has_hindi_ocr = any('\u0900' <= char <= '\u097F' for char in ocr)
-            has_hindi_text = any('\u0900' <= char <= '\u097F' for char in text)
-            
-            if has_hindi_ocr and not has_hindi_text:
-                combined_text = ocr
-            elif len(text) >= len(ocr):
+            # Use the longer one as primary, add unique content from the other
+            if len(text) >= len(ocr):
                 combined_text = text
+                # Add OCR content that might be from images (not in main text)
                 ocr_unique = self._get_unique_content(ocr, text)
                 if ocr_unique:
                     combined_text += f"\n\n[Additional content from images:]\n{ocr_unique}"
@@ -474,11 +464,13 @@ class AdvancedPDFProcessor:
         
         parts.append(combined_text)
         
+        # Add image descriptions
         if page.image_descriptions:
             parts.append("\n[Visual Content Description:]")
             for desc in page.image_descriptions:
                 parts.append(f"• {desc}")
         
+        # Add formulas if detected
         if page.formulas:
             parts.append("\n[Formulas/Equations:]")
             for formula in page.formulas:
@@ -490,6 +482,7 @@ class AdvancedPDFProcessor:
         """
         Extract content from new_text that doesn't appear in existing_text.
         """
+        # Tokenize both texts
         existing_words = set(existing_text.lower().split())
         new_sentences = new_text.split('.')
         
@@ -499,11 +492,12 @@ class AdvancedPDFProcessor:
             if len(words) < 3:
                 continue
             
+            # If less than 60% of words match, consider it unique
             matching = sum(1 for w in words if w in existing_words)
             if len(words) > 0 and (matching / len(words)) < 0.6:
                 unique_sentences.append(sentence.strip())
         
-        return '. '.join(unique_sentences[:5])
+        return '. '.join(unique_sentences[:5])  # Limit to 5 unique sentences
     
     def create_chunks(
         self,
@@ -531,13 +525,14 @@ class AdvancedPDFProcessor:
             if not page.combined_content.strip():
                 continue
             
+            # Split page content into chunks
             page_chunks = self._chunk_text(
                 text=page.combined_content,
                 page_number=page.page_number
             )
             
             for chunk_text in page_chunks:
-                if len(chunk_text.strip()) < 50:
+                if len(chunk_text.strip()) < 50:  # Skip very short chunks
                     continue
                 
                 chunk = {
@@ -569,12 +564,15 @@ class AdvancedPDFProcessor:
         """
         chunks = []
         
+        # Clean text
         text = re.sub(r'\n+', '\n', text)
         text = re.sub(r' +', ' ', text)
         
+        # If text is short enough, return as single chunk
         if len(text) <= self.chunk_size:
             return [text]
         
+        # Split into sentences
         sentences = re.split(r'(?<=[.!?])\s+', text)
         
         current_chunk = []
@@ -584,8 +582,10 @@ class AdvancedPDFProcessor:
             sentence_len = len(sentence)
             
             if current_length + sentence_len > self.chunk_size and current_chunk:
+                # Save current chunk
                 chunks.append(' '.join(current_chunk))
                 
+                # Start new chunk with overlap
                 overlap_sentences = current_chunk[-2:] if len(current_chunk) > 2 else current_chunk
                 current_chunk = overlap_sentences + [sentence]
                 current_length = sum(len(s) for s in current_chunk)
@@ -593,10 +593,12 @@ class AdvancedPDFProcessor:
                 current_chunk.append(sentence)
                 current_length += sentence_len
         
+        # Add final chunk
         if current_chunk:
             chunks.append(' '.join(current_chunk))
         
         return chunks
+
 
 class PineconeEmbeddingUploader:
     """
@@ -610,47 +612,28 @@ class PineconeEmbeddingUploader:
         self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
         self.index = self.pc.Index(host=settings.PINECONE_HOST)
         
-        self.batch_size = 50
+        self.batch_size = 50  # Pinecone recommends 100, but smaller is safer
         self.retry_count = 3
-        self.retry_delay = 2
+        self.retry_delay = 2  # seconds
         
         logger.info("✓ Connected to Pinecone")
     
     def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate embedding using Gemini gemini-embedding-001 via REST API.
-        Returns 768-dimensional vector for Pinecone compatibility.
+        Generate embedding using Gemini text-embedding-004.
+        
+        Returns 768-dimensional embedding vector.
         """
         try:
-            return _generate_embedding_rest(
-                text=text,
-                api_key=settings.GEMINI_API_KEY,
-                task_type="RETRIEVAL_DOCUMENT"
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=text,
+                task_type="retrieval_document"
             )
+            return result['embedding']
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             raise
-
-    def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """
-        Generate embeddings for a batch of texts using Gemini REST API.
-        Uses batch endpoint for efficiency.
-        """
-        try:
-            return _generate_embeddings_batch_rest(
-                texts=texts,
-                api_key=settings.GEMINI_API_KEY,
-                task_type="RETRIEVAL_DOCUMENT"
-            )
-        except Exception as e:
-            logger.warning(f"Batch embedding failed, falling back to single: {e}")
-            embeddings = []
-            for text in texts:
-                try:
-                    embeddings.append(self.generate_embedding(text))
-                except Exception:
-                    embeddings.append([])
-            return embeddings
     
     def upload_chunks(
         self,
@@ -660,7 +643,14 @@ class PineconeEmbeddingUploader:
     ) -> Dict:
         """
         Upload chunks to Pinecone with embeddings.
-        Uses batch processing for both embedding generation and upload.
+        
+        Args:
+            chunks: List of text chunks with metadata
+            namespace: Pinecone namespace (e.g., "mathematics_class10")
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            Upload statistics
         """
         stats = {
             'total_chunks': len(chunks),
@@ -669,65 +659,62 @@ class PineconeEmbeddingUploader:
             'errors': []
         }
         
-        logger.info(f"Uploading {len(chunks)} chunks to namespace '{namespace}'")
+        logger.info(f"🚀 Uploading {len(chunks)} chunks to namespace '{namespace}'")
         
-        total_batches = (len(chunks) + self.batch_size - 1) // self.batch_size
+        vectors = []
         
-        for batch_idx in range(total_batches):
-            start_idx = batch_idx * self.batch_size
-            end_idx = min(start_idx + self.batch_size, len(chunks))
-            
-            batch_chunks = chunks[start_idx:end_idx]
-            batch_texts = [chunk['text'] for chunk in batch_chunks]
-            
+        for i, chunk in enumerate(chunks):
             try:
-                logger.info(f"  Generating embeddings for batch {batch_idx+1}/{total_batches} ({len(batch_chunks)} chunks)...")
-                embeddings = self.generate_embeddings_batch(batch_texts)
+                # Generate embedding
+                embedding = self.generate_embedding(chunk['text'])
                 
-                if len(embeddings) != len(batch_chunks):
-                    logger.error(f"Mismatch in embedding count: got {len(embeddings)}, expected {len(batch_chunks)}")
-                    stats['failed'] += len(batch_chunks)
-                    continue
-                
-                vectors = []
-                for i, chunk in enumerate(batch_chunks):
-                    if not embeddings[i]:
-                        continue
-                        
-                    vector = {
-                        'id': chunk['id'],
-                        'values': embeddings[i],
-                        'metadata': {
-                            **chunk['metadata'],
-                            'text': chunk['text'][:2000]
-                        }
+                # Prepare vector
+                vector = {
+                    'id': chunk['id'],
+                    'values': embedding,
+                    'metadata': {
+                        **chunk['metadata'],
+                        'text': chunk['text'][:2000]  # Store truncated text for retrieval
                     }
-                    vectors.append(vector)
+                }
+                vectors.append(vector)
                 
-                if vectors:
+                # Upload in batches
+                if len(vectors) >= self.batch_size:
                     success = self._upload_batch(vectors, namespace)
                     if success:
                         stats['successful'] += len(vectors)
                     else:
                         stats['failed'] += len(vectors)
+                    vectors = []
+                    
+                    if progress_callback:
+                        progress_callback(
+                            i + 1,
+                            len(chunks),
+                            f"Uploaded {i + 1}/{len(chunks)} embeddings"
+                        )
                 
-                if progress_callback:
-                    progress_callback(
-                        end_idx,
-                        len(chunks),
-                        f"Processed {end_idx}/{len(chunks)} chunks"
-                    )
-                
-                time.sleep(1)
+                # Rate limiting - Gemini has rate limits
+                if (i + 1) % 10 == 0:
+                    time.sleep(0.5)  # Small delay every 10 embeddings
                     
             except Exception as e:
-                logger.error(f"Batch processing failed: {e}")
-                stats['failed'] += len(batch_chunks)
-                stats['errors'].append(str(e))
+                stats['failed'] += 1
+                stats['errors'].append(f"Chunk {i}: {str(e)}")
+                logger.error(f"Failed to process chunk {i}: {e}")
         
-        logger.info(f"Upload complete: {stats['successful']} successful, {stats['failed']} failed")
+        # Upload remaining vectors
+        if vectors:
+            success = self._upload_batch(vectors, namespace)
+            if success:
+                stats['successful'] += len(vectors)
+            else:
+                stats['failed'] += len(vectors)
+        
+        logger.info(f"✅ Upload complete: {stats['successful']} successful, {stats['failed']} failed")
         return stats
-
+    
     def _upload_batch(self, vectors: List[Dict], namespace: str) -> bool:
         """
         Upload a batch of vectors to Pinecone with retry logic.

@@ -16,6 +16,9 @@ router = APIRouter(
     tags=["User Stats"]
 )
 
+
+# ==================== SCHEMAS ====================
+
 class DailyActivity(BaseModel):
     """Daily activity entry."""
     day: str = Field(..., description="Day name (Mon, Tue, etc.)")
@@ -23,12 +26,14 @@ class DailyActivity(BaseModel):
     hours: float = Field(..., description="Hours of activity")
     date: str = Field(..., description="Date string (YYYY-MM-DD)")
 
+
 class StreakData(BaseModel):
     """User streak information."""
     current_streak: int = Field(..., description="Current consecutive days")
     longest_streak: int = Field(..., description="Longest streak ever")
     weekly_activity: List[DailyActivity] = Field(..., description="Last 7 days activity")
     last_activity_date: Optional[str] = Field(None, description="Last activity date")
+
 
 class ProgressData(BaseModel):
     """User progress information."""
@@ -39,6 +44,7 @@ class ProgressData(BaseModel):
     completed_chapters: int = Field(..., description="Chapters completed")
     average_score: float = Field(..., description="Average test score")
 
+
 class NoteSummary(BaseModel):
     """Note summary for dashboard."""
     id: str
@@ -47,12 +53,16 @@ class NoteSummary(BaseModel):
     date: str
     subject: str
 
+
 class DashboardData(BaseModel):
     """Complete dashboard data."""
     streak: StreakData
     progress: ProgressData
     recent_notes: List[NoteSummary]
     total_notes: int
+
+
+# ==================== ENDPOINTS ====================
 
 @router.get("/streak/{student_id}", response_model=StreakData)
 async def get_streak_data(student_id: str):
@@ -64,8 +74,10 @@ async def get_streak_data(student_id: str):
     try:
         logger.info(f"📊 Fetching streak data for student: {student_id}")
         
+        # Get activity collection
         activities_col = mongodb.db["user_activities"]
         
+        # Fetch last 30 days of activity
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         
         activities = await activities_col.find({
@@ -73,20 +85,24 @@ async def get_streak_data(student_id: str):
             "date": {"$gte": thirty_days_ago.strftime("%Y-%m-%d")}
         }).sort("date", -1).to_list(length=30)
         
+        # Calculate current streak
         current_streak = 0
         today = datetime.utcnow().date()
         check_date = today
         
+        # Build set of active dates
         active_dates = {a["date"] for a in activities}
         
         while check_date.strftime("%Y-%m-%d") in active_dates:
             current_streak += 1
             check_date -= timedelta(days=1)
         
+        # Get longest streak from user profile or calculate
         user_col = mongodb.db["users"]
         user = await user_col.find_one({"student_id": student_id})
         longest_streak = user.get("longest_streak", current_streak) if user else current_streak
         
+        # Update longest streak if current is higher
         if current_streak > longest_streak:
             longest_streak = current_streak
             await user_col.update_one(
@@ -95,14 +111,16 @@ async def get_streak_data(student_id: str):
                 upsert=True
             )
         
+        # Build weekly activity (last 7 days)
         weekly_activity = []
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         
-        for i in range(6, -1, -1):
+        for i in range(6, -1, -1):  # Last 7 days
             day_date = today - timedelta(days=i)
             day_str = day_date.strftime("%Y-%m-%d")
             day_name = day_names[day_date.weekday()]
             
+            # Find activity for this day
             day_activity = next((a for a in activities if a["date"] == day_str), None)
             
             weekly_activity.append(DailyActivity(
@@ -122,7 +140,8 @@ async def get_streak_data(student_id: str):
         )
         
     except Exception as e:
-        logger.error(f" Get streak error: {e}")
+        logger.error(f"❌ Get streak error: {e}")
+        # Return default data on error
         today = datetime.utcnow().date()
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         weekly = []
@@ -142,6 +161,7 @@ async def get_streak_data(student_id: str):
             last_activity_date=None
         )
 
+
 @router.get("/progress/{student_id}", response_model=ProgressData)
 async def get_progress_data(
     student_id: str,
@@ -155,23 +175,29 @@ async def get_progress_data(
     try:
         logger.info(f"📊 Fetching progress data for student: {student_id}")
         
+        # Get evaluations collection
         eval_col = mongodb.db["evaluations"]
         
+        # Build filter
         filter_query = {"student_id": student_id}
         if subject:
             filter_query["subject"] = subject
         
+        # Fetch evaluations
         evaluations = await eval_col.find(filter_query).to_list(length=100)
         
+        # Calculate stats
         completed_tests = len(evaluations)
-        total_tests = 10
+        total_tests = 10  # Default total (can be made dynamic)
         
+        # Calculate average score
         if evaluations:
             scores = [e.get("result", {}).get("percentage", 0) for e in evaluations]
             average_score = sum(scores) / len(scores)
         else:
             average_score = 0
         
+        # Get completed chapters from notes/activities
         notes_col = mongodb.db["notes"]
         notes_filter = {"student_id": student_id}
         if subject:
@@ -180,8 +206,9 @@ async def get_progress_data(
         notes = await notes_col.find(notes_filter).to_list(length=500)
         completed_chapters = len(set(n.get("chapter", 0) for n in notes if n.get("chapter")))
         
-        total_chapters = 14
+        total_chapters = 14  # Default total chapters
         
+        # Calculate overall progress
         test_progress = (completed_tests / total_tests) * 50 if total_tests > 0 else 0
         chapter_progress = (completed_chapters / total_chapters) * 50 if total_chapters > 0 else 0
         overall_progress = int(test_progress + chapter_progress)
@@ -196,7 +223,7 @@ async def get_progress_data(
         )
         
     except Exception as e:
-        logger.error(f" Get progress error: {e}")
+        logger.error(f"❌ Get progress error: {e}")
         return ProgressData(
             overall_progress=0,
             total_tests=10,
@@ -205,6 +232,7 @@ async def get_progress_data(
             completed_chapters=0,
             average_score=0
         )
+
 
 @router.get("/dashboard/{student_id}", response_model=DashboardData)
 async def get_dashboard_data(
@@ -219,9 +247,11 @@ async def get_dashboard_data(
     try:
         logger.info(f"📊 Fetching dashboard data for student: {student_id}")
         
+        # Get streak and progress
         streak = await get_streak_data(student_id)
         progress = await get_progress_data(student_id, subject)
         
+        # Get recent notes
         notes_col = mongodb.db["notes"]
         notes_filter = {"student_id": student_id}
         if subject:
@@ -245,6 +275,7 @@ async def get_dashboard_data(
                 subject=note.get("subject", "Unknown")
             ))
         
+        # Get total notes count
         total_notes = await notes_col.count_documents(notes_filter)
         
         return DashboardData(
@@ -255,8 +286,9 @@ async def get_dashboard_data(
         )
         
     except Exception as e:
-        logger.error(f" Get dashboard error: {e}")
+        logger.error(f"❌ Get dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/activity/log")
 async def log_activity(
@@ -273,6 +305,7 @@ async def log_activity(
         
         activities_col = mongodb.db["user_activities"]
         
+        # Upsert today's activity
         result = await activities_col.update_one(
             {"student_id": student_id, "date": today},
             {
@@ -282,106 +315,10 @@ async def log_activity(
             upsert=True
         )
         
-        logger.info(f"Logged activity for {student_id}: +{hours}h on {today}")
+        logger.info(f"✅ Logged activity for {student_id}: +{hours}h on {today}")
         
         return {"message": "Activity logged", "date": today, "hours_added": hours}
         
     except Exception as e:
-        logger.error(f" Log activity error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/analytics/{student_id}")
-async def get_student_analytics(
-    student_id: str,
-    period: str = Query("week", description="Period: week, month, or all")
-):
-    """
-    Get comprehensive analytics for charts and progress tracking.
-    
-    Returns:
-    - Total study hours
-    - Questions asked per subject
-    - Tests taken per subject
-    - Daily/weekly activity data for charts
-    """
-    try:
-        logger.info(f"📊 Fetching analytics for student: {student_id}, period: {period}")
-        
-        db = mongodb.db
-        today = datetime.utcnow().date()
-        
-        if period == "week":
-            start_date = today - timedelta(days=7)
-        elif period == "month":
-            start_date = today - timedelta(days=30)
-        else:
-            start_date = today - timedelta(days=365)
-        
-        start_str = start_date.strftime("%Y-%m-%d")
-        
-        activities_col = db["user_activities"]
-        activities = await activities_col.find({
-            "student_id": student_id,
-            "date": {"$gte": start_str}
-        }).sort("date", 1).to_list(length=100)
-        
-        total_hours = sum(a.get("hours", 0) for a in activities)
-        
-        daily_data = []
-        for a in activities:
-            daily_data.append({
-                "date": a.get("date"),
-                "hours": round(a.get("hours", 0), 1)
-            })
-        
-        questions_col = db["top_questions"]
-        questions = await questions_col.find({
-            "user_id": student_id
-        }).to_list(length=500)
-        
-        subject_questions = {}
-        for q in questions:
-            subj = q.get("subject", "Unknown")
-            subject_questions[subj] = subject_questions.get(subj, 0) + 1
-        
-        tests_col = db["test_submissions"]
-        tests = await tests_col.find({
-            "student_id": student_id
-        }).to_list(length=100)
-        
-        subject_tests = {}
-        test_scores = []
-        for t in tests:
-            subj = t.get("subject", "Unknown")
-            subject_tests[subj] = subject_tests.get(subj, 0) + 1
-            score = t.get("score", 0)
-            if score:
-                test_scores.append(score)
-        
-        avg_test_score = sum(test_scores) / len(test_scores) if test_scores else 0
-        
-        all_subjects = set(subject_questions.keys()) | set(subject_tests.keys())
-        subject_breakdown = []
-        for subj in sorted(all_subjects):
-            subject_breakdown.append({
-                "subject": subj,
-                "questions_asked": subject_questions.get(subj, 0),
-                "tests_taken": subject_tests.get(subj, 0)
-            })
-        
-        return {
-            "period": period,
-            "summary": {
-                "total_hours": round(total_hours, 1),
-                "total_questions": len(questions),
-                "total_tests": len(tests),
-                "avg_test_score": round(avg_test_score, 1)
-            },
-            "daily_activity": daily_data,
-            "subject_breakdown": subject_breakdown,
-            "active_days": len(activities)
-        }
-        
-    except Exception as e:
-        logger.error(f" Get analytics error: {e}")
+        logger.error(f"❌ Log activity error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

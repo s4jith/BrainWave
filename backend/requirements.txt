@@ -1,19 +1,19 @@
 # FastAPI Core
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.6
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
 python-dotenv==1.0.0
 
 # Pydantic
-pydantic>=2.5.3
-pydantic-settings>=2.1.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
 # Database - MongoDB Atlas
-pymongo>=4.6.1
-motor>=3.3.2
+pymongo==4.6.1
+motor==3.3.2
 
 # Vector Database - Pinecone
-pinecone>=3.1.0
+pinecone-client==3.0.0
 
 # Google Gemini AI
 google-generativeai==0.3.2
@@ -23,7 +23,6 @@ httpx==0.26.0
 
 # Validation & Security
 email-validator==2.1.0
-PyJWT>=2.8.0
 
 # Testing (optional)
 pytest==7.4.3
@@ -32,31 +31,7 @@ pytest-asyncio==0.21.1
 # PDF Processing & OCR
 PyPDF2==3.0.1
 pdf2image==1.17.0
-# NOTE: pdf2image requires Poppler to be installed as a SYSTEM DEPENDENCY.
-# Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases
-#          Extract to C:\poppler and add C:\poppler\Library\bin to your PATH.
-# macOS: brew install poppler
-# Linux: sudo apt-get install poppler-utils
-Pillow>=10.2.0
-opencv-python-headless>=4.9.0.80
-numpy>=1.24.0
-
-requests>=2.31.0
-
-# NLP & ML
-transformers>=4.35.0
-sentencepiece>=0.1.99
-
-# Multilingual Support & API Optimization
-langdetect>=1.0.9
-
-# PDF Rendering (PyMuPDF - provides 'fitz' module)
-PyMuPDF>=1.23.0
-
-# Cloudinary for PDF cloud storage (Free tier: 25GB storage, 25GB bandwidth/month)
-cloudinary>=1.40.0
-
-
-pytz>=2023.3
-
-sentence-transformers>=2.2.2
+pytesseract==0.3.10
+Pillow==10.2.0
+opencv-python-headless==4.9.0.80
+numpy>=1.24.0,<2.0.0

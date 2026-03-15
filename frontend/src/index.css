@@ -28,11 +28,11 @@
 }
 
 .dark {
-  --background: 0 0% 0%;
+  --background: 0 0% 5%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 9%;
+  --card: 0 0% 8%;
   --card-foreground: 0 0% 98%;
-  --popover: 0 0% 7%;
+  --popover: 0 0% 5%;
   --popover-foreground: 0 0% 98%;
   --primary: 0 0% 98%;
   --primary-foreground: 0 0% 5%;
@@ -76,8 +76,8 @@ body {
   margin: 1rem auto;
 }
 
-.space-grotesk-500 {
-  font-family: "Space Grotesk", sans-serif;
+  .space-grotesk-500 {
+    font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
   font-weight: 500;
   font-style: normal;
@@ -85,10 +85,10 @@ body {
 
 .material-symbols-outlined {
   font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24
+  'FILL' 0,
+  'wght' 400,
+  'GRAD' 0,
+  'opsz' 24
 }
 
 /* Page Transition Animations */
@@ -97,7 +97,6 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -109,7 +108,6 @@ body {
     opacity: 0;
     transform: translateX(-20px);
   }
-
   to {
     opacity: 1;
     transform: translateX(0);
@@ -121,7 +119,6 @@ body {
     opacity: 0;
     transform: translateY(30px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -142,21 +139,10 @@ body {
 }
 
 /* Staggered animation delays */
-.delay-100 {
-  animation-delay: 0.1s;
-}
-
-.delay-200 {
-  animation-delay: 0.2s;
-}
-
-.delay-300 {
-  animation-delay: 0.3s;
-}
-
-.delay-400 {
-  animation-delay: 0.4s;
-}
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
 
 /* Page wrapper with smooth transition */
 .page-animate {
@@ -168,8 +154,8 @@ body {
 }
 
 /* Hide Spline watermark */
-.spline-container canvas+div,
-.spline-container>div>a,
+.spline-container canvas + div,
+.spline-container > div > a,
 .spline-container [href*="spline.design"] {
   display: none !important;
   visibility: hidden !important;
@@ -185,17 +171,14 @@ body {
     opacity: 1;
     transform: translateX(0);
   }
-
   40% {
     opacity: 0;
     transform: translateX(-20px);
   }
-
   60% {
     opacity: 0;
     transform: translateX(20px);
   }
-
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -207,17 +190,14 @@ body {
     opacity: 1;
     transform: translateX(0);
   }
-
   40% {
     opacity: 0;
     transform: translateX(20px);
   }
-
   60% {
     opacity: 0;
     transform: translateX(-20px);
   }
-
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -286,7 +266,6 @@ body {
     opacity: 0;
     transform: translate(-50%, -100%) translateY(-4px);
   }
-
   to {
     opacity: 1;
     transform: translate(-50%, -100%) translateY(-12px);
@@ -320,12 +299,12 @@ body {
 }
 
 .bookmark-ribbon.ai {
-  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
   color: white;
 }
 
 .bookmark-ribbon.ai::before {
-  border-bottom-color: #1d4ed8;
+  border-bottom-color: #5b21b6;
 }
 
 .bookmark-ribbon.note {
@@ -339,7 +318,7 @@ body {
 
 /* PDF Page Shadow Enhancement */
 .pdf-page-shadow {
-  box-shadow:
+  box-shadow: 
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06),
     0 20px 40px -10px rgba(0, 0, 0, 0.15);
@@ -352,7 +331,7 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow:
+  box-shadow: 
     0 4px 12px rgba(0, 0, 0, 0.1),
     0 20px 40px rgba(0, 0, 0, 0.15);
 }
@@ -374,38 +353,10 @@ body {
 
 /* Text selection highlight style */
 ::selection {
-  background: rgba(37, 99, 235, 0.3);
+  background: rgba(124, 58, 237, 0.3);
 }
 
 /* PDF text layer selection enhancement */
 .react-pdf__Page__textContent ::selection {
-  background: rgba(37, 99, 235, 0.35);
-}
-
-/* ── Shimmer skeleton animation ──────────────────────────────────────────── */
-@keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position:  400px 0; }
-}
-
-.shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.04) 25%,
-    rgba(0, 0, 0, 0.08) 50%,
-    rgba(0, 0, 0, 0.04) 75%
-  );
-  background-size: 800px 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-.dark .shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.09) 50%,
-    rgba(255, 255, 255, 0.04) 75%
-  );
-  background-size: 800px 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  background: rgba(124, 58, 237, 0.35);
 }

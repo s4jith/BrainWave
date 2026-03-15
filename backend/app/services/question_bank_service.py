@@ -1,297 +1,316 @@
 """
-Question Bank Service
-Handles management of the centralized question bank.
+Question Bank Service - Manages question generation and storage
+Implements intelligent question caching and reuse
 """
 
-from app.db.mongo import db
+from motor.motor_asyncio import AsyncIOMotorClient
+from app.models.question_bank import QuestionSet, Question, StudentAssessmentAttempt
 from app.services.rag_service import rag_service
 from app.services.gemini_service import gemini_service
-from datetime import datetime, timedelta
-from bson import ObjectId
+from app.db.mongo import mongodb
+from typing import Optional, List
+from datetime import datetime
 import logging
-from typing import List, Optional, Dict
 
 logger = logging.getLogger(__name__)
 
+
 class QuestionBankService:
-    def __init__(self):
-        self.collection = db.questions
+    """Service for managing question bank with MongoDB storage."""
     
-    async def get_questions(
+    def __init__(self):
+        self.question_sets_collection = "question_sets"
+        self.attempts_collection = "assessment_attempts"
+    
+    def get_collection(self, collection_name: str):
+        """Get MongoDB collection instance."""
+        return mongodb.get_collection(collection_name)
+    
+    async def check_existing_questions(
         self,
-        class_level: Optional[int] = None,
-        subject: Optional[str] = None,
-        search: Optional[str] = None,
-        type: Optional[str] = None,
-        difficulty: Optional[str] = None,
-        status: Optional[str] = "approved",
-        created_by: Optional[str] = None,
-        limit: int = 50,
-        offset: int = 0,
-        group_filters: Optional[list] = None,
-        user_id: Optional[str] = None,
-        user_role: Optional[str] = None,
-        extra_filter: Optional[Dict] = None
-    ) -> Dict:
-        """Get questions with filters."""
-        query = {}
-        if class_level:
-            query["class_level"] = class_level
-        if subject:
-            query["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
-        if type:
-            query["type"] = type
-        if difficulty:
-            query["difficulty"] = difficulty
+        class_level: int,
+        subject: str,
+        chapter: int,
+        page_range: str
+    ) -> Optional[QuestionSet]:
+        """
+        Check if questions already exist for this page range.
+        Returns existing QuestionSet if found, None otherwise.
+        """
+        try:
+            collection = self.get_collection(self.question_sets_collection)
             
-        if status:
-             query["status"] = status
-        
-        if status == "pending" and user_role not in ("admin", "head"):
-            if user_id:
-                query["$or"] = [
-                    {"created_by": user_id},
-                    {"triggered_by": user_id}
-                ]
-            else:
-                query["_id"] = {"$exists": False}
-
-        # Merge extra_filter (e.g. head assignment scope)
-        if extra_filter:
-            for k, v in extra_filter.items():
-                if k == "$and":
-                    if "$and" not in query:
-                        query["$and"] = v
-                    else:
-                        query["$and"].extend(v)
-                else:
-                    query[k] = v
-
-        if group_filters is not None:
-            group_or = []
-            for gf in group_filters:
-                group_or.append({
-                    "subject": {"$regex": f"^{gf['subject']}$", "$options": "i"},
-                    "class_level": gf["class_level"]
-                })
-            if group_or:
-                if "$or" not in query:
-                    query["$and"] = [{"$or": group_or}]
-                else:
-                    query["$and"] = [{"$or": group_or}]
-             
-        if search:
-            search_or = [
-                {"text": {"$regex": search, "$options": "i"}},
-                {"topic": {"$regex": search, "$options": "i"}}
-            ]
-            if "$and" in query:
-                query["$and"].append({"$or": search_or})
-            else:
-                query["$or"] = search_or
+            # Search for existing question set
+            query = {
+                "class_level": class_level,
+                "subject": subject,
+                "chapter": chapter,
+                "page_range": page_range
+            }
             
-        total = self.collection.count_documents(query)
-        cursor = self.collection.find(query).sort("created_at", -1).skip(offset).limit(limit)
-        
-        questions = []
-        for q in cursor:
-            questions.append({
-                "id": str(q["_id"]),
-                "text": q.get("text"),
-                "subject": q.get("subject"),
-                "class_level": q.get("class_level"),
-                "chapter": q.get("chapter"),
-                "chapter_name": q.get("chapter_name"),
-                "topic": q.get("topic"),
-                "type": q.get("type"),
-                "difficulty": q.get("difficulty"),
-                "marks": q.get("marks"),
-                "options": q.get("options", []),
-                "correct_answer": q.get("correct_answer"),
-                "status": q.get("status", "approved"),
-                "created_by": q.get("created_by"),
-                "created_role": q.get("created_role"),
-                "triggered_by": q.get("triggered_by"),
-                "created_at": q.get("created_at"),
-                "is_ai_generated": q.get("is_ai_generated", False),
-                "expires_at": q.get("expires_at")
-            })
+            result = await collection.find_one(query)
             
-        return {
-            "questions": questions,
-            "total": total,
-            "page": (offset // limit) + 1,
-            "pages": (total + limit - 1) // limit
-        }
-
-    async def create_question(self, question_data: dict, user_id: str, user_role: str):
-        """Create a single question manually."""
-        question_data["created_by"] = user_id
-        question_data["created_role"] = user_role
-        question_data["created_at"] = datetime.utcnow().isoformat()
-        question_data["updated_at"] = datetime.utcnow().isoformat()
-        
-        if "options" not in question_data:
-            question_data["options"] = []
+            if result:
+                logger.info(f"✅ Found existing questions for {subject} Ch.{chapter} pages {page_range}")
+                # Increment usage count
+                await collection.update_one(
+                    {"_id": result["_id"]},
+                    {"$inc": {"times_used": 1}}
+                )
+                return QuestionSet(**result)
             
-        result = self.collection.insert_one(question_data)
-        
-        return str(result.inserted_id)
-
-    async def update_question(self, question_id: str, update_data: dict, user_id: str, user_role: str):
-        """Update a question."""
-        if not ObjectId.is_valid(question_id):
-            return False, "Invalid ID"
+            return None
             
-        update_data["updated_at"] = datetime.utcnow().isoformat()
-        result = self.collection.update_one(
-            {"_id": ObjectId(question_id)},
-            {"$set": update_data}
-        )
-        
-        if result.matched_count == 0:
-            return False, "Question not found"
-            
-        return True, "Updated successfully"
-
-    async def delete_question(self, question_id: str, user_id: str, user_role: str):
-        """Delete a question."""
-        if not ObjectId.is_valid(question_id):
-            return False, "Invalid ID"
-            
-        result = self.collection.delete_one({"_id": ObjectId(question_id)})
-        
-        if result.deleted_count == 0:
-            return False, "Question not found"
-            
-        return True, "Deleted successfully"
-
-    async def archive_question(self, question_id: str, user_id: str):
-        """Soft-delete a question by marking it archived. Used by teachers."""
-        if not ObjectId.is_valid(question_id):
-            return False, "Invalid ID"
-
-        result = self.collection.find_one_and_update(
-            {"_id": ObjectId(question_id)},
-            {"$set": {
-                "status": "archived",
-                "archived_by": user_id,
-                "archived_at": __import__("datetime").datetime.utcnow().isoformat()
-            }},
-            return_document=True
-        )
-
-        if not result:
-            return False, "Question not found"
-
-        return True, "Question archived successfully"
-
+        except Exception as e:
+            logger.error(f"❌ Error checking existing questions: {e}")
+            return None
+    
     async def generate_questions(
         self,
         class_level: int,
         subject: str,
         chapter: int,
-        config: dict,
-        user_id: str,
-        user_role: str
-    ):
+        lesson_name: str,
+        page_range: str,
+        student_id: str
+    ) -> QuestionSet:
         """
-        Generate questions using AI and save to bank.
-        
-        config example:
-        {
-            "easy": {"mcq": 5},
-            "medium": {"short_answer": 3}
-        }
+        Generate new question set using RAG + Gemini.
+        Follows the specific distribution:
+        - 5 Direct questions (2 easy, 2 medium, 1 hard)
+        - 10 Concept questions (4 easy, 4 medium, 2 hard)
         """
         try:
+            logger.info(f"📝 Generating NEW question set for {subject} Ch.{chapter} pages {page_range}")
+            
+            # Get content from the page range using RAG
+            start_page, end_page = map(int, page_range.split('-'))
             context = rag_service.retrieve_chapter_context(
                 class_level=class_level,
                 subject=subject,
-                chapter=chapter
+                chapter=chapter,
+                max_chunks=20  # Get extensive context
             )
             
-            if not context:
-                return {"success": False, "error": "No context found for this chapter. Please upload textbook content first."}
+            # Generate Direct Questions (from textbook)
+            direct_questions = await self._generate_direct_questions(
+                context, class_level, page_range
+            )
+            
+            # Generate Concept Questions (application-based)
+            concept_questions = await self._generate_concept_questions(
+                context, class_level, page_range
+            )
+            
+            # Ensure page_range is set on each question
+            for q in direct_questions:
+                q.page_range = page_range
+            for q in concept_questions:
+                q.page_range = page_range
 
-            generated_questions = gemini_service.generate_varied_questions(
-                context=context,
-                config=config,
+            # Create QuestionSet
+            question_set = QuestionSet(
                 class_level=class_level,
                 subject=subject,
-                chapter=chapter
+                chapter=chapter,
+                lesson_name=lesson_name,
+                page_range=page_range,
+                direct_questions=direct_questions,
+                concept_questions=concept_questions,
+                generated_by=student_id,
+                generated_at=datetime.utcnow(),
+                times_used=1
             )
             
-            saved_ids = []
-            now = datetime.utcnow()
-            expires_at = now + timedelta(days=7)
+            # Save to MongoDB
+            await self._save_question_set(question_set)
             
-            for q in generated_questions:
-                q_type = q.get("type", "mcq").lower()
-                # For subjective question types, never store an AI-generated answer.
-                # Only MCQ, fillup and true_false need a correct_answer to function.
-                if q_type in ("short_answer", "long_answer"):
-                    correct_answer = ""
-                else:
-                    correct_answer = q.get("correct_answer") or ""
+            logger.info(f"✅ Generated and saved question set with 15 questions")
+            return question_set
+            
+        except Exception as e:
+            logger.error(f"❌ Question generation error: {e}")
+            raise
+    
+    async def _generate_direct_questions(
+        self,
+        context: str,
+        class_level: int,
+        page_range: str
+    ) -> List[Question]:
+        """Generate 5 direct questions from textbook (2 easy, 2 medium, 1 hard).
 
-                q_doc = {
-                    "text": q.get("text") or q.get("question"),
-                    "subject": subject,
-                    "class_level": class_level,
-                    "chapter": chapter,
-                    "type": q_type,
-                    "difficulty": q.get("difficulty", "medium").lower(),
-                    "marks": q.get("marks", 1),
-                    "options": q.get("options", []),
-                    "correct_answer": correct_answer,
-                    "created_by": "AI",
-                    "created_role": "system",
-                    "triggered_by": user_id,
-                    "triggered_by_role": user_role,
-                    "teacher_id": user_id if user_role == "teacher" else None,
-                    "created_at": now.isoformat(),
-                    "is_ai_generated": True,
-                    "status": "pending",
-                    "expires_at": expires_at
-                }
+        Also request 3-6 expected KEYWORDS for each question to guide students and evaluation.
+        """
+        
+        prompt = f"""You are creating DIRECT TEXTBOOK questions for Class {class_level} students.
+
+**TEXTBOOK CONTENT (Pages {page_range}):**
+{context}
+
+**TASK:** Generate 5 DIRECT questions that ask EXACTLY what is written in the textbook.
+These questions should have clear, specific answers from the text.
+
+**DISTRIBUTION:**
+1. Easy Question 1: Simple factual recall (What is X? Who is Y?)
+2. Easy Question 2: Another simple factual question
+3. Medium Question 1: Definition or explanation (Explain X. Describe Y.)
+4. Medium Question 2: Compare or list (List the types of X. What are the features of Y?)
+5. Hard Question 1: Detailed explanation requiring multiple facts from the text
+
+**RULES:**
+- Each question must be answerable from the provided textbook content
+- Questions should be direct and specific
+- Avoid questions requiring outside knowledge
+- Use age-appropriate language for Class {class_level}
+
+**FORMAT (STRICT):**
+Return EXACTLY 5 lines, each on a new line with label and keywords:
+[EASY 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)
+[EASY 2] Question text (KEYWORDS: keyword1, keyword2, keyword3)
+[MEDIUM 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)
+[MEDIUM 2] Question text (KEYWORDS: keyword1, keyword2, keyword3)
+[HARD 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)
+"""
+
+        response = gemini_service.generate_response(prompt)
+        return self._parse_questions(response, "direct")
+    
+    async def _generate_concept_questions(
+        self,
+        context: str,
+        class_level: int,
+        page_range: str
+    ) -> List[Question]:
+        """Generate 10 concept/application questions (4 easy, 4 medium, 2 hard).
+
+        Also request 3-6 expected KEYWORDS for each question to guide students and evaluation.
+        """
+
+        prompt = (
+            f"You are creating CONCEPT & APPLICATION questions for Class {class_level} students.\n\n"
+            f"TEXTBOOK CONTENT (Pages {page_range}):\n{context}\n\n"
+            "TASK: Generate 10 CONCEPT-BASED questions that test understanding and application. "
+            "These questions require students to think, connect ideas, and apply concepts.\n\n"
+            "DISTRIBUTION:\n1-4. Easy Concept Questions (4): Why questions, cause-effect, simple connections\n"
+            "5-8. Medium Concept Questions (4): How questions, application, real-world examples\n"
+            "9-10. Hard Concept Questions (2): Analysis, evaluation, deep understanding\n\n"
+            "RULES:\n- Questions must be based on textbook concepts but require thinking\n"
+            "- Test understanding, not just memorization\n- Encourage explanation and reasoning\n"
+            f"- Appropriate for Class {class_level} cognitive level\n\n"
+            "FORMAT (STRICT): Return EXACTLY 10 lines, each on a new line with label and keywords:\n"
+            "[EASY 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[EASY 2] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[EASY 3] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[EASY 4] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[MEDIUM 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[MEDIUM 2] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[MEDIUM 3] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[MEDIUM 4] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[HARD 1] Question text (KEYWORDS: keyword1, keyword2, keyword3)\n"
+            "[HARD 2] Question text (KEYWORDS: keyword1, keyword2, keyword3)"
+        )
+
+        # Call Gemini to generate concept questions
+        response = gemini_service.generate_response(prompt)
+        return self._parse_questions(response, "concept")
+    
+    def _parse_questions(self, response: str, question_type: str) -> List[Question]:
+        """Parse Gemini response into Question objects."""
+        questions = []
+        
+        for line in response.split('\n'):
+            line = line.strip()
+            if not line or not line.startswith('['):
+                continue
+            
+            try:
+                # Extract difficulty and question
+                if '[EASY' in line:
+                    difficulty = "easy"
+                elif '[MEDIUM' in line:
+                    difficulty = "medium"
+                elif '[HARD' in line:
+                    difficulty = "hard"
+                else:
+                    continue
                 
-                if not q_doc["text"]: continue
+                # Extract question text and optional keywords in format (KEYWORDS: a, b, c)
+                content = line.split(']', 1)[1].strip()
+                question_text = content
+                keywords: List[str] = []
+                upper = content.upper()
+                if '(KEYWORDS:' in upper:
+                    idx = upper.rfind('(KEYWORDS:')
+                    q_part = content[:idx].strip()
+                    kw_part = content[idx:]
+                    if ')' in kw_part:
+                        raw = kw_part.split(':', 1)[1].split(')', 1)[0]
+                        keywords = [k.strip() for k in raw.split(',') if k.strip()]
+                    question_text = q_part.rstrip('-: ').strip()
                 
-                res = self.collection.insert_one(q_doc)
-                saved_ids.append(str(res.inserted_id))
-                
-            return {
-                "success": True, 
-                "count": len(saved_ids), 
-                "ids": saved_ids,
-                "message": f"Successfully generated {len(saved_ids)} questions. They are now pending approval."
+                if question_text and len(question_text) > 10:
+                    questions.append(Question(
+                        question_text=question_text,
+                        question_type=question_type,
+                        difficulty=difficulty,
+                        page_range="",  # Will be set by caller
+                        expected_keywords=keywords,
+                        sample_answer=None
+                    ))
+            except Exception as e:
+                logger.warning(f"⚠️ Could not parse question line: {line} - {e}")
+                continue
+        
+        return questions
+    
+    async def _save_question_set(self, question_set: QuestionSet):
+        """Save question set to MongoDB."""
+        try:
+            collection = self.get_collection(self.question_sets_collection)
+            
+            # Convert to dict and save
+            data = question_set.dict()
+            result = await collection.insert_one(data)
+            
+            logger.info(f"✅ Saved question set with ID: {result.inserted_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error saving question set: {e}")
+            raise
+    
+    async def save_assessment_attempt(
+        self,
+        student_id: str,
+        question_set_id: str,
+        answers: List[dict],
+        evaluation: dict
+    ):
+        """Save student's assessment attempt."""
+        try:
+            collection = self.get_collection(self.attempts_collection)
+            
+            attempt = {
+                "student_id": student_id,
+                "question_set_id": question_set_id,
+                "answers": answers,
+                "total_score": evaluation.get("score", 0),
+                "feedback": evaluation.get("feedback", ""),
+                "strengths": evaluation.get("strengths", []),
+                "improvements": evaluation.get("improvements", []),
+                "topics_to_study": evaluation.get("topics_to_study", []),
+                "completed_at": datetime.utcnow()
             }
             
+            result = await collection.insert_one(attempt)
+            logger.info(f"✅ Saved assessment attempt with ID: {result.inserted_id}")
+            
+            return str(result.inserted_id)
+            
         except Exception as e:
-            logger.error(f"Generate questions error: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"❌ Error saving assessment attempt: {e}")
+            raise
 
-    async def cleanup_expired_pending_questions(self):
-        """
-        Delete pending questions that have expired (older than 7 days).
-        Returns count of deleted questions.
-        """
-        try:
-            now = datetime.utcnow()
-            
-            result = self.collection.delete_many({
-                "status": "pending",
-                "expires_at": {"$lt": now}
-            })
-            
-            deleted_count = result.deleted_count
-            if deleted_count > 0:
-                logger.info(f" Cleaned up {deleted_count} expired pending questions")
-            
-            return deleted_count
-        except Exception as e:
-            logger.error(f"Error cleaning up expired questions: {e}")
-            return 0
 
+# Global instance
 question_bank_service = QuestionBankService()

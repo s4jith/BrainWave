@@ -15,6 +15,7 @@ router = APIRouter(
     tags=["Notes"]
 )
 
+
 @router.post("/", response_model=Note)
 async def create_note(request: NoteCreateRequest):
     """
@@ -34,16 +35,16 @@ async def create_note(request: NoteCreateRequest):
         return note
     
     except Exception as e:
-        logger.error(f" Create note error: {e}")
+        logger.error(f"❌ Create note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/{student_id}", response_model=NotesListResponse)
 async def get_notes(
     student_id: str,
-    class_level: Optional[int] = Query(None, ge=1, le=12),
+    class_level: Optional[int] = Query(None, ge=5, le=10),
     subject: Optional[str] = Query(None),
-    chapter: Optional[int] = Query(None, ge=1),
-    page_number: Optional[int] = Query(None, ge=1)
+    chapter: Optional[int] = Query(None, ge=1)
 ):
     """
     Retrieve notes for a student with optional filters.
@@ -60,8 +61,7 @@ async def get_notes(
             student_id=student_id,
             class_level=class_level,
             subject=subject,
-            chapter=chapter,
-            page_number=page_number
+            chapter=chapter
         )
         
         return NotesListResponse(
@@ -70,8 +70,9 @@ async def get_notes(
         )
     
     except Exception as e:
-        logger.error(f" Get notes error: {e}")
+        logger.error(f"❌ Get notes error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.patch("/{note_id}", response_model=Note)
 async def update_note(
@@ -101,8 +102,9 @@ async def update_note(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f" Update note error: {e}")
+        logger.error(f"❌ Update note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/{note_id}", response_model=SuccessResponse)
 async def delete_note(note_id: str):
@@ -124,5 +126,5 @@ async def delete_note(note_id: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f" Delete note error: {e}")
+        logger.error(f"❌ Delete note error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

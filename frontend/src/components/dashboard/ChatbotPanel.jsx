@@ -2,148 +2,104 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Send, Plus, Clock, Search, Share2, LayoutGrid, ArrowUp,
   ChevronLeft, Settings, Sparkles, Zap, Brain,
-  FileText, TrendingUp, HelpCircle, Camera, Image as ImageIcon, XCircle,
-  Sun, Moon, Monitor
+  FileText, TrendingUp, HelpCircle
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import useUserStore from "../../stores/userStore";
-import useThemeStore from "../../stores/themeStore";
-import { chatService, userStatsService, topQuestionsService } from "../../services/api";
+import { chatService, userStatsService } from "../../services/api";
 import { exportChatAsDoc } from "../../utils/chatExport";
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+
+/**
+ * ChatbotPanel - Clean UI matching reference design
+ */
 
 export default function ChatbotPanel({ isOpen, onClose }) {
   const { user } = useUserStore();
-  const { theme, setTheme } = useThemeStore();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatMode, setChatMode] = useState("quick");
   const messagesEndRef = useRef(null);
-  const imageInputRef = useRef(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [streamingMessageId, setStreamingMessageId] = useState(null);
-  const abortStreamRef = useRef(null);
-  const textareaRef = useRef(null);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const themeMenuRef = useRef(null);
 
-  useEffect(() => {
-    return () => {
-      if (abortStreamRef.current) {
-        abortStreamRef.current();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
-        setShowThemeMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const themeOptions = [
-    { value: 'light', label: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark', icon: Moon },
-    { value: 'system', label: 'System', icon: Monitor },
-  ];
-
-  const getThemeIcon = () => {
-    switch (theme) {
-      case 'dark': return Moon;
-      case 'light': return Sun;
-      default: return Sun;
-    }
-  };
-
-  const ThemeIcon = getThemeIcon();
-
-  const [subjects, setSubjects] = useState([]);
-  const [subjectsLoading, setSubjectsLoading] = useState(false);
-  const [activeSubject, setActiveSubject] = useState("");
-
+  /**
+   * TOP QUESTIONS STATE
+   * 
+   * This state holds the list of popular/trending questions fetched from the database.
+   * The questions are shown in the sidebar to help users quickly start conversations.
+   * 
+   * Data structure from API should be:
+   * {
+   *   id: number | string,    // Unique identifier
+   *   text: string,           // The question text to display
+   *   category: string,       // Subject category (Math, Science, etc.)
+   *   count?: number,         // Optional: Number of times asked (for sorting)
+   *   createdAt?: string      // Optional: Timestamp
+   * }
+   */
   const [topQuestions, setTopQuestions] = useState([]);
   const [topQuestionsLoading, setTopQuestionsLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      if (!isOpen) return;
+  // Fallback questions shown while loading or if API fails
+  const fallbackQuestions = [
+    { id: 1, text: "Explain photosynthesis", category: "Science" },
+    { id: 2, text: "What are prime numbers?", category: "Math" },
+    { id: 3, text: "Causes of World War 1", category: "History" },
+    { id: 4, text: "Parts of a plant cell", category: "Biology" },
+    { id: 5, text: "Newton's laws of motion", category: "Physics" },
+  ];
 
-      setSubjectsLoading(true);
-      try {
-        const response = await topQuestionsService.getAvailableSubjects(user.classLevel || 7);
-        console.log("Subjects API response for class", user.classLevel, ":", response);
-
-        if (response.success && response.subjects && response.subjects.length > 0) {
-          setSubjects(response.subjects);
-          
-          const preferredSubject = response.subjects.find(
-            s => s.value.toLowerCase() === (user.preferredSubject || "").toLowerCase()
-          );
-          setActiveSubject(preferredSubject ? preferredSubject.value : response.subjects[0].value);
-        } else {
-          
-          console.log("No subjects found for class", user.classLevel);
-          setSubjects([]);
-          setActiveSubject("");
-        }
-      } catch (error) {
-        console.error("Failed to fetch subjects:", error);
-        
-        setSubjects([]);
-        setActiveSubject("");
-      } finally {
-        setSubjectsLoading(false);
-      }
-    };
-
-    fetchSubjects();
-  }, [isOpen, user.classLevel]);
-
+  /**
+   * FETCH TOP QUESTIONS FROM DATABASE
+   * 
+   * TODO: Backend Integration
+   * -------------------------
+   * 1. Create API endpoint: GET /api/questions/top
+   *    - Query params: limit (default 5), classLevel, subject (optional filters)
+   *    - Response: { questions: [...], total: number }
+   * 
+   * 2. Backend should track question popularity by:
+   *    - Counting how many times each question is asked
+   *    - Using a "top_questions" table or aggregating from chat history
+   *    - Sorting by count DESC, limiting to top 5-10
+   * 
+   * 3. Example API call:
+   *    const response = await fetch(`/api/questions/top?limit=5&classLevel=${user.classLevel}`);
+   *    const data = await response.json();
+   *    setTopQuestions(data.questions);
+   * 
+   * 4. Add to api.js service:
+   *    export const questionService = {
+   *      getTopQuestions: async (limit = 5, classLevel) => {
+   *        const response = await apiClient.get('/questions/top', { params: { limit, classLevel } });
+   *        return response.data;
+   *      }
+   *    };
+   */
   useEffect(() => {
     const fetchTopQuestions = async () => {
-      if (!isOpen || !activeSubject) return;
-
       setTopQuestionsLoading(true);
       try {
-        const mode = chatMode === "deepdive" ? "deep" : "quick";
-        const response = await topQuestionsService.getTopQuestions(
-          activeSubject,
-          user.classLevel || 7,
-          mode,
-          5
-        );
+        // TODO: Replace with actual API call
+        // const response = await questionService.getTopQuestions(5, user.classLevel);
+        // setTopQuestions(response.questions);
 
-        if (response.success && response.questions) {
-          
-          const formattedQuestions = response.questions.map((q, index) => ({
-            id: index + 1,
-            text: q.question,
-            category: q.subject ? q.subject.charAt(0).toUpperCase() + q.subject.slice(1) : activeSubject,
-            askCount: q.ask_count || 0,
-            chapter: q.chapter
-          }));
-          setTopQuestions(formattedQuestions);
-        } else {
-          setTopQuestions([]);
-        }
+        // For now, using fallback questions
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setTopQuestions(fallbackQuestions);
       } catch (error) {
         console.error("Failed to fetch top questions:", error);
-        setTopQuestions([]);
+        // Use fallback questions on error
+        setTopQuestions(fallbackQuestions);
       } finally {
         setTopQuestionsLoading(false);
       }
     };
 
-    fetchTopQuestions();
-  }, [isOpen, activeSubject, chatMode, user.classLevel]);
+    if (isOpen) {
+      fetchTopQuestions();
+    }
+  }, [isOpen, user.classLevel]);
 
   const starterCards = [
     { id: 1, icon: FileText, title: "Explain a concept", description: "Get a clear explanation of any topic from your textbook", action: "Get Started" },
@@ -182,184 +138,36 @@ export default function ChatbotPanel({ isOpen, onClose }) {
   };
 
   const handleSend = async () => {
-    if ((!message.trim() && !selectedImage) || isLoading) return;
+    if (!message.trim() || isLoading) return;
 
-    const userMessage = {
-      role: 'user',
-      content: message,
-      timestamp: new Date(),
-      imagePreview: selectedImage ? URL.createObjectURL(selectedImage) : null
-    };
-
+    const userMessage = { role: 'user', content: message, timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
-    const currentMessage = message;
-    const currentImage = selectedImage;
-
     setMessage("");
-    setSelectedImage(null);
     setIsLoading(true);
-    
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
-      if (currentImage) {
-        
-        const result = await chatService.imageChat(
-          currentImage,
-          user.classLevel || 6,
-          activeSubject,
-          1,
-          chatMode,
-          currentMessage
-        );
-
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          role: "assistant",
-          content: result.answer,
-          timestamp: new Date(),
-          mode: chatMode,
-          imageAnalysis: result.imageAnalysis,
-        }]);
-        setIsLoading(false);
-      } else {
-        
-        const messageId = Date.now();
-        setStreamingMessageId(messageId);
-
-        setMessages(prev => [...prev, {
-          id: messageId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-          mode: chatMode,
-          isStreaming: true
-        }]);
-        setIsLoading(false); 
-
-        let fullAnswer = "";
-
-        if (abortStreamRef.current) {
-          abortStreamRef.current();
-        }
-
-        const abort = chatService.studentChatStream(
-          currentMessage,
-          user.classLevel || 6,
-          activeSubject,
-          1,
-          chatMode,
-          
-          (text) => {
-            fullAnswer += text;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, content: fullAnswer }
-                : msg
-            ));
-          },
-          
-          (data) => {
-            setStreamingMessageId(null);
-            abortStreamRef.current = null;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, isStreaming: false }
-                : msg
-            ));
-
-            topQuestionsService.trackQuestion({
-              question: currentMessage,
-              answer: fullAnswer,
-              subject: activeSubject,
-              class_level: user.classLevel || 7,
-              mode: chatMode === "deepdive" ? "deep" : "quick",
-              user_id: user.id || "guest",
-              session_id: `${user.id || "guest"}_${Date.now()}`
-            }).then(() => {
-              
-              const mode = chatMode === "deepdive" ? "deep" : "quick";
-              return topQuestionsService.getTopQuestions(activeSubject, user.classLevel || 7, mode, 5);
-            }).then(response => {
-              if (response?.success && response.questions) {
-                const formattedQuestions = response.questions.map((q, index) => ({
-                  id: index + 1,
-                  text: q.question,
-                  category: q.subject ? q.subject.charAt(0).toUpperCase() + q.subject.slice(1) : activeSubject,
-                  askCount: q.ask_count || 0,
-                  chapter: q.chapter
-                }));
-                setTopQuestions(formattedQuestions);
-              }
-            }).catch(err => console.log("Question tracking/refresh failed:", err));
-          },
-          
-          (error) => {
-            console.error("Stream error:", error);
-            setStreamingMessageId(null);
-            abortStreamRef.current = null;
-            setMessages(prev => prev.map(msg =>
-              msg.id === messageId
-                ? { ...msg, content: fullAnswer || "Sorry, I couldn't process that.", isStreaming: false, isError: !fullAnswer }
-                : msg
-            ));
-          }
-        );
-
-        abortStreamRef.current = abort;
-      }
-
+      const result = await chatService.studentChat(
+        userMessage.content,
+        user.classLevel || 6,
+        user.preferredSubject || "Mathematics",
+        1, chatMode
+      );
+      setMessages(prev => [...prev, {
+        role: "assistant", content: result.answer, timestamp: new Date(), mode: chatMode
+      }]);
       userStatsService.logActivity(user.id || "guest", 0.1);
     } catch (error) {
-      console.error("Chat error:", error);
       setMessages(prev => [...prev, {
         role: "assistant", content: "Sorry, I couldn't process that.", timestamp: new Date(), isError: true
       }]);
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-    if (!validTypes.includes(file.type)) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Please upload a valid image (JPG, PNG, or WebP).</span>),
-        timestamp: new Date(),
-        isError: true
-      }]);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: (<span className="flex items-center gap-2"><XCircle className="w-4 h-4 inline text-red-500" /> Image is too large. Maximum size is 5MB.</span>),
-        timestamp: new Date(),
-        isError: true
-      }]);
-      return;
-    }
-
-    setSelectedImage(file);
-    event.target.value = '';
-  };
-
-  const removeSelectedImage = () => {
-    setSelectedImage(null);
-  };
-
   const renderMarkdown = (content) => (
     <div className="prose prose-sm max-w-none [&_strong]:font-bold [&_p]:my-2 [&_ul]:list-disc [&_ul]:ml-5 [&_ol]:list-decimal [&_ol]:ml-5">
-      <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-      >
-        {content}
-      </ReactMarkdown>
+      <ReactMarkdown>{content}</ReactMarkdown>
     </div>
   );
 
@@ -369,56 +177,31 @@ export default function ChatbotPanel({ isOpen, onClose }) {
     <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose}>
       <div className="absolute inset-0 flex" onClick={e => e.stopPropagation()}>
 
-        {}
-        <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-          {}
-          <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
-            <img src={getAvatarUrl()} alt="" className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700" />
+        {/* Left Sidebar */}
+        <div className="w-72 bg-white border-r border-gray-200 flex flex-col">
+          {/* Profile */}
+          <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+            <img src={getAvatarUrl()} alt="" className="w-10 h-10 rounded-full bg-gray-200" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{user.name || 'Student'}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Class {user.classLevel}</p>
+              <p className="font-semibold text-gray-900 text-sm truncate">{user.name || 'Student'}</p>
+              <p className="text-xs text-gray-500">Class {user.classLevel}</p>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-              <ChevronLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
+              <ChevronLeft className="w-4 h-4 text-gray-500" />
             </button>
           </div>
 
-          {}
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Subject</p>
-            {subjectsLoading ? (
-              <div className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 animate-pulse">
-                <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-              </div>
-            ) : (
-              <select
-                value={activeSubject}
-                onChange={(e) => setActiveSubject(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-600"
-                disabled={subjects.length === 0}
-              >
-                {subjects.length === 0 ? (
-                  <option value="">No subjects available</option>
-                ) : (
-                  subjects.map(sub => (
-                    <option key={sub.value} value={sub.value}>{sub.name}</option>
-                  ))
-                )}
-              </select>
-            )}
-          </div>
-
           {/* Mode Toggle */}
-          <div className="p-3 border-b border-gray-100 dark:border-gray-800">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">Mode</p>
+          <div className="p-3 border-b border-gray-100">
+            <p className="text-xs font-medium text-gray-500 mb-2 px-1">Mode</p>
             <div className="flex gap-2">
               <button onClick={() => handleModeChange("quick")}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "quick" ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "quick" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}>
                 <Zap className="w-3.5 h-3.5" /> Quick
               </button>
               <button onClick={() => handleModeChange("deepdive")}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "deepdive" ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${chatMode === "deepdive" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}>
                 <Brain className="w-3.5 h-3.5" /> Deep
               </button>
@@ -427,95 +210,60 @@ export default function ChatbotPanel({ isOpen, onClose }) {
 
           {/* Top Questions */}
           <div className="flex-1 overflow-y-auto p-3">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3 px-1">
-              Top Questions {activeSubject && `- ${activeSubject.charAt(0).toUpperCase() + activeSubject.slice(1)}`}
-            </p>
+            <p className="text-xs font-medium text-gray-500 mb-3 px-1">Top Questions</p>
             <div className="space-y-2">
               {topQuestionsLoading ? (
+                // Loading skeleton
                 [...Array(5)].map((_, i) => (
-                  <div key={i} className="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 animate-pulse">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+                  <div key={i} className="w-full p-3 rounded-lg bg-gray-50 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/4"></div>
                   </div>
                 ))
               ) : topQuestions.length > 0 ? (
                 topQuestions.map(q => (
                   <button key={q.id} onClick={() => setMessage(q.text)}
-                    className="w-full text-left p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    <p className="text-sm text-gray-800 dark:text-gray-200 font-medium line-clamp-2">{q.text}</p>
-                    <div className="flex justify-between items-center mt-1">
-                      <p className="text-xs text-gray-400">{q.category}</p>
-                      {q.askCount > 0 && (
-                        <p className="text-xs text-gray-400">Asked {q.askCount}x</p>
-                      )}
-                    </div>
+                    className="w-full text-left p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <p className="text-sm text-gray-800 font-medium line-clamp-2">{q.text}</p>
+                    <p className="text-xs text-gray-400 mt-1">{q.category}</p>
                   </button>
                 ))
               ) : (
-                <div className="text-center py-6">
-                  <p className="text-sm text-gray-400 mb-2">No questions asked yet</p>
-                  <p className="text-xs text-gray-300 dark:text-gray-500">Be the first to ask about {activeSubject || 'this subject'}!</p>
-                </div>
+                <p className="text-sm text-gray-400 text-center py-4">No questions available</p>
               )}
             </div>
           </div>
 
-          {/* Theme Toggle */}
-          <div className="p-3 border-t border-gray-100 dark:border-gray-800">
-            <div className="relative" ref={themeMenuRef}>
-              <button
-                onClick={() => setShowThemeMenu(!showThemeMenu)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
-              >
-                <ThemeIcon className="w-4 h-4" />
-                <span>Theme</span>
-              </button>
-              {showThemeMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                  {themeOptions.map((option) => {
-                    const OptionIcon = option.icon;
-                    return (
-                      <button
-                        key={option.value}
-                        onClick={() => { setTheme(option.value); setShowThemeMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          theme === option.value
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                        }`}
-                      >
-                        <OptionIcon className="w-4 h-4" />
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          {/* Settings */}
+          <div className="p-3 border-t border-gray-100">
+            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">
+              <Settings className="w-4 h-4" /> Settings
+            </button>
           </div>
-
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-[#fafafa] dark:bg-gray-950 relative overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[#fafafa] relative overflow-hidden">
 
           {/* Animated Grid Background */}
-          <div className="absolute inset-0 opacity-[0.15] dark:opacity-[0.08]" style={{
-            backgroundImage: 'linear-gradient(to right, #6b7280 1px, transparent 1px), linear-gradient(to bottom, #6b7280 1px, transparent 1px)',
+          <div className="absolute inset-0 opacity-[0.03]" style={{
+            backgroundImage: 'linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)',
             backgroundSize: '50px 50px',
             animation: 'gridScroll 8s linear infinite'
           }} />
-          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/40 dark:bg-orange-500/10" />
-          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-orange-300/30 dark:bg-orange-500/10" />
+          <div className="absolute right-0 top-0 w-1/3 h-1/3 rounded-full blur-[100px] bg-orange-200/30" />
+          <div className="absolute left-0 bottom-0 w-1/4 h-1/4 rounded-full blur-[80px] bg-blue-200/20" />
 
           {/* Header */}
-          <div className="relative z-10 h-14 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex items-center justify-between px-6">
+          <div className="relative z-10 h-14 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMessages([])} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                <Plus className="w-4 h-4 text-gray-600 dark:text-gray-400" /><span className="text-sm font-medium text-gray-700 dark:text-gray-300">New Chat</span>
+              <button className="p-2 hover:bg-gray-100 rounded-lg"><Search className="w-5 h-5 text-gray-500" /></button>
+              <button onClick={() => setMessages([])} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+                <Plus className="w-4 h-4 text-gray-600" /><span className="text-sm font-medium text-gray-700">New Chat</span>
               </button>
             </div>
             <div className="flex items-center gap-2">
+              <button className="p-2 hover:bg-gray-100 rounded-lg"><LayoutGrid className="w-5 h-5 text-gray-500" /></button>
               <button
                 onClick={() => {
                   if (messages.length > 0) {
@@ -527,38 +275,39 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                     });
                   }
                 }}
-                className={`flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${messages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg ${messages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 disabled={messages.length === 0}
               >
-                <Share2 className="w-4 h-4 text-gray-500 dark:text-gray-400" /><span className="text-sm text-gray-600 dark:text-gray-400">Share</span>
+                <Share2 className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-600">Share</span>
               </button>
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ml-2"><X className="w-5 h-5 text-gray-500 dark:text-gray-400" /></button>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg ml-2"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
           </div>
 
           {/* Content Area - Scrollable */}
-          <div className="relative z-10 flex-1 overflow-y-scroll">
+          <div className="relative z-10 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
+              /* Welcome State */
               <div className="h-full flex flex-col items-center justify-center px-6 pb-32">
-                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center mb-6 shadow-sm">
-                  <Sparkles className="w-7 h-7 text-gray-700 dark:text-gray-300" />
+                <div className="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-6 shadow-sm">
+                  <Sparkles className="w-7 h-7 text-gray-700" />
                 </div>
-                <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {getGreeting()}, <span className="text-gray-500 dark:text-gray-400">{user.name || 'Student'}</span>
+                <h1 className="text-3xl font-semibold text-gray-900 mb-2">
+                  {getGreeting()}, <span className="text-gray-500">{user.name || 'Student'}</span>
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 mb-12">Hey there! What can I do for your studies today?</p>
+                <p className="text-gray-500 mb-12">Hey there! What can I do for your studies today?</p>
                 <div className="grid grid-cols-3 gap-4 max-w-4xl w-full">
                   {starterCards.map(card => {
                     const Icon = card.icon;
                     return (
-                      <div key={card.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg transition-all">
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
-                          <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      <div key={card.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg transition-all">
+                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
+                          <Icon className="w-5 h-5 text-gray-600" />
                         </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{card.title}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">{card.description}</p>
+                        <h3 className="font-semibold text-gray-900 mb-2">{card.title}</h3>
+                        <p className="text-sm text-gray-500 mb-4 leading-relaxed">{card.description}</p>
                         <button onClick={() => setMessage(card.title)}
-                          className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                          className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
                           {card.action}
                         </button>
                       </div>
@@ -567,43 +316,37 @@ export default function ChatbotPanel({ isOpen, onClose }) {
                 </div>
               </div>
             ) : (
+              /* Messages */
               <div className="max-w-3xl mx-auto p-6 pb-32 space-y-4">
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-gray-200 flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-4 h-4 text-white dark:text-gray-900" />
+                      <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-4 h-4 text-white" />
                       </div>
                     )}
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900'
-                      : msg.isError ? 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
-                        : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700'
+                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-gray-900 text-white'
+                      : msg.isError ? 'bg-red-50 text-red-800 border border-red-200'
+                        : 'bg-white text-gray-800 border border-gray-200'
                       }`}>
                       <div className="text-sm leading-relaxed">
-                        {msg.role === 'assistant' ? (
-                          <div className="relative">
-                            {renderMarkdown(msg.content)}
-                            {msg.isStreaming && (
-                              <span className="inline-block w-0.5 h-4 bg-gray-900 dark:bg-gray-200 ml-0.5 animate-pulse" />
-                            )}
-                          </div>
-                        ) : msg.content}
+                        {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
                       </div>
-                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-gray-400' : 'text-gray-500'}`}>
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <img src={getAvatarUrl()} alt="" className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                      <img src={getAvatarUrl()} alt="" className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0" />
                     )}
                   </div>
                 ))}
                 {isLoading && (
                   <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-gray-200 flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-white dark:text-gray-900" />
+                    <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
                     </div>
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3">
+                    <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
                       <div className="flex gap-1">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -618,73 +361,21 @@ export default function ChatbotPanel({ isOpen, onClose }) {
           </div>
 
           {/* Input - Fixed at Bottom */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-[#fafafa] dark:from-gray-950 via-[#fafafa] dark:via-gray-950 to-transparent pt-12">
+          <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-[#fafafa] via-[#fafafa] to-transparent pt-12">
             <div className="max-w-3xl mx-auto">
-              {/* Image Preview */}
-              {selectedImage && (
-                <div className="mb-2 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 w-fit shadow-sm">
-                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
-                    <img
-                      src={URL.createObjectURL(selectedImage)}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]">
-                      {selectedImage.name}
-                    </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                      {(selectedImage.size / 1024).toFixed(1)} KB
-                    </span>
-                  </div>
-                  <button
-                    onClick={removeSelectedImage}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-end gap-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 px-4 py-2 shadow-sm">
+              <div className="flex items-center gap-3 bg-white rounded-full border border-gray-200 px-4 py-2 shadow-sm">
+                <button className="p-2 rounded-full hover:bg-gray-100 text-gray-400"><Plus className="w-5 h-5" /></button>
+                <button className="p-2 rounded-full hover:bg-gray-100 text-gray-400"><Clock className="w-5 h-5" /></button>
                 <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={handleImageUpload}
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isLoading || uploadingImage}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 disabled:opacity-50 mb-0.5"
-                  title="Upload image of textbook/question"
-                >
-                  <Camera className="w-5 h-5" />
-                </button>
-                <textarea
-                  ref={textareaRef}
                   value={message}
-                  onChange={e => {
-                    setMessage(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder={selectedImage ? "Add a question about this image..." : "Write a message here..."}
-                  className="flex-1 bg-transparent border-none outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 text-sm resize-none overflow-y-auto"
-                  style={{ minHeight: '36px', maxHeight: '120px' }}
-                  rows={1}
+                  onChange={e => setMessage(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                  placeholder="Write a message here..."
+                  className="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-400 text-sm"
                   disabled={isLoading}
                 />
-                <button onClick={handleSend} disabled={(!message.trim() && !selectedImage) || isLoading}
-                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600 mb-0.5 flex-shrink-0">
+                <button onClick={handleSend} disabled={!message.trim() || isLoading}
+                  className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 disabled:opacity-50 hover:bg-gray-200">
                   <ArrowUp className="w-5 h-5" />
                 </button>
               </div>

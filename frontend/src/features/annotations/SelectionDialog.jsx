@@ -3,6 +3,12 @@ import { Sparkles, StickyNote, Highlighter } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 
+/**
+ * Selection Dialog Component
+ * 
+ * Appears after text selection with AI and Note options.
+ * Features glassmorphism styling and smooth animations.
+ */
 export default function SelectionDialog({ position, onAI, onNote }) {
   if (!position) return null;
 
@@ -15,9 +21,9 @@ export default function SelectionDialog({ position, onAI, onNote }) {
         transform: "translate(-50%, -100%) translateY(-12px)",
       }}
     >
-      {}
+      {/* Main Dialog Container with Glassmorphism */}
       <div className="selection-dialog rounded-xl p-1.5 flex items-center gap-1">
-        {}
+        {/* Hint Text */}
         <div className="px-3 py-1.5 flex items-center gap-2 text-muted-foreground">
           <Highlighter className="h-3.5 w-3.5" />
           <span className="text-xs font-medium">Dive deeper</span>
@@ -25,7 +31,7 @@ export default function SelectionDialog({ position, onAI, onNote }) {
 
         <div className="w-px h-6 bg-border/50" />
 
-        {}
+        {/* AI Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -44,7 +50,7 @@ export default function SelectionDialog({ position, onAI, onNote }) {
 
         <div className="w-px h-6 bg-border/50" />
 
-        {}
+        {/* Note Button */}
         <Button
           variant="ghost"
           size="sm"

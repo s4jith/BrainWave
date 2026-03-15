@@ -225,7 +225,7 @@ class NCERTMathProcessor:
         logger.info("   [5/5] Uploading to Pinecone...")
         upload_result = self.uploader.upload_chunks(
             chunks=valid_chunks,
-            namespace="maths"
+            namespace="mathematics"
         )
         logger.info(f"      [+] Uploaded {upload_result['uploaded']}/{upload_result['total']}")
         
@@ -287,8 +287,8 @@ class NCERTMathProcessor:
         
         # Check Pinecone stats
         try:
-            namespace_stats = self.uploader.get_namespace_stats("maths")
-            logger.info(f"[STATS] Pinecone Maths Namespace:")
+            namespace_stats = self.uploader.get_namespace_stats("mathematics")
+            logger.info(f"[STATS] Pinecone Mathematics Namespace:")
             logger.info(f"   Total vectors: {namespace_stats.get('vector_count', 'N/A')}")
         except Exception as e:
             logger.warning(f"Could not get Pinecone stats: {e}")

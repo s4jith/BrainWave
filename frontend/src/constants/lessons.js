@@ -1,4 +1,16 @@
+/**
+ * Lessons Configuration
+ * 
+ * Contains chapter information for different subjects.
+ * Currently we have PDFs in /public folder for:
+ * - Mathematics (fegp1XX.pdf) - Has backend RAG support
+ * - Social Science (fees1XX.pdf) - PDFs only, no backend RAG yet
+ * 
+ * TODO: Move this to backend API
+ * Replace static data with dynamic API call: GET /api/lessons
+ */
 
+// Mathematics Chapters (Class 6) - HAS BACKEND RAG SUPPORT
 export const MATH_LESSONS = [
   {
     id: 1,
@@ -92,6 +104,7 @@ export const MATH_LESSONS = [
   },
 ];
 
+// Social Science Chapters (Class 6) - PDFs available, no backend RAG yet
 export const SOCIAL_SCIENCE_LESSONS = [
   {
     id: 1,
@@ -221,6 +234,7 @@ export const SOCIAL_SCIENCE_LESSONS = [
   },
 ];
 
+// Get lessons by subject
 export function getLessonsBySubject(subject) {
   switch (subject) {
     case "Mathematics":
@@ -228,12 +242,16 @@ export function getLessonsBySubject(subject) {
     case "Social Science":
       return SOCIAL_SCIENCE_LESSONS;
     default:
-      return []; 
+      return []; // Return empty array - no fallback to avoid showing wrong subject content
   }
 }
 
+// Export SAMPLE_LESSONS as MATH_LESSONS for backward compatibility
+// Since we have RAG support for Mathematics, use it as default
 export const SAMPLE_LESSONS = MATH_LESSONS;
 
+// Available subjects with RAG support
 export const SUBJECTS_WITH_RAG = ["Mathematics"];
 
+// All available subjects
 export const ALL_SUBJECTS = ["Mathematics", "Social Science"];

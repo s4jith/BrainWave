@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Sparkles, FileText, BookOpen, Download, Image } from "lucide-react";
+import React, { useState } from "react";
+import { Sparkles, FileText, BookOpen, Download } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -14,6 +14,11 @@ import useUserStore from "../../stores/userStore";
 import { chatService } from "../../services/api";
 import ReactMarkdown from "react-markdown";
 import { exportChatAsDoc } from "../../utils/chatExport";
+
+/**
+ * AI Panel Component - Backend Connected
+ * Uses chatService.processAnnotation() for RAG-based AI responses
+ */
 
 const AI_ACTIONS = [
   {
@@ -49,38 +54,8 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [error, setError] = useState(null);
 
+  // Use lesson's subject if available, otherwise use user's preferred subject
   const effectiveSubject = currentLesson?.subject || user.preferredSubject || "Mathematics";
-
-  const isScreenshotDoubt = selectedText?.imageData;
-  const preSelectedAction = selectedText?.action;
-
-  useEffect(() => {
-    if (open && preSelectedAction && !selectedAction && !isProcessing) {
-      const actionMap = {
-        define: "define",
-        stickflow: "stick_flow",
-        elaborate: "elaborate",
-        custom: null,
-      };
-
-      const mappedAction = actionMap[preSelectedAction];
-      if (mappedAction) {
-        const action = AI_ACTIONS.find(a => a.id === mappedAction);
-        if (action) {
-          handleActionSelect(action);
-        }
-      }
-    }
-  }, [open, preSelectedAction]);
-
-  useEffect(() => {
-    if (!open) {
-      setSelectedAction(null);
-      setResponse("");
-      setImageUrl(null);
-      setError(null);
-    }
-  }, [open]);
 
   const handleActionSelect = async (action) => {
     setSelectedAction(action.id);
@@ -89,36 +64,28 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     setImageUrl(null);
 
     try {
-      console.log("Calling backend API...", {
+      console.log("🚀 Calling backend API...", {
         chapter: currentLesson?.number || 1,
         text: selectedText?.text,
         action: action.id,
         subject: effectiveSubject,
-        classLevel: user.classLevel,
-        hasImageData: !!selectedText?.imageData,
+        classLevel: user.classLevel
       });
 
-      let queryText = selectedText?.text || "";
-
-      if (selectedText?.imageData) {
-        queryText = `[Screenshot from page ${selectedText.pageNumber || pageNumber}] Please ${action.id === 'define' ? 'define and explain' : action.id === 'stick_flow' ? 'create a step-by-step breakdown of' : 'elaborate on'} the content in this selected area from the textbook.`;
-      }
-
+      // Use unified annotation endpoint for all actions
       const result = await chatService.processAnnotation(
-        queryText,
+        selectedText?.text || "",
         action.id,
         user.classLevel,
         effectiveSubject,
-        currentLesson?.number || 1,
-        selectedText?.imageData, 
-        selectedText?.pageNumber || pageNumber 
+        currentLesson?.number || 1
       );
 
-      console.log("Backend response received:", result);
+      console.log("✅ Backend response received:", result);
       setResponse(result.answer);
       setIsProcessing(false);
     } catch (err) {
-      console.error(" AI API Error:", err);
+      console.error("❌ AI API Error:", err);
       setError(err.message || "Failed to get AI response");
       setIsProcessing(false);
     }
@@ -133,9 +100,6 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         pageNumber: pageNumber,
         position: selectedText.position,
         lessonId: currentLesson?.id,
-        classLevel: user.classLevel,
-        subject: effectiveSubject,
-        chapter: currentLesson?.number,
       });
 
       setSelectedAction(null);
@@ -151,6 +115,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     onClose();
   };
 
+  // Download AI response as document
   const handleDownload = () => {
     if (!response && !imageUrl) return;
 
@@ -183,45 +148,25 @@ Action: ${actionLabel}`,
       <SheetContent
         side="right"
         onClose={handleClose}
-        className="w-[500px] max-w-[90vw] flex flex-col"
+        className="w-[500px] max-w-[90vw]"
       >
-        <SheetHeader className="mb-6 flex-shrink-0">
+        <SheetHeader className="mb-6">
           <SheetTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             AI Assistant
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-6 flex-1 overflow-y-auto pr-2">
-          {}
+        <div className="space-y-6">
+          {/* Selected Text */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2">
-              {isScreenshotDoubt ? "Selected Area" : "Selected Text"}
+              Selected Text
             </p>
-
-            {/* Show screenshot preview if available */}
-            {isScreenshotDoubt && selectedText?.imageData && (
-              <div className="mb-3">
-                <img
-                  src={selectedText.imageData}
-                  alt="Selected area"
-                  className="max-h-32 rounded border object-contain"
-                />
-              </div>
-            )}
-
-            <p className="text-sm leading-relaxed">
-              {selectedText?.text || "No text selected"}
-            </p>
-
-            {selectedText?.pageNumber && (
-              <Badge variant="secondary" className="mt-2">
-                Page {selectedText.pageNumber}
-              </Badge>
-            )}
+            <p className="text-sm leading-relaxed">{selectedText?.text}</p>
           </div>
 
-          {}
+          {/* AI Actions */}
           {!selectedAction && (
             <div className="space-y-3">
               <p className="text-sm font-medium">What would you like to do?</p>
@@ -234,7 +179,6 @@ Action: ${actionLabel}`,
                       variant="outline"
                       className="h-auto justify-start p-4"
                       onClick={() => handleActionSelect(action)}
-                      disabled={isProcessing}
                     >
                       <Icon className={`h-5 w-5 mr-3 ${action.color}`} />
                       <div className="text-left">
@@ -250,7 +194,7 @@ Action: ${actionLabel}`,
             </div>
           )}
 
-          {}
+          {/* AI Response */}
           {selectedAction && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -264,7 +208,6 @@ Action: ${actionLabel}`,
                     setSelectedAction(null);
                     setResponse("");
                   }}
-                  disabled={isProcessing}
                 >
                   Change Action
                 </Button>
@@ -276,14 +219,7 @@ Action: ${actionLabel}`,
                     <div className="text-center space-y-2">
                       <Sparkles className="h-8 w-8 animate-pulse text-violet-600 mx-auto" />
                       <p className="text-sm text-muted-foreground">
-                        {isScreenshotDoubt
-                          ? "Analyzing your selection..."
-                          : selectedAction === 'stick_flow'
-                            ? 'Creating flow diagram...'
-                            : 'AI is thinking...'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Retrieving from your textbook...
+                        AI is {selectedAction === 'stick_flow' ? 'creating flow diagram' : 'thinking'}...
                       </p>
                     </div>
                   </div>
@@ -318,7 +254,7 @@ Action: ${actionLabel}`,
                     <div className="pr-4">
                       <div
                         className="max-w-none text-base leading-relaxed 
-     text-foreground
+     text-black
      [&_strong]:font-bold 
      [&_em]:italic 
      [&_li]:list-disc [&_li]:ml-4"

@@ -3,6 +3,17 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import classesData from '../../data/classes.json';
 
+/**
+ * BasicProfile Step (Step 1)
+ * 
+ * MANDATORY step - collects student name and class level.
+ * 
+ * TODO: Backend Integration
+ * - Validate name against profanity filter
+ * - Check if class exists in system
+ * - POST /api/onboarding/profile
+ */
+
 function BasicProfile({ data, onNext }) {
   const [formData, setFormData] = useState({
     name: data.name || '',
@@ -22,6 +33,14 @@ function BasicProfile({ data, onNext }) {
       setError('Name must be at least 2 characters');
       return;
     }
+
+    /**
+     * TODO: Backend Integration
+     * await fetch('/api/onboarding/profile', {
+     *   method: 'POST',
+     *   body: JSON.stringify(formData)
+     * });
+     */
 
     onNext(formData);
   };

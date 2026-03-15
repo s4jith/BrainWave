@@ -4,7 +4,9 @@ import { Eye, EyeOff } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import { AnimatedCharacters } from "../components/ui/animated-characters";
 import { Slack } from "lucide-react";
-
+/**
+ * Signup Page - Clean White Minimal Design
+ */
 export default function Signup() {
   const navigate = useNavigate();
   const { setUser } = useUserStore();
@@ -53,9 +55,9 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen w-full flex bg-white page-animate">
-      {}
+      {/* Left side - Branding + Animated Characters */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-between bg-slate-50 py-12">
-        {}
+        {/* Top - Brand Name */}
         <div className="mb-2 flex items-center gap-2 relative right-[150px]" >
           <span><Slack  /></span>
         <h1 
@@ -74,7 +76,7 @@ Built for focus, clarity, and growth.
           
         </div>
         
-        {}
+        {/* Bottom - Animated Characters */}
         <div className="mb-10">
           <AnimatedCharacters 
             password={password} 
@@ -84,10 +86,10 @@ Built for focus, clarity, and growth.
         </div>
       </div>
 
-      {}
+      {/* Right side - Signup Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-8">
         <div className="w-full max-w-md">
-          {}
+          {/* Header */}
           <div className="text-center mb-10">
             <h1 className="text-4xl font-bold text-gray-900 mb-3">Join us!</h1>
             <p className="text-gray-500">
@@ -123,7 +125,7 @@ Built for focus, clarity, and growth.
           </div>
 
           <form onSubmit={handleSignup} className="space-y-4">
-            {}
+            {/* Name */}
             <input
               type="text"
               placeholder="Your full name"
@@ -132,7 +134,7 @@ Built for focus, clarity, and growth.
               className="w-full h-14 px-5 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             />
 
-            {}
+            {/* Email */}
             <input
               type="email"
               placeholder="Your email address"
@@ -141,7 +143,7 @@ Built for focus, clarity, and growth.
               className="w-full h-14 px-5 bg-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             />
 
-            {}
+            {/* Password */}
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -161,7 +163,7 @@ Built for focus, clarity, and growth.
               </button>
             </div>
 
-            {}
+            {/* Error */}
             {error && (
               <p className="text-red-500 text-sm text-center">{error}</p>
             )}
@@ -176,7 +178,7 @@ Built for focus, clarity, and growth.
             </button>
           </form>
 
-          {}
+          {/* Footer */}
           <div className="text-center mt-10 text-gray-400 text-sm">
             <p>Already have an account?</p>
             <Link to="/login" className="text-green-500 hover:text-green-600 font-medium">

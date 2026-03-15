@@ -14,6 +14,7 @@ router = APIRouter(
     tags=["Evaluation"]
 )
 
+
 @router.post("/", response_model=EvaluationResponse)
 async def evaluate_mcqs(request: EvaluationRequest):
     """
@@ -33,6 +34,7 @@ async def evaluate_mcqs(request: EvaluationRequest):
     try:
         logger.info(f"Evaluation request: Student {request.student_id}, Class {request.class_level}, {request.subject}, Ch. {request.chapter}")
         
+        # Evaluate answers
         result, evaluation_id = await eval_service.evaluate_mcqs(
             student_id=request.student_id or "anonymous",
             class_level=request.class_level,
@@ -49,5 +51,5 @@ async def evaluate_mcqs(request: EvaluationRequest):
         )
     
     except Exception as e:
-        logger.error(f" Evaluation error: {e}")
+        logger.error(f"❌ Evaluation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

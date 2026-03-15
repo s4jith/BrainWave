@@ -6,9 +6,6 @@ Entry point for the FastAPI application.
 Includes all routers, CORS configuration, and database initialization.
 """
 
-from dotenv import load_dotenv
-load_dotenv()
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -16,148 +13,111 @@ import logging
 
 from app.core.config import settings
 from app.db.mongo import init_databases, close_databases
-from app.routers import chat, mcq, evaluate, notes, assessment, annotation, history
+from app.routers import chat, mcq, evaluate, notes, assessment, annotation
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+
+# Lifespan context manager for startup and shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Lifespan events for FastAPI application.
     Handles database initialization and cleanup.
     """
-    logger.info("Starting NCERT AI Learning Backend...")
+    # Startup
+    logger.info("🚀 Starting NCERT AI Learning Backend...")
     logger.info(f"   App: {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"   Debug Mode: {settings.DEBUG}")
     
     try:
         await init_databases()
-        
-        from app.services.question_bank_service import question_bank_service
-        deleted = await question_bank_service.cleanup_expired_pending_questions()
-        if deleted > 0:
-            logger.info(f" Cleaned up {deleted} expired pending questions")
-        
-        logger.info("All systems initialized successfully")
+        logger.info("✅ All systems initialized successfully")
     except Exception as e:
-        logger.error(f" Startup failed: {e}")
+        logger.error(f"❌ Startup failed: {e}")
         raise
     
     yield
     
-    logger.info(" Shutting down NCERT AI Learning Backend...")
+    # Shutdown
+    logger.info("🛑 Shutting down NCERT AI Learning Backend...")
     await close_databases()
-    logger.info("Shutdown complete")
+    logger.info("✅ Shutdown complete")
 
+
+# Create FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="""
+    ## NCERT AI Learning Backend
     
     A production-grade educational AI system for NCERT students (Classes 5-10).
     
+    ### Features:
     - **RAG-based Chatbot**: Context-aware explanations using Pinecone + Gemini
     - **AI MCQ Generation**: Concept-based questions using chapter content
     - **Automated Evaluation**: Score calculation and personalized feedback
     - **Student Notes**: CRUD operations with MongoDB Atlas
     - **Multi-mode Learning**: Simple, Meaning, Story, Example, Summary modes
     
+    ### Tech Stack:
     - **Backend**: FastAPI + Python 3
-    - **AI**: Google Gemini 1.5 Flash + embedding-001
+    - **AI**: Google Gemini 1.5 Flash + text-embedding-004
     - **Vector DB**: Pinecone
     - **Database**: MongoDB Atlas
     
+    ### Architecture:
     All endpoints follow strict RAG principles - no hallucination, only context-based answers.
     """,
     lifespan=lifespan,
     debug=settings.DEBUG
 )
 
+
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://192.168.3.1:3000" # from the user's dev server output
+        settings.FRONTEND_URL,
+        "http://localhost:5173",  # Vite default
+        "http://localhost:3000",  # Alternative React dev server
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+# Include routers
 app.include_router(chat.router, prefix="/api")
 app.include_router(mcq.router, prefix="/api")
 app.include_router(evaluate.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
-app.include_router(assessment.router, prefix="/api")
-app.include_router(annotation.router, prefix="/api")
-app.include_router(history.router, prefix="/api")
+app.include_router(assessment.router, prefix="/api")  # ✅ Voice Assessment
+app.include_router(annotation.router, prefix="/api")  # ✅ Annotation Chatbot
 
+# Import admin and user routers
 from app.routers import admin, user, test, auth
-from app.routers import admin_dashboard, support, support_tickets, test_management, suggestions
-from app.routers import book_management, curriculum
-app.include_router(admin.router, prefix="/api")
-app.include_router(user.router, prefix="/api")
-app.include_router(test.router, prefix="/api")
-app.include_router(auth.router)
-app.include_router(admin_dashboard.router)
-app.include_router(support.router)
-app.include_router(support_tickets.router)
-app.include_router(suggestions.router, prefix="/api")
-app.include_router(test_management.router)
-app.include_router(book_management.router)
-app.include_router(curriculum.router)
-
-from app.routers import teacher
-app.include_router(teacher.router)
-
-from app.routers import notifications
-app.include_router(notifications.router)
-
-from app.routers import student_level, student
-app.include_router(student_level.router)
-app.include_router(student.router)
-
-from app.routers import question_bank, question_papers, queries
-app.include_router(question_bank.router)
-app.include_router(queries.router)
-app.include_router(question_papers.router)
-
-from app.routers import head_approval
-app.include_router(head_approval.router)
-
-from app.routers import top_questions
-app.include_router(top_questions.router)
-
-from app.routers import courses
-app.include_router(courses.router)
-
-from app.routers import assessments
-app.include_router(assessments.router)
-
-from app.routers import gradebook
-app.include_router(gradebook.router)
-
-@app.get("/api/public/maintenance", tags=["Public"])
-async def public_maintenance_alias():
-    """Alias for /api/admin/public/maintenance (backward compat)."""
-    from app.db.mongo import db
-    try:
-        col = db.get_collection("platform_settings")
-        doc = col.find_one({"_id": "global"})
-        maintenance = doc.get("maintenanceMode", False) if doc else False
-        platform_name = doc.get("platformName", "NCERT Learning Platform") if doc else "NCERT Learning Platform"
-        return {"maintenance_mode": maintenance, "platform_name": platform_name}
-    except Exception:
-        return {"maintenance_mode": False, "platform_name": "NCERT Learning Platform"}
+from app.routers import admin_dashboard, support, support_tickets, test_management
+from app.routers import book_management
+app.include_router(admin.router, prefix="/api")  # ✅ Admin & Monitoring
+app.include_router(user.router, prefix="/api")   # ✅ User Stats (Dashboard)
+app.include_router(test.router, prefix="/api")   # ✅ Tests (Staff + AI)
+app.include_router(auth.router)                  # ✅ Authentication (Login/Password)
+app.include_router(admin_dashboard.router)       # ✅ Admin Dashboard & Student Management
+app.include_router(support.router)               # ✅ Support (FAQs, Contact, Feedback)
+app.include_router(support_tickets.router)       # ✅ Support Tickets
+app.include_router(test_management.router)       # ✅ Test Management (PDF Tests, Submissions, Feedback)
+app.include_router(book_management.router)       # ✅ Book Management (Admin upload, Student view)
 
 
+# Root endpoint
 @app.get("/", tags=["Health Check"])
 async def root():
     """Root endpoint - API health check."""
@@ -169,6 +129,8 @@ async def root():
         "redoc": "/redoc"
     }
 
+
+# Health check endpoint
 @app.get("/health", tags=["Health Check"])
 async def health_check():
     """Detailed health check endpoint."""
@@ -178,6 +140,7 @@ async def health_check():
         "version": settings.APP_VERSION,
         "debug": settings.DEBUG
     }
+
 
 if __name__ == "__main__":
     import uvicorn

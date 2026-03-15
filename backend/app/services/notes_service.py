@@ -10,6 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class NotesService:
     """Service for managing student notes."""
     
@@ -41,16 +42,17 @@ class NotesService:
             
             result = await collection.insert_one(document)
             
+            # Return created note
             note = Note(
                 id=str(result.inserted_id),
                 **document
             )
             
-            logger.info(f"Note created: {note.id}")
+            logger.info(f"✅ Note created: {note.id}")
             return note
         
         except Exception as e:
-            logger.error(f" Failed to create note: {e}")
+            logger.error(f"❌ Failed to create note: {e}")
             raise
     
     async def get_notes_by_student(
@@ -58,8 +60,7 @@ class NotesService:
         student_id: str,
         class_level: int = None,
         subject: str = None,
-        chapter: int = None,
-        page_number: int = None
+        chapter: int = None
     ) -> list[Note]:
         """
         Retrieve notes for a student with optional filters.
@@ -69,7 +70,6 @@ class NotesService:
             class_level: Optional class filter
             subject: Optional subject filter
             chapter: Optional chapter filter
-            page_number: Optional page number filter
         
         Returns:
             List of Note objects
@@ -77,6 +77,7 @@ class NotesService:
         try:
             collection = get_notes_collection()
             
+            # Build query
             query = {"student_id": student_id}
             if class_level:
                 query["class_level"] = class_level
@@ -84,9 +85,8 @@ class NotesService:
                 query["subject"] = subject
             if chapter:
                 query["chapter"] = chapter
-            if page_number:
-                query["page_number"] = page_number
             
+            # Fetch notes
             cursor = collection.find(query).sort("created_at", -1)
             notes = []
             
@@ -106,11 +106,11 @@ class NotesService:
                 )
                 notes.append(note)
             
-            logger.info(f"Retrieved {len(notes)} notes for student {student_id}")
+            logger.info(f"✅ Retrieved {len(notes)} notes for student {student_id}")
             return notes
         
         except Exception as e:
-            logger.error(f" Failed to retrieve notes: {e}")
+            logger.error(f"❌ Failed to retrieve notes: {e}")
             raise
     
     async def update_note(
@@ -133,12 +133,14 @@ class NotesService:
         try:
             collection = get_notes_collection()
             
+            # Build update document
             update_doc = {"updated_at": datetime.utcnow()}
             if note_content is not None:
                 update_doc["note_content"] = note_content
             if heading is not None:
                 update_doc["heading"] = heading
             
+            # Update note
             result = await collection.find_one_and_update(
                 {"_id": ObjectId(note_id)},
                 {"$set": update_doc},
@@ -148,6 +150,7 @@ class NotesService:
             if not result:
                 raise ValueError(f"Note {note_id} not found")
             
+            # Return updated note
             note = Note(
                 id=str(result["_id"]),
                 student_id=result["student_id"],
@@ -162,11 +165,11 @@ class NotesService:
                 updated_at=result.get("updated_at")
             )
             
-            logger.info(f"Note updated: {note_id}")
+            logger.info(f"✅ Note updated: {note_id}")
             return note
         
         except Exception as e:
-            logger.error(f" Failed to update note: {e}")
+            logger.error(f"❌ Failed to update note: {e}")
             raise
     
     async def delete_note(self, note_id: str) -> bool:
@@ -187,11 +190,13 @@ class NotesService:
             if result.deleted_count == 0:
                 raise ValueError(f"Note {note_id} not found")
             
-            logger.info(f"Note deleted: {note_id}")
+            logger.info(f"✅ Note deleted: {note_id}")
             return True
         
         except Exception as e:
-            logger.error(f" Failed to delete note: {e}")
+            logger.error(f"❌ Failed to delete note: {e}")
             raise
 
+
+# Global notes service instance
 notes_service = NotesService()

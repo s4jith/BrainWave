@@ -1,7 +1,5 @@
 """
 MCQ Router - MCQ generation endpoints.
-
-Uses Gemini for high-quality MCQ generation.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -16,6 +14,7 @@ router = APIRouter(
     tags=["MCQ Generation"]
 )
 
+
 @router.post("/generate", response_model=MCQGenerationResponse)
 async def generate_mcqs(request: MCQGenerationRequest):
     """
@@ -27,35 +26,31 @@ async def generate_mcqs(request: MCQGenerationRequest):
     **Returns:**
     - List of MCQs with questions, options, correct answer, and explanations
     - Metadata about class, subject, and chapter
-    - Pipeline used and inference time
     """
     try:
-        logger.info(f"MCQ generation request: Class {request.class_level}, {request.subject}, Ch. {request.chapter}, {request.num_questions} questions, local_model={request.use_local_model}")
+        logger.info(f"MCQ generation request: Class {request.class_level}, {request.subject}, Ch. {request.chapter}, {request.num_questions} questions")
         
-        mcqs, used_pipeline, inference_time_ms = mcq_service.generate_mcqs(
+        # Generate MCQs
+        mcqs = mcq_service.generate_mcqs(
             class_level=request.class_level,
             subject=request.subject,
             chapter=request.chapter,
             num_questions=request.num_questions,
-            page_range=request.page_range,
-            use_local_model=request.use_local_model
+            page_range=request.page_range
         )
         
         metadata = {
             "class_level": request.class_level,
             "subject": request.subject,
             "chapter": request.chapter,
-            "num_questions": len(mcqs),
-            "requested_questions": request.num_questions
+            "num_questions": len(mcqs)
         }
         
         return MCQGenerationResponse(
             mcqs=mcqs,
-            metadata=metadata,
-            used_pipeline=used_pipeline,
-            inference_time_ms=inference_time_ms
+            metadata=metadata
         )
     
     except Exception as e:
-        logger.error(f" MCQ generation error: {e}")
+        logger.error(f"❌ MCQ generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

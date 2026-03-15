@@ -1,32 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  User,
-  Palette,
-  Calendar,
-  Shield,
+import { 
+  User, 
+  GraduationCap, 
+  Palette, 
+  Calendar, 
+  Shield, 
   ArrowLeft,
   Save,
   Plus,
   X,
   RefreshCw,
   ChevronLeft,
-  ChevronRight,
-  Lock,
-  Eye,
-  EyeOff,
-  Loader2
+  ChevronRight
 } from 'lucide-react';
 import useUserStore from '../stores/userStore';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import classesData from '../data/classes.json';
 
+/**
+ * Settings Page
+ * 
+ * Comprehensive settings page with horizontal tab navigation.
+ * Allows editing all profile data set during onboarding plus privacy settings.
+ */
+
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
+  { id: 'academics', label: 'Academics', icon: GraduationCap },
   { id: 'avatar', label: 'Avatar', icon: Palette },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'security', label: 'Security', icon: Lock },
+  { id: 'privacy', label: 'Privacy', icon: Shield },
 ];
 
 const AVATAR_STYLES = [
@@ -46,56 +51,53 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function Settings() {
   const navigate = useNavigate();
-  const {
-    user,
-    academics,
-    calendar,
-    updateProfile,
-    updateAcademics,
-    updateCalendar,
-    getAuthHeader
+  const { 
+    user, 
+    academics, 
+    calendar, 
+    privacySettings, 
+    updateProfile, 
+    updateAcademics, 
+    updateCalendar, 
+    updatePrivacySettings 
   } = useUserStore();
-
+  
   const [activeTab, setActiveTab] = useState('profile');
   const [saveMessage, setSaveMessage] = useState('');
 
+  // Profile state
   const [profileData, setProfileData] = useState({
     name: user.name || '',
     classLevel: user.classLevel || 6,
+    username: user.username || '',
   });
 
+  // Academics state
   const [subjects, setSubjects] = useState(academics.subjects || []);
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [newSubject, setNewSubject] = useState({ name: '', marks: '' });
 
+  // Avatar state
   const [avatarSeed, setAvatarSeed] = useState(user.avatarSeed || Date.now().toString());
   const [avatarStyle, setAvatarStyle] = useState(user.avatarStyle || 'avataaars');
 
+  // Calendar state
   const [exams, setExams] = useState(calendar.exams || []);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddExam, setShowAddExam] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [newExam, setNewExam] = useState({ subject: '', date: '' });
 
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPwd, setNewPwd] = useState('');
-  const [confirmPwd, setConfirmPwd] = useState('');
-  const [showOldPwd, setShowOldPwd] = useState(false);
-  const [showNewPwd, setShowNewPwd] = useState(false);
-  const [pwdLoading, setPwdLoading] = useState(false);
-  const [pwdError, setPwdError] = useState('');
-  const [pwdSuccess, setPwdSuccess] = useState('');
+  // Privacy state
+  const [privacy, setPrivacy] = useState(privacySettings);
 
-  const [newUserId, setNewUserId] = useState('');
-  const [userIdLoading, setUserIdLoading] = useState(false);
-  const [userIdError, setUserIdError] = useState('');
-  const [userIdSuccess, setUserIdSuccess] = useState('');
-
+  // Show save message temporarily
   const showSaveMessage = (message) => {
     setSaveMessage(message);
     setTimeout(() => setSaveMessage(''), 2000);
   };
 
+  // Avatar helpers
   const getAvatarUrl = (style, seed) => {
     return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}`;
   };
@@ -104,6 +106,7 @@ export default function Settings() {
     setAvatarSeed(Date.now().toString());
   };
 
+  // Calendar helpers
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
 
@@ -132,10 +135,12 @@ export default function Settings() {
     setShowAddExam(true);
   };
 
+  // Save handlers
   const saveProfile = () => {
     updateProfile({
       name: profileData.name,
       classLevel: profileData.classLevel,
+      username: profileData.username,
     });
     showSaveMessage('Profile saved!');
   };
@@ -188,65 +193,21 @@ export default function Settings() {
     showSaveMessage('Exam removed!');
   };
 
-  const handleChangePassword = async () => {
-    setPwdError('');
-    setPwdSuccess('');
-    if (!oldPassword || !newPwd || !confirmPwd) { setPwdError('All fields are required.'); return; }
-    if (newPwd.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
-    if (newPwd !== confirmPwd) { setPwdError('Passwords do not match.'); return; }
-    setPwdLoading(true);
-    try {
-      const res = await fetch('http://localhost:8000/api/auth/change-password-secure', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.user_id, old_password: oldPassword, new_password: newPwd, confirm_password: confirmPwd })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPwdSuccess('Password changed successfully!');
-        setOldPassword(''); setNewPwd(''); setConfirmPwd('');
-      } else {
-        setPwdError(data.error || 'Failed to change password.');
-      }
-    } catch {
-      setPwdError('Network error. Please try again.');
-    }
-    setPwdLoading(false);
+  const togglePrivacy = (key) => {
+    const updated = { ...privacy, [key]: !privacy[key] };
+    setPrivacy(updated);
+    updatePrivacySettings(updated);
+    showSaveMessage('Privacy setting updated!');
   };
 
-  const handleChangeUserId = async () => {
-    setUserIdError('');
-    setUserIdSuccess('');
-    const trimmed = newUserId.trim();
-    if (!trimmed) { setUserIdError('Please enter a new User ID.'); return; }
-    if (trimmed === user.user_id) { setUserIdError('New User ID is the same as current.'); return; }
-    setUserIdLoading(true);
-    try {
-      const res = await fetch('http://localhost:8000/api/auth/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ new_user_id: trimmed })
-      });
-      const data = await res.json();
-      if (data.success) {
-        updateProfile({ user_id: trimmed });
-        setUserIdSuccess('User ID updated successfully!');
-        setNewUserId('');
-      } else {
-        setUserIdError(data.error || 'Failed to update User ID.');
-      }
-    } catch {
-      setUserIdError('Network error. Please try again.');
-    }
-    setUserIdLoading(false);
-  };
-
+  // Generate calendar grid
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
   const calendarDays = [];
   for (let i = 0; i < firstDay; i++) calendarDays.push(null);
   for (let day = 1; day <= daysInMonth; day++) calendarDays.push(day);
 
+  // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
@@ -266,25 +227,37 @@ export default function Settings() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Username
+              </label>
+              <Input
+                type="text"
+                value={profileData.username}
+                onChange={(e) => setProfileData({ 
+                  ...profileData, 
+                  username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') 
+                })}
+                placeholder="your_username"
+                className="h-12"
+              />
+              <p className="text-xs text-gray-500 mt-1">Letters, numbers, and underscores only</p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Class Level
               </label>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3">
-                <p className="text-sm text-gray-800 flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  <span>Class level can only be changed by admin. Contact support if needed.</span>
-                </p>
-              </div>
               <div className="grid grid-cols-4 gap-2">
                 {classesData.classes.map((cls) => (
                   <button
                     key={cls.level}
                     type="button"
-                    disabled={true}
-                    className={`p-3 rounded-lg border-2 text-center transition-all duration-200 cursor-not-allowed opacity-60 ${profileData.classLevel === cls.level
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : 'border-gray-200'
-                      }`}
+                    onClick={() => setProfileData({ ...profileData, classLevel: cls.level })}
+                    className={`p-3 rounded-lg border-2 text-center transition-all duration-200 ${
+                      profileData.classLevel === cls.level
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 hover:border-gray-400'
+                    }`}
                   >
                     <span className="font-medium">{cls.level}</span>
                   </button>
@@ -356,8 +329,8 @@ export default function Settings() {
                   <Button onClick={addSubject} disabled={!newSubject.name || !newSubject.marks} className="flex-1">
                     Add Subject
                   </Button>
-                  <Button
-                    variant="outline"
+                  <Button 
+                    variant="outline" 
                     onClick={() => { setShowAddSubject(false); setNewSubject({ name: '', marks: '' }); }}
                   >
                     Cancel
@@ -379,6 +352,7 @@ export default function Settings() {
       case 'avatar':
         return (
           <div className="space-y-6">
+            {/* Avatar Preview */}
             <div className="flex justify-center">
               <div className="relative">
                 <img
@@ -389,13 +363,14 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={regenerateAvatar}
-                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-black transition-colors shadow-lg"
+                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors shadow-lg"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
+            {/* Style Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Choose a style
@@ -406,10 +381,11 @@ export default function Settings() {
                     key={style.id}
                     type="button"
                     onClick={() => setAvatarStyle(style.id)}
-                    className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all duration-200 ${avatarStyle === style.id
-                      ? 'border-gray-900 bg-gray-50'
-                      : 'border-gray-200 hover:border-gray-400'
-                      }`}
+                    className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all duration-200 ${
+                      avatarStyle === style.id
+                        ? 'border-gray-900 bg-gray-50'
+                        : 'border-gray-200 hover:border-gray-400'
+                    }`}
                   >
                     <img
                       src={getAvatarUrl(style.id, avatarSeed)}
@@ -432,25 +408,35 @@ export default function Settings() {
       case 'calendar':
         return (
           <div className="space-y-6">
-
+            {/* 
+             * TODO: Backend Integration
+             * - GET /api/calendar/events - Fetch user's calendar events
+             * - POST /api/calendar/events - Create new event
+             * - DELETE /api/calendar/events/:id - Delete event
+             * - PUT /api/calendar/events/:id - Update event
+             */}
+            
+            {/* Header with Add Event Button */}
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 Manage your exam dates and reminders
               </p>
-              <Button
+              <Button 
                 onClick={() => {
                   setSelectedDate(formatDate(new Date().getDate()));
                   setNewExam({ subject: '', date: formatDate(new Date().getDate()), type: 'exam' });
                   setShowAddExam(true);
                 }}
-                className="bg-gray-900 hover:bg-black text-white"
+                className="bg-orange-500 hover:bg-orange-600"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Event
               </Button>
             </div>
 
+            {/* Calendar Grid */}
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+              {/* Month Navigation */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h3 className="text-xl font-semibold text-gray-800">
                   {MONTHS[currentMonth]} {currentYear}
@@ -471,67 +457,76 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* Weekday Headers */}
               <div className="grid grid-cols-7 border-b border-gray-100">
                 {WEEKDAYS.map((day, index) => (
-                  <div
-                    key={day}
-                    className={`text-center text-xs font-medium text-gray-500 py-3 ${index < 6 ? 'border-r border-gray-100' : ''
-                      }`}
+                  <div 
+                    key={day} 
+                    className={`text-center text-xs font-medium text-gray-500 py-3 ${
+                      index < 6 ? 'border-r border-gray-100' : ''
+                    }`}
                   >
                     {day}
                   </div>
                 ))}
               </div>
 
+              {/* Calendar Grid with Events */}
               <div className="grid grid-cols-7">
                 {calendarDays.map((day, index) => {
                   const isLastInRow = (index + 1) % 7 === 0;
                   const isInLastRow = index >= calendarDays.length - 7;
-
+                  
                   if (day === null) {
                     return (
-                      <div
-                        key={`empty-${index}`}
-                        className={`min-h-[100px] bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
-                          } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
+                      <div 
+                        key={`empty-${index}`} 
+                        className={`min-h-[100px] bg-gray-50 ${
+                          !isLastInRow ? 'border-r border-gray-100' : ''
+                        } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                       />
                     );
                   }
 
                   const dayExams = getExamsForDate(day);
-                  const isToday = new Date().getDate() === day &&
-                    new Date().getMonth() === currentMonth &&
-                    new Date().getFullYear() === currentYear;
+                  const isToday = new Date().getDate() === day && 
+                                  new Date().getMonth() === currentMonth && 
+                                  new Date().getFullYear() === currentYear;
 
                   return (
                     <div
                       key={day}
                       onClick={() => handleDateClick(day)}
-                      className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${!isLastInRow ? 'border-r border-gray-100' : ''
-                        } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
+                      className={`min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-gray-50 ${
+                        !isLastInRow ? 'border-r border-gray-100' : ''
+                      } ${!isInLastRow ? 'border-b border-gray-100' : ''}`}
                     >
+                      {/* Date Number */}
                       <div className="flex items-start justify-between mb-1">
-                        <span
-                          className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${isToday
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-700'
-                            }`}
+                        <span 
+                          className={`inline-flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${
+                            isToday 
+                              ? 'bg-gray-900 text-white' 
+                              : 'text-gray-700'
+                          }`}
                         >
                           {day}
                         </span>
                       </div>
-
+                      
+                      {/* Events on this date */}
                       <div className="space-y-1">
                         {dayExams.slice(0, 3).map((exam, examIndex) => {
+                          // Assign colors based on exam type or cycle through colors
                           const colors = [
                             { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-l-emerald-500' },
                             { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-l-pink-500' },
-                            { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-l-blue-500' },
+                            { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-l-blue-500' },
                             { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-l-amber-500' },
-                            { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-l-blue-500' },
+                            { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-l-purple-500' },
                           ];
                           const color = colors[examIndex % colors.length];
-
+                          
                           return (
                             <div
                               key={exam.id}
@@ -554,19 +549,25 @@ export default function Settings() {
               </div>
             </div>
 
+            {/* Add Event Modal/Form */}
             {showAddExam && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                  {/* 
+                   * TODO: Backend Integration
+                   * - Validate event data
+                   * - POST /api/calendar/events with event details
+                   */}
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-lg font-semibold text-gray-800">Add Event</h4>
-                    <button
-                      onClick={() => { setShowAddExam(false); setSelectedDate(null); }}
+                    <button 
+                      onClick={() => { setShowAddExam(false); setSelectedDate(null); }} 
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <X className="w-5 h-5 text-gray-500" />
                     </button>
                   </div>
-
+                  
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
@@ -574,7 +575,7 @@ export default function Settings() {
                         {selectedDate}
                       </div>
                     </div>
-
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
                       <Input
@@ -587,17 +588,17 @@ export default function Settings() {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                      <Button
-                        variant="outline"
+                      <Button 
+                        variant="outline" 
                         onClick={() => { setShowAddExam(false); setSelectedDate(null); }}
                         className="flex-1 h-12"
                       >
                         Cancel
                       </Button>
-                      <Button
-                        onClick={addExam}
-                        disabled={!newExam.subject}
-                        className="flex-1 h-12 bg-gray-900 hover:bg-black text-white"
+                      <Button 
+                        onClick={addExam} 
+                        disabled={!newExam.subject} 
+                        className="flex-1 h-12 bg-orange-500 hover:bg-orange-600"
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Event
@@ -608,6 +609,7 @@ export default function Settings() {
               </div>
             )}
 
+            {/* Upcoming Events List */}
             {exams.length > 0 && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-3">All Events</h4>
@@ -616,17 +618,21 @@ export default function Settings() {
                     const colors = [
                       { bg: 'bg-emerald-50', border: 'border-l-emerald-500', icon: 'bg-emerald-500' },
                       { bg: 'bg-pink-50', border: 'border-l-pink-500', icon: 'bg-pink-500' },
-                      { bg: 'bg-orange-50', border: 'border-l-blue-500', icon: 'bg-orange-500' },
+                      { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'bg-blue-500' },
                       { bg: 'bg-amber-50', border: 'border-l-amber-500', icon: 'bg-amber-500' },
-                      { bg: 'bg-orange-50', border: 'border-l-blue-500', icon: 'bg-orange-500' },
+                      { bg: 'bg-purple-50', border: 'border-l-purple-500', icon: 'bg-purple-500' },
                     ];
                     const color = colors[index % colors.length];
-
+                    
                     return (
                       <div
                         key={exam.id}
                         className={`flex items-center justify-between p-4 ${color.bg} border-l-4 ${color.border} rounded-lg`}
                       >
+                        {/* 
+                         * TODO: Backend Integration
+                         * - DELETE /api/calendar/events/:id
+                         */}
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full ${color.icon}`} />
                           <div>
@@ -649,99 +655,71 @@ export default function Settings() {
           </div>
         );
 
-      case 'security':
+      case 'privacy':
         return (
-          <div className="space-y-6">
-            <p className="text-sm text-gray-500">
-              Update your password. You'll need your current password to make changes.
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500 mb-6">
+              Control your privacy preferences and data sharing settings.
             </p>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-              <div className="relative">
-                <input
-                  type={showOldPwd ? 'text' : 'password'}
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="Enter current password"
-                  className="w-full h-12 px-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-                />
-                <button type="button" onClick={() => setShowOldPwd(!showOldPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showOldPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-              <div className="relative">
-                <input
-                  type={showNewPwd ? 'text' : 'password'}
-                  value={newPwd}
-                  onChange={(e) => setNewPwd(e.target.value)}
-                  placeholder="Min 8 characters"
-                  className="w-full h-12 px-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-                />
-                <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPwd}
-                onChange={(e) => setConfirmPwd(e.target.value)}
-                placeholder="Re-enter new password"
-                className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-              />
-              {newPwd && confirmPwd && newPwd !== confirmPwd && (
-                <p className="text-red-500 text-xs mt-1">Passwords do not match</p>
-              )}
-            </div>
-
-            {pwdError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{pwdError}</p>}
-            {pwdSuccess && <p className="text-green-600 text-sm text-center bg-green-50 p-2 rounded-lg">{pwdSuccess}</p>}
-
-            <Button
-              onClick={handleChangePassword}
-              disabled={pwdLoading}
-              className="w-full h-12"
-            >
-              {pwdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
-              {pwdLoading ? 'Changing...' : 'Change Password'}
-            </Button>
-
-            <div className="border-t border-gray-200 pt-6 space-y-4">
-              <p className="text-sm text-gray-500">
-                Change your login User ID. The new ID must be unique across all students.
-              </p>
-              <p className="text-sm text-gray-500">
-                Current ID: <span className="font-medium text-gray-800">{user.user_id}</span>
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">New User ID</label>
-                <input
-                  type="text"
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                  placeholder="Enter new user ID"
-                  className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-                />
-              </div>
-              {userIdError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{userIdError}</p>}
-              {userIdSuccess && <p className="text-green-600 text-sm text-center bg-green-50 p-2 rounded-lg">{userIdSuccess}</p>}
-              <Button
-                onClick={handleChangeUserId}
-                disabled={userIdLoading}
-                className="w-full h-12"
+            {/* Privacy Toggle Items */}
+            <div className="space-y-3">
+              <div 
+                onClick={() => togglePrivacy('showProfileToOthers')}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
               >
-                {userIdLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <User className="w-4 h-4 mr-2" />}
-                {userIdLoading ? 'Updating...' : 'Update User ID'}
-              </Button>
+                <div>
+                  <p className="font-medium text-gray-800">Show Profile to Others</p>
+                  <p className="text-sm text-gray-500">Allow other students to view your profile</p>
+                </div>
+                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.showProfileToOthers ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.showProfileToOthers ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+              </div>
+
+              <div 
+                onClick={() => togglePrivacy('allowNotifications')}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                <div>
+                  <p className="font-medium text-gray-800">Allow Notifications</p>
+                  <p className="text-sm text-gray-500">Receive updates about your learning progress</p>
+                </div>
+                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.allowNotifications ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.allowNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+              </div>
+
+              <div 
+                onClick={() => togglePrivacy('shareProgressWithTeacher')}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                <div>
+                  <p className="font-medium text-gray-800">Share Progress with Teacher</p>
+                  <p className="text-sm text-gray-500">Let your teacher track your learning progress</p>
+                </div>
+                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.shareProgressWithTeacher ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.shareProgressWithTeacher ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+              </div>
+
+              <div 
+                onClick={() => togglePrivacy('dataCollectionConsent')}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                <div>
+                  <p className="font-medium text-gray-800">Anonymous Data Collection</p>
+                  <p className="text-sm text-gray-500">Help improve the app with anonymous usage data</p>
+                </div>
+                <div className={`w-12 h-7 rounded-full transition-colors relative ${privacy.dataCollectionConsent ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy.dataCollectionConsent ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+              </div>
             </div>
+
+            <p className="text-xs text-gray-400 mt-6">
+              Your privacy settings are automatically saved. Changes take effect immediately.
+            </p>
           </div>
         );
 
@@ -752,6 +730,7 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
@@ -769,22 +748,25 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex gap-8">
+          {/* Sidebar Tabs */}
           <div className="w-56 flex-shrink-0">
             <nav className="space-y-1 sticky top-8">
               {TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
-
+                
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
-                      ? 'bg-gray-900 text-white shadow-lg'
-                      : 'text-gray-600 hover:bg-gray-100'
-                      }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                      isActive 
+                        ? 'bg-gray-900 text-white shadow-lg' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">{tab.label}</span>
@@ -794,6 +776,7 @@ export default function Settings() {
             </nav>
           </div>
 
+          {/* Tab Content */}
           <div className="flex-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">

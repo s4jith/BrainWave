@@ -1,37 +1,48 @@
+/**
+ * User Store - Manages user profile and settings
+ * Zustand store for user data including class level, subject preferences, etc.
+ */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/**
+ * User Store
+ * 
+ * TODO: Backend Integration
+ * - Load user profile from API on login
+ * - Save preferences to backend
+ * - Sync across devices
+ */
+
 const useUserStore = create(
   persist(
     (set, get) => ({
-      
+      // User Profile
       user: {
         id: null,
-        user_id: null, 
         name: "",
         email: "",
-        classLevel: 10,
-        preferredSubject: "Maths",
-        role: null, 
-        subjects: [], 
+        classLevel: 10, // Default to Class 10 (matches our sample questions)
+        preferredSubject: "Mathematics", // Default to Mathematics (has RAG support)
+        role: null, // 'student' | 'teacher'
         isOnboarded: false,
         username: "",
         avatarSeed: "",
         avatarStyle: "avataaars",
-        permissions: [], 
       },
 
-      accessToken: null,
-
+      // Previous Year Academics
       academics: {
-        subjects: [],
+        subjects: [], // Array of { name: string, marks: number }
       },
 
+      // Exam Calendar
       calendar: {
-        exams: [],
+        exams: [], // Array of { id: number, subject: string, date: string }
       },
 
+      // Privacy Settings
       privacySettings: {
         showProfileToOthers: true,
         allowNotifications: true,
@@ -39,24 +50,13 @@ const useUserStore = create(
         dataCollectionConsent: true,
       },
 
+      // Authentication state
       isAuthenticated: false,
 
-      setUser: (userData) => set({
-        user: { ...get().user, ...userData },
-        isAuthenticated: true
-      }),
-
-      setAccessToken: (token) => set({ accessToken: token }),
-
-      login: (userData, token) => set({
-        user: {
-          ...get().user,
-          ...userData,
-          classLevel: userData.class_level || userData.classLevel || 10,
-          permissions: userData.permissions || []
-        },
-        accessToken: token,
-        isAuthenticated: true
+      // Actions
+      setUser: (userData) => set({ 
+        user: { ...get().user, ...userData }, 
+        isAuthenticated: true 
       }),
 
       setClassLevel: (classLevel) =>
@@ -74,21 +74,25 @@ const useUserStore = create(
           user: { ...state.user, isOnboarded },
         })),
 
+      // Update profile info
       updateProfile: (profileData) =>
         set((state) => ({
           user: { ...state.user, ...profileData },
         })),
 
+      // Update academics
       updateAcademics: (academicsData) =>
         set((state) => ({
           academics: { ...state.academics, ...academicsData },
         })),
 
+      // Update calendar
       updateCalendar: (calendarData) =>
         set((state) => ({
           calendar: { ...state.calendar, ...calendarData },
         })),
 
+      // Update privacy settings
       updatePrivacySettings: (settings) =>
         set((state) => ({
           privacySettings: { ...state.privacySettings, ...settings },
@@ -98,20 +102,16 @@ const useUserStore = create(
         set({
           user: {
             id: null,
-            user_id: null,
             name: "",
             email: "",
             classLevel: 6,
-            preferredSubject: "Maths",
+            preferredSubject: "Mathematics", // Default to Mathematics (has RAG support)
             role: null,
-            subjects: [],
             isOnboarded: false,
             username: "",
             avatarSeed: "",
             avatarStyle: "avataaars",
-            permissions: [],
           },
-          accessToken: null,
           academics: { subjects: [] },
           calendar: { exams: [] },
           privacySettings: {
@@ -123,38 +123,17 @@ const useUserStore = create(
           isAuthenticated: false,
         }),
 
+      // Get current class level
       getClassLevel: () => get().user.classLevel,
 
+      // Get current subject
       getSubject: () => get().user.preferredSubject,
-
-      isAdmin: () => get().user.role === "admin",
-      isTeacher: () => get().user.role === "teacher",
-      isStudent: () => get().user.role === "student",
-      isHead: () => get().user.role === "head",
-
-      hasPermission: (permission) => {
-        const { permissions } = get().user;
-        return permissions && permissions.includes(permission);
-      },
-
-      hasAnyPermission: (permissionList) => {
-        const { permissions } = get().user;
-        if (!permissions) return false;
-        return permissionList.some(p => permissions.includes(p));
-      },
-
-      getAuthHeader: () => {
-        const token = get().accessToken;
-        if (!token) return {};
-        return { Authorization: `Bearer ${token}` };
-      },
     }),
     {
-      name: "user-storage", 
-      skipHydration: false,
+      name: "user-storage", // LocalStorage key
+      skipHydration: false, // Enable hydration
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
         academics: state.academics,
         calendar: state.calendar,
         privacySettings: state.privacySettings,

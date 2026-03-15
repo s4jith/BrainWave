@@ -4,6 +4,23 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Progress } from "../../components/ui/progress";
 
+/**
+ * Voice Assessment Component
+ *
+ * Appears after completing 4 pages of lesson.
+ * Uses voice input/output for questions and answers.
+ *
+ * TODO: Backend Integration
+ * =========================
+ * 1. POST /api/assessments - Submit voice assessment
+ * 2. POST /api/assessments/evaluate - Send audio for evaluation
+ * 3. GET /api/assessments/score - Get evaluation results
+ *
+ * Web Speech API:
+ * - SpeechRecognition: For voice input
+ * - SpeechSynthesis: For voice output (questions)
+ */
+
 export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
   const [isListening, setIsListening] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -16,12 +33,14 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
   const recognitionRef = useRef(null);
   const synthesisRef = useRef(null);
 
+  // Sample questions - TODO: Load from backend based on lesson
   const questions = [
     "What did you learn from this lesson?",
     "Can you explain the main concept?",
     "How would you apply this knowledge?",
   ];
 
+  // Initialize Web Speech API
   useEffect(() => {
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       const SpeechRecognition =
@@ -49,9 +68,10 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     };
   }, []);
 
+  // Speak question
   const speakQuestion = (text) => {
     if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel(); 
+      window.speechSynthesis.cancel(); // Stop any ongoing speech
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
       utterance.pitch = 1;
@@ -64,6 +84,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     }
   };
 
+  // Start listening
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
       setTranscript("");
@@ -72,6 +93,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     }
   };
 
+  // Stop listening
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
@@ -79,6 +101,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     }
   };
 
+  // Submit answer and move to next question
   const submitAnswer = () => {
     const newAnswers = [
       ...answers,
@@ -92,23 +115,37 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     setTranscript("");
 
     if (currentQuestion < questions.length - 1) {
-      
+      // Move to next question
       setCurrentQuestion(currentQuestion + 1);
       setTimeout(() => speakQuestion(questions[currentQuestion + 1]), 500);
     } else {
-      
+      // All questions answered, evaluate
       evaluateAnswers(newAnswers);
     }
   };
 
+  // Evaluate answers with backend
   const evaluateAnswers = async (allAnswers) => {
     setIsEvaluating(true);
 
+    // TODO: Send to backend for AI evaluation
+    // const response = await fetch('/api/assessments/evaluate', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     lessonId,
+    //     answers: allAnswers
+    //   })
+    // });
+    // const result = await response.json();
+
+    // Simulate evaluation
     setTimeout(() => {
-      const simulatedScore = Math.floor(Math.random() * 30) + 70; 
+      const simulatedScore = Math.floor(Math.random() * 30) + 70; // 70-100
       setScore(simulatedScore);
       setIsEvaluating(false);
 
+      // Speak the score
       speakQuestion(
         `Your score is ${simulatedScore} out of 100. ${
           simulatedScore >= 80 ? "Excellent work!" : "Good effort!"
@@ -117,6 +154,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
     }, 2000);
   };
 
+  // Start assessment
   useEffect(() => {
     if (questions.length > 0) {
       setTimeout(() => {
@@ -129,12 +167,12 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex items-stretch">
-      {}
+      {/* Split Screen Layout */}
       <div className="flex w-full h-full">
-        {}
+        {/* Left Side - Virtual Companion (AI) */}
         <div className="w-1/2 bg-card border-r border-primary/20 flex flex-col items-center justify-center p-8">
           <div className="text-center max-w-md">
-            {}
+            {/* AI Avatar */}
             <div className="w-32 h-32 mx-auto mb-6 rounded-full bg-primary/10 border-4 border-primary flex items-center justify-center">
               <Volume2
                 className={`h-16 w-16 ${
@@ -159,7 +197,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
                   </p>
                 </div>
 
-                {}
+                {/* Progress Indicator */}
                 <div className="mt-4">
                   <p className="text-xs text-muted-foreground mb-2">
                     Question {currentQuestion + 1} of {questions.length}
@@ -169,7 +207,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               </div>
             )}
 
-            {}
+            {/* Evaluation State */}
             {isEvaluating && (
               <div className="py-8">
                 <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
@@ -177,7 +215,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               </div>
             )}
 
-            {}
+            {/* Score Display */}
             {score !== null && (
               <div className="py-4">
                 <CheckCircle className="h-16 w-16 mx-auto mb-4 text-emerald-600" />
@@ -193,10 +231,10 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
           </div>
         </div>
 
-        {}
+        {/* Right Side - You (User) */}
         <div className="w-1/2 bg-background flex flex-col items-center justify-center p-8">
           <div className="text-center max-w-md w-full">
-            {}
+            {/* User Avatar */}
             <div className="w-32 h-32 mx-auto mb-6 rounded-full bg-muted border-4 border-muted-foreground/20 flex items-center justify-center">
               <div className="w-16 h-16 rounded-full bg-muted-foreground/20" />
             </div>
@@ -207,7 +245,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
             {/* User Interaction Area */}
             {!isEvaluating && score === null && (
               <>
-                {}
+                {/* Voice Input */}
                 <div className="mb-6">
                   <Button
                     size="lg"
@@ -267,7 +305,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               </>
             )}
 
-            {}
+            {/* Waiting/Evaluating State */}
             {isEvaluating && (
               <div className="py-8">
                 <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-muted animate-pulse flex items-center justify-center">
@@ -280,7 +318,7 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
             {/* Result State */}
             {score !== null && (
               <div className="w-full">
-                {}
+                {/* Answers Review */}
                 <div className="mb-6 space-y-3 max-h-[400px] overflow-y-auto">
                   <h4 className="text-xs font-semibold text-muted-foreground mb-3">
                     YOUR ANSWERS:

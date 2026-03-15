@@ -11,6 +11,11 @@ import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 import useAnnotationStore from "../../stores/annotationStore";
 
+/**
+ * Notes Panel Component
+ * For saving personal notes on selected text
+ */
+
 export default function NotesPanel({
   open,
   onClose,
@@ -31,9 +36,6 @@ export default function NotesPanel({
         pageNumber: pageNumber,
         position: selectedText.position,
         lessonId: currentLesson?.id,
-        classLevel: currentLesson?.classLevel, 
-        subject: currentLesson?.subject,
-        chapter: currentLesson?.number,
       });
 
       setHeading("");
@@ -63,7 +65,7 @@ export default function NotesPanel({
         </SheetHeader>
 
         <div className="space-y-6">
-          {}
+          {/* Selected Text */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2">
               Selected Text
@@ -113,7 +115,7 @@ export default function NotesPanel({
             </div>
           </div>
 
-          {}
+          {/* Helper Text */}
           <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs text-muted-foreground">
               Note: Your note will be highlighted in{" "}
