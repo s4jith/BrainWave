@@ -9,6 +9,19 @@ import authFetch from "../utils/authFetch";
 import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
+function parseApiError(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((item) => item?.msg || item?.message)
+      .filter(Boolean);
+    return msgs.length ? msgs.join(", ") : fallback;
+  }
+  if (typeof detail === "object") return detail.message || fallback;
+  return fallback;
+}
+
 export default function StudentManagement() {
   const { toast } = useToast();
   const { getAuthHeader } = useUserStore();
@@ -212,7 +225,13 @@ export default function StudentManagement() {
         method: "DELETE"
       });
       if (!response.ok) {
-        throw new Error("Failed to delete student");
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409 && errorData.detail?.groups) {
+          const groupNames = (errorData.detail.groups || []).filter(Boolean);
+          const suffix = groupNames.length ? ` Assigned groups: ${groupNames.join(", ")}` : "";
+          throw new Error(`Remove this student from group(s) before deleting.${suffix}`);
+        }
+        throw new Error(parseApiError(errorData.detail, "Failed to delete student"));
       }
     } catch (err) {
       

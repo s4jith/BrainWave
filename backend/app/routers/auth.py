@@ -76,6 +76,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
     return hash_password(plain_password) == hashed_password
 
+
+def get_user_password_hash(user: dict) -> str:
+    """Read password hash from supported schema variants."""
+    if not user:
+        return ""
+    return user.get("password") or user.get("password_hash") or ""
+
 def create_access_token(user_id: str, email: str, role: str, mongo_id: str) -> str:
     """
     Create JWT access token with user information.
@@ -110,25 +117,29 @@ class AdminTokenRequest(BaseModel):
 @router.post("/admin-token")
 async def get_admin_token(request: AdminTokenRequest):
     """
-    Generate a JWT token for the hardcoded admin account.
-    This is used by the frontend when admin logs in with the client-side credentials.
+    Generate a JWT token for an admin user from MongoDB.
     """
-    ADMIN_EMAIL = "admin1@gmail.com"
-    ADMIN_PASSWORD = "admin1234"
-    
-    if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
+    normalized_email = (request.email or "").strip().lower()
+    admin = db.users.find_one({
+        "role": UserRole.ADMIN.value,
+        "$or": [
+            {"email_normalized": normalized_email},
+            {"email": {"$regex": f"^{normalized_email}$", "$options": "i"}},
+        ],
+    })
+
+    if not admin or not verify_password(request.password, get_user_password_hash(admin)):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-    
-    expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
-    payload = {
-        "user_id": "ADMIN_ROOT",
-        "email": ADMIN_EMAIL,
-        "role": "admin",
-        "exp": expire,
-        "iat": datetime.utcnow()
-    }
-    token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    
+    if not admin.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Admin account is deactivated")
+
+    token = create_access_token(
+        user_id=admin.get("user_id", ""),
+        email=admin.get("email", ""),
+        role=UserRole.ADMIN.value,
+        mongo_id=str(admin.get("_id")),
+    )
+
     return {"access_token": token, "token_type": "bearer"}
 
 def generate_teacher_id() -> str:
@@ -156,38 +167,6 @@ async def login(request: LoginRequest):
         normalized_email = (request.email or "").strip().lower()
         if not normalized_email:
             return {"success": False, "error": "Email is required"}
-
-        ADMIN_EMAIL = "admin1@gmail.com"
-        ADMIN_PASSWORD = "admin1234"
-        if normalized_email == ADMIN_EMAIL and request.password == ADMIN_PASSWORD:
-            access_token = create_access_token(
-                user_id="ADMIN_ROOT",
-                email=ADMIN_EMAIL,
-                role="admin",
-                mongo_id="admin-root"
-            )
-            role_enum = UserRole("admin")
-            permissions = [p.value for p in get_role_permissions(role_enum)]
-            
-            return {
-                "success": True,
-                "first_login": False,
-                "user_id": "ADMIN_ROOT",
-                "session_id": str(uuid.uuid4()),
-                "access_token": access_token,
-                "token_type": "bearer",
-                "user": {
-                    "id": "admin-root",
-                    "user_id": "ADMIN_ROOT",
-                    "name": "Administrator",
-                    "email": ADMIN_EMAIL,
-                    "role": "admin",
-                    "class_level": None,
-                    "subjects": [],
-                    "is_onboarded": True,
-                    "permissions": permissions
-                }
-            }
         
         email_query = {
             "$or": [
@@ -206,7 +185,7 @@ async def login(request: LoginRequest):
                 "error": f"{role_msg} found with this email"
             }
         
-        if not verify_password(request.password, user.get("password", "")):
+        if not verify_password(request.password, get_user_password_hash(user)):
             return {
                 "success": False,
                 "error": "Invalid password"
@@ -520,22 +499,6 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     Get current authenticated user's information.
     """
     try:
-        # Built-in admin account is token-backed and may not exist in Mongo users.
-        if current_user.user_id == "ADMIN_ROOT":
-            role_enum = UserRole.ADMIN
-            permissions = [p.value for p in get_role_permissions(role_enum)]
-            return {
-                "id": "admin-root",
-                "user_id": "ADMIN_ROOT",
-                "name": "Administrator",
-                "email": "admin1@gmail.com",
-                "role": "admin",
-                "class_level": None,
-                "subjects": [],
-                "is_active": True,
-                "permissions": permissions,
-            }
-
         user = db.users.find_one({"user_id": current_user.user_id})
         
         if not user:
@@ -719,7 +682,7 @@ async def change_password_secure(request: ChangePasswordConfirmRequest):
         if not user:
             return {"success": False, "error": "User not found."}
         
-        if not verify_password(request.old_password, user.get("password", "")):
+        if not verify_password(request.old_password, get_user_password_hash(user)):
             return {"success": False, "error": "Current password is incorrect."}
         
         if request.old_password == request.new_password:

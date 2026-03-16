@@ -6,6 +6,24 @@
  */
 import useUserStore from "../stores/userStore";
 
+let isForceLoggingOut = false;
+
+function forceLogoutToLogin() {
+  if (isForceLoggingOut) return;
+  isForceLoggingOut = true;
+
+  const { logout } = useUserStore.getState();
+  logout();
+
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.replace("/login");
+  }
+
+  setTimeout(() => {
+    isForceLoggingOut = false;
+  }, 500);
+}
+
 export default async function authFetch(url, options = {}) {
   const token = useUserStore.getState().accessToken;
   const headers = { ...(options.headers || {}) };
@@ -14,13 +32,9 @@ export default async function authFetch(url, options = {}) {
   }
   const response = await fetch(url, { ...options, headers });
 
-  // If the server says unauthorized, the token is invalid/expired — force logout
-  if (response.status === 401) {
-    const { logout, isAuthenticated } = useUserStore.getState();
-    if (isAuthenticated) {
-      logout();
-      window.location.href = "/login";
-    }
+  // If the server says unauthorized/forbidden, the token/session is invalid — force logout
+  if (response.status === 401 || response.status === 403) {
+    forceLogoutToLogin();
   }
 
   return response;

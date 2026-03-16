@@ -85,7 +85,12 @@ export default function TeacherManagement() {
             });
             if (!response.ok) throw new Error("Failed to fetch teachers");
             const data = await response.json();
-            setTeachers(data);
+            const normalized = (Array.isArray(data) ? data : []).map((teacher) => ({
+                ...teacher,
+                dob: teacher?.dob ? String(teacher.dob).split("T")[0] : "",
+                preferred_subject: teacher?.preferred_subject || teacher?.subjects?.[0] || "",
+            }));
+            setTeachers(normalized);
         } catch (err) {
             setError(err.message);
             setTeachers([]);
@@ -185,7 +190,12 @@ export default function TeacherManagement() {
             });
             if (!response.ok) throw new Error("Failed to update teacher");
             const updated = await response.json();
-            setTeachers(teachers.map(t => t.id === selectedTeacher.id ? updated : t));
+            setTeachers(teachers.map(t => t.id === selectedTeacher.id ? {
+                ...t,
+                ...updated,
+                dob: updated?.dob ? String(updated.dob).split("T")[0] : (t.dob || ""),
+                preferred_subject: updated?.preferred_subject || updated?.subjects?.[0] || t.preferred_subject || "",
+            } : t));
             setShowEditModal(false);
             setSelectedTeacher(null);
             resetForm();
@@ -345,8 +355,8 @@ export default function TeacherManagement() {
             name: teacher.name,
             email: teacher.email,
             mobile: teacher.mobile || "",
-            dob: teacher.dob || "",
-            preferred_subject: teacher.preferred_subject || teacher.subjects?.[0] || ""
+            dob: teacher.dob ? String(teacher.dob).split("T")[0] : "",
+            preferred_subject: teacher.preferred_subject || teacher.subjects?.[0] || teacher.subject || ""
         });
         setShowEditModal(true);
     };

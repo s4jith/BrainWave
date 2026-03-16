@@ -1,6 +1,6 @@
 """
-Initialize Users in MongoDB Atlas
-Creates admin and sample student/teacher accounts
+Initialize users in MongoDB Atlas.
+Creates admin and sample student/teacher accounts.
 """
 import sys
 import os
@@ -14,9 +14,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
 
-# Admin credentials (must match Login.jsx)
+# Admin credentials for DB-seeded admin account
 ADMIN_EMAIL = "admin1@gmail.com"
 ADMIN_PASSWORD = "admin1234"
+ADMIN_USER_ID = "ADMIN001"
 
 def hash_password(password: str) -> str:
     """Hash password using SHA-256 (same as auth.py)"""
@@ -32,11 +33,46 @@ async def init_users():
     print(" Connected to MongoDB Atlas")
     print(f" Database: {settings.MONGODB_DB_NAME}")
     
-    # Note: Admin credentials are hardcoded in Login.jsx and auth.py
-    print(f"\n Admin Credentials (Hardcoded):")
+    print(f"\n Admin Credentials (Database):")
     print(f"   Email: {ADMIN_EMAIL}")
     print(f"   Password: {ADMIN_PASSWORD}")
-    print(f"   Note: Admin does NOT use database authentication")
+
+    # Create/ensure admin user in DB
+    admin_existing = await users_collection.find_one({
+        "role": "admin",
+        "$or": [
+            {"email_normalized": ADMIN_EMAIL.lower()},
+            {"email": ADMIN_EMAIL},
+        ],
+    })
+    admin_password_hash = hash_password(ADMIN_PASSWORD)
+    if admin_existing:
+        await users_collection.update_one(
+            {"_id": admin_existing["_id"]},
+            {
+                "$set": {
+                    "email": ADMIN_EMAIL,
+                    "email_normalized": ADMIN_EMAIL.lower(),
+                    "password": admin_password_hash,
+                    "is_active": True,
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
+        print("   Admin user updated in DB")
+    else:
+        await users_collection.insert_one({
+            "user_id": ADMIN_USER_ID,
+            "name": "Administrator",
+            "email": ADMIN_EMAIL,
+            "email_normalized": ADMIN_EMAIL.lower(),
+            "password": admin_password_hash,
+            "role": "admin",
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        })
+        print("   Admin user created in DB")
     
     # Create sample students
     sample_students = [
@@ -77,7 +113,7 @@ async def init_users():
                 "user_id": student_data["user_id"],
                 "name": student_data["name"],
                 "email": student_data["email"],
-                "password_hash": password_hash,
+                "password": password_hash,
                 "role": "student",
                 "class_level": student_data["class_level"],
                 "is_active": True,
@@ -120,7 +156,7 @@ async def init_users():
                 "user_id": teacher_data["user_id"],
                 "name": teacher_data["name"],
                 "email": teacher_data["email"],
-                "password_hash": password_hash,
+                "password": password_hash,
                 "role": "teacher",
                 "class_level": None,
                 "is_active": True,
@@ -150,7 +186,7 @@ async def init_users():
     print("\n" + "=" * 60)
     print(" LOGIN CREDENTIALS")
     print("=" * 60)
-    print(f"Admin (Hardcoded):")
+    print(f"Admin (Database):")
     print(f"   Email:    {ADMIN_EMAIL}")
     print(f"   Password: {ADMIN_PASSWORD}")
     print(f"   Role:     Admin (routes to /admin-dashboard)")

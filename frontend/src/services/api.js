@@ -1,32 +1,7 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-import useUserStore from "../stores/userStore";
-
-/**
- * Authenticated fetch wrapper.
- * Automatically injects the JWT Bearer token from the user store
- * into every request's Authorization header.
- * On 401 responses, automatically logs the user out and redirects to login.
- */
-async function authFetch(url, options = {}) {
-  const token = useUserStore.getState().accessToken;
-  const headers = { ...(options.headers || {}) };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const response = await fetch(url, { ...options, headers });
-
-  if (response.status === 401) {
-    const { logout, isAuthenticated } = useUserStore.getState();
-    if (isAuthenticated) {
-      logout();
-      window.location.href = "/login";
-    }
-  }
-
-  return response;
-}
+import authFetch from "../utils/authFetch";
 
 export const chatService = {
   async _postAnnotation(requestBody) {

@@ -177,6 +177,60 @@ def serialize_student(student: dict) -> dict:
         "feature_overrides": student.get("feature_overrides", {})
     }
 
+
+def _resolve_users_for_role(candidate_ids: Optional[List[str]], role: str) -> List[dict]:
+    """Resolve mixed user_id/ObjectId identifiers into user documents for a role."""
+    if not candidate_ids:
+        return []
+
+    values = [str(v).strip() for v in candidate_ids if str(v).strip()]
+    if not values:
+        return []
+
+    object_ids = [ObjectId(v) for v in values if ObjectId.is_valid(v)]
+    role_query = {"role": role}
+    if role == "teacher":
+        role_query = {
+            "$or": [
+                {"role": "teacher"},
+                {"role": "head", "promoted_from_teacher": True},
+            ]
+        }
+
+    query = {"$and": [role_query, {"$or": [{"user_id": {"$in": values}}]}]}
+    if object_ids:
+        query["$and"][1]["$or"].append({"_id": {"$in": object_ids}})
+
+    docs = list(db.users.find(query))
+    by_oid = {str(doc.get("_id")): doc for doc in docs if doc.get("_id")}
+    by_uid = {str(doc.get("user_id")): doc for doc in docs if doc.get("user_id")}
+
+    ordered: List[dict] = []
+    seen = set()
+    for value in values:
+        doc = by_oid.get(value) or by_uid.get(value)
+        if not doc:
+            continue
+        oid_str = str(doc.get("_id"))
+        if not oid_str or oid_str in seen:
+            continue
+        seen.add(oid_str)
+        ordered.append(doc)
+    return ordered
+
+
+def _canonical_oid_strings(docs: List[dict]) -> List[str]:
+    """Return stable ObjectId string list for resolved docs."""
+    ids: List[str] = []
+    seen = set()
+    for doc in docs:
+        oid = str(doc.get("_id", "")).strip()
+        if not oid or oid in seen:
+            continue
+        seen.add(oid)
+        ids.append(oid)
+    return ids
+
 @router.get("/dashboard-stats")
 async def get_dashboard_stats():
     """
@@ -808,6 +862,28 @@ async def delete_student(student_id: str):
         uid = student.get("user_id", "")
         oid_str = str(student["_id"])
 
+        assigned_groups = list(db.groups.find(
+            {
+                "$or": [
+                    {"student_ids": uid},
+                    {"student_ids": oid_str},
+                ]
+            },
+            {"_id": 0, "name": 1, "class_level": 1, "subject": 1, "batch_year": 1}
+        ))
+        if assigned_groups:
+            group_list = [
+                g.get("name") or f"Class {g.get('class_level')} - {g.get('subject', '')} ({g.get('batch_year', '')})"
+                for g in assigned_groups
+            ]
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Student is assigned to one or more groups. Remove the student from groups first.",
+                    "groups": group_list,
+                }
+            )
+
         user_id_filter = {"$or": [{"user_id": uid}, {"user_id": oid_str}, {"student_id": uid}, {"student_id": oid_str}]}
         db.db.test_sessions.delete_many(user_id_filter)
         db.submissions.delete_many({"$or": [{"student_id": uid}, {"student_id": oid_str}]})
@@ -1174,7 +1250,10 @@ async def delete_teacher(teacher_id: str):
             ]
             raise HTTPException(
                 status_code=409,
-                detail={"message": "Teacher is assigned to groups", "groups": group_list}
+                detail={
+                    "message": "Teacher is assigned to one or more groups. Remove the teacher from groups first.",
+                    "groups": group_list,
+                }
             )
 
         db.users.delete_one({"_id": teacher["_id"]})
@@ -1247,21 +1326,39 @@ async def get_groups():
         groups = []
         
         for g in cursor:
-            teacher_names = []
+            resolved_students = _resolve_users_for_role(g.get("student_ids", []), "student")
+            canonical_student_ids = _canonical_oid_strings(resolved_students)
+
+            teacher_candidates: List[str] = []
             if g.get("teacher_id"):
-                tid = g.get("teacher_id")
-                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
-                if teacher:
-                    teacher_names.append(teacher.get("name"))
-            
-            if g.get("teacher_ids"):
-                for tid in g.get("teacher_ids"):
-                    if g.get("teacher_id") and tid == g.get("teacher_id"):
-                        continue
-                        
-                    teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
-                    if teacher:
-                        teacher_names.append(teacher.get("name"))
+                teacher_candidates.append(str(g.get("teacher_id")))
+            teacher_candidates.extend([str(tid) for tid in g.get("teacher_ids", []) if str(tid).strip()])
+            resolved_teachers = _resolve_users_for_role(teacher_candidates, "teacher")
+            canonical_teacher_ids = _canonical_oid_strings(resolved_teachers)
+
+            if (
+                canonical_student_ids != (g.get("student_ids") or [])
+                or canonical_teacher_ids != (g.get("teacher_ids") or [])
+                or (canonical_teacher_ids and g.get("teacher_id") != canonical_teacher_ids[0])
+                or (not canonical_teacher_ids and g.get("teacher_id") is not None)
+            ):
+                db.groups.update_one(
+                    {"_id": g["_id"]},
+                    {
+                        "$set": {
+                            "student_ids": canonical_student_ids,
+                            "teacher_ids": canonical_teacher_ids,
+                            "teacher_id": canonical_teacher_ids[0] if canonical_teacher_ids else None,
+                            "updated_at": datetime.utcnow(),
+                        }
+                    }
+                )
+
+            teacher_names = []
+            for teacher in resolved_teachers:
+                teacher_name = teacher.get("name")
+                if teacher_name and teacher_name not in teacher_names:
+                    teacher_names.append(teacher_name)
             
             groups.append({
                 "id": str(g["_id"]),
@@ -1270,12 +1367,12 @@ async def get_groups():
                 "subject": g.get("subject"),
                 "batch_year": g.get("batch_year"),
                 "description": g.get("description", ""),
-                "teacher_id": g.get("teacher_id"),
-                "teacher_ids": g.get("teacher_ids", [g.get("teacher_id")] if g.get("teacher_id") else []),
+                "teacher_id": canonical_teacher_ids[0] if canonical_teacher_ids else None,
+                "teacher_ids": canonical_teacher_ids,
                 "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
-                "student_ids": g.get("student_ids", []),
-                "students": [serialize_student(s) for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in g.get("student_ids", [])]}})] if g.get("student_ids") else [],
-                "student_count": len(g.get("student_ids", [])),
+                "student_ids": canonical_student_ids,
+                "students": [serialize_student(s) for s in resolved_students],
+                "student_count": len(canonical_student_ids),
                 "feature_flags": {**{"ai_chatbot": False, "test_center": False, "my_grades": False, "book_to_bot": True, "book_to_bot_doubt": False}, **g.get("feature_flags", {})},
                 "created_at": g.get("created_at").isoformat() if g.get("created_at") else None
             })
@@ -1296,14 +1393,19 @@ async def create_group(group: GroupCreate):
         if existing:
             pass
 
+        resolved_students = _resolve_users_for_role(group.student_ids, "student")
+        resolved_teachers = _resolve_users_for_role(group.teacher_ids, "teacher")
+        canonical_student_ids = _canonical_oid_strings(resolved_students)
+        canonical_teacher_ids = _canonical_oid_strings(resolved_teachers)
+
         group_doc = {
             "name": group_name,
             "class_level": group.class_level,
             "subject": group.subject,
             "batch_year": group.batch_year,
-            "teacher_ids": group.teacher_ids,
-            "teacher_id": group.teacher_ids[0] if group.teacher_ids else None,
-            "student_ids": group.student_ids,
+            "teacher_ids": canonical_teacher_ids,
+            "teacher_id": canonical_teacher_ids[0] if canonical_teacher_ids else None,
+            "student_ids": canonical_student_ids,
             "created_at": datetime.utcnow()
         }
         
@@ -1311,13 +1413,12 @@ async def create_group(group: GroupCreate):
         group_doc["_id"] = result.inserted_id
         
         teacher_names = []
-        if group_doc["teacher_ids"]:
-            for tid in group_doc["teacher_ids"]:
-                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
-                if teacher:
-                    teacher_names.append(teacher.get("name"))
+        for teacher in resolved_teachers:
+            teacher_name = teacher.get("name")
+            if teacher_name and teacher_name not in teacher_names:
+                teacher_names.append(teacher_name)
         
-        logger.info(f"Created group: {group_name} with {len(group.student_ids)} students")
+        logger.info(f"Created group: {group_name} with {len(canonical_student_ids)} students")
         return {
             "id": str(group_doc["_id"]),
             "name": group_name,
@@ -1327,8 +1428,8 @@ async def create_group(group: GroupCreate):
             "teacher_id": group_doc["teacher_id"],
             "teacher_ids": group_doc["teacher_ids"],
             "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
-            "student_ids": group.student_ids,
-            "student_count": len(group.student_ids)
+            "student_ids": canonical_student_ids,
+            "student_count": len(canonical_student_ids)
         }
         
     except Exception as e:
@@ -1366,7 +1467,10 @@ async def update_group(group_id: str, data: GroupUpdate):
         update_data = {k: v for k, v in data.dict().items() if v is not None}
         
         if "teacher_ids" in update_data:
-            update_data["teacher_id"] = update_data["teacher_ids"][0] if update_data["teacher_ids"] else None
+            resolved_teachers = _resolve_users_for_role(update_data.get("teacher_ids") or [], "teacher")
+            canonical_teacher_ids = _canonical_oid_strings(resolved_teachers)
+            update_data["teacher_ids"] = canonical_teacher_ids
+            update_data["teacher_id"] = canonical_teacher_ids[0] if canonical_teacher_ids else None
             
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -1383,26 +1487,42 @@ async def update_group(group_id: str, data: GroupUpdate):
             raise HTTPException(status_code=404, detail="Group not found")
         
         teacher_names = []
+        teacher_candidates: List[str] = []
         if result.get("teacher_ids"):
-            for tid in result.get("teacher_ids"):
-                teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
-                if teacher:
-                    teacher_names.append(teacher.get("name"))
+            teacher_candidates.extend([str(tid) for tid in result.get("teacher_ids", []) if str(tid).strip()])
         elif result.get("teacher_id"):
-            tid = result.get("teacher_id")
-            teacher = db.users.find_one({"_id": ObjectId(tid)} if ObjectId.is_valid(tid) else {"user_id": tid})
-            if teacher:
-                teacher_names.append(teacher.get("name"))
+            teacher_candidates.append(str(result.get("teacher_id")))
+        resolved_teachers = _resolve_users_for_role(teacher_candidates, "teacher")
+        canonical_teacher_ids = _canonical_oid_strings(resolved_teachers)
+        for teacher in resolved_teachers:
+            teacher_name = teacher.get("name")
+            if teacher_name and teacher_name not in teacher_names:
+                teacher_names.append(teacher_name)
+
+        resolved_students = _resolve_users_for_role(result.get("student_ids", []), "student")
+        canonical_student_ids = _canonical_oid_strings(resolved_students)
+        if canonical_teacher_ids != (result.get("teacher_ids") or []) or canonical_student_ids != (result.get("student_ids") or []):
+            db.groups.update_one(
+                {"_id": result["_id"]},
+                {
+                    "$set": {
+                        "teacher_ids": canonical_teacher_ids,
+                        "teacher_id": canonical_teacher_ids[0] if canonical_teacher_ids else None,
+                        "student_ids": canonical_student_ids,
+                        "updated_at": datetime.utcnow(),
+                    }
+                }
+            )
             
         logger.info(f"Updated group: {group_id}")
         return {
             "id": str(result["_id"]),
             "name": result.get("name"),
-            "teacher_id": result.get("teacher_id"),
-            "teacher_ids": result.get("teacher_ids", [result.get("teacher_id")] if result.get("teacher_id") else []),
+            "teacher_id": canonical_teacher_ids[0] if canonical_teacher_ids else None,
+            "teacher_ids": canonical_teacher_ids,
             "teacher_name": ", ".join(teacher_names) if teacher_names else "No Teacher",
-            "student_ids": result.get("student_ids", []),
-            "student_count": len(result.get("student_ids", []))
+            "student_ids": canonical_student_ids,
+            "student_count": len(canonical_student_ids)
         }
         
     except HTTPException:
@@ -1418,9 +1538,12 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
         if not ObjectId.is_valid(group_id):
             raise HTTPException(status_code=400, detail="Invalid group ID")
         
+        resolved_students = _resolve_users_for_role(data.student_ids, "student")
+        canonical_student_ids = _canonical_oid_strings(resolved_students)
+
         result = db.groups.find_one_and_update(
             {"_id": ObjectId(group_id)},
-            {"$set": {"student_ids": data.student_ids, "updated_at": datetime.utcnow()}},
+            {"$set": {"student_ids": canonical_student_ids, "updated_at": datetime.utcnow()}},
             return_document=True
         )
         
@@ -1428,24 +1551,26 @@ async def update_group_students(group_id: str, data: GroupStudentUpdate):
             raise HTTPException(status_code=404, detail="Group not found")
         
         teacher_name = None
-        if result.get("teacher_id"):
-            teacher = db.users.find_one({"_id": ObjectId(result["teacher_id"])} if ObjectId.is_valid(result["teacher_id"]) else {"user_id": result["teacher_id"]})
-            teacher_name = teacher.get("name") if teacher else None
+        teacher_candidates: List[str] = []
+        if result.get("teacher_ids"):
+            teacher_candidates.extend([str(tid) for tid in result.get("teacher_ids", []) if str(tid).strip()])
+        elif result.get("teacher_id"):
+            teacher_candidates.append(str(result.get("teacher_id")))
+        resolved_teachers = _resolve_users_for_role(teacher_candidates, "teacher")
+        if resolved_teachers:
+            teacher_name = resolved_teachers[0].get("name")
 
-        students = [
-            serialize_student(s)
-            for s in db.users.find({"_id": {"$in": [ObjectId(sid) for sid in result.get("student_ids", []) if ObjectId.is_valid(sid)]}})
-        ]
+        students = [serialize_student(s) for s in resolved_students]
         
-        logger.info(f"Updated group students: {group_id} - {len(data.student_ids)} students")
+        logger.info(f"Updated group students: {group_id} - {len(canonical_student_ids)} students")
         return {
             "id": str(result["_id"]),
             "name": result.get("name", ""),
             "description": result.get("description", ""),
             "teacher_id": result.get("teacher_id", ""),
             "teacher_name": teacher_name,
-            "student_ids": result.get("student_ids", []),
-            "student_count": len(result.get("student_ids", [])),
+            "student_ids": canonical_student_ids,
+            "student_count": len(canonical_student_ids),
             "students": students
         }
         

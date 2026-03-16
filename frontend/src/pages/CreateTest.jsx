@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import { ClipboardList, Calendar, Clock, CheckCircle, Plus, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
+import { ClipboardList, Calendar, Clock, CheckCircle, ChevronRight, FileText, AlertCircle, X, Trash2, Edit2, Search } from "lucide-react";
 import QuestionBankSelector from "../components/QuestionBankSelector";
 import QuestionPaperSelector from "../components/QuestionPaperSelector";
 import { parseCombinedValue, parseGroupName } from "../constants/academicConstants";
@@ -453,18 +453,19 @@ export default function CreateTest() {
 
   const handleGroupToggle = (groupId) => {
     const group = groups.find(g => g.id === groupId);
+    const groupStudentIds = (group?.students || []).map(s => s.id).filter(Boolean);
     
     if (selectedGroups.includes(groupId)) {
       setSelectedGroups(prev => prev.filter(id => id !== groupId));
       
-      const studentIdsToRemove = group?.student_ids || group?.students?.map(s => s.id) || [];
+      const studentIdsToRemove = groupStudentIds;
       if (studentIdsToRemove.length > 0) {
         setSelectedStudents(prev => prev.filter(id => !studentIdsToRemove.includes(id)));
       }
     } else {
       setSelectedGroups(prev => [...prev, groupId]);
       
-      const studentIdsToAdd = group?.student_ids || group?.students?.map(s => s.id) || [];
+      const studentIdsToAdd = groupStudentIds;
       if (studentIdsToAdd.length > 0) {
         setSelectedStudents(prev => {
           const newSelected = [...new Set([...prev, ...studentIdsToAdd])];
@@ -484,7 +485,7 @@ export default function CreateTest() {
     const allGroupIds = filteredGroups.map(g => g.id);
     setSelectedGroups(allGroupIds);
     
-    const allStudentIds = filteredGroups.flatMap(g => g.student_ids || []);
+    const allStudentIds = filteredGroups.flatMap(g => (g.students || []).map(s => s.id).filter(Boolean));
     setSelectedStudents([...new Set(allStudentIds)]);
   };
 
@@ -633,26 +634,6 @@ export default function CreateTest() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const openAddQuestion = () => {
-    setQuestionForm({
-      class_level: formData.class_level || 10,
-      subject: formData.subject || "",
-      chapter: "",
-      chapter_name: "",
-      topic: "",
-      marks: 1,
-      type: "mcq",
-      text: "",
-      options: ["", "", "", ""],
-      correct_answer: 0,
-      correct_answers: [],
-      fillup_answers: "",
-      answer_text: ""
-    });
-    setEditingIndex(null);
-    setShowQuestionModal(true);
   };
 
   const isTestDetailsComplete = formData.title?.trim() && formData.subject && formData.class_level && formData.startDate;
@@ -1096,7 +1077,7 @@ export default function CreateTest() {
                         <div className="flex-1">
                           <p className="font-medium text-gray-900 dark:text-white">{group.name}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {group.student_count || 0} students
+                            {Array.isArray(group.students) ? group.students.length : (group.student_count || 0)} students
                             {group.teacher_name && group.teacher_name !== 'No Teacher' && (
                               <span> • Teacher: {group.teacher_name}</span>
                             )}
@@ -1221,12 +1202,6 @@ export default function CreateTest() {
               >
                 <FileText className="w-4 h-4" /> Select from Papers
               </button>
-              <button
-                onClick={openAddQuestion}
-                className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Add Question
-              </button>
             </div>
           </div>
 
@@ -1234,7 +1209,7 @@ export default function CreateTest() {
             <div className="text-center py-12">
               <FileText className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">No questions added yet</p>
-              <p className="text-gray-400 dark:text-gray-500 text-sm">Click "Add Question" to start building your test</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">Use "Select from Bank" or "Select from Papers" to add questions</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1299,7 +1274,7 @@ export default function CreateTest() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingIndex !== null ? 'Edit Question' : 'Add New Question'}
+                Edit Question
               </h3>
               <button onClick={() => setShowQuestionModal(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
                 <X className="w-5 h-5" />
@@ -1534,7 +1509,7 @@ export default function CreateTest() {
                 onClick={handleSaveQuestion}
                 className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition font-medium"
               >
-                {editingIndex !== null ? 'Update Question' : 'Add Question'}
+                Update Question
               </button>
             </div>
           </div>

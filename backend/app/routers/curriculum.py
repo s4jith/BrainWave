@@ -29,6 +29,34 @@ router = APIRouter(prefix="/api/curriculum", tags=["Curriculum Management"])
 SUBJECTS_COLLECTION = "subjects"
 PENDING_CURRICULUM_COLLECTION = "pending_curriculum"
 
+
+class BulkTopicUpdate(BaseModel):
+    topic_id: Optional[str] = None
+    topic_name: str
+    description: Optional[str] = ""
+    page_range: Optional[str] = ""
+    difficulty_level: Optional[str] = "medium"
+    order: Optional[int] = None
+    is_active: Optional[bool] = True
+
+
+class BulkChapterUpdate(BaseModel):
+    chapter_id: Optional[str] = None
+    chapter_number: Optional[int] = None
+    chapter_name: str
+    description: Optional[str] = ""
+    summary: Optional[str] = ""
+    order: Optional[int] = None
+    is_active: Optional[bool] = True
+    topics: List[BulkTopicUpdate] = []
+
+
+class BulkSubjectUpdateRequest(BaseModel):
+    subject_name: Optional[str] = None
+    class_level: Optional[int] = None
+    description: Optional[str] = None
+    chapters: List[BulkChapterUpdate] = []
+
 @router.get("/subjects", response_model=List[SubjectSummary])
 async def get_all_subjects(
     class_level: Optional[int] = Query(None, ge=1, le=12),
@@ -315,6 +343,110 @@ async def update_subject(subject_id: str, request: UpdateSubjectRequest):
         raise
     except Exception as e:
         logger.error(f" Update subject failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/subjects/{subject_id}/bulk", response_model=Subject)
+async def bulk_update_subject(subject_id: str, request: BulkSubjectUpdateRequest):
+    """Update subject and full chapter/topic structure in a single request."""
+    try:
+        collection = mongodb.db[SUBJECTS_COLLECTION]
+
+        current = await collection.find_one({"subject_id": subject_id})
+        if not current:
+            raise HTTPException(status_code=404, detail="Subject not found")
+
+        target_subject_name = request.subject_name or current.get("subject_name")
+        target_class_level = request.class_level if request.class_level is not None else current.get("class_level")
+
+        duplicate = await collection.find_one({
+            "subject_id": {"$ne": subject_id},
+            "subject_name": target_subject_name,
+            "class_level": target_class_level,
+            "is_active": {"$ne": False}
+        })
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Subject '{target_subject_name}' already exists for Class {target_class_level}"
+            )
+
+        now = datetime.utcnow()
+        normalized_chapters = []
+        for chapter_index, chapter in enumerate(request.chapters, start=1):
+            chapter_id = chapter.chapter_id or f"{subject_id}_ch_{chapter_index}_{uuid.uuid4().hex[:6]}"
+            chapter_topics = []
+            for topic_index, topic in enumerate(chapter.topics or [], start=1):
+                topic_id = topic.topic_id or f"{chapter_id}_tp_{topic_index}_{uuid.uuid4().hex[:6]}"
+                chapter_topics.append({
+                    "topic_id": topic_id,
+                    "topic_name": topic.topic_name,
+                    "description": topic.description or "",
+                    "page_range": topic.page_range or "",
+                    "learning_objectives": [],
+                    "keywords": [],
+                    "estimated_time_minutes": 45,
+                    "difficulty_level": topic.difficulty_level or "medium",
+                    "prerequisites": [],
+                    "order": topic.order if topic.order is not None else topic_index,
+                    "is_active": topic.is_active if topic.is_active is not None else True,
+                    "question_count": 0,
+                })
+
+            normalized_chapters.append({
+                "chapter_id": chapter_id,
+                "chapter_number": chapter.chapter_number if chapter.chapter_number is not None else chapter_index,
+                "chapter_name": chapter.chapter_name,
+                "description": chapter.description or "",
+                "summary": chapter.summary or "",
+                "topics": chapter_topics,
+                "pdf_url": "",
+                "video_url": "",
+                "total_pages": 0,
+                "order": chapter.order if chapter.order is not None else chapter_index,
+                "is_active": chapter.is_active if chapter.is_active is not None else True,
+                "created_at": now,
+                "updated_at": now,
+            })
+
+        update_data = {
+            "subject_name": target_subject_name,
+            "class_level": target_class_level,
+            "description": request.description if request.description is not None else current.get("description", ""),
+            "chapters": normalized_chapters,
+            "updated_at": now,
+        }
+
+        result = await collection.find_one_and_update(
+            {"subject_id": subject_id},
+            {"$set": update_data},
+            return_document=True
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Subject not found")
+
+        subject_data = {
+            "subject_id": result["subject_id"],
+            "subject_name": result["subject_name"],
+            "class_level": result["class_level"],
+            "board": result.get("board", "CBSE"),
+            "description": result.get("description", ""),
+            "icon": result.get("icon", "📚"),
+            "color": result.get("color", "#3B82F6"),
+            "chapters": result.get("chapters", []),
+            "total_topics": sum(len(ch.get("topics", [])) for ch in result.get("chapters", [])),
+            "total_chapters": len(result.get("chapters", [])),
+            "is_active": result.get("is_active", True),
+            "created_at": result.get("created_at", now),
+            "updated_at": result.get("updated_at", now),
+        }
+        return Subject(**subject_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bulk update subject failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/subjects/{subject_id}")
