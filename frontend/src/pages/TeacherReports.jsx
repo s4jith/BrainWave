@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { ReportsPageSkeleton } from "../components/LoadingSpinner";
 import { BarChart3, TrendingUp, Users, CheckCircle, FileText, Award } from "lucide-react";
 import {
     AreaChart,
@@ -111,9 +111,7 @@ export default function TeacherReports() {
     if (loading) {
         return (
             <AdminLayout title="Reports & Analytics" icon={BarChart3}>
-                <div className="flex items-center justify-center h-96">
-                    <LoadingSpinner size="lg" text="Loading analytics…" />
-                </div>
+                <ReportsPageSkeleton />
             </AdminLayout>
         );
     }

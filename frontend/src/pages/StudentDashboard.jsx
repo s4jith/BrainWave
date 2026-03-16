@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
+import { DashboardPageSkeleton } from "../components/LoadingSpinner";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -34,14 +35,22 @@ export default function StudentDashboard() {
     const [groups, setGroups] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!user?.id) return;
-        fetchStudentStats();
-        fetchRecentGrades();
-        fetchGroups();
-        fetchSubjects();
-        fetchFeatures();
+        const loadAll = async () => {
+            setLoading(true);
+            await Promise.all([
+                fetchStudentStats(),
+                fetchRecentGrades(),
+                fetchGroups(),
+                fetchSubjects(),
+                fetchFeatures(),
+            ]);
+            setLoading(false);
+        };
+        loadAll();
     }, [user?.id]);
 
     const fetchFeatures = async () => {
@@ -177,6 +186,16 @@ export default function StudentDashboard() {
         ...action,
         isLocked: action.featureKey && !features[action.featureKey]
     }));
+
+    if (loading) {
+        return (
+            <div className="min-h-screen text-gray-900 dark:text-white p-6">
+                <div className="max-w-7xl mx-auto">
+                    <DashboardPageSkeleton />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen text-gray-900 dark:text-white">

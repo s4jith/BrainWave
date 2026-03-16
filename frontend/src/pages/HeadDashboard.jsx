@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { DashboardPageSkeleton } from "../components/LoadingSpinner";
 import {
     CheckCircle, XCircle, Clock, FileText, HelpCircle,
     ChevronDown, ChevronUp, Filter, RefreshCw, CheckSquare,
@@ -238,7 +238,7 @@ export default function HeadDashboard() {
     if (loading) {
         return (
             <AdminLayout title="Head Dashboard" icon={BarChart3}>
-                <div className="flex items-center justify-center h-64"><LoadingSpinner /></div>
+                <DashboardPageSkeleton />
             </AdminLayout>
         );
     }

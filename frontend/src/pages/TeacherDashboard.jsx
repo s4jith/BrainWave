@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { DashboardPageSkeleton } from "../components/LoadingSpinner";
 import authFetch from "../utils/authFetch";
 import {
     LayoutDashboard, ClipboardList, CheckCircle, Clock,
@@ -96,9 +96,7 @@ export default function TeacherDashboard() {
     if (loading) {
         return (
             <AdminLayout title="Teacher Dashboard" icon={LayoutDashboard}>
-                <div className="flex items-center justify-center min-h-[400px]">
-                    <LoadingSpinner size="lg" text="Loading dashboard…" />
-                </div>
+                <DashboardPageSkeleton />
             </AdminLayout>
         );
     }

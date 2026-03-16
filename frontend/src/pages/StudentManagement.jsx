@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { CardLoader } from "../components/LoadingSpinner";
 import { Lightbulb, CheckCircle, Plus, Download, Edit, Key, Trash2, AlertTriangle, Clipboard, Users, Search, UserPlus, ChevronDown, ChevronUp, Shield } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
@@ -308,6 +308,36 @@ export default function StudentManagement() {
     active: students.filter(s => s.is_active).length
   };
 
+  if (loading) {
+    return (
+      <AdminLayout title="Student Management" icon={Users}>
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+            <div className="h-11 w-full max-w-md rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+            <div className="flex gap-3 w-full md:w-auto">
+              <div className="h-11 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+              <div className="h-11 w-40 rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <CardLoader key={idx} rows={2} />
+            ))}
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="h-10 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="Student Management" icon={Users}>
       {error && (
@@ -399,11 +429,7 @@ export default function StudentManagement() {
 
       {/* Users Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center">
-            <LoadingSpinner size="lg" text="Loading students…" />
-          </div>
-        ) : students.length === 0 ? (
+        {students.length === 0 ? (
           <div className="p-12 text-center">
             <Users className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
             <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">No students found</p>

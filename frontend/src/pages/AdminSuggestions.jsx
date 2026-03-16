@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, MessageSquare, CheckCircle, Clock, Reply, Trash2, RefreshCw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import { CardLoader } from "../components/LoadingSpinner";
 import authFetch from "../utils/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -83,6 +84,39 @@ export default function AdminSuggestions() {
     (s.subject || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (loading) {
+    return (
+      <AdminLayout title="Suggestions" icon={MessageSquare}>
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
+            <div className="h-10 w-64 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+            <div className="grid grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <CardLoader key={idx} rows={2} />
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="h-11 rounded-xl bg-gray-200 dark:bg-gray-700 shimmer" />
+              <div className="h-11 rounded-xl bg-gray-200 dark:bg-gray-700 shimmer" />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-gray-100 dark:border-zinc-800">
+                <div className="h-5 w-48 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-3" />
+                <div className="h-20 rounded-xl bg-gray-100 dark:bg-gray-700 shimmer" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="Suggestions" icon={MessageSquare}>
     <div className="max-w-7xl mx-auto space-y-6">
@@ -154,12 +188,7 @@ export default function AdminSuggestions() {
 
         {}
         <div className="space-y-4">
-          {loading ? (
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-zinc-800">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 dark:border-zinc-700 border-t-gray-900 dark:border-t-gray-200 mx-auto" />
-              <p className="text-gray-500 dark:text-gray-400 mt-4">Loading suggestions...</p>
-            </div>
-          ) : filteredSuggestions.length === 0 ? (
+          {filteredSuggestions.length === 0 ? (
             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-zinc-800">
               <MessageSquare className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
               <p className="text-gray-500 dark:text-gray-400">No suggestions found</p>

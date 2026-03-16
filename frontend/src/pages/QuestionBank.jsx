@@ -16,6 +16,62 @@ const DEFAULT_COGNITIVE_LEVELS = ["remember", "understand", "apply", "analyze", 
 
 const humanizeOption = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
+const splitAnswerString = (value) =>
+    String(value || "")
+        .split(/[|,]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+const getQuestionAnswerValues = (question) => {
+    const options = Array.isArray(question?.options) ? question.options : [];
+    const values = [];
+
+    const rawCorrectAnswers = question?.correct_answers;
+    if (Array.isArray(rawCorrectAnswers)) {
+        rawCorrectAnswers.forEach((answer) => {
+            if (Number.isInteger(answer) && options[answer] != null) {
+                values.push(String(options[answer]).trim());
+                return;
+            }
+            const parsedIndex = Number.parseInt(answer, 10);
+            if (!Number.isNaN(parsedIndex) && String(answer).trim() !== "" && options[parsedIndex] != null) {
+                values.push(String(options[parsedIndex]).trim());
+                return;
+            }
+            const parsedValue = String(answer || "").trim();
+            if (parsedValue) values.push(parsedValue);
+        });
+    }
+
+    const rawCorrectAnswer = question?.correct_answer;
+    if (Array.isArray(rawCorrectAnswer)) {
+        rawCorrectAnswer.forEach((answer) => {
+            const parsedValue = String(answer || "").trim();
+            if (parsedValue) values.push(parsedValue);
+        });
+    } else if (typeof rawCorrectAnswer === "string") {
+        values.push(...splitAnswerString(rawCorrectAnswer));
+    }
+
+    return new Set(values);
+};
+
+const hasQuestionAnswer = (question) => {
+    const qType = (question?.type || "").toLowerCase();
+    const answerValues = getQuestionAnswerValues(question);
+
+    if (qType === "mcq") {
+        return answerValues.size > 0;
+    }
+
+    if (qType === "true_false") {
+        const normalized = (question?.correct_answer || "").trim().toLowerCase();
+        return normalized === "true" || normalized === "false";
+    }
+
+    return answerValues.size > 0;
+};
+
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
     const isAdmin = user.role === "admin";
@@ -621,6 +677,11 @@ const QuestionBank = () => {
                         <div className="divide-y divide-gray-100 dark:divide-gray-700">
                             {questions.map((q) => (
                                 <div key={q.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                                    {(() => {
+                                        const questionAnswerValues = getQuestionAnswerValues(q);
+                                        const questionHasAnswer = hasQuestionAnswer(q);
+
+                                        return (
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex flex-wrap gap-2 mb-3">
@@ -655,7 +716,7 @@ const QuestionBank = () => {
                                             {q.type === 'mcq' && (
                                                 <div className="grid grid-cols-2 gap-2 mb-3">
                                                     {q.options.map((opt, idx) => (
-                                                        <div key={idx} className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${opt === q.correct_answer ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300'}`}>
+                                                        <div key={idx} className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${questionAnswerValues.has(String(opt || "").trim()) ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-700/40 text-gray-700 dark:text-gray-300'}`}>
                                                             <span className="font-semibold text-xs w-5 h-5 rounded-full bg-white dark:bg-gray-600 flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-gray-500">{String.fromCharCode(65 + idx)}</span>
                                                             {opt}
                                                         </div>
@@ -681,7 +742,7 @@ const QuestionBank = () => {
                                                 </div>
                                             )}
 
-                                            {activeTab === "answers" && !q.correct_answer && (
+                                            {activeTab === "answers" && !questionHasAnswer && (
                                                 <div className="mb-3 text-sm text-red-600 dark:text-red-400 font-medium">
                                                     Add answer before sending to pending.
                                                 </div>
@@ -727,7 +788,7 @@ const QuestionBank = () => {
                                             {activeTab === "answers" && (
                                                 <button
                                                     onClick={() => handleSendToPending(q.id)}
-                                                    disabled={!q.correct_answer}
+                                                    disabled={!questionHasAnswer}
                                                     className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     Send to Pending
@@ -750,6 +811,8 @@ const QuestionBank = () => {
                                             </button>
                                         </div>
                                     </div>
+                                        );
+                                    })()}
                                 </div>
                             ))}
                         </div>

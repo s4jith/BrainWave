@@ -6,6 +6,7 @@ import {
   BookOpen, Upload, Trash2, Database, Loader2, Plus, ChevronDown, ChevronRight,
   RefreshCw, CheckCircle, FileText, Layers, Book, GraduationCap, FileQuestion
 } from "lucide-react";
+import { CardLoader } from "../components/LoadingSpinner";
 import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
@@ -176,8 +177,26 @@ export default function BookManagement() {
   if (loading) {
     return (
       <AdminLayout title="Book Management" icon={BookOpen}>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-900 dark:text-white" />
+        <div className="space-y-6">
+          <div className="flex gap-3">
+            <div className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+            <div className="h-10 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <CardLoader key={idx} rows={2} />
+            ))}
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <div className="h-5 w-44 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="h-12 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
+              ))}
+            </div>
+          </div>
         </div>
       </AdminLayout>
     );

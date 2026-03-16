@@ -15,6 +15,7 @@ import {
 import useUserStore from "../stores/userStore";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { DashboardPageSkeleton } from "../components/LoadingSpinner";
 import quotesData from "../data/quotes.json";
 import authFetch from "../utils/authFetch";
 import { testService } from "../services/api";
@@ -86,6 +87,7 @@ export default function Dashboard() {
   const [features, setFeatures] = useState({ ai_chatbot: false, test_center: false, my_grades: false, book_to_bot: true });
   const [recentNotes, setRecentNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const getDailyQuote = () => {
     
@@ -110,12 +112,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchPendingTests();
-    fetchStreakData();
-    fetchProgressData();
-    logUserActivity();
-    fetchFeatures();
-    fetchRecentNotes();
+    const loadDashboard = async () => {
+      setPageLoading(true);
+      await Promise.all([
+        fetchPendingTests(),
+        fetchStreakData(),
+        fetchProgressData(),
+        logUserActivity(),
+        fetchFeatures(),
+        fetchRecentNotes(),
+      ]);
+      setPageLoading(false);
+    };
+    loadDashboard();
   }, [user?.id]);
 
   const fetchFeatures = async () => {
@@ -233,6 +242,16 @@ export default function Dashboard() {
     if (hour < 17) return "Good Afternoon";
     return "Good Evening";
   };
+
+  if (pageLoading) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-7xl mx-auto">
+          <DashboardPageSkeleton />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

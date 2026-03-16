@@ -13,47 +13,30 @@ import React from "react";
  */
 
 // ── Animated gradient ring ────────────────────────────────────────────────────
-export default function LoadingSpinner({ text = "Loading…", size = "md", color = "indigo", className = "" }) {
-  const ring = {
-    sm: "h-6 w-6 border-2",
-    md: "h-10 w-10 border-[3px]",
-    lg: "h-14 w-14 border-4",
-  }[size] ?? "h-10 w-10 border-[3px]";
-
-  const arc = {
-    indigo: "border-t-indigo-500 border-r-indigo-400",
-    orange: "border-t-orange-500 border-r-orange-400",
-    emerald: "border-t-emerald-500 border-r-emerald-400",
-    gray:   "border-t-gray-500 border-r-gray-400",
-  }[color] ?? "border-t-indigo-500 border-r-indigo-400";
-
-  const dot = {
-    indigo:  "bg-indigo-400",
-    orange:  "bg-orange-400",
-    emerald: "bg-emerald-400",
-    gray:    "bg-gray-400",
-  }[color] ?? "bg-indigo-400";
+export default function LoadingSpinner({ text = "Loading…", size = "md", className = "" }) {
+  const config = {
+    sm: { width: "w-40", rows: 2 },
+    md: { width: "w-56", rows: 3 },
+    lg: { width: "w-72", rows: 4 },
+  }[size] ?? { width: "w-56", rows: 3 };
 
   return (
     <div className={`flex flex-col items-center justify-center gap-3 ${className}`}>
-      <div className="relative">
-        {/* Base track */}
-        <div className={`${ring} rounded-full border-gray-200 dark:border-gray-700`} />
-        {/* Spinning arc with gradient-like look */}
-        <div
-          className={`${ring} absolute inset-0 rounded-full border-transparent ${arc} animate-spin`}
-          style={{ animationDuration: "0.75s" }}
-        />
-        {/* Inner glow dot */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`h-1.5 w-1.5 rounded-full ${dot} animate-pulse`} />
-        </div>
+      <div className={`${config.width} max-w-full space-y-2`}>
+        {Array.from({ length: config.rows }).map((_, idx) => (
+          <div
+            key={idx}
+            className="h-3 rounded bg-gray-200 dark:bg-gray-700 shimmer"
+            style={{ width: `${96 - idx * 12}%` }}
+          />
+        ))}
+        <div className="h-2.5 w-1/2 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
       </div>
-      {text && (
-        <p className="text-sm font-medium text-gray-400 dark:text-gray-500 animate-pulse tracking-wide">
+      {text ? (
+        <div className="text-xs font-medium text-gray-400 dark:text-gray-500 tracking-wide">
           {text}
-        </p>
-      )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -139,6 +122,97 @@ export function TableLoader({ rows = 5 }) {
       {Array.from({ length: rows }).map((_, i) => (
         <SkeletonRow key={i} />
       ))}
+    </div>
+  );
+}
+
+export function DashboardPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="h-20 rounded-2xl bg-gray-200 dark:bg-gray-700 shimmer" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <div key={idx} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-3" />
+            <div className="h-8 w-16 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-2" />
+            <div className="h-3 w-28 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+          <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+          <div className="h-52 rounded-lg bg-gray-100 dark:bg-gray-700 shimmer" />
+        </div>
+        <div className="h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+          <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+          <div className="h-52 rounded-lg bg-gray-100 dark:bg-gray-700 shimmer" />
+        </div>
+      </div>
+      <div className="h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+        <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <div key={idx} className="h-10 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ReportsPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <div key={idx} className="h-28 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+            <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-3" />
+            <div className="h-8 w-14 rounded bg-gray-200 dark:bg-gray-700 shimmer" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3 h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+          <div className="h-5 w-44 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+          <div className="h-52 rounded-lg bg-gray-100 dark:bg-gray-700 shimmer" />
+        </div>
+        <div className="lg:col-span-2 h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+          <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+          <div className="h-52 rounded-lg bg-gray-100 dark:bg-gray-700 shimmer" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {Array.from({ length: 2 }).map((_, idx) => (
+          <div key={idx} className="h-72 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+            <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-4" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((__, rowIdx) => (
+                <div key={rowIdx} className="h-10 rounded bg-gray-100 dark:bg-gray-700 shimmer" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function SettingsPageSkeleton() {
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="flex justify-end">
+        <div className="h-10 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 shimmer" />
+      </div>
+      <div className="h-14 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700" />
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5">
+        {Array.from({ length: 5 }).map((_, idx) => (
+          <div key={idx}>
+            <div className="h-4 w-36 rounded bg-gray-200 dark:bg-gray-700 shimmer mb-2" />
+            <div className="h-11 rounded-lg bg-gray-100 dark:bg-gray-700 shimmer" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

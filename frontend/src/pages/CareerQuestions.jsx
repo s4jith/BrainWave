@@ -5,6 +5,7 @@ import {
   BarChart3, AlertCircle, Check, X, Loader2, Filter, Brain,
   ClipboardList, Power, PowerOff
 } from "lucide-react";
+import { CardLoader } from "../components/LoadingSpinner";
 import useUserStore from "../stores/userStore";
 import authFetch from "../utils/authFetch";
 
@@ -42,6 +43,7 @@ export default function CareerQuestions() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
   const [stats, setStats] = useState(null);
 
   // Filters
@@ -106,8 +108,14 @@ export default function CareerQuestions() {
     }
   }, [accessToken]);
 
-  useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => {
+    const loadInitial = async () => {
+      setInitializing(true);
+      await Promise.all([fetchQuestions(), fetchStats()]);
+      setInitializing(false);
+    };
+    loadInitial();
+  }, [fetchQuestions, fetchStats]);
 
   // ── Assignment fetch & handlers ────────────────────────────────────────
   const fetchAssignments = useCallback(async () => {
@@ -389,8 +397,10 @@ export default function CareerQuestions() {
           <div>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Assignment History</h3>
             {loadingAssignments ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <div className="space-y-3 py-2">
+                {Array.from({ length: 3 }).map((_, idx) => (
+                  <div key={idx} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-700 shimmer" />
+                ))}
               </div>
             ) : assignments.length === 0 ? (
               <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">
@@ -442,7 +452,13 @@ export default function CareerQuestions() {
       {activeTab === "questions" && (
         <>
       {/* Stats */}
-      {stats && (
+      {initializing ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <CardLoader key={idx} rows={2} />
+          ))}
+        </div>
+      ) : stats && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
@@ -501,9 +517,11 @@ export default function CareerQuestions() {
       </div>
 
       {/* Questions Table */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+      {loading || initializing ? (
+        <div className="space-y-3 py-6">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="h-28 rounded-xl bg-gray-100 dark:bg-gray-700 shimmer" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-500 dark:text-gray-400">

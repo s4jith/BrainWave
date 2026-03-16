@@ -5,6 +5,7 @@ import AdminLayout from "../components/AdminLayout";
 import AIExtractionModal from "../components/AIExtractionModal";
 import PendingCurriculumReview from "../components/PendingCurriculumReview";
 import SubjectIcon from "../components/SubjectIcon";
+import { CardLoader } from "../components/LoadingSpinner";
 import {
   BookOpen, Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, ChevronUp,
   Loader2, FileText, List, BookMarked, X, Check, Save, AlertCircle, Sparkles, Clock
@@ -20,6 +21,8 @@ export default function SubjectsManagement() {
 
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 9;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
 
@@ -122,6 +125,10 @@ export default function SubjectsManagement() {
   useEffect(() => {
     fetchSubjects();
   }, [selectedClass]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedClass]);
 
   const fetchSubjects = async () => {
     setLoading(true);
@@ -735,6 +742,7 @@ export default function SubjectsManagement() {
       setSelectedSubject(details);
       setDraftSubject(details);
       setShowChapterModal(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -742,11 +750,16 @@ export default function SubjectsManagement() {
     subject.subject_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const totalPages = Math.max(1, Math.ceil(filteredSubjects.length / pageSize));
+  const paginatedSubjects = filteredSubjects.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (loading) {
     return (
       <AdminLayout title="Subjects, Chapters and Topics" icon={BookOpen}>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-900 dark:text-white" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <CardLoader key={idx} rows={3} />
+          ))}
         </div>
       </AdminLayout>
     );
@@ -808,8 +821,9 @@ export default function SubjectsManagement() {
           <p className="text-gray-400 dark:text-gray-500 mt-2">Create your first subject to get started</p>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredSubjects.map((subject) => (
+          {paginatedSubjects.map((subject) => (
             <div
               key={subject.subject_id}
               className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition"
@@ -830,19 +844,21 @@ export default function SubjectsManagement() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleEditSubject(subject)}
-                  className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEditSubject(subject)}
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
 
-                <button
-                  onClick={() => handleDeleteSubject(subject.subject_id)}
-                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => handleDeleteSubject(subject.subject_id)}
+                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-4 mb-4 text-sm">
@@ -863,6 +879,26 @@ export default function SubjectsManagement() {
             </div>
           ))}
         </div>
+        {totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-end gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-500 dark:text-gray-400 px-2">Page {currentPage} of {totalPages}</span>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
+            >
+              Next
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Add Subject Modal */}
@@ -950,11 +986,10 @@ export default function SubjectsManagement() {
         </div>
       )}
 
-      {/* Chapters & Topics Modal */}
+      {/* Chapters & Topics Editor (page section) */}
       {showChapterModal && selectedSubject && draftSubject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-5xl w-full my-8">
-            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 rounded-t-xl">
+        <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 rounded-t-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-zinc-800">
@@ -1141,7 +1176,6 @@ export default function SubjectsManagement() {
                 </button>
               </div>
             </div>
-          </div>
         </div>
       )}
 

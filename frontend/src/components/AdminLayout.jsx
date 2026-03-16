@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Users, GraduationCap, FolderKanban, BookOpen,
     ClipboardList, BarChart3, Settings, Bell, LogOut, HelpCircle,
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
-    MessageCircle, BookMarked, MessageSquare, Compass
+    MessageCircle, BookMarked, MessageSquare, Compass, Menu, ChevronLeft
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 
@@ -24,6 +24,11 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     const [unreadCount, setUnreadCount] = useState(0);
     const [showThemeMenu, setShowThemeMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        const saved = localStorage.getItem("bw_sidebar_collapsed");
+        return saved === "1";
+    });
     const themeMenuRef = useRef(null);
     const notificationRef = useRef(null);
 
@@ -166,7 +171,15 @@ export default function AdminLayout({ children, title, icon: Icon }) {
         { path: "/head-reports", label: "Reports", icon: BarChart3 },
     ];
 
-    const [expandedNavGroups, setExpandedNavGroups] = useState({ Users: true, Questions: true });
+    const [expandedNavGroups, setExpandedNavGroups] = useState(() => {
+        try {
+            const saved = localStorage.getItem("bw_sidebar_groups");
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            // ignore malformed local storage state
+        }
+        return { Users: true, Questions: true };
+    });
     const navItems = user?.role === "teacher"
         ? teacherNavItems
         : user?.role === "head"
@@ -190,48 +203,80 @@ export default function AdminLayout({ children, title, icon: Icon }) {
     const ThemeIcon = getThemeIcon();
     const roleLabel = user?.role ? String(user.role).charAt(0).toUpperCase() + String(user.role).slice(1) : "";
 
+    useEffect(() => {
+        localStorage.setItem("bw_sidebar_collapsed", sidebarCollapsed ? "1" : "0");
+    }, [sidebarCollapsed]);
+
+    useEffect(() => {
+        localStorage.setItem("bw_sidebar_groups", JSON.stringify(expandedNavGroups));
+    }, [expandedNavGroups]);
+
+    useEffect(() => {
+        setMobileSidebarOpen(false);
+    }, [currentPath]);
+
+    const sidebarWidthClass = sidebarCollapsed ? "w-20" : "w-64";
+
     return (
         <div className="h-screen bg-gray-50 dark:bg-black flex transition-colors duration-200 overflow-hidden">
-            {}
-            <aside className="w-64 h-screen bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-200">
+            {mobileSidebarOpen && (
+                <button
+                    type="button"
+                    aria-label="Close sidebar backdrop"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+                />
+            )}
+            <aside
+                className={`
+                    fixed lg:static z-40 lg:z-auto h-screen bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800
+                    flex flex-col flex-shrink-0 transition-all duration-200
+                    ${sidebarWidthClass}
+                    ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+                `}
+            >
                 {}
-                <div className="h-16 flex items-center px-4 border-b border-gray-100 dark:border-zinc-800">
+                <div className={`h-16 flex items-center border-b border-gray-100 dark:border-zinc-800 ${sidebarCollapsed ? "justify-center px-2" : "px-4"}`}>
                     <div className="flex items-center gap-3">
                         <img
                             src={BRAND_LOGO_SRC}
                             alt="Brainwave logo"
                             className="w-9 h-9 object-contain"
                         />
-                        <div>
+                        {!sidebarCollapsed && <div>
                             <h1 className="font-semibold text-gray-900 dark:text-white text-sm">Brainwave</h1>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Learning Platform</p>
-                        </div>
+                        </div>}
                     </div>
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+                <nav className="theme-scrollbar flex-1 py-4 px-3 space-y-1 overflow-y-auto">
                     {user?.role === "admin" ? (
                         adminNavGroups.map((item) => {
                             if (item.type === 'group') {
                                 const isExpanded = expandedNavGroups[item.id];
                                 const GroupIcon = item.icon;
                                 const isGroupActive = item.children.some(c => currentPath === c.path);
+                                const shouldShowChildren = !sidebarCollapsed && isExpanded;
                                 return (
                                     <div key={item.id}>
                                         <button
                                             onClick={() => setExpandedNavGroups(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                            className={`w-full flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"} px-3 py-2.5 rounded-lg text-sm transition-colors ${
                                                 isGroupActive
                                                     ? 'text-gray-900 dark:text-white font-medium'
                                                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                             }`}
+                                            title={sidebarCollapsed ? item.label : undefined}
                                         >
                                             <GroupIcon className="w-5 h-5" />
-                                            <span className="flex-1 text-left">{item.label}</span>
-                                            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            {!sidebarCollapsed && <>
+                                                <span className="flex-1 text-left">{item.label}</span>
+                                                <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </>}
                                         </button>
-                                        {isExpanded && (
+                                        {shouldShowChildren && (
                                             <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 dark:border-gray-700 pl-3">
                                                 {item.children.map(child => {
                                                     const ChildIcon = child.icon;
@@ -263,14 +308,15 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                                 <button
                                     key={item.path}
                                     onClick={() => navigate(item.path)}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                    className={`w-full flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"} px-3 py-2.5 rounded-lg text-sm transition-colors ${
                                         isActive
                                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
                                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                     }`}
+                                    title={sidebarCollapsed ? item.label : undefined}
                                 >
                                     <ItemIcon className="w-5 h-5" />
-                                    <span>{item.label}</span>
+                                    {!sidebarCollapsed && <span>{item.label}</span>}
                                 </button>
                             );
                         })
@@ -283,14 +329,15 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                                 <button
                                     key={item.path}
                                     onClick={() => navigate(item.path)}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                                    className={`w-full flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"} px-3 py-2.5 rounded-lg text-sm transition-colors ${
                                         isActive
                                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
                                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                     }`}
+                                    title={sidebarCollapsed ? item.label : undefined}
                                 >
                                     <ItemIcon className="w-5 h-5" />
-                                    <span>{item.label}</span>
+                                    {!sidebarCollapsed && <span>{item.label}</span>}
                                 </button>
                             );
                         })
@@ -304,27 +351,28 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                     <div className="px-3 pb-2">
                         <button
                             onClick={() => navigate("/teacher-settings")}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
+                            className={`w-full flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"} px-3 py-2.5 rounded-lg text-sm transition-colors
                                 ${currentPath === "/teacher-settings"
                                     ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-medium'
                                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                            title={sidebarCollapsed ? "Settings" : undefined}
                         >
                             <Settings className="w-5 h-5" />
-                            <span>Settings</span>
+                            {!sidebarCollapsed && <span>Settings</span>}
                         </button>
                     </div>
                 )}
 
                 {}
                 <div className="p-3 border-t border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center gap-3 px-3 py-2">
+                    <div className={`flex items-center px-3 py-2 ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
                         <div className="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 text-sm font-medium">
                             {user?.name?.charAt(0)?.toUpperCase() || "A"}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        {!sidebarCollapsed && <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name || "Admin"}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-                        </div>
+                        </div>}
                         <button
                             onClick={handleLogout}
                             className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -341,6 +389,20 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 {}
                 <header className="h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-6 flex-shrink-0 transition-colors duration-200">
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setMobileSidebarOpen((prev) => !prev)}
+                            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title="Toggle sidebar"
+                        >
+                            <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                        </button>
+                        <button
+                            onClick={() => setSidebarCollapsed((prev) => !prev)}
+                            className="hidden lg:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        >
+                            <ChevronLeft className={`w-5 h-5 text-gray-600 dark:text-gray-300 transition-transform ${sidebarCollapsed ? "rotate-180" : ""}`} />
+                        </button>
                         {Icon && <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />}
                         <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h1>
                         {roleLabel && (
@@ -413,7 +475,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                                             </button>
                                         )}
                                     </div>
-                                    <div className="overflow-y-auto max-h-72">
+                                    <div className="theme-scrollbar overflow-y-auto max-h-72">
                                         {notifications.length === 0 ? (
                                             <p className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">No notifications</p>
                                         ) : (
@@ -478,7 +540,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-black transition-colors duration-200">
+                <main className="theme-scrollbar flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-black transition-colors duration-200">
                     {children}
                 </main>
             </div>

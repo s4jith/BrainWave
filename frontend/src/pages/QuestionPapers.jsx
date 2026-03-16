@@ -55,6 +55,48 @@ const STATUS_COLORS = {
   rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
 };
 
+const splitAnswerString = (value) =>
+  String(value || "")
+    .split(/[|,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getQuestionAnswerValues = (question) => {
+  const options = Array.isArray(question?.options) ? question.options : [];
+  const values = [];
+
+  const rawCorrectAnswers = question?.correct_answers;
+  if (Array.isArray(rawCorrectAnswers)) {
+    rawCorrectAnswers.forEach((answer) => {
+      if (Number.isInteger(answer) && options[answer] != null) {
+        values.push(String(options[answer]).trim());
+        return;
+      }
+      const parsedIndex = Number.parseInt(answer, 10);
+      if (!Number.isNaN(parsedIndex) && String(answer).trim() !== "" && options[parsedIndex] != null) {
+        values.push(String(options[parsedIndex]).trim());
+        return;
+      }
+      const parsedValue = String(answer || "").trim();
+      if (parsedValue) values.push(parsedValue);
+    });
+  }
+
+  const rawCorrectAnswer = question?.correct_answer;
+  if (Array.isArray(rawCorrectAnswer)) {
+    rawCorrectAnswer.forEach((answer) => {
+      const parsedValue = String(answer || "").trim();
+      if (parsedValue) values.push(parsedValue);
+    });
+  } else if (typeof rawCorrectAnswer === "string") {
+    values.push(...splitAnswerString(rawCorrectAnswer));
+  }
+
+  return new Set(values);
+};
+
+const toPipeAnswerString = (question) => Array.from(getQuestionAnswerValues(question)).join("|");
+
 export default function QuestionPapers() {
   const { toast } = useToast();
   const { getAuthHeader, user } = useUserStore();
@@ -83,7 +125,13 @@ export default function QuestionPapers() {
       if (filters.subject) params.append("subject", filters.subject);
       if (filters.paper_type) params.append("paper_type", filters.paper_type);
       if (filters.year) params.append("year", filters.year);
-      const requestedStatus = filters.status || (activeTab === "answers" ? "draft_answer" : activeTab === "pending-papers" ? "pending" : "");
+      const requestedStatus =
+        filters.status ||
+        (activeTab === "answers"
+          ? "draft_answer"
+          : activeTab === "pending-papers"
+            ? "pending"
+            : "approved");
       if (requestedStatus) params.append("status", requestedStatus);
       if (activeTab === "answers" || activeTab === "pending-papers") {
         params.append("include_questions", "true");
@@ -508,7 +556,7 @@ export default function QuestionPapers() {
                     )}
 
                     {/* Approve/Reject for pending papers — admin & head only */}
-                    {paper.status === "pending" && canApprove && (
+                    {activeTab === "pending-papers" && paper.status === "pending" && canApprove && (
                       <>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleApprove(paper.id); }}
@@ -607,8 +655,8 @@ export default function QuestionPapers() {
                                       {q.type === "mcq" && q.options?.length > 0 && (
                                         <div className="mt-2 grid grid-cols-2 gap-1">
                                           {q.options.map((opt, oi) => {
-                                            const correctAnswers = (q.correct_answer || "").split("|").filter(Boolean);
-                                            const isCorrect = correctAnswers.includes(opt);
+                                            const correctAnswers = getQuestionAnswerValues(q);
+                                            const isCorrect = correctAnswers.has(String(opt || "").trim());
                                             return (
                                               <span key={oi} className={`text-xs px-2 py-1 rounded border ${isCorrect ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium" : "bg-white dark:bg-zinc-700 border-gray-200 dark:border-zinc-600 text-gray-600 dark:text-gray-300"}`}>
                                                 {String.fromCharCode(65 + oi)}. {opt}
@@ -764,7 +812,24 @@ function CreatePaperModal({ metadata, onClose, onCreated }) {
     if (isAddedToActiveSection(q.id)) return;
     setSections(prev => prev.map((s, i) =>
       i === activeSection
-        ? { ...s, questions: [...s.questions, { question_bank_id: q.id, text: q.text, type: q.type, marks: q.marks, difficulty: q.difficulty, bloom_level: q.bloom_level, options: q.options || [], correct_answer: q.correct_answer || "", chapter: q.chapter, chapter_name: q.chapter_name }] }
+        ? {
+            ...s,
+            questions: [
+              ...s.questions,
+              {
+                question_bank_id: q.id,
+                text: q.text,
+                type: q.type,
+                marks: q.marks,
+                difficulty: q.difficulty,
+                bloom_level: q.bloom_level,
+                options: q.options || [],
+                correct_answer: toPipeAnswerString(q),
+                chapter: q.chapter,
+                chapter_name: q.chapter_name,
+              },
+            ],
+          }
         : s
     ));
   };

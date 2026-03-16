@@ -1071,9 +1071,29 @@ async def add_paper_questions_to_bank(
 
     now = datetime.utcnow().isoformat()
     added = 0
-    for q in questions:
+    skipped_existing_bank = 0
+    skipped_already_added = 0
+
+    for idx, q in enumerate(questions):
+        # If this paper question already came from question bank, do not re-add it.
+        if q.get("question_bank_id"):
+            skipped_existing_bank += 1
+            continue
+
         if not q.get("text"):
             continue
+
+        already_added = await mongodb.db.questions.find_one(
+            {
+                "source_paper": str(doc["_id"]),
+                "source_question_index": idx,
+            },
+            {"_id": 1},
+        )
+        if already_added:
+            skipped_already_added += 1
+            continue
+
         q_doc = {
             "text": q["text"],
             "subject": doc["subject"],
@@ -1089,9 +1109,21 @@ async def add_paper_questions_to_bank(
             "created_role": current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
             "created_at": now,
             "source_paper": str(doc["_id"]),
+            "source_question_index": idx,
             "source_paper_title": doc.get("title", ""),
         }
         await mongodb.db.questions.insert_one(q_doc)
         added += 1
 
-    return {"message": f"Added {added} questions to the question bank (pending approval)", "count": added}
+    message = f"Added {added} question{'s' if added != 1 else ''} to the question bank (pending approval)"
+    if skipped_existing_bank:
+        message += f". Skipped {skipped_existing_bank} already sourced from question bank"
+    if skipped_already_added:
+        message += f". Skipped {skipped_already_added} already imported from this paper"
+
+    return {
+        "message": message,
+        "count": added,
+        "skipped_existing_bank": skipped_existing_bank,
+        "skipped_already_added": skipped_already_added,
+    }

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
+import { DashboardPageSkeleton } from "../components/LoadingSpinner";
 import {
   LayoutDashboard, Users, FileText, ClipboardList, Activity,
   GraduationCap, AlertCircle, TrendingUp
@@ -72,6 +73,14 @@ export default function AdminDashboard() {
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
+  if (loading) {
+    return (
+      <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
+        <DashboardPageSkeleton />
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="Admin Dashboard" icon={LayoutDashboard}>
       {error && (
@@ -88,12 +97,7 @@ export default function AdminDashboard() {
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{today}</p>
         </div>
-        {loading && (
-          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-            <div className="w-3 h-3 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
-            Loading…
-          </div>
-        )}
+        <div />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">

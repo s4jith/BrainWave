@@ -7,6 +7,7 @@ import {
     Save, Check, Loader2
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
+import { SettingsPageSkeleton } from "../components/LoadingSpinner";
 
 import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
@@ -51,6 +52,7 @@ export default function AdminSettings() {
     const [activeSection, setActiveSection] = useState("general_settings");
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [initializing, setInitializing] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [newQuestionType, setNewQuestionType] = useState("");
@@ -116,10 +118,20 @@ export default function AdminSettings() {
                 }
             } catch (err) {
                 setLoadError("Failed to load settings.");
+            } finally {
+                setInitializing(false);
             }
         };
         fetchSettings();
     }, []);
+
+    if (initializing) {
+        return (
+            <AdminLayout title="Settings" icon={Settings}>
+                <SettingsPageSkeleton />
+            </AdminLayout>
+        );
+    }
 
     const handleSave = async () => {
         setSaving(true);

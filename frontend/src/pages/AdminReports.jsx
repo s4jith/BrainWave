@@ -7,6 +7,7 @@ import {
     Award, AlertTriangle, Activity, Download, RefreshCcw, UserCheck
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
+import { ReportsPageSkeleton } from "../components/LoadingSpinner";
 
 import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
@@ -153,9 +154,7 @@ export default function AdminReports() {
     if (loading) {
         return (
             <AdminLayout title="Reports & Analytics" icon={BarChart3}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-gray-900 dark:border-white"></div>
-                </div>
+                <ReportsPageSkeleton />
             </AdminLayout>
         );
     }

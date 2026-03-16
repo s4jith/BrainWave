@@ -36,6 +36,8 @@ export default function TeacherManagement() {
     const [selectedTeacher, setSelectedTeacher] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [saving, setSaving] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 12;
     const [expandedTeacherGroups, setExpandedTeacherGroups] = useState({});
     const [teacherGroupConflict, setTeacherGroupConflict] = useState(null);
 
@@ -371,6 +373,13 @@ export default function TeacherManagement() {
         t.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, teachers.length]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / pageSize));
+    const paginatedTeachers = filteredTeachers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     return (
         <AdminLayout title="Teacher Management" icon={GraduationCap}>
             {}
@@ -472,7 +481,7 @@ export default function TeacherManagement() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {filteredTeachers.map((teacher) => (
+                                {paginatedTeachers.map((teacher) => (
                                     <tr key={teacher.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                                         <td className="px-6 py-4">
                                             <p className="font-medium text-gray-900 dark:text-white">{teacher.name}</p>
@@ -529,12 +538,24 @@ export default function TeacherManagement() {
                                         </td>
                                         <td className="px-6 py-4">
                                             {teacher.role === "head" ? (
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 flex-wrap">
+                                                    <button
+                                                        onClick={() => openEditModal(teacher)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                    >
+                                                        <Edit className="w-3.5 h-3.5" /> Edit
+                                                    </button>
                                                     <button
                                                         onClick={() => handleDemoteToTeacher(teacher)}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition"
                                                     >
                                                         <ArrowDownCircle className="w-3.5 h-3.5" /> Demote
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTeacher(teacher.id)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" /> Delete
                                                     </button>
                                                 </div>
                                             ) : (
@@ -564,6 +585,28 @@ export default function TeacherManagement() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                {!loading && filteredTeachers.length > 0 && totalPages > 1 && (
+                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Showing {paginatedTeachers.length} of {filteredTeachers.length} teachers</p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage((p) => p - 1)}
+                                className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 px-2">Page {currentPage} of {totalPages}</span>
+                            <button
+                                disabled={currentPage === totalPages}
+                                onClick={() => setCurrentPage((p) => p + 1)}
+                                className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
