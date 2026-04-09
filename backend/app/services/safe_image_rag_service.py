@@ -39,7 +39,9 @@ IMAGE_UNREADABLE_MESSAGE = (
     "Please upload textbook pages, diagrams, or questions."
 )
 
-SIMILARITY_THRESHOLD = 0.75
+# Kept conservative to avoid hallucinations, but not so strict that valid
+# diagram/textbook snippets get rejected frequently.
+SIMILARITY_THRESHOLD = 0.45
 
 
 CHATBOT_SYSTEM_PROMPT = """You are an NCERT tutoring assistant.
@@ -285,6 +287,12 @@ class SafeImageRAGService:
             )
 
         relevance = await asyncio.to_thread(self._classify_image_relevance, image_bytes)
+        logger.info(
+            "[IMAGE_RAG] relevance=%s category=%s confidence=%.2f",
+            relevance.get("is_relevant"),
+            relevance.get("category"),
+            float(relevance.get("confidence", 0.0)),
+        )
         if not relevance["is_relevant"]:
             logger.info("Image rejected as irrelevant: %s", relevance)
             return SafeImageRAGResult(
@@ -296,6 +304,13 @@ class SafeImageRAGService:
             )
 
         understanding = await asyncio.to_thread(self._extract_educational_query, image_bytes)
+        logger.info(
+            "[IMAGE_RAG] understanding has_educational_content=%s type=%s extracted_text_len=%s query_len=%s",
+            understanding.get("has_educational_content"),
+            understanding.get("image_type"),
+            len(understanding.get("extracted_text", "")),
+            len(understanding.get("retrieval_query", "")),
+        )
         if not understanding["has_educational_content"]:
             logger.info("Image has no usable educational content: %s", understanding)
             return SafeImageRAGResult(
@@ -309,7 +324,11 @@ class SafeImageRAGService:
         extracted_query = understanding["retrieval_query"] or understanding["extracted_text"] or understanding["description"]
         extracted_query = extracted_query.strip()
 
-        if fallback_text and len(extracted_query) < 8:
+        if (
+            fallback_text
+            and len(extracted_query) < 8
+            and "[screenshot from page" not in fallback_text.lower()
+        ):
             extracted_query = fallback_text.strip()
 
         if len(extracted_query) < 5:
@@ -328,6 +347,35 @@ class SafeImageRAGService:
             class_level,
             chapter,
         )
+
+        logger.info(
+            "[IMAGE_RAG] retrieval subject=%s class=%s chapter=%s query='%s' matches=%s best_similarity=%.3f threshold=%.2f",
+            subject,
+            class_level,
+            chapter,
+            extracted_query[:180],
+            len(chunks),
+            best_similarity,
+            SIMILARITY_THRESHOLD,
+        )
+
+        # If chapter metadata is noisy/misaligned, retry once across all chapters.
+        if chapter is not None and (not chunks or best_similarity < SIMILARITY_THRESHOLD):
+            chunks_all, best_similarity_all = await asyncio.to_thread(
+                self._retrieve_ncert_chunks,
+                extracted_query,
+                subject,
+                class_level,
+                None,
+            )
+            logger.info(
+                "[IMAGE_RAG] all-chapter fallback matches=%s best_similarity=%.3f",
+                len(chunks_all),
+                best_similarity_all,
+            )
+            if best_similarity_all > best_similarity:
+                chunks = chunks_all
+                best_similarity = best_similarity_all
 
         if not chunks or best_similarity < SIMILARITY_THRESHOLD:
             logger.info(

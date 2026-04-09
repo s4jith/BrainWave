@@ -89,6 +89,12 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
     setImageUrl(null);
 
     try {
+      const lessonChapter =
+        currentLesson?.chapter_number ||
+        currentLesson?.chapterNumber ||
+        currentLesson?.number ||
+        1;
+
       let queryText = selectedText?.text || "";
 
       if (selectedText?.imageData) {
@@ -100,7 +106,7 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         action.id,
         user.classLevel,
         effectiveSubject,
-        currentLesson?.number || 1,
+        lessonChapter,
         selectedText?.imageData, 
         selectedText?.pageNumber || pageNumber 
       );
@@ -125,7 +131,11 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
         lessonId: currentLesson?.id,
         classLevel: user.classLevel,
         subject: effectiveSubject,
-        chapter: currentLesson?.number,
+        chapter:
+          currentLesson?.chapter_number ||
+          currentLesson?.chapterNumber ||
+          currentLesson?.number ||
+          1,
       });
 
       setSelectedAction(null);

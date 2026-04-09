@@ -108,8 +108,9 @@ const QuestionBank = () => {
     const [drActionId, setDrActionId] = useState(null); // request id being processed
 
     const combinedOptions = React.useMemo(() => {
-        if (isTeacher && groups.length > 0) {
-            
+        if (isTeacher) {
+            // Teachers must only see class/subject combinations from assigned groups.
+            // If no groups are assigned, dropdown must stay empty.
             return groups.map(group => ({
                 value: group.name,  
                 label: group.name,  
@@ -427,14 +428,16 @@ const QuestionBank = () => {
     };
 
     const handleReject = async (id) => {
-        if (!window.confirm("Reject and delete this question?")) return;
+        if (!window.confirm("Reject this pending question?")) return;
         try {
             const response = await authFetch(`${apiUrl}/api/question-bank/questions/${id}/reject`, {
                 method: "PUT",
                 headers: { "Authorization": `Bearer ${accessToken}` }
             });
-            if (!response.ok) throw new Error("Failed to reject");
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || data.message || "Failed to reject");
             fetchQuestions();
+            toast.success(data.message || "Question rejected");
         } catch (err) {
             toast.info(err.message)
         }

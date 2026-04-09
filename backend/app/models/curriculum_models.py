@@ -170,8 +170,10 @@ class TopicSummary(BaseModel):
 class ExtractedTopic(BaseModel):
     """Topic extracted from PDF/image by AI"""
     topic_name: str
+    section_number: Optional[str] = ""
     page_range: Optional[str] = ""
     description: Optional[str] = ""
+    subtopics: List["ExtractedTopic"] = Field(default_factory=list)
 
 class ExtractedChapter(BaseModel):
     """Chapter extracted from PDF/image by AI"""
@@ -180,6 +182,11 @@ class ExtractedChapter(BaseModel):
     author: Optional[str] = ""
     page_number: Optional[int] = None
     topics: List[ExtractedTopic] = Field(default_factory=list)
+
+try:
+    ExtractedTopic.model_rebuild()
+except AttributeError:
+    ExtractedTopic.update_forward_refs()
 
 class PendingCurriculumItem(BaseModel):
     """Pending curriculum item awaiting admin approval"""

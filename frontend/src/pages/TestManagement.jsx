@@ -13,7 +13,8 @@ const API_URL = import.meta.env.VITE_API_URL;
 export default function TestManagement() {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { getAuthHeader } = useUserStore();
+  const { getAuthHeader, user } = useUserStore();
+  const isTeacher = user?.role === "teacher";
   const [tests, setTests] = useState([]);
   const [selectedTest, setSelectedTest] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -118,12 +119,17 @@ export default function TestManagement() {
     }
   };
 
-  const filterClassLevels = teacherClassLevels.length > 0 
-    ? teacherClassLevels 
-    : [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b);
-  const filterSubjectNames = teacherSubjects.length > 0 
-    ? teacherSubjects 
-    : [...new Set(curriculumSubjects.map(s => s.subject_name))].sort();
+  const filterClassLevels = isTeacher
+    ? teacherClassLevels
+    : (teacherClassLevels.length > 0
+      ? teacherClassLevels
+      : [...new Set(curriculumSubjects.map(s => s.class_level))].sort((a, b) => a - b));
+
+  const filterSubjectNames = isTeacher
+    ? teacherSubjects
+    : (teacherSubjects.length > 0
+      ? teacherSubjects
+      : [...new Set(curriculumSubjects.map(s => s.subject_name))].sort());
 
   const fetchTests = async () => {
     try {
@@ -214,8 +220,8 @@ export default function TestManagement() {
         headers: getAuthHeader()
       });
       if (!response.ok) {
-        
-        throw new Error("Failed to delete test");
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.detail || "Failed to delete test");
       }
     } catch (err) {
       

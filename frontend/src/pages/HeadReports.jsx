@@ -18,6 +18,12 @@ export default function HeadReports() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeSection, setActiveSection] = useState("overview");
+    const [selectedClass, setSelectedClass] = useState("");
+    const [selectedSubject, setSelectedSubject] = useState("");
+    const [studentSummaries, setStudentSummaries] = useState([]);
+    const [loadingStudentSummaries, setLoadingStudentSummaries] = useState(false);
+    const [studentDetail, setStudentDetail] = useState(null);
+    const [loadingStudentDetail, setLoadingStudentDetail] = useState(false);
 
     const fetchAssignment = useCallback(async () => {
         try {
@@ -45,16 +51,73 @@ export default function HeadReports() {
         }
     }, [getAuthHeader]);
 
+    const fetchStudentSummaries = useCallback(async (classFilter, subjectFilter) => {
+        try {
+            setLoadingStudentSummaries(true);
+            const params = new URLSearchParams();
+            if (classFilter) params.set("class_level", classFilter);
+            if (subjectFilter) params.set("subject", subjectFilter);
+
+            const url = `${API_URL}/api/head/reports/student-results${params.toString() ? `?${params.toString()}` : ""}`;
+            const res = await authFetch(url, {
+                headers: getAuthHeader()
+            });
+            if (!res.ok) {
+                throw new Error("Failed to fetch student results");
+            }
+            const data = await res.json();
+            setStudentSummaries(data.students || []);
+        } catch (err) {
+            setError(err.message);
+            setStudentSummaries([]);
+        } finally {
+            setLoadingStudentSummaries(false);
+        }
+    }, [getAuthHeader]);
+
+    const fetchStudentDetail = useCallback(async (studentId) => {
+        try {
+            setLoadingStudentDetail(true);
+            const params = new URLSearchParams();
+            if (selectedClass) params.set("class_level", selectedClass);
+            if (selectedSubject) params.set("subject", selectedSubject);
+
+            const url = `${API_URL}/api/head/reports/student-results/${studentId}${params.toString() ? `?${params.toString()}` : ""}`;
+            const res = await authFetch(url, {
+                headers: getAuthHeader()
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || "Failed to fetch student result detail");
+            }
+            setStudentDetail(await res.json());
+        } catch (err) {
+            setError(err.message);
+            setStudentDetail(null);
+        } finally {
+            setLoadingStudentDetail(false);
+        }
+    }, [getAuthHeader, selectedClass, selectedSubject]);
+
     const loadAll = useCallback(async () => {
         setLoading(true);
         setError(null);
-        await Promise.all([fetchAssignment(), fetchReports()]);
+        await Promise.all([
+            fetchAssignment(),
+            fetchReports(),
+            fetchStudentSummaries(selectedClass, selectedSubject)
+        ]);
         setLoading(false);
-    }, [fetchAssignment, fetchReports]);
+    }, [fetchAssignment, fetchReports, fetchStudentSummaries, selectedClass, selectedSubject]);
 
     useEffect(() => {
         loadAll();
     }, [loadAll]);
+
+    useEffect(() => {
+        fetchStudentSummaries(selectedClass, selectedSubject);
+        setStudentDetail(null);
+    }, [selectedClass, selectedSubject, fetchStudentSummaries]);
 
     if (loading) {
         return (
@@ -65,6 +128,15 @@ export default function HeadReports() {
     }
 
     const overview = reports?.overview || {};
+    const classOptions = Array.from(new Set([
+        ...(assignment?.assigned_classes || []),
+        ...((reports?.class_breakdown || []).map((c) => c.class_level).filter(Boolean))
+    ])).sort((a, b) => a - b);
+    const subjectOptions = Array.from(new Set([
+        ...(assignment?.head_subjects || []),
+        ...(assignment?.assigned_subjects || []),
+        ...((reports?.subject_breakdown || []).map((s) => s.subject).filter(Boolean))
+    ])).sort((a, b) => a.localeCompare(b));
 
     return (
         <AdminLayout title="Reports" icon={BarChart3}>
@@ -108,7 +180,7 @@ export default function HeadReports() {
 
                 {/* Section Tabs */}
                 <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 p-1.5">
-                    {["overview", "subjects", "teachers"].map(section => (
+                    {["overview", "subjects", "teachers", "students"].map(section => (
                         <button
                             key={section}
                             onClick={() => setActiveSection(section)}
@@ -342,6 +414,156 @@ export default function HeadReports() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Student Results */}
+                {activeSection === "students" && (
+                    <div className="space-y-6">
+                        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 p-4 flex flex-col md:flex-row gap-3 md:items-end">
+                            <div className="min-w-40">
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Class</label>
+                                <select
+                                    value={selectedClass}
+                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    className="w-full rounded-lg border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-sm"
+                                >
+                                    <option value="">All classes</option>
+                                    {classOptions.map((c) => (
+                                        <option key={c} value={c}>Class {c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="min-w-48">
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Subject</label>
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(e) => setSelectedSubject(e.target.value)}
+                                    className="w-full rounded-lg border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white px-3 py-2 text-sm"
+                                >
+                                    <option value="">All subjects</option>
+                                    {subjectOptions.map((s) => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button
+                                onClick={() => fetchStudentSummaries(selectedClass, selectedSubject)}
+                                className="md:ml-auto px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                            >
+                                {loadingStudentSummaries ? "Loading..." : "Apply Filters"}
+                            </button>
+                        </div>
+
+                        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 overflow-hidden">
+                            <div className="p-6 border-b border-gray-200 dark:border-zinc-800">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Student Results</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Click a student to view detailed test-by-test results</p>
+                            </div>
+                            {loadingStudentSummaries ? (
+                                <div className="p-10 text-center text-gray-400">Loading student results...</div>
+                            ) : studentSummaries.length === 0 ? (
+                                <div className="p-10 text-center text-gray-400">No student results found for selected filters</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 dark:bg-zinc-800/50">
+                                            <tr>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Student</th>
+                                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Class</th>
+                                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Attempts</th>
+                                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Avg %</th>
+                                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Best %</th>
+                                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Passed</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                                            {studentSummaries.map((student) => (
+                                                <tr
+                                                    key={student.student_id}
+                                                    onClick={() => fetchStudentDetail(student.student_id)}
+                                                    className="hover:bg-gray-50 dark:hover:bg-zinc-800/30 cursor-pointer"
+                                                >
+                                                    <td className="px-6 py-4">
+                                                        <div>
+                                                            <p className="font-medium text-gray-900 dark:text-white">{student.student_name}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{student.student_id}</p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-gray-800 dark:text-gray-200">{student.class_level || "-"}</td>
+                                                    <td className="px-6 py-4 text-center font-semibold text-gray-900 dark:text-white">{student.attempt_count || 0}</td>
+                                                    <td className="px-6 py-4 text-center text-gray-900 dark:text-white">{student.average_percentage || 0}%</td>
+                                                    <td className="px-6 py-4 text-center text-gray-900 dark:text-white">{student.best_percentage || 0}%</td>
+                                                    <td className="px-6 py-4 text-center text-green-600 dark:text-green-400 font-medium">{student.passed_count || 0}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {(loadingStudentDetail || studentDetail) && (
+                            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 overflow-hidden">
+                                <div className="p-6 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {loadingStudentDetail ? "Loading result details..." : `${studentDetail?.student?.student_name || "Student"} - Detailed Results`}
+                                        </h3>
+                                        {!loadingStudentDetail && studentDetail?.summary && (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                                Attempts: {studentDetail.summary.attempt_count || 0} | Avg: {studentDetail.summary.average_percentage || 0}% | Best: {studentDetail.summary.best_percentage || 0}%
+                                            </p>
+                                        )}
+                                    </div>
+                                    {!loadingStudentDetail && (
+                                        <button
+                                            onClick={() => setStudentDetail(null)}
+                                            className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        >
+                                            Close
+                                        </button>
+                                    )}
+                                </div>
+
+                                {loadingStudentDetail ? (
+                                    <div className="p-8 text-center text-gray-400">Loading...</div>
+                                ) : (studentDetail?.results || []).length === 0 ? (
+                                    <div className="p-8 text-center text-gray-400">No results found for this student</div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50 dark:bg-zinc-800/50">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Test</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Subject</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Class</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Score</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Percentage</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                                                {(studentDetail?.results || []).map((result) => (
+                                                    <tr key={result.submission_id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/30">
+                                                        <td className="px-6 py-4 text-gray-900 dark:text-white font-medium">{result.assessment_title}</td>
+                                                        <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{result.subject || "-"}</td>
+                                                        <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{result.class_level || "-"}</td>
+                                                        <td className="px-6 py-4 text-center text-gray-900 dark:text-white">{result.total_score || 0}/{result.max_score || 0}</td>
+                                                        <td className="px-6 py-4 text-center text-gray-900 dark:text-white">{result.percentage || 0}%</td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${result.passed ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"}`}>
+                                                                {result.passed ? "Passed" : "Failed"}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

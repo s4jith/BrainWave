@@ -121,6 +121,86 @@ async def get_teacher_groups(current_user: TokenData = Depends(require_role([Use
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/students")
+async def get_teacher_students(
+    class_level: int,
+    subject: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: TokenData = Depends(require_role([UserRole.TEACHER, UserRole.ADMIN]))
+):
+    """
+    Return class students visible to the current teacher/admin.
+
+    - Admin: all students from the class.
+    - Teacher: students from requested class if teacher has at least one assigned
+      group for that class (and subject when provided). This includes students
+      not in any group so tests can be assigned directly.
+    """
+    try:
+        grouped_student_keys = set()
+
+        if current_user.role == UserRole.ADMIN:
+            scope_groups = list(db.groups.find({"class_level": class_level}, {"student_ids": 1}))
+        else:
+            teacher_doc = db.users.find_one({"user_id": current_user.user_id, "role": "teacher"})
+            teacher_id_str = str(teacher_doc["_id"]) if teacher_doc else ""
+            match_values = [current_user.user_id]
+            if teacher_id_str:
+                match_values.append(teacher_id_str)
+
+            group_query: Dict[str, Any] = {
+                "$or": [
+                    {"teacher_id": {"$in": match_values}},
+                    {"teacher_ids": {"$in": match_values}}
+                ],
+                "class_level": class_level,
+            }
+
+            if subject:
+                group_query["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
+
+            scope_groups = list(db.groups.find(group_query, {"student_ids": 1}))
+            if not scope_groups:
+                return {"students": [], "total": 0}
+
+        for group in scope_groups:
+            for sid in (group.get("student_ids") or []):
+                key = str(sid)
+                if key:
+                    grouped_student_keys.add(key)
+
+        user_query: Dict[str, Any] = {"role": "student", "class_level": class_level, "is_active": True}
+        if search:
+            user_query["$or"] = [
+                {"name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+                {"user_id": {"$regex": search, "$options": "i"}},
+            ]
+
+        student_docs = list(db.users.find(user_query, {"password": 0, "permissions": 0}).sort("name", 1))
+
+        students = []
+        for s in student_docs:
+            student_mongo_id = str(s.get("_id"))
+            student_user_id = str(s.get("user_id") or "")
+            in_group = student_mongo_id in grouped_student_keys or student_user_id in grouped_student_keys
+
+            students.append({
+                "id": student_mongo_id,
+                "user_id": student_user_id,
+                "name": s.get("name", ""),
+                "email": s.get("email", ""),
+                "class_level": s.get("class_level"),
+                "is_in_group": in_group,
+            })
+
+        return {"students": students, "total": len(students)}
+
+    except Exception as e:
+        logger.error(f"Error fetching teacher students: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/questions")
 async def get_questions(
     subject: Optional[str] = None,

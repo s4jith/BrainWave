@@ -18,6 +18,9 @@ export default function CreateTest() {
 
   const { user, getAuthHeader } = useUserStore();
   const isAdmin = user?.role === "admin";
+  const isTeacher = user?.role === "teacher";
+  const isHead = user?.role === "head";
+  const fixedAssignmentMode = !isAdmin ? "groups" : "";
   const [activeTab, setActiveTab] = useState("details");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -26,7 +29,7 @@ export default function CreateTest() {
 
   const [formData, setFormData] = useState({
     title: "",
-    class_level: 10,  
+    class_level: null,
     subject: "",
     startDate: "",
     endDate: "",
@@ -43,11 +46,19 @@ export default function CreateTest() {
   const [students, setStudents] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
+  const [assignmentMode, setAssignmentMode] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [groupSearch, setGroupSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [mainFormCurriculumSubjects, setMainFormCurriculumSubjects] = useState([]); 
   const [loadingMainFormCurriculum, setLoadingMainFormCurriculum] = useState(true);
+  const [testSubjects, setTestSubjects] = useState([]);
+  const [headAssignment, setHeadAssignment] = useState({
+    assignment_type: null,
+    assigned_classes: [],
+    assigned_subjects: [],
+    head_subjects: []
+  });
 
   const combinedOptions = React.useMemo(() => {
     if (groups && groups.length > 0) {
@@ -75,6 +86,32 @@ export default function CreateTest() {
       return a.subject.localeCompare(b.subject);
     });
   }, [groups, mainFormCurriculumSubjects, isAdmin]);
+
+  const classOptionsForDirectAssign = React.useMemo(() => {
+    const classSet = new Set();
+    if (isAdmin) {
+      mainFormCurriculumSubjects.forEach((s) => {
+        if (s?.class_level != null) classSet.add(Number(s.class_level));
+      });
+    } else {
+      groups.forEach((g) => {
+        if (g?.class_level != null) classSet.add(Number(g.class_level));
+      });
+    }
+    return Array.from(classSet).sort((a, b) => a - b);
+  }, [isAdmin, groups, mainFormCurriculumSubjects]);
+
+  const subjectOptionsForDirectAssign = React.useMemo(() => {
+    if (testSubjects.length > 0) return testSubjects;
+    if (!formData.class_level) return [];
+    const subjects = new Set();
+    mainFormCurriculumSubjects.forEach((s) => {
+      if (Number(s?.class_level) === Number(formData.class_level) && s?.subject_name) {
+        subjects.add(s.subject_name);
+      }
+    });
+    return Array.from(subjects).sort((a, b) => a.localeCompare(b));
+  }, [testSubjects, mainFormCurriculumSubjects, formData.class_level]);
 
   const getGroupNameValue = React.useCallback((classLevel, subject) => {
     if (!classLevel || !subject) return '';
@@ -151,6 +188,19 @@ export default function CreateTest() {
     );
   }, [ungroupedStudents, studentSearch]);
 
+  const selectedGroupStudents = React.useMemo(() => {
+    const map = new Map();
+    selectedGroups.forEach(groupId => {
+      const group = groups.find(g => g.id === groupId);
+      (group?.students || []).forEach(student => {
+        if (student?.id && !map.has(student.id)) {
+          map.set(student.id, student);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [selectedGroups, groups]);
+
   const [questions, setQuestions] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showBankSelector, setShowBankSelector] = useState(false);
@@ -170,12 +220,18 @@ export default function CreateTest() {
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
-  const [testSubjects, setTestSubjects] = useState([]);
 
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [questionCurrSubject, setQuestionCurrSubject] = useState(null); 
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
   const [loadingCurrDetail, setLoadingCurrDetail] = useState(false);
+
+  useEffect(() => {
+    if (fixedAssignmentMode && assignmentMode !== fixedAssignmentMode) {
+      setAssignmentMode(fixedAssignmentMode);
+      setSelectedStudents([]);
+    }
+  }, [fixedAssignmentMode, assignmentMode]);
 
   useEffect(() => {
     fetchGroupsAndStudents();
@@ -187,7 +243,7 @@ export default function CreateTest() {
       
       fetchTestSubjectsForClass(formData.class_level, false);
     }
-  }, [testId]);
+  }, [testId, fixedAssignmentMode]);
 
   const fetchCurriculumSubjects = async () => {
     setLoadingCurriculum(true);
@@ -325,12 +381,21 @@ export default function CreateTest() {
       });
 
       setQuestions(formattedQuestions);
-      setSelectedStudents(data.student_ids || []);
+      setSelectedStudents(fixedAssignmentMode ? [] : (data.student_ids || []));
       setSelectedGroups(data.group_ids || []);
+      if (fixedAssignmentMode) {
+        setAssignmentMode(fixedAssignmentMode);
+      } else if ((data.group_ids || []).length > 0 && (data.student_ids || []).length > 0) {
+        setAssignmentMode("both");
+      } else if ((data.group_ids || []).length > 0) {
+        setAssignmentMode("groups");
+      } else {
+        setAssignmentMode("students");
+      }
 
       fetchTestSubjectsForClass(data.class_level || 10, false);
 
-      fetchStudentsForClass(data.class_level || 10, false);
+      fetchStudentsForClass(data.class_level || 10, false, null, data.subject || "");
 
     } catch (err) {
       setError("Failed to load test details");
@@ -367,6 +432,13 @@ export default function CreateTest() {
   };
 
   const fetchTestSubjectsForClass = async (classLevel, resetSubject = true) => {
+    if (!classLevel) {
+      setTestSubjects([]);
+      if (resetSubject) {
+        setFormData(prev => ({ ...prev, subject: "" }));
+      }
+      return;
+    }
     try {
       const response = await authFetch(`${API_URL}/api/test/subjects/${classLevel}`);
       if (response.ok) {
@@ -396,15 +468,35 @@ export default function CreateTest() {
   const fetchGroupsAndStudents = async () => {
     setLoadingGroups(true);
     try {
-      // Teachers only see their own assigned groups
-      const endpoint = isAdmin
-        ? `${API_URL}/api/admin/groups`
-        : `${API_URL}/api/teacher/groups`;
+      // Roles only see groups they are permitted to assign.
+      let endpoint = `${API_URL}/api/admin/groups`;
+      if (isTeacher) {
+        endpoint = `${API_URL}/api/teacher/groups`;
+      } else if (isHead) {
+        endpoint = `${API_URL}/api/head/groups`;
+      }
       const groupsRes = await authFetch(endpoint, { headers: getAuthHeader() });
       if (groupsRes.ok) {
         const data = await groupsRes.json();
         const fetchedGroups = data.groups || [];
         setGroups(fetchedGroups);
+        if (isHead) {
+          try {
+            const assignmentRes = await authFetch(`${API_URL}/api/head/my-assignment`, {
+              headers: getAuthHeader()
+            });
+            if (assignmentRes.ok) {
+              const assignmentData = await assignmentRes.json();
+              setHeadAssignment({
+                assignment_type: assignmentData.assignment_type || null,
+                assigned_classes: assignmentData.assigned_classes || [],
+                assigned_subjects: assignmentData.assigned_subjects || [],
+                head_subjects: assignmentData.head_subjects || []
+              });
+            }
+          } catch (err) {
+          }
+        }
         // Pass fetched groups directly to avoid React state timing issues
         if (!isEditMode) {
           await fetchStudentsForClass(formData.class_level, true, fetchedGroups);
@@ -416,27 +508,66 @@ export default function CreateTest() {
     }
   };
 
-  const fetchStudentsForClass = async (classLevel, clearSelection = true, groupsOverride = null) => {
+  const fetchStudentsForClass = async (classLevel, clearSelection = true, groupsOverride = null, subjectOverride = null) => {
     if (!classLevel) return;
-    // For teachers, extract students from their assigned groups instead of calling admin API
-    if (!isAdmin) {
+    const subject = subjectOverride ?? formData.subject;
+
+    // Teacher path: fetch class students from teacher-scoped endpoint (includes non-group students)
+    if (isTeacher) {
+      try {
+        const qs = new URLSearchParams({ class_level: String(classLevel) });
+        if (subject) qs.set("subject", subject);
+        const res = await authFetch(`${API_URL}/api/teacher/students?${qs.toString()}`, {
+          headers: getAuthHeader()
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStudents(data.students || []);
+          if (clearSelection) setSelectedStudents([]);
+          return;
+        }
+      } catch (err) {
+      }
+
+      // Fallback to grouped students if endpoint fails.
       const groupsToUse = groupsOverride !== null ? groupsOverride : groups;
       const seen = new Set();
-      const filtered = [];
+      const groupedOnly = [];
       groupsToUse
         .filter(g => g.class_level == classLevel)
         .forEach(g => {
           (g.students || []).forEach(s => {
-            if (!seen.has(s.id)) {
+            if (s?.id && !seen.has(s.id)) {
               seen.add(s.id);
-              filtered.push(s);
+              groupedOnly.push(s);
             }
           });
         });
-      setStudents(filtered);
+      setStudents(groupedOnly);
       if (clearSelection) setSelectedStudents([]);
       return;
     }
+
+    // Head path: use assignment-filtered groups only.
+    if (isHead) {
+      const groupsToUse = groupsOverride !== null ? groupsOverride : groups;
+      const seen = new Set();
+      const groupedOnly = [];
+      groupsToUse
+        .filter(g => g.class_level == classLevel)
+        .forEach(g => {
+          (g.students || []).forEach(s => {
+            if (s?.id && !seen.has(s.id)) {
+              seen.add(s.id);
+              groupedOnly.push(s);
+            }
+          });
+        });
+      setStudents(groupedOnly);
+      if (clearSelection) setSelectedStudents([]);
+      return;
+    }
+
     // Admin path: fetch all students for the class via admin API
     try {
       const studentsRes = await authFetch(`${API_URL}/api/admin/students?limit=200&class_level=${classLevel}`);
@@ -452,27 +583,34 @@ export default function CreateTest() {
   };
 
   const handleGroupToggle = (groupId) => {
-    const group = groups.find(g => g.id === groupId);
-    const groupStudentIds = (group?.students || []).map(s => s.id).filter(Boolean);
-    
     if (selectedGroups.includes(groupId)) {
       setSelectedGroups(prev => prev.filter(id => id !== groupId));
-      
-      const studentIdsToRemove = groupStudentIds;
-      if (studentIdsToRemove.length > 0) {
-        setSelectedStudents(prev => prev.filter(id => !studentIdsToRemove.includes(id)));
-      }
     } else {
       setSelectedGroups(prev => [...prev, groupId]);
-      
-      const studentIdsToAdd = groupStudentIds;
-      if (studentIdsToAdd.length > 0) {
-        setSelectedStudents(prev => {
-          const newSelected = [...new Set([...prev, ...studentIdsToAdd])];
-          return newSelected;
-        });
-      }
     }
+  };
+
+  const handleAssignmentModeChange = (mode) => {
+    if (fixedAssignmentMode) return;
+    if (mode === assignmentMode) return;
+
+    setAssignmentMode(mode);
+    setSelectedGroups([]);
+    setSelectedStudents([]);
+    setGroupSearch("");
+    setStudentSearch("");
+
+    if (mode === "students") {
+      setFormData(prev => ({ ...prev, class_level: null, subject: "" }));
+      setTestSubjects([]);
+      setStudents([]);
+      return;
+    }
+
+    // Groups / Both mode: class + subject are selected from group combos.
+    setFormData(prev => ({ ...prev, class_level: null, subject: "" }));
+    setTestSubjects([]);
+    setStudents([]);
   };
 
   const handleStudentToggle = (studentId) => {
@@ -484,13 +622,31 @@ export default function CreateTest() {
   const selectAllGroups = () => {
     const allGroupIds = filteredGroups.map(g => g.id);
     setSelectedGroups(allGroupIds);
-    
-    const allStudentIds = filteredGroups.flatMap(g => (g.students || []).map(s => s.id).filter(Boolean));
-    setSelectedStudents([...new Set(allStudentIds)]);
   };
 
   const clearAllGroups = () => {
     setSelectedGroups([]);
+  };
+
+  const buildAssignmentPayload = () => {
+    const mode = fixedAssignmentMode || assignmentMode;
+
+    if (mode === "groups") {
+      return {
+        student_ids: [],
+        group_ids: selectedGroups,
+      };
+    }
+    if (mode === "both") {
+      return {
+        student_ids: selectedStudents,
+        group_ids: selectedGroups,
+      };
+    }
+    return {
+      student_ids: selectedStudents,
+      group_ids: [],
+    };
   };
 
   const selectAllStudents = () => {
@@ -502,8 +658,18 @@ export default function CreateTest() {
   };
 
   const handleSaveDraft = async () => {
+    const effectiveAssignmentMode = fixedAssignmentMode || assignmentMode;
+
     if (!formData.title.trim()) {
       setError("Please enter a test title before saving as draft");
+      return;
+    }
+    if (!effectiveAssignmentMode) {
+      setError("Please choose an assignment option: Groups, Students, or Both");
+      return;
+    }
+    if (!formData.class_level || !formData.subject) {
+      setError("Please select class and subject");
       return;
     }
     setSaving(true);
@@ -526,8 +692,7 @@ export default function CreateTest() {
         show_results_immediately: formData.show_results,
         start_datetime: startDateTime,
         end_datetime: endDateTime,
-        student_ids: selectedStudents,
-        group_ids: selectedGroups,
+        ...buildAssignmentPayload(),
         questions: questions,
         created_by: user?.user_id || "admin",
         evaluation_type: formData.evaluation_type,
@@ -564,16 +729,30 @@ export default function CreateTest() {
   };
 
   const handlePublish = async () => {
+    const effectiveAssignmentMode = fixedAssignmentMode || assignmentMode;
+
     if (!formData.title.trim()) {
       setError("Please enter a test title");
+      return;
+    }
+    if (!effectiveAssignmentMode) {
+      setError("Please choose an assignment option: Groups, Students, or Both");
       return;
     }
     if (!formData.subject) {
       setError("Please select a subject");
       return;
     }
-    if (selectedStudents.length === 0) {
+    if (effectiveAssignmentMode === "groups" && selectedGroups.length === 0) {
+      setError("Please select at least one group");
+      return;
+    }
+    if (effectiveAssignmentMode === "students" && selectedStudents.length === 0) {
       setError("Please select at least one student");
+      return;
+    }
+    if (effectiveAssignmentMode === "both" && selectedGroups.length === 0) {
+      setError("Please select at least one group for Both assignment mode");
       return;
     }
 
@@ -598,8 +777,7 @@ export default function CreateTest() {
         show_results_immediately: formData.show_results,
         start_datetime: startDateTime,
         end_datetime: endDateTime,
-        student_ids: selectedStudents,
-        group_ids: selectedGroups,
+        ...buildAssignmentPayload(),
         questions: questions,
         created_by: user?.user_id || "admin",
         evaluation_type: formData.evaluation_type,
@@ -636,7 +814,7 @@ export default function CreateTest() {
     }
   };
 
-  const isTestDetailsComplete = formData.title?.trim() && formData.subject && formData.class_level && formData.startDate;
+  const isTestDetailsComplete = formData.title?.trim() && (fixedAssignmentMode || assignmentMode) && formData.subject && formData.class_level && formData.startDate;
 
   const _now = new Date();
   const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
@@ -849,50 +1027,146 @@ export default function CreateTest() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Assignment Option <span className="text-red-500">*</span>
+                </label>
+                {isAdmin ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAssignmentModeChange("groups")}
+                      className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${assignmentMode === "groups" ? "border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-700/50" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"}`}
+                    >
+                      Groups
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignmentModeChange("students")}
+                      className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${assignmentMode === "students" ? "border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-700/50" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"}`}
+                    >
+                      Students
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignmentModeChange("both")}
+                      className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${assignmentMode === "both" ? "border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-700/50" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"}`}
+                    >
+                      Both
+                    </button>
+                  </div>
+                ) : (
+                  <div className="px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 text-sm text-gray-700 dark:text-gray-300">
+                    {isTeacher && "Teacher mode: assignment is restricted to your assigned groups."}
+                    {isHead && "Head mode: assignment is restricted to groups in your assigned scope."}
+                  </div>
+                )}
+                {isHead && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Assigned classes: {headAssignment.assigned_classes?.length ? headAssignment.assigned_classes.join(", ") : "None"}
+                    {" | "}
+                    Assigned subjects: {(headAssignment.assigned_subjects?.length ? headAssignment.assigned_subjects : headAssignment.head_subjects)?.length
+                      ? (headAssignment.assigned_subjects?.length ? headAssignment.assigned_subjects : headAssignment.head_subjects).join(", ")
+                      : "None"}
+                  </p>
+                )}
+                {isAdmin && !assignmentMode && (
+                  <p className="text-xs text-red-500 mt-1">Choose how this test will be assigned.</p>
+                )}
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Class & Subject <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={getGroupNameValue(formData.class_level, formData.subject)}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (!value) {
-                      setFormData({ ...formData, class_level: null, subject: '' });
-                      return;
-                    }
-                    
-                    const matchedOption = combinedOptions.find(opt => opt.value === value);
-                    
-                    if (matchedOption) {
-                      
-                      setFormData({ ...formData, class_level: matchedOption.class, subject: matchedOption.subject });
-                      fetchTestSubjectsForClass(matchedOption.class, false); 
-                      fetchStudentsForClass(matchedOption.class, true);
-                    } else {
-                      
-                      let parsed = parseGroupName(value);
-                      if (!parsed.class) {
-                        parsed = parseCombinedValue(value);
+                {(assignmentMode === "groups" || assignmentMode === "both") && (
+                  <select
+                    value={getGroupNameValue(formData.class_level, formData.subject)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!value) {
+                        setFormData({ ...formData, class_level: null, subject: '' });
+                        setSelectedGroups([]);
+                        setSelectedStudents([]);
+                        setStudents([]);
+                        return;
                       }
-                      if (parsed.class && parsed.subject) {
-                        setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
-                        fetchTestSubjectsForClass(parsed.class, false); 
-                        fetchStudentsForClass(parsed.class, true);
+
+                      const matchedOption = combinedOptions.find(opt => opt.value === value);
+
+                      if (matchedOption) {
+                        setFormData({ ...formData, class_level: matchedOption.class, subject: matchedOption.subject });
+                        fetchTestSubjectsForClass(matchedOption.class, false);
+                        fetchStudentsForClass(matchedOption.class, true, null, matchedOption.subject);
+                      } else {
+                        let parsed = parseGroupName(value);
+                        if (!parsed.class) {
+                          parsed = parseCombinedValue(value);
+                        }
+                        if (parsed.class && parsed.subject) {
+                          setFormData({ ...formData, class_level: parsed.class, subject: parsed.subject });
+                          fetchTestSubjectsForClass(parsed.class, false);
+                          fetchStudentsForClass(parsed.class, true, null, parsed.subject);
+                        }
                       }
-                    }
-                  }}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
-                >
-                  <option value="">Select Class & Subject</option>
-                  {(loadingGroups || loadingMainFormCurriculum) ? (
-                    <option disabled>Loading...</option>
-                  ) : combinedOptions.length === 0 ? (
-                    <option disabled>No subjects available</option>
-                  ) : (
-                    combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
-                  )}
-                </select>
+                    }}
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
+                    disabled={!assignmentMode}
+                  >
+                    <option value="">Select Class & Subject From Group</option>
+                    {(loadingGroups || loadingMainFormCurriculum) ? (
+                      <option disabled>Loading...</option>
+                    ) : combinedOptions.length === 0 ? (
+                      <option disabled>No group-based subjects available</option>
+                    ) : (
+                      combinedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                    )}
+                  </select>
+                )}
+
+                {assignmentMode === "students" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <select
+                      value={formData.class_level || ""}
+                      onChange={(e) => {
+                        const selectedClass = Number(e.target.value) || null;
+                        setFormData(prev => ({ ...prev, class_level: selectedClass, subject: "" }));
+                        setSelectedStudents([]);
+                        setSelectedGroups([]);
+                        fetchTestSubjectsForClass(selectedClass, true);
+                        fetchStudentsForClass(selectedClass, true, null, "");
+                      }}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
+                    >
+                      <option value="">Select Class</option>
+                      {classOptionsForDirectAssign.map((c) => (
+                        <option key={c} value={c}>Class {c}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={formData.subject || ""}
+                      onChange={(e) => {
+                        const selectedSubject = e.target.value;
+                        setFormData(prev => ({ ...prev, subject: selectedSubject }));
+                        if (formData.class_level) {
+                          fetchStudentsForClass(formData.class_level, true, null, selectedSubject);
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:outline-none"
+                      disabled={!formData.class_level}
+                    >
+                      <option value="">Select Subject</option>
+                      {subjectOptionsForDirectAssign.map((subject) => (
+                        <option key={subject} value={subject}>{subject}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {isAdmin && !assignmentMode && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Choose Assignment Option first to continue class/subject selection.</p>
+                )}
               </div>
 
               <div>
@@ -1035,7 +1309,11 @@ export default function CreateTest() {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Student Assignment</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Select groups on the left to automatically select all students from those groups. You can also manually adjust individual student selections on the right.
+              {!isAdmin && "Group mode only: select one or more groups from your assigned scope."}
+              {assignmentMode === "groups" && "Group mode: select groups. All students in selected groups will receive the test."}
+              {assignmentMode === "students" && "Student mode: select individual students from the selected class/subject."}
+              {assignmentMode === "both" && "Both mode: select groups and optionally add extra individual students not in groups."}
+              {!assignmentMode && "Choose assignment option in Basic Information first."}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1043,8 +1321,20 @@ export default function CreateTest() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white">Groups</h3>
                   <div className="flex gap-2">
-                    <button onClick={selectAllGroups} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Select All</button>
-                    <button onClick={clearAllGroups} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
+                    <button
+                      onClick={selectAllGroups}
+                      disabled={assignmentMode !== "groups" && assignmentMode !== "both"}
+                      className="text-xs text-gray-600 disabled:opacity-40 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={clearAllGroups}
+                      disabled={assignmentMode !== "groups" && assignmentMode !== "both"}
+                      className="text-xs text-gray-600 disabled:opacity-40 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    >
+                      Clear All
+                    </button>
                   </div>
                 </div>
                 <div className="relative mb-2">
@@ -1072,6 +1362,7 @@ export default function CreateTest() {
                           type="checkbox"
                           checked={selectedGroups.includes(group.id)}
                           onChange={() => handleGroupToggle(group.id)}
+                            disabled={assignmentMode !== "groups" && assignmentMode !== "both"}
                           className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
                         />
                         <div className="flex-1">
@@ -1088,6 +1379,24 @@ export default function CreateTest() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{selectedGroups.length} groups selected</p>
+
+                {(assignmentMode === "groups" || assignmentMode === "both") && (
+                  <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
+                    <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 sticky top-0">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Students In Selected Groups</span>
+                    </div>
+                    {selectedGroupStudents.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 dark:text-gray-400">Select groups to preview students.</div>
+                    ) : (
+                      selectedGroupStudents.map(student => (
+                        <div key={student.id} className="p-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">{student.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{student.email}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1096,8 +1405,20 @@ export default function CreateTest() {
                     Students
                   </h3>
                   <div className="flex gap-2">
-                    <button onClick={selectAllStudents} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Select All</button>
-                    <button onClick={clearAllStudents} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Clear All</button>
+                    <button
+                      onClick={selectAllStudents}
+                      disabled={!isAdmin || (assignmentMode !== "students" && assignmentMode !== "both")}
+                      className="text-xs text-gray-600 disabled:opacity-40 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={clearAllStudents}
+                      disabled={!isAdmin || (assignmentMode !== "students" && assignmentMode !== "both")}
+                      className="text-xs text-gray-600 disabled:opacity-40 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    >
+                      Clear All
+                    </button>
                   </div>
                 </div>
                 <div className="relative mb-2">
@@ -1107,6 +1428,7 @@ export default function CreateTest() {
                     placeholder="Search students..."
                     value={studentSearch}
                     onChange={e => setStudentSearch(e.target.value)}
+                    disabled={!isAdmin || (assignmentMode !== "students" && assignmentMode !== "both")}
                     className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                   />
                 </div>
@@ -1125,6 +1447,7 @@ export default function CreateTest() {
                             type="checkbox"
                             checked={selectedStudents.includes(student.id)}
                             onChange={() => handleStudentToggle(student.id)}
+                            disabled={!isAdmin || (assignmentMode !== "students" && assignmentMode !== "both")}
                             className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
                           />
                           <div className="flex-1">
@@ -1149,6 +1472,7 @@ export default function CreateTest() {
                             type="checkbox"
                             checked={selectedStudents.includes(student.id)}
                             onChange={() => handleStudentToggle(student.id)}
+                            disabled={!isAdmin || (assignmentMode !== "students" && assignmentMode !== "both")}
                             className="w-4 h-4 text-gray-900 rounded border-gray-300 dark:border-gray-600"
                           />
                           <div className="flex-1">

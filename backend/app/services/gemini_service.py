@@ -14,8 +14,8 @@ class GeminiService:
     
     def __init__(self):
         self.model_name = 'models/gemini-2.5-flash'
-        logger.info(f"Gemini Service initialized with model: {self.model_name}")
-        logger.info(f"Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
+        logger.debug(f"Gemini Service initialized with model: {self.model_name}")
+        logger.debug(f"Using multi-key rotation: {gemini_key_manager.get_quota_status()['total_keys']} keys available")
         
         self.embedding_model = 'models/gemini-embedding-001'
     
@@ -121,9 +121,13 @@ class GeminiService:
             error_str = str(e)
             
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
-                
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                current_key_id = gemini_key_manager.get_current_key_id()
+                if current_key_id:
+                    gemini_key_manager.mark_key_exhausted(current_key_id)
+                logger.warning(
+                    f"[Gemini Retry] 429 on {current_key_id or 'unknown_key'} "
+                    f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                )
                 
                 return self.format_explanation(context, question, mode, class_level, retry_count + 1)
             
@@ -189,11 +193,18 @@ class GeminiService:
                         gemini_key_manager.mark_key_invalid(current_key_id)
                     logger.warning(f" API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
                 elif is_timeout:
-                    logger.warning(f" 504 Deadline Exceeded. Retrying with next key (retry {retry_count + 1})...")
+                    logger.warning(
+                        f"[Gemini Retry] timeout on {current_key_id or 'unknown_key'} "
+                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                    )
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 else:
-                    logger.warning(f" 429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
-                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                    if current_key_id:
+                        gemini_key_manager.mark_key_exhausted(current_key_id)
+                    logger.warning(
+                        f"[Gemini Retry] 429 on {current_key_id or 'unknown_key'} "
+                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                    )
                 
                 return self.generate_response(prompt, retry_count + 1, max_output_tokens, model_name)
             
@@ -245,11 +256,18 @@ class GeminiService:
                         gemini_key_manager.mark_key_invalid(current_key_id)
                     logger.warning(f" API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
                 elif is_timeout:
-                    logger.warning(f" 504 Deadline Exceeded in stream. Retrying with next key (retry {retry_count + 1})...")
+                    logger.warning(
+                        f"[Gemini Stream Retry] timeout on {current_key_id or 'unknown_key'} "
+                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                    )
                     gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
                 else:
-                    logger.warning(f" 429 Rate limit hit in stream. Rotating to next key (retry {retry_count + 1})...")
-                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                    if current_key_id:
+                        gemini_key_manager.mark_key_exhausted(current_key_id)
+                    logger.warning(
+                        f"[Gemini Stream Retry] 429 on {current_key_id or 'unknown_key'} "
+                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                    )
                 
                 yield from self.generate_response_streaming(prompt, retry_count + 1, max_output_tokens)
             else:
@@ -310,9 +328,13 @@ class GeminiService:
             error_str = str(e)
             
             if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
-                
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
+                current_key_id = gemini_key_manager.get_current_key_id()
+                if current_key_id:
+                    gemini_key_manager.mark_key_exhausted(current_key_id)
+                logger.warning(
+                    f"[Gemini Vision Retry] 429 on {current_key_id or 'unknown_key'} "
+                    f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                )
                 
                 return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1, max_output_tokens)
             

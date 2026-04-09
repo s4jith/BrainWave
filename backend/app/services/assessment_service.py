@@ -46,6 +46,69 @@ class AssessmentService:
             if mongodb.db is not None:
                 self._submissions = mongodb.get_collection(self.submissions_collection)
         return self._submissions
+
+    async def _is_admin_user(self, user_id: str) -> bool:
+        """Return True when the acting user is an admin."""
+        try:
+            user_doc = await mongodb.db.users.find_one({"user_id": user_id}, {"role": 1})
+            return bool(user_doc and user_doc.get("role") == "admin")
+        except Exception:
+            return False
+
+    async def _teacher_has_assessment_scope(self, assessment: dict, teacher_user_id: str) -> bool:
+        """Check teacher scope using same rules as list_assessments visibility."""
+        try:
+            teacher_user = await mongodb.db.users.find_one({"user_id": teacher_user_id})
+            teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
+
+            group_query = {
+                "$or": [
+                    {"teacher_ids": teacher_user_id},
+                    {"teacher_id": teacher_user_id}
+                ]
+            }
+            if teacher_mongo_id and teacher_mongo_id != teacher_user_id:
+                group_query["$or"].extend([
+                    {"teacher_ids": teacher_mongo_id},
+                    {"teacher_id": teacher_mongo_id}
+                ])
+
+            teacher_groups = await mongodb.db.groups.find(group_query).to_list(length=200)
+            if not teacher_groups:
+                return False
+
+            teacher_group_ids = {str(g.get("_id")) for g in teacher_groups if g.get("_id")}
+            assessment_group_ids = {
+                str(gid) for gid in (assessment.get("group_ids") or []) if str(gid).strip()
+            }
+
+            # Direct group assignment match.
+            if assessment_group_ids and teacher_group_ids.intersection(assessment_group_ids):
+                return True
+
+            # Class/subject visibility fallback used for admin-created tests.
+            assessment_instructor = str(assessment.get("instructor_id") or "")
+            admins = await mongodb.db.users.find({"role": "admin"}, {"user_id": 1}).to_list(length=100)
+            admin_ids = {str(a.get("user_id")) for a in admins if a.get("user_id")}
+
+            if assessment_instructor not in admin_ids:
+                return False
+
+            assessment_class = assessment.get("class_level")
+            assessment_subject = str(assessment.get("subject") or "").strip().lower()
+            if not assessment_class or not assessment_subject:
+                return False
+
+            for g in teacher_groups:
+                group_class = g.get("class_level")
+                group_subject = str(g.get("subject") or "").strip().lower()
+                if group_class == assessment_class and group_subject == assessment_subject:
+                    return True
+
+            return False
+        except Exception as e:
+            logger.warning(f"Teacher scope check failed for {teacher_user_id}: {e}")
+            return False
     
     async def create_assessment(
         self,
@@ -661,37 +724,21 @@ class AssessmentService:
             if not existing:
                 return None
             
+            is_admin = await self._is_admin_user(instructor_id)
             is_instructor = existing.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
-            if not is_instructor:
-                teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
-                teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
-                
-                group_ids = existing.get("group_ids", [])
-                if group_ids:
-                    teacher_match = [
-                        {"teacher_ids": instructor_id},
-                        {"teacher_id": instructor_id}
-                    ]
-                    if teacher_mongo_id and teacher_mongo_id != instructor_id:
-                        teacher_match.extend([
-                            {"teacher_ids": teacher_mongo_id},
-                            {"teacher_id": teacher_mongo_id}
-                        ])
-                    
-                    teacher_groups = await mongodb.db.groups.find({
-                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
-                        "$or": teacher_match
-                    }).to_list(length=100)
-                    is_assigned_teacher = len(teacher_groups) > 0
-                    logger.info(f"Update permission check: user={instructor_id}, mongo_id={teacher_mongo_id}, groups_found={len(teacher_groups)}")
+            if not is_instructor and not is_admin:
+                is_assigned_teacher = await self._teacher_has_assessment_scope(existing, instructor_id)
             
-            if not is_instructor and not is_assigned_teacher:
+            if not is_admin and not is_instructor and not is_assigned_teacher:
                 logger.warning(f"User {instructor_id} denied access to update assessment {assessment_id}")
                 return None
             
-            logger.info(f"User {instructor_id} updating assessment {assessment_id} - Instructor: {is_instructor}, Assigned Teacher: {is_assigned_teacher}")
+            logger.info(
+                f"User {instructor_id} updating assessment {assessment_id} "
+                f"- Admin: {is_admin}, Instructor: {is_instructor}, Assigned Teacher: {is_assigned_teacher}"
+            )
             
             update_data = {"updated_at": datetime.utcnow()}
             
@@ -761,22 +808,14 @@ class AssessmentService:
             if not assessment:
                 return None
             
+            is_admin = await self._is_admin_user(instructor_id)
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
-            if not is_instructor:
-                group_ids = assessment.get("group_ids", [])
-                if group_ids:
-                    teacher_groups = await mongodb.db.groups.find({
-                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
-                        "$or": [
-                            {"teacher_ids": instructor_id},
-                            {"teacher_id": instructor_id}
-                        ]
-                    }).to_list(length=100)
-                    is_assigned_teacher = len(teacher_groups) > 0
+            if not is_instructor and not is_admin:
+                is_assigned_teacher = await self._teacher_has_assessment_scope(assessment, instructor_id)
             
-            if not is_instructor and not is_assigned_teacher:
+            if not is_admin and not is_instructor and not is_assigned_teacher:
                 return None
             
             if assessment.get("status") != AssessmentStatus.DRAFT.value:
@@ -812,39 +851,21 @@ class AssessmentService:
             if not assessment:
                 return False
             
+            is_admin = await self._is_admin_user(instructor_id)
             is_instructor = assessment.get("instructor_id") == instructor_id
             is_assigned_teacher = False
             
-            if not is_instructor:
-                teacher_user = await mongodb.db.users.find_one({"user_id": instructor_id})
-                teacher_mongo_id = str(teacher_user["_id"]) if teacher_user else None
-                
-                group_ids = assessment.get("group_ids", [])
-                logger.info(f"Delete permission check: test_id={assessment_id}, user={instructor_id}, mongo_id={teacher_mongo_id}, group_ids={group_ids}")
-                
-                if group_ids:
-                    teacher_match = [
-                        {"teacher_ids": instructor_id},
-                        {"teacher_id": instructor_id}
-                    ]
-                    if teacher_mongo_id and teacher_mongo_id != instructor_id:
-                        teacher_match.extend([
-                            {"teacher_ids": teacher_mongo_id},
-                            {"teacher_id": teacher_mongo_id}
-                        ])
-                    
-                    teacher_groups = await mongodb.db.groups.find({
-                        "_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]},
-                        "$or": teacher_match
-                    }).to_list(length=100)
-                    is_assigned_teacher = len(teacher_groups) > 0
-                    logger.info(f"Delete permission check: groups_found={len(teacher_groups)}, matched={is_assigned_teacher}")
+            if not is_instructor and not is_admin:
+                is_assigned_teacher = await self._teacher_has_assessment_scope(assessment, instructor_id)
             
-            if not is_instructor and not is_assigned_teacher:
+            if not is_admin and not is_instructor and not is_assigned_teacher:
                 logger.warning(f"User {instructor_id} DENIED access to delete assessment {assessment_id}")
                 return False
             
-            logger.info(f"User {instructor_id} ALLOWED to delete assessment {assessment_id} (instructor={is_instructor}, assigned={is_assigned_teacher})")
+            logger.info(
+                f"User {instructor_id} ALLOWED to delete assessment {assessment_id} "
+                f"(admin={is_admin}, instructor={is_instructor}, assigned={is_assigned_teacher})"
+            )
             
             deleted_submissions = await self.submissions.delete_many({"assessment_id": assessment_id})
             logger.info(f"Deleted {deleted_submissions.deleted_count} submissions for assessment {assessment_id}")

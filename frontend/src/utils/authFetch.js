@@ -32,8 +32,8 @@ export default async function authFetch(url, options = {}) {
   }
   const response = await fetch(url, { ...options, headers });
 
-  // If the server says unauthorized/forbidden, the token/session is invalid — force logout
-  if (response.status === 401 || response.status === 403) {
+  // Force logout only when unauthenticated. 403 can be valid for permission checks.
+  if (response.status === 401) {
     forceLogoutToLogin();
   }
 

@@ -6,7 +6,7 @@ only see content relevant to their assignment.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.db.mongo import db, mongodb
 from app.core.permissions import require_role
 from app.models.rbac_models import UserRole, TokenData
@@ -152,6 +152,55 @@ def build_assignment_filter_groups(head_doc: dict) -> dict:
             query["$or"] = flat_conditions
 
     return query
+
+
+def _add_optional_subject_class_filters(query: dict, class_level: Optional[int], subject: Optional[str]) -> dict:
+    """Apply optional class/subject filters to an existing Mongo query."""
+    filtered = dict(query)
+    if class_level is not None:
+        filtered["class_level"] = class_level
+    if subject:
+        filtered["subject"] = {"$regex": f"^{subject}$", "$options": "i"}
+    return filtered
+
+
+def _collect_head_students_from_groups(groups: List[dict]) -> Dict[str, Any]:
+    """Build student maps from assignment-scoped groups."""
+    student_oid_strings = set()
+    group_names_by_student_oid = {}
+
+    for group in groups:
+        group_name = group.get("name") or "Unnamed Group"
+        for sid in group.get("student_ids", []) or []:
+            sid_str = str(sid)
+            if not ObjectId.is_valid(sid_str):
+                continue
+            student_oid_strings.add(sid_str)
+            if sid_str not in group_names_by_student_oid:
+                group_names_by_student_oid[sid_str] = set()
+            group_names_by_student_oid[sid_str].add(group_name)
+
+    student_oids = [ObjectId(sid) for sid in student_oid_strings]
+    student_docs = list(db.users.find(
+        {"_id": {"$in": student_oids}},
+        {"name": 1, "user_id": 1, "class_level": 1, "email": 1}
+    )) if student_oids else []
+
+    by_user_id = {}
+    by_oid = {}
+    for student in student_docs:
+        oid_str = str(student["_id"])
+        user_id = student.get("user_id")
+        if user_id:
+            by_user_id[user_id] = student
+        by_oid[oid_str] = student
+
+    return {
+        "by_user_id": by_user_id,
+        "by_oid": by_oid,
+        "group_names_by_student_oid": group_names_by_student_oid,
+        "allowed_student_identifiers": list(set(list(by_user_id.keys()) + list(by_oid.keys())))
+    }
 
 
 # ──────────── My Assignment Info ────────────
@@ -703,4 +752,231 @@ async def get_head_reports(
         }
     except Exception as e:
         logger.error(f"Error fetching head reports: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reports/student-results")
+async def get_head_student_results_summary(
+    class_level: Optional[int] = Query(None),
+    subject: Optional[str] = Query(None),
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """List assignment-scoped student result summaries with optional class/subject filtering."""
+    try:
+        head_doc = get_head_user(current_user.user_id) if current_user.role == UserRole.HEAD else None
+
+        group_filter = _add_optional_subject_class_filters(
+            build_assignment_filter_groups(head_doc),
+            class_level,
+            subject
+        )
+        groups = list(db.groups.find(group_filter, {"name": 1, "student_ids": 1}))
+
+        student_ctx = _collect_head_students_from_groups(groups)
+        allowed_student_identifiers = student_ctx["allowed_student_identifiers"]
+        if not allowed_student_identifiers:
+            return {
+                "students": [],
+                "total": 0,
+                "filters": {"class_level": class_level, "subject": subject}
+            }
+
+        assessment_filter = _add_optional_subject_class_filters(
+            build_assignment_filter(head_doc, {}),
+            class_level,
+            subject
+        )
+        assessment_docs = await mongodb.db.assessments.find(
+            assessment_filter,
+            {"title": 1, "subject": 1, "class_level": 1}
+        ).to_list(length=5000)
+        assessment_ids = [str(a["_id"]) for a in assessment_docs]
+
+        if not assessment_ids:
+            return {
+                "students": [],
+                "total": 0,
+                "filters": {"class_level": class_level, "subject": subject}
+            }
+
+        submissions = await mongodb.db.submissions.find({
+            "assessment_id": {"$in": assessment_ids},
+            "student_id": {"$in": allowed_student_identifiers}
+        }).to_list(length=10000)
+
+        summaries: Dict[str, Dict[str, Any]] = {}
+        for submission in submissions:
+            sid = str(submission.get("student_id") or "")
+            student = student_ctx["by_user_id"].get(sid) or student_ctx["by_oid"].get(sid)
+            if not student:
+                continue
+
+            student_key = student.get("user_id") or str(student["_id"])
+            if student_key not in summaries:
+                oid_str = str(student["_id"])
+                summaries[student_key] = {
+                    "student_id": student_key,
+                    "student_name": student.get("name") or submission.get("student_name") or "Unknown Student",
+                    "class_level": student.get("class_level"),
+                    "email": student.get("email"),
+                    "groups": sorted(list(student_ctx["group_names_by_student_oid"].get(oid_str, set()))),
+                    "attempt_count": 0,
+                    "passed_count": 0,
+                    "failed_count": 0,
+                    "total_percentage": 0.0,
+                    "best_percentage": 0.0,
+                    "last_submission_at": None
+                }
+
+            row = summaries[student_key]
+            percentage = float(submission.get("percentage") or 0)
+            row["attempt_count"] += 1
+            row["total_percentage"] += percentage
+            row["best_percentage"] = max(row["best_percentage"], percentage)
+            if percentage >= 40:
+                row["passed_count"] += 1
+            else:
+                row["failed_count"] += 1
+
+            submitted_at = submission.get("submitted_at")
+            if submitted_at and (row["last_submission_at"] is None or submitted_at > row["last_submission_at"]):
+                row["last_submission_at"] = submitted_at
+
+        students = []
+        for item in summaries.values():
+            attempts = item.pop("attempt_count")
+            total_percentage = item.pop("total_percentage")
+            item["attempt_count"] = attempts
+            item["average_percentage"] = round(total_percentage / attempts, 2) if attempts > 0 else 0
+            item["best_percentage"] = round(item["best_percentage"], 2)
+            students.append(item)
+
+        students.sort(key=lambda x: (x.get("average_percentage", 0), x.get("best_percentage", 0)), reverse=True)
+
+        return {
+            "students": students,
+            "total": len(students),
+            "filters": {"class_level": class_level, "subject": subject}
+        }
+    except Exception as e:
+        logger.error(f"Error fetching head student result summaries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reports/student-results/{student_id}")
+async def get_head_student_result_detail(
+    student_id: str,
+    class_level: Optional[int] = Query(None),
+    subject: Optional[str] = Query(None),
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """Get assignment-scoped result details for one student with optional class/subject filtering."""
+    try:
+        head_doc = get_head_user(current_user.user_id) if current_user.role == UserRole.HEAD else None
+
+        group_filter = _add_optional_subject_class_filters(
+            build_assignment_filter_groups(head_doc),
+            class_level,
+            subject
+        )
+        groups = list(db.groups.find(group_filter, {"name": 1, "student_ids": 1}))
+        student_ctx = _collect_head_students_from_groups(groups)
+
+        student_doc = student_ctx["by_user_id"].get(student_id) or student_ctx["by_oid"].get(student_id)
+        if not student_doc:
+            raise HTTPException(status_code=404, detail="Student not found in your assignment scope")
+
+        assessment_filter = _add_optional_subject_class_filters(
+            build_assignment_filter(head_doc, {}),
+            class_level,
+            subject
+        )
+        assessment_docs = await mongodb.db.assessments.find(
+            assessment_filter,
+            {"title": 1, "subject": 1, "class_level": 1}
+        ).to_list(length=5000)
+        assessment_map = {str(a["_id"]): a for a in assessment_docs}
+        assessment_ids = list(assessment_map.keys())
+
+        if not assessment_ids:
+            return {
+                "student": {
+                    "student_id": student_doc.get("user_id") or str(student_doc["_id"]),
+                    "student_name": student_doc.get("name", "Unknown Student"),
+                    "class_level": student_doc.get("class_level"),
+                    "email": student_doc.get("email")
+                },
+                "results": [],
+                "summary": {"attempt_count": 0, "average_percentage": 0, "best_percentage": 0, "passed_count": 0, "failed_count": 0}
+            }
+
+        student_identifiers = [str(student_doc["_id"])]
+        if student_doc.get("user_id"):
+            student_identifiers.append(student_doc.get("user_id"))
+
+        submissions = await mongodb.db.submissions.find({
+            "assessment_id": {"$in": assessment_ids},
+            "student_id": {"$in": student_identifiers}
+        }).sort("submitted_at", -1).to_list(length=5000)
+
+        results = []
+        passed_count = 0
+        failed_count = 0
+        total_percentage = 0.0
+        best_percentage = 0.0
+
+        for submission in submissions:
+            assessment = assessment_map.get(str(submission.get("assessment_id")))
+            if not assessment:
+                continue
+
+            percentage = float(submission.get("percentage") or 0)
+            passed = percentage >= 40
+            if passed:
+                passed_count += 1
+            else:
+                failed_count += 1
+
+            total_percentage += percentage
+            best_percentage = max(best_percentage, percentage)
+
+            results.append({
+                "submission_id": str(submission["_id"]),
+                "assessment_id": str(submission.get("assessment_id")),
+                "assessment_title": assessment.get("title", "Untitled Test"),
+                "subject": assessment.get("subject"),
+                "class_level": assessment.get("class_level"),
+                "status": submission.get("status"),
+                "total_score": submission.get("total_score", 0),
+                "max_score": submission.get("max_score", 0),
+                "percentage": round(percentage, 2),
+                "passed": passed,
+                "submitted_at": submission.get("submitted_at"),
+                "graded_at": submission.get("graded_at")
+            })
+
+        attempt_count = len(results)
+        summary = {
+            "attempt_count": attempt_count,
+            "average_percentage": round(total_percentage / attempt_count, 2) if attempt_count > 0 else 0,
+            "best_percentage": round(best_percentage, 2),
+            "passed_count": passed_count,
+            "failed_count": failed_count
+        }
+
+        return {
+            "student": {
+                "student_id": student_doc.get("user_id") or str(student_doc["_id"]),
+                "student_name": student_doc.get("name", "Unknown Student"),
+                "class_level": student_doc.get("class_level"),
+                "email": student_doc.get("email")
+            },
+            "results": results,
+            "summary": summary,
+            "filters": {"class_level": class_level, "subject": subject}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching head student result detail: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -32,13 +32,14 @@ class GeminiKeyManager:
         self.daily_limit = 20
         self.db = None
         self.invalid_keys = set()
+        self.last_used_key_id: Optional[str] = None
         
         self._load_keys_from_env()
         
         self._init_db()
         
-        logger.info(f"🔑 Gemini Key Manager initialized with {len(self.keys)} API keys")
-        logger.info(f"📊 Total daily capacity: {len(self.keys) * self.daily_limit} requests")
+        logger.debug(f"Gemini Key Manager initialized with {len(self.keys)} API keys")
+        logger.debug(f"Total daily capacity: {len(self.keys) * self.daily_limit} requests")
     
     def _load_keys_from_env(self):
         """Load all GEMINI_API_KEY_* from environment variables."""
@@ -52,7 +53,7 @@ class GeminiKeyManager:
                     "key": api_key,
                     "index": i - 1
                 })
-                logger.info(f"Loaded {key_name} (ending in ...{api_key[-6:]})")
+                logger.debug(f"Loaded {key_name} (ending in ...{api_key[-6:]})")
         
         if not self.keys:
             legacy_key = os.getenv("GEMINI_API_KEY")
@@ -77,7 +78,7 @@ class GeminiKeyManager:
             
             self.quota_collection.create_index("key_id", unique=True)
             
-            logger.info("MongoDB connection initialized for quota tracking")
+            logger.debug("MongoDB connection initialized for quota tracking")
         except Exception as e:
             logger.error(f" Failed to initialize MongoDB for quota tracking: {e}")
             self.db = None
@@ -152,23 +153,32 @@ class GeminiKeyManager:
             
             if quota_data["request_count"] < self.daily_limit:
                 api_key = key_info["key"]
+                next_count = quota_data['request_count'] + 1
+                remaining = max(0, self.daily_limit - next_count)
+
+                if self.last_used_key_id and self.last_used_key_id != key_id:
+                    logger.info(
+                        f"[Gemini Rotation] {self.last_used_key_id} -> {key_id} "
+                        f"(reason: key switch, next usage {next_count}/{self.daily_limit})"
+                    )
+
                 logger.info(
-                    f"Using {key_id} "
-                    f"({quota_data['request_count'] + 1}/{self.daily_limit} requests today)"
+                    f"[Gemini Key Usage] key={key_id} used={next_count}/{self.daily_limit} remaining={remaining}"
                 )
                 
                 self._increment_usage(key_id)
+                self.last_used_key_id = key_id
                 
                 return api_key
             else:
                 logger.warning(
-                    f" {key_id} quota exhausted "
+                    f"[Gemini Rate Limit] {key_id} quota exhausted "
                     f"({quota_data['request_count']}/{self.daily_limit}). "
                     f"Rotating to next key..."
                 )
                 self.current_key_index = (self.current_key_index + 1) % len(self.keys)
         
-        logger.error(" All API keys exhausted or invalid! All quotas used for today.")
+        logger.error("[Gemini Keys] All API keys exhausted or invalid. All quotas used for today.")
         return None
     
     def mark_key_invalid(self, key_id: str):
@@ -189,20 +199,19 @@ class GeminiKeyManager:
         Force-mark a key's quota as fully used (called after a real 429 from Google).
         This corrects local-counter drift and ensures the key is skipped next time.
         """
-        if self.db is None:
-            return
-        current_date = self._get_current_pacific_date()
-        self.quota_collection.update_one(
-            {"key_id": key_id},
-            {"$set": {"request_count": self.daily_limit, "date": current_date}},
-            upsert=True
-        )
+        if self.db is not None:
+            current_date = self._get_current_pacific_date()
+            self.quota_collection.update_one(
+                {"key_id": key_id},
+                {"$set": {"request_count": self.daily_limit, "date": current_date}},
+                upsert=True
+            )
         # Rotate away from this key immediately
         for i, key_info in enumerate(self.keys):
             if key_info["id"] == key_id:
                 self.current_key_index = (i + 1) % len(self.keys)
                 break
-        logger.warning(f"⚠️ Marked {key_id} as quota-exhausted (real 429 from Google)")
+        logger.warning(f"[Gemini Rate Limit] Marked {key_id} as quota-exhausted after real 429")
     
     def get_current_key_id(self) -> Optional[str]:
         """Get the ID of the current key being used."""

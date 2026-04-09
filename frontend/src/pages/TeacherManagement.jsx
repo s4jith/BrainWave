@@ -501,7 +501,19 @@ export default function TeacherManagement() {
                                             )}
                                         </td>
                                         <td className="px-6 py-4">
-                                            {teacher.group_names && teacher.group_names.length > 0 ? (
+                                            {teacher.role === "head" ? (
+                                                teacher.assigned_classes && teacher.assigned_classes.length > 0 ? (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {teacher.assigned_classes.map((cls, idx) => (
+                                                            <span key={idx} className="text-sm px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-md font-medium">
+                                                                Class {cls}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-sm text-gray-400 dark:text-gray-500 italic">No class assignment</span>
+                                                )
+                                            ) : teacher.group_names && teacher.group_names.length > 0 ? (
                                                 <div>
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                         <span className="text-sm px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md font-medium">

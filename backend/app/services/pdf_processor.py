@@ -665,50 +665,86 @@ class PineconeEmbeddingUploader:
         Generate embedding using Gemini gemini-embedding-001 via REST API.
         Returns 768-dimensional vector for Pinecone compatibility.
         """
-        try:
-            api_key = settings.GEMINI_API_KEY or gemini_key_manager.get_available_key()
-            if not api_key:
-                raise RuntimeError("No Gemini API key available for embedding generation")
+        last_error = None
+        max_attempts = max(1, len(gemini_key_manager.keys))
 
-            return _generate_embedding_rest(
-                text=text,
-                api_key=api_key,
-                task_type="RETRIEVAL_DOCUMENT"
-            )
-        except Exception as e:
-            logger.error(f"Embedding generation failed: {e}")
-            raise
+        for attempt in range(max_attempts):
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                break
+
+            key_id = gemini_key_manager.get_current_key_id()
+            try:
+                return _generate_embedding_rest(
+                    text=text,
+                    api_key=api_key,
+                    task_type="RETRIEVAL_DOCUMENT"
+                )
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                if "429" in error_str and key_id:
+                    gemini_key_manager.mark_key_exhausted(key_id)
+                    logger.warning(
+                        f"[Embedding Retry] 429 on {key_id} -> rotating "
+                        f"(attempt {attempt + 1}/{max_attempts})"
+                    )
+                    continue
+
+                logger.error(f"Embedding generation failed on {key_id or 'unknown_key'}: {e}")
+                raise
+
+        raise RuntimeError(f"No Gemini API key available for embedding generation: {last_error}")
 
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """
         Generate embeddings for a batch of texts using Gemini REST API.
         Uses batch endpoint for efficiency.
         """
-        try:
-            api_key = settings.GEMINI_API_KEY or gemini_key_manager.get_available_key()
-            if not api_key:
-                raise RuntimeError("No Gemini API key available for batch embedding generation")
+        max_attempts = max(1, len(gemini_key_manager.keys))
+        last_error = None
 
-            return _generate_embeddings_batch_rest(
-                texts=texts,
-                api_key=api_key,
-                task_type="RETRIEVAL_DOCUMENT"
-            )
-        except Exception as e:
-            logger.warning(f"Batch embedding failed, falling back to single: {e}")
-            embeddings = []
-            for text in texts:
-                try:
-                    embeddings.append(self.generate_embedding(text))
-                except Exception:
-                    embeddings.append([])
-            return embeddings
+        for attempt in range(max_attempts):
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                break
+
+            key_id = gemini_key_manager.get_current_key_id()
+            try:
+                return _generate_embeddings_batch_rest(
+                    texts=texts,
+                    api_key=api_key,
+                    task_type="RETRIEVAL_DOCUMENT"
+                )
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                if "429" in error_str and key_id:
+                    gemini_key_manager.mark_key_exhausted(key_id)
+                    logger.warning(
+                        f"[Embedding Batch Retry] 429 on {key_id} -> rotating "
+                        f"(attempt {attempt + 1}/{max_attempts})"
+                    )
+                    continue
+                logger.warning(f"Batch embedding failed on {key_id or 'unknown_key'}: {e}")
+                break
+
+        logger.warning(f"Batch embedding failed, falling back to single: {last_error}")
+        embeddings = []
+        for text in texts:
+            try:
+                embeddings.append(self.generate_embedding(text))
+            except Exception:
+                embeddings.append([])
+        return embeddings
     
     def upload_chunks(
         self,
         chunks: List[Dict],
         namespace: str,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        start_chunk_index: int = 0,
+        control_callback: Optional[Callable[[], str]] = None
     ) -> Dict:
         """
         Upload chunks to Pinecone with embeddings.
@@ -718,16 +754,38 @@ class PineconeEmbeddingUploader:
             'total_chunks': len(chunks),
             'successful': 0,
             'failed': 0,
-            'errors': []
+            'errors': [],
+            'processed_chunks': max(0, start_chunk_index),
+            'paused': False,
+            'cancelled': False
         }
         
         logger.info(f"Uploading {len(chunks)} chunks to namespace '{namespace}'")
         
+        if start_chunk_index >= len(chunks):
+            logger.info("All chunks are already processed; skipping upload")
+            return stats
+
         total_batches = (len(chunks) + self.batch_size - 1) // self.batch_size
+        start_batch = start_chunk_index // self.batch_size
         
-        for batch_idx in range(total_batches):
+        for batch_idx in range(start_batch, total_batches):
+            if control_callback:
+                control_state = control_callback()
+                if control_state == "pause":
+                    stats['paused'] = True
+                    logger.info("Embedding upload paused by control callback")
+                    break
+                if control_state == "cancel":
+                    stats['cancelled'] = True
+                    logger.info("Embedding upload cancelled by control callback")
+                    break
+
             start_idx = batch_idx * self.batch_size
             end_idx = min(start_idx + self.batch_size, len(chunks))
+
+            if end_idx <= start_chunk_index:
+                continue
             
             batch_chunks = chunks[start_idx:end_idx]
             batch_texts = [chunk['text'] for chunk in batch_chunks]
@@ -762,6 +820,8 @@ class PineconeEmbeddingUploader:
                         stats['successful'] += len(vectors)
                     else:
                         stats['failed'] += len(vectors)
+
+                stats['processed_chunks'] = end_idx
                 
                 if progress_callback:
                     progress_callback(
@@ -776,6 +836,7 @@ class PineconeEmbeddingUploader:
                 logger.error(f"Batch processing failed: {e}")
                 stats['failed'] += len(batch_chunks)
                 stats['errors'].append(str(e))
+                stats['processed_chunks'] = end_idx
         
         logger.info(f"Upload complete: {stats['successful']} successful, {stats['failed']} failed")
         return stats

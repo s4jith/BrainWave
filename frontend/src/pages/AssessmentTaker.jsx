@@ -11,6 +11,7 @@ import {
     Flag
 } from "lucide-react";
 import useAssessmentStore from "../stores/assessmentStore";
+import QuestionImageRenderer from "../components/QuestionImageRenderer";
 
 export default function AssessmentTaker() {
     const { assessmentId } = useParams();
@@ -269,7 +270,9 @@ export default function AssessmentTaker() {
                                 </div>
 
                                 {/* Question Text */}
-                                <p className="text-lg mb-6">{currentQuestion.question_text}</p>
+                                <div className="text-lg mb-6 leading-relaxed">
+                                    <QuestionImageRenderer text={currentQuestion.question_text} />
+                                </div>
 
                                 {/* Answer Input */}
                                 <QuestionInput
@@ -364,7 +367,7 @@ function QuestionInput({ question, answer, onAnswer }) {
                             }
             `}
                     >
-                        {opt.text}
+                        <QuestionImageRenderer text={opt.text} />
                     </button>
                 ))}
             </div>

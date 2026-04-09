@@ -32,6 +32,17 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
     color: "#3B82F6"
   });
 
+  const countTopicsWithSubtopics = (chapters = []) => {
+    return (chapters || []).reduce((sum, ch) => {
+      const topicCount = (ch.topics || []).length;
+      const subtopicCount = (ch.topics || []).reduce(
+        (subSum, topic) => subSum + ((topic.subtopics || []).length),
+        0
+      );
+      return sum + topicCount + subtopicCount;
+    }, 0);
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchPendingItems();
@@ -271,6 +282,52 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
     }
   };
 
+  const updateSubtopicInEdit = (chapterIndex, topicIndex, subtopicIndex, field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      extracted_chapters: prev.extracted_chapters.map((ch, chIdx) =>
+        chIdx === chapterIndex
+          ? {
+              ...ch,
+              topics: (ch.topics || []).map((topic, topIdx) =>
+                topIdx === topicIndex
+                  ? {
+                      ...topic,
+                      subtopics: (topic.subtopics || []).map((subtopic, subIdx) =>
+                        subIdx === subtopicIndex ? { ...subtopic, [field]: value } : subtopic
+                      )
+                    }
+                  : topic
+              )
+            }
+          : ch
+      )
+    }));
+  };
+
+  const deleteSubtopicInEdit = (chapterIndex, topicIndex, subtopicIndex) => {
+    if (confirm("Remove this subtopic?")) {
+      setEditForm(prev => ({
+        ...prev,
+        extracted_chapters: prev.extracted_chapters.map((ch, chIdx) =>
+          chIdx === chapterIndex
+            ? {
+                ...ch,
+                topics: (ch.topics || []).map((topic, topIdx) =>
+                  topIdx === topicIndex
+                    ? {
+                        ...topic,
+                        subtopics: (topic.subtopics || []).filter((_, subIdx) => subIdx !== subtopicIndex)
+                      }
+                    : topic
+                )
+              }
+            : ch
+        )
+      }));
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -376,9 +433,9 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                         {editingItem === item.pending_id ? editForm.extracted_chapters?.length : item.extracted_chapters?.length || 0} Chapters
                       </span>
                       <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-1">
-                        <FileText className="w-3.5 h-3.5" /> {editingItem === item.pending_id 
-                          ? editForm.extracted_chapters?.reduce((sum, ch) => sum + (ch.topics?.length || 0), 0)
-                          : item.extracted_chapters?.reduce((sum, ch) => sum + (ch.topics?.length || 0), 0) || 0} Topics
+                        <FileText className="w-3.5 h-3.5" /> {editingItem === item.pending_id
+                          ? countTopicsWithSubtopics(editForm.extracted_chapters)
+                          : countTopicsWithSubtopics(item.extracted_chapters)} Topics
                       </span>
                     </div>
 
@@ -535,7 +592,9 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                                           </div>
                                         ) : (
                                           <>
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">{topic.topic_name}</span>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                              {topic.section_number ? `${topic.section_number} ` : ""}{topic.topic_name}
+                                            </span>
                                             {topic.page_range && (
                                               <span className="text-xs text-gray-400">
                                                 (pg. {topic.page_range})
@@ -545,6 +604,54 @@ export default function PendingCurriculumReview({ isOpen, onClose, onApproved })
                                         )}
                                       </div>
                                     ))}
+
+                                    {chapter.topics.map((topic, topicIdx) =>
+                                      (topic.subtopics && topic.subtopics.length > 0) ? (
+                                        <div key={`subtopics-${chapter.chapter_number}-${topicIdx}`} className="ml-7 space-y-1">
+                                          {(topic.subtopics || []).map((subtopic, subIdx) => (
+                                            <div key={`subtopic-${chapter.chapter_number}-${topicIdx}-${subIdx}`} className="flex items-center gap-2">
+                                              <span className="w-1 h-1 bg-gray-300 rounded-full flex-shrink-0"></span>
+                                              {editingItem === item.pending_id ? (
+                                                <div className="flex-1 flex items-center gap-2">
+                                                  <input
+                                                    type="text"
+                                                    value={subtopic.topic_name}
+                                                    onChange={(e) => updateSubtopicInEdit(idx, topicIdx, subIdx, 'topic_name', e.target.value)}
+                                                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-400"
+                                                  />
+                                                  {subtopic.page_range && (
+                                                    <input
+                                                      type="text"
+                                                      value={subtopic.page_range}
+                                                      onChange={(e) => updateSubtopicInEdit(idx, topicIdx, subIdx, 'page_range', e.target.value)}
+                                                      placeholder="Pages"
+                                                      className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400"
+                                                    />
+                                                  )}
+                                                  <button
+                                                    onClick={() => deleteSubtopicInEdit(idx, topicIdx, subIdx)}
+                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                  >
+                                                    <X className="w-3 h-3" />
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <>
+                                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {subtopic.section_number ? `${subtopic.section_number} ` : ""}{subtopic.topic_name}
+                                                  </span>
+                                                  {subtopic.page_range && (
+                                                    <span className="text-xs text-gray-400">
+                                                      (pg. {subtopic.page_range})
+                                                    </span>
+                                                  )}
+                                                </>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : null
+                                    )}
                                   </div>
                                 )}
                               </div>

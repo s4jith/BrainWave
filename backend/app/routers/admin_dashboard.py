@@ -243,7 +243,10 @@ async def get_dashboard_stats():
 
         total_students = db.users.count_documents({"role": "student"})
         total_teachers = db.users.count_documents({"role": "teacher"})
-        active_today = db.users.count_documents({"last_login": {"$gte": today_start}})
+        active_today = db.users.count_documents({
+            "role": "student",
+            "last_login": {"$gte": today_start}
+        })
 
         tests_col = db.get_collection("tests")
         assessments_col = db.get_collection("assessments")
@@ -259,7 +262,10 @@ async def get_dashboard_stats():
         for i in range(6, -1, -1):
             day_start = today_start - timedelta(days=i)
             day_end = day_start + timedelta(days=1)
-            active_users = db.users.count_documents({"last_login": {"$gte": day_start, "$lt": day_end}})
+            active_users = db.users.count_documents({
+                "role": "student",
+                "last_login": {"$gte": day_start, "$lt": day_end}
+            })
             tests_done = (
                 test_sessions.count_documents({"completed_at": {"$gte": day_start, "$lt": day_end}}) +
                 submissions_col.count_documents({
@@ -1002,6 +1008,8 @@ async def get_teachers(
                 "group_names": group_names,
                 "is_active": t.get("is_active", True),
                 "role": t.get("role", "teacher"),
+                "assigned_classes": t.get("assigned_classes", []),
+                "assigned_subjects": t.get("assigned_subjects", []),
                 "created_at": t.get("created_at", datetime.utcnow()).isoformat() if t.get("created_at") else None,
                 "last_login": t.get("last_login").isoformat() if t.get("last_login") else None
             })

@@ -15,15 +15,34 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
-from app.db.mongo import init_databases, close_databases
-from app.routers import chat, mcq, evaluate, notes, assessment, annotation, history
-from app.core.auth_middleware import AuthMiddleware
 
 logging.basicConfig(
     level=logging.INFO if settings.DEBUG else logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Keep third-party Pinecone internals quiet; these startup plugin logs are noisy and not actionable.
+for noisy_logger in (
+    "pinecone_plugin_interface",
+    "pinecone_plugin_interface.logging",
+    "pinecone_plugins",
+    "pinecone",
+):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+# Keep startup output focused: hide verbose service init logs (Gemini, RAG, etc.)
+# while retaining app lifecycle, DB connectivity, and request/access logs.
+logging.getLogger("app.services").setLevel(logging.WARNING)
+
+# Re-enable only runtime key usage/rotation visibility for Gemini.
+logging.getLogger("app.services.gemini_key_manager").setLevel(logging.INFO)
+logging.getLogger("app.services.gemini_service").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
+
+from app.db.mongo import init_databases, close_databases
+from app.routers import chat, mcq, evaluate, notes, assessment, annotation, history
+from app.core.auth_middleware import AuthMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

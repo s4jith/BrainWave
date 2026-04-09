@@ -15,6 +15,7 @@ from bson import ObjectId
 import logging
 import uuid
 import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -322,17 +323,40 @@ async def reject_question(
     question_id: str,
     current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.HEAD]))
 ):
-    """Reject (delete) a pending question. Only Head and Admin can reject."""
+    """Reject a pending question. Only Head and Admin can reject."""
     try:
-        
-        success, msg = await question_bank_service.delete_question(
-            question_id, 
-            current_user.user_id, 
-            current_user.role.value
+        if not ObjectId.is_valid(question_id):
+            raise HTTPException(status_code=400, detail="Invalid ID")
+
+        query = {"_id": ObjectId(question_id), "status": "pending"}
+
+        # Heads can reject only within their assignment scope.
+        if current_user.role == UserRole.HEAD:
+            from app.db.mongo import db
+            from app.routers.head_approval import build_assignment_filter, get_head_user
+
+            head_doc = get_head_user(current_user.user_id)
+            query = build_assignment_filter(head_doc, query)
+
+        from app.db.mongo import db
+        result = db.questions.find_one_and_update(
+            query,
+            {
+                "$set": {
+                    "status": "rejected",
+                    "rejected_by": current_user.user_id,
+                    "rejected_at": datetime.utcnow().isoformat()
+                }
+            },
+            return_document=True
         )
-        if not success:
-             raise HTTPException(status_code=400, detail=msg)
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Pending question not found")
+
         return {"success": True, "message": "Question rejected"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

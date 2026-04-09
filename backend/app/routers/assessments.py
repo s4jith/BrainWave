@@ -12,6 +12,8 @@ from datetime import datetime
 import logging
 import io
 import textwrap
+import re
+from pathlib import Path
 
 from app.models.assessment_models import (
     AssessmentCreateRequest, AssessmentUpdateRequest,
@@ -50,6 +52,7 @@ def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict
     margin_bottom = 42
     line_height = 15
     y = margin_top
+    question_images_dir = Path(__file__).resolve().parent.parent / "uploads" / "question_images"
 
     def ensure_space(lines=1):
         nonlocal page, y
@@ -70,6 +73,71 @@ def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict
             ensure_space(1)
             page.insert_text((margin_x + indent, y), ln, fontsize=size)
             y += line_height
+
+    def extract_image_ids_from_text(text: str) -> list[str]:
+        if not text:
+            return []
+        return re.findall(r"/api/question-bank/images/([A-Za-z0-9_-]+)", str(text))
+
+    def collect_image_ids(q: dict, include_answer_images: bool = False) -> list[str]:
+        found = []
+        seen = set()
+
+        def push(image_id):
+            key = str(image_id or "").strip()
+            if key and key not in seen:
+                seen.add(key)
+                found.append(key)
+
+        for image_id in (q.get("image_ids") or []):
+            push(image_id)
+
+        text_fields = [q.get("question_text"), q.get("text")]
+        if include_answer_images:
+            text_fields.extend([q.get("correct_answer_text"), q.get("correct_answer"), q.get("answer_text")])
+
+        for text in text_fields:
+            for image_id in extract_image_ids_from_text(text):
+                push(image_id)
+
+        if include_answer_images:
+            for image_id in (q.get("answer_image_ids") or []):
+                push(image_id)
+
+        return found
+
+    def render_images(image_ids: list[str], indent: int = 12):
+        nonlocal y, page
+        if not image_ids:
+            return
+
+        max_width = page.rect.width - margin_x - margin_x - indent
+        for image_id in image_ids:
+            matches = sorted(question_images_dir.glob(f"{image_id}.*"))
+            if not matches:
+                continue
+            image_path = matches[0]
+            try:
+                pix = fitz.Pixmap(str(image_path))
+            except Exception:
+                continue
+
+            width = float(pix.width or 1)
+            height = float(pix.height or 1)
+            scale = min(1.0, max_width / width)
+            draw_w = max(80.0, width * scale)
+            draw_h = max(50.0, height * scale)
+
+            if y + draw_h > (page.rect.height - margin_bottom):
+                page = doc.new_page()
+                y = margin_top
+
+            rect = fitz.Rect(margin_x + indent, y, margin_x + indent + draw_w, y + draw_h)
+            try:
+                page.insert_image(rect, filename=str(image_path))
+                y += draw_h + 8
+            except Exception:
+                continue
 
     questions = assessment.get("questions", []) or []
     answers_map = {}
@@ -164,6 +232,8 @@ def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict
                     opt_text = opt.get("text") if isinstance(opt, dict) else str(opt)
                     write_wrapped(f"{chr(65 + oi)}. {opt_text}", size=10, indent=14, width=82)
 
+            render_images(collect_image_ids(q), indent=14)
+
             student_answer = resolve_student_answer(q)
             write_wrapped(f"Student Answer: {student_answer}", size=11, indent=12, width=84)
             write_line("", size=10)
@@ -182,6 +252,7 @@ def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict
                 for oi, opt in enumerate(options):
                     opt_text = opt.get("text") if isinstance(opt, dict) else str(opt)
                     write_wrapped(f"{chr(65 + oi)}. {opt_text}", size=10, indent=14, width=82)
+            render_images(collect_image_ids(q), indent=14)
             write_line("", size=10)
 
     if mode in ("answers", "both") and not (submission and mode == "both"):
@@ -194,7 +265,10 @@ def _build_assessment_pdf(assessment: dict, mode: str, submission: Optional[dict
             q_text = q.get("question_text") or q.get("text") or ""
             answer = resolve_student_answer(q) if submission else resolve_answer(q)
             write_wrapped(f"Q{idx}. {q_text}", size=10, width=90)
+            render_images(collect_image_ids(q), indent=12)
             write_wrapped(f"Answer: {answer}", size=11, indent=12, width=84)
+            if not submission:
+                render_images(collect_image_ids(q, include_answer_images=True), indent=12)
             write_line("", size=10)
 
     pdf_bytes = doc.write()

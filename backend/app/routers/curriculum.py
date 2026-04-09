@@ -1334,11 +1334,25 @@ async def approve_or_reject_pending_item(
                 topics = []
                 for topic_idx, extracted_topic in enumerate(extracted_ch.get("topics", []), 1):
                     topic_id = f"{subject_id}_ch{extracted_ch['chapter_number']}_topic{topic_idx}"
+                    subtopics = []
+                    for sub_idx, subtopic in enumerate(extracted_topic.get("subtopics", []) or [], 1):
+                        subtopics.append({
+                            "subtopic_id": f"{topic_id}_sub{sub_idx}",
+                            "subtopic_name": subtopic.get("topic_name", ""),
+                            "section_number": subtopic.get("section_number", ""),
+                            "page_range": subtopic.get("page_range", ""),
+                            "description": subtopic.get("description", ""),
+                            "order": sub_idx,
+                            "is_active": True,
+                        })
+
                     topics.append({
                         "topic_id": topic_id,
                         "topic_name": extracted_topic["topic_name"],
+                        "section_number": extracted_topic.get("section_number", ""),
                         "description": extracted_topic.get("description", ""),
                         "page_range": extracted_topic.get("page_range", ""),
+                        "subtopics": subtopics,
                         "learning_objectives": [],
                         "keywords": [],
                         "estimated_time_minutes": 45,

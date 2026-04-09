@@ -15,6 +15,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+NO_TOPIC_FOUND_MESSAGE = "I could not find this topic in the NCERT material."
+IMAGE_UNREADABLE_PREFIX = "Unable to read the uploaded image clearly"
+
 router = APIRouter(
     prefix="/annotation",
     tags=["Annotation"]
@@ -96,8 +99,17 @@ async def process_annotation(request: AnnotationRequest):
         )
         
         if cached_response:
-            logger.info(f"[FAST] CACHE HIT: Serving stored {request.action} response (0 cost)")
-            return AnnotationResponse(**cached_response)
+            cached_answer = (cached_response.get("answer") or "").strip()
+
+            # Do not reuse failed image answers forever; allow fresh retrieval.
+            if request.image_data and (
+                cached_answer == NO_TOPIC_FOUND_MESSAGE
+                or cached_answer.startswith(IMAGE_UNREADABLE_PREFIX)
+            ):
+                logger.info("[CACHE] Ignoring stale fallback image answer and regenerating")
+            else:
+                logger.info(f"[FAST] CACHE HIT: Serving stored {request.action} response (0 cost)")
+                return AnnotationResponse(**cached_response)
 
         query_text = request.selected_text
         source_chunks = []
@@ -120,14 +132,22 @@ async def process_annotation(request: AnnotationRequest):
                 "source_count": image_result.source_count,
             }
 
-            await cache_service.set_annotation_cache(
-                action=request.action,
-                subject=request.subject,
-                class_level=request.class_level,
-                selected_text=request.selected_text,
-                response_data=response_data,
-                image_data=request.image_data,
+            answer_text = (image_result.answer or "").strip()
+            should_cache_image = (
+                answer_text
+                and answer_text != NO_TOPIC_FOUND_MESSAGE
+                and not answer_text.startswith(IMAGE_UNREADABLE_PREFIX)
             )
+
+            if should_cache_image:
+                await cache_service.set_annotation_cache(
+                    action=request.action,
+                    subject=request.subject,
+                    class_level=request.class_level,
+                    selected_text=request.selected_text,
+                    response_data=response_data,
+                    image_data=request.image_data,
+                )
 
             return AnnotationResponse(**response_data)
         

@@ -126,3 +126,5 @@ lerna-debug.log*
 *.sln
 
 backend/Books/
+
+.vite-cache/

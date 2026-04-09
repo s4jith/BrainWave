@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout";
 import {
@@ -7,7 +7,7 @@ import {
   RefreshCw, CheckCircle, FileText, Layers, Book, GraduationCap, FileQuestion
 } from "lucide-react";
 import { CardLoader } from "../components/LoadingSpinner";
-import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue } from "../constants/academicConstants";
+import { parseCombinedValue } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
 import { useToast } from "../contexts/ToastContext";
@@ -22,6 +22,8 @@ export default function BookManagement() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [activeEmbeddingJob, setActiveEmbeddingJob] = useState(null);
+  const jobPollRef = useRef(null);
   const [pineconeStats, setPineconeStats] = useState(null);
   const [curriculumSubjects, setCurriculumSubjects] = useState([]); 
   const [loadingCurriculum, setLoadingCurriculum] = useState(true);
@@ -46,7 +48,65 @@ export default function BookManagement() {
     fetchHierarchicalStructure();
     fetchPineconeStats();
     fetchCurriculumSubjects();
+
+    const storedJob = localStorage.getItem("bookEmbeddingActiveJob");
+    if (storedJob) {
+      try {
+        const parsedJob = JSON.parse(storedJob);
+        if (parsedJob?.job_id) {
+          fetchEmbeddingJob(parsedJob.job_id, true);
+        }
+      } catch (error) {
+        console.error("Failed to parse stored embedding job", error);
+        localStorage.removeItem("bookEmbeddingActiveJob");
+      }
+    }
+
+    return () => {
+      if (jobPollRef.current) {
+        clearInterval(jobPollRef.current);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (!activeEmbeddingJob?.job_id) {
+      if (jobPollRef.current) {
+        clearInterval(jobPollRef.current);
+        jobPollRef.current = null;
+      }
+      return;
+    }
+
+    const terminalStates = ["completed", "failed", "cancelled"];
+    if (terminalStates.includes(activeEmbeddingJob.status)) {
+      localStorage.removeItem("bookEmbeddingActiveJob");
+      if (jobPollRef.current) {
+        clearInterval(jobPollRef.current);
+        jobPollRef.current = null;
+      }
+      fetchHierarchicalStructure();
+      fetchPineconeStats();
+      return;
+    }
+
+    localStorage.setItem("bookEmbeddingActiveJob", JSON.stringify(activeEmbeddingJob));
+
+    if (jobPollRef.current) {
+      clearInterval(jobPollRef.current);
+    }
+
+    jobPollRef.current = setInterval(() => {
+      fetchEmbeddingJob(activeEmbeddingJob.job_id);
+    }, 4000);
+
+    return () => {
+      if (jobPollRef.current) {
+        clearInterval(jobPollRef.current);
+        jobPollRef.current = null;
+      }
+    };
+  }, [activeEmbeddingJob?.job_id, activeEmbeddingJob?.status]);
 
   const fetchHierarchicalStructure = async () => {
     setLoading(true);
@@ -87,6 +147,72 @@ export default function BookManagement() {
   const toggleSubject = (subject) => setExpandedSubjects(prev => ({ ...prev, [subject]: !prev[subject] }));
   const toggleClass = (subject, classLevel) => setExpandedClasses(prev => ({ ...prev, [`${subject}-${classLevel}`]: !prev[`${subject}-${classLevel}`] }));
 
+  const fetchEmbeddingJob = async (jobId, silent = false) => {
+    try {
+      const response = await authFetch(`${API_BASE}/api/books/embedding-jobs/${jobId}`);
+      if (!response.ok) {
+        if (!silent) {
+          toast.error("Unable to fetch embedding status");
+        }
+        return;
+      }
+
+      const data = await response.json();
+      if (data?.job) {
+        setActiveEmbeddingJob(data.job);
+
+        const status = data.job.status;
+        if (["processing", "queued"].includes(status)) {
+          setUploadProgress({ message: data.job.last_message || "Embedding in progress" });
+        } else if (status === "paused") {
+          setUploadProgress({ message: "Embedding paused" });
+        } else if (status === "completed") {
+          setUploadProgress({ message: "Embedding completed" });
+          toast.success("Embedding completed successfully");
+          setTimeout(() => {
+            setUploadProgress(null);
+            setActiveEmbeddingJob(null);
+          }, 1200);
+        } else if (status === "failed") {
+          setUploadProgress({ message: "Embedding failed" });
+        } else if (status === "cancelled") {
+          setUploadProgress({ message: "Embedding cancelled" });
+          setTimeout(() => {
+            setUploadProgress(null);
+            setActiveEmbeddingJob(null);
+          }, 1200);
+        }
+      }
+    } catch (error) {
+      if (!silent) {
+        toast.error("Unable to fetch embedding status");
+      }
+    }
+  };
+
+  const controlEmbeddingJob = async (action) => {
+    if (!activeEmbeddingJob?.job_id) return;
+
+    try {
+      const response = await authFetch(`${API_BASE}/api/books/embedding-jobs/${activeEmbeddingJob.job_id}/${action}`, {
+        method: "POST"
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error(data?.detail || `Failed to ${action} job`);
+        return;
+      }
+
+      if (data?.job) {
+        setActiveEmbeddingJob(data.job);
+      }
+      toast.success(data?.message || `Job ${action} request submitted`);
+      fetchEmbeddingJob(activeEmbeddingJob.job_id, true);
+    } catch (error) {
+      toast.error(`Failed to ${action} job`);
+    }
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!uploadForm.pdf_file) return toast.info("Please select a PDF file")
@@ -96,7 +222,7 @@ export default function BookManagement() {
     if (!classLevel || !subject) return toast.info("Please select class and subject")
 
     setUploading(true);
-    setUploadProgress({ stage: "uploading", message: "Uploading...", percent: 10 });
+    setUploadProgress({ stage: "uploading", message: "Uploading chapter..." });
 
     try {
       const formData = new FormData();
@@ -108,21 +234,32 @@ export default function BookManagement() {
       formData.append('pdf_file', uploadForm.pdf_file);
       formData.append("generate_embeddings", "true");
 
-      setUploadProgress({ stage: "processing", message: "Processing...", percent: 30 });
+      setUploadProgress({ stage: "processing", message: "Preparing embedding job..." });
 
       const response = await authFetch(`${API_BASE}/api/books/upload`, { method: "POST", body: formData });
+      const payload = await response.json();
 
       if (response.ok) {
-        setUploadProgress({ stage: "complete", message: "Done!", percent: 100 });
         toast.success("Chapter uploaded successfully!")
-        setShowUploadModal(false);
         setUploadForm({ title: "", classSubject: "6-Maths", chapter_number: 1, description: "", pdf_file: null });
-        setUploadProgress(null);
+
+        if (payload?.embedding_job?.job_id) {
+          setActiveEmbeddingJob(payload.embedding_job);
+          setUploadProgress({
+            stage: "processing",
+            message: payload.embedding_job.last_message || "Embedding in progress"
+          });
+        } else {
+          setUploadProgress({ stage: "complete", message: "Upload complete" });
+          setTimeout(() => {
+            setUploadProgress(null);
+          }, 1000);
+        }
+
         fetchHierarchicalStructure();
         fetchPineconeStats();
       } else {
-        const error = await response.json();
-        toast.error(`Upload failed: ${error.detail}`)
+        toast.error(`Upload failed: ${payload?.detail || "Unknown error"}`)
       }
     } catch (err) {
       toast.error("Upload failed.")
@@ -212,7 +349,7 @@ export default function BookManagement() {
         </button>
         <button onClick={() => setShowUploadModal(true)}
           className="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 flex items-center gap-2 font-medium">
-          <Plus className="w-4 h-4" /> Upload Book
+          <Plus className="w-4 h-4" /> Upload Chapter
         </button>
       </div>
 
@@ -257,7 +394,7 @@ export default function BookManagement() {
           <div className="text-center py-12">
             <FileQuestion className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 text-lg">No books found</p>
-            <p className="text-gray-400 dark:text-gray-500 mt-2">Upload your first book to get started</p>
+            <p className="text-gray-400 dark:text-gray-500 mt-2">Upload your first chapter to get started</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -373,13 +510,43 @@ export default function BookManagement() {
               </div>
               {uploadProgress && (
                 <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3">
                     <Loader2 className="w-5 h-5 animate-spin text-gray-900 dark:text-white" />
                     <span className="font-medium text-gray-900 dark:text-white">{uploadProgress.message}</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                    <div className="bg-gray-900 dark:bg-white h-2 rounded-full transition-all" style={{ width: `${uploadProgress.percent}%` }} />
-                  </div>
+
+                  {activeEmbeddingJob?.job_id && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => controlEmbeddingJob("pause")}
+                        disabled={!activeEmbeddingJob || ["paused", "completed", "failed", "cancelled"].includes(activeEmbeddingJob.status)}
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                      >
+                        Pause
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => controlEmbeddingJob("resume")}
+                        disabled={!activeEmbeddingJob || !["paused", "failed", "queued"].includes(activeEmbeddingJob.status)}
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                      >
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => controlEmbeddingJob("cancel")}
+                        disabled={!activeEmbeddingJob || ["completed", "cancelled"].includes(activeEmbeddingJob.status)}
+                        className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 self-center">
+                        Status: {activeEmbeddingJob.status || "queued"}
+                      </span>
+                    </div>
+                  )}
+
                 </div>
               )}
               <div className="flex gap-3 pt-4">
@@ -387,7 +554,7 @@ export default function BookManagement() {
                   className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300">Cancel</button>
                 <button type="submit" disabled={uploading}
                   className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-                  {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload</>}
+                  {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Chapter</>}
                 </button>
               </div>
             </form>
