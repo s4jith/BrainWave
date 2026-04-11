@@ -691,9 +691,9 @@ async def grade_submission(
                 db.notifications.insert_one({
                     "user_id": student_id,
                     "role": "student",
-                    "type": "test_graded",
-                    "title": "Test Reviewed",
-                    "message": f"Your submission for '{assessment.get('title', 'test') if assessment else 'test'}' has been reviewed.",
+                    "type": "test_evaluated",
+                    "title": "Test Evaluated",
+                    "message": f"Your submission for '{assessment.get('title', 'test') if assessment else 'test'}' has been evaluated.",
                     "assessment_id": submission.get("assessment_id") if submission else None,
                     "submission_id": submission_id,
                     "read": False,

@@ -92,6 +92,11 @@ class SyncMongoDB:
     def test_submissions(self):
         """Get test submissions collection."""
         return self.db.test_submissions
+
+    @property
+    def test_sessions(self):
+        """Get test sessions collection."""
+        return self.db.test_sessions
     
     @property
     def notifications(self):

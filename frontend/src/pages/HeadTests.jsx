@@ -171,6 +171,16 @@ export default function HeadTests() {
     );
   };
 
+  const isSubmissionEvaluated = (sub) => {
+    const status = String(sub?.status || "").toLowerCase();
+    return Boolean(
+      sub?.is_reviewed ||
+      sub?.graded_at ||
+      status === "graded" ||
+      status === "evaluated"
+    );
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
     try {
@@ -439,8 +449,8 @@ export default function HeadTests() {
                                 <td className="py-2 pr-4 font-medium">{sub.student_name || sub.student_id}</td>
                                 <td className="py-2 pr-4 text-gray-500 dark:text-gray-400">{formatDate(sub.submitted_at)}</td>
                                 <td className="py-2 pr-4">
-                                  {sub.is_reviewed
-                                    ? <span className="text-xs text-green-600 dark:text-green-400 font-medium">Reviewed</span>
+                                  {isSubmissionEvaluated(sub)
+                                    ? <span className="text-xs text-green-600 dark:text-green-400 font-medium">Evaluated</span>
                                     : <span className="text-xs text-amber-500">Pending</span>}
                                 </td>
                                 <td className="py-2">

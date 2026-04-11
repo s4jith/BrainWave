@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
     ArrowLeft,
@@ -36,7 +36,7 @@ export default function AssessmentTaker() {
 
     useEffect(() => {
         startAssessment(assessmentId);
-    }, [assessmentId]);
+    }, [assessmentId, startAssessment]);
 
     useEffect(() => {
         if (!timerActive) return;
@@ -47,14 +47,8 @@ export default function AssessmentTaker() {
 
         return () => clearInterval(interval);
     }, [timerActive, tickTimer]);
-
-    useEffect(() => {
-        if (timerActive && timeRemaining === 0) {
-            handleSubmit();
-        }
-    }, [timeRemaining, timerActive]);
-
-    const questions = currentAssessment?.questions || [];
+    
+    const questions = useMemo(() => currentAssessment?.questions || [], [currentAssessment]);
     const currentQuestion = questions[currentQuestionIndex];
     const isLastQuestion = currentQuestionIndex === questions.length - 1;
     const answeredCount = Object.keys(answers).length;
@@ -129,6 +123,16 @@ export default function AssessmentTaker() {
         setSubmitting(false);
         setShowConfirmSubmit(false);
     }, [answers, questions, assessmentId, submitAnswers]);
+
+    useEffect(() => {
+        if (timerActive && timeRemaining === 0) {
+            const submitTimeout = setTimeout(() => {
+                handleSubmit();
+            }, 0);
+
+            return () => clearTimeout(submitTimeout);
+        }
+    }, [timeRemaining, timerActive, handleSubmit]);
 
     if (result) {
         return (

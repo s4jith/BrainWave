@@ -1590,7 +1590,8 @@ class AssessmentService:
                 "feedback": request.question_grades,
                 "overall_feedback": request.overall_feedback,
                 "status": SubmissionStatus.GRADED.value,
-                "graded_at": datetime.utcnow()
+                "graded_at": datetime.utcnow(),
+                "is_reviewed": True
             }
             
             await self.submissions.update_one(

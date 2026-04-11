@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import authFetch from "../utils/authFetch";
 
+// Prevent repeated network requests for known-missing image URLs (404).
+const missingImageSrcCache = new Set();
+
 export default function AuthImage({ src, alt = "", className = "", onError, ...rest }) {
   const [objectUrl, setObjectUrl] = useState("");
 
@@ -14,10 +17,17 @@ export default function AuthImage({ src, alt = "", className = "", onError, ...r
         return;
       }
 
+      if (missingImageSrcCache.has(src)) {
+        setObjectUrl("");
+        return;
+      }
+
       try {
         const res = await authFetch(src);
         if (!res.ok) {
-          throw new Error(`Image request failed: ${res.status}`);
+          const requestError = new Error(`Image request failed: ${res.status}`);
+          requestError.status = res.status;
+          throw requestError;
         }
 
         const blob = await res.blob();
@@ -34,6 +44,10 @@ export default function AuthImage({ src, alt = "", className = "", onError, ...r
           return nextObjectUrl;
         });
       } catch (err) {
+        if (err?.status === 404) {
+          missingImageSrcCache.add(src);
+        }
+
         if (isActive) {
           setObjectUrl((prev) => {
             if (prev.startsWith("blob:")) {

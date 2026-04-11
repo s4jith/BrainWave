@@ -203,6 +203,82 @@ def _collect_head_students_from_groups(groups: List[dict]) -> Dict[str, Any]:
     }
 
 
+def _extract_submission_percent(sub: Dict[str, Any]) -> Optional[float]:
+    """Normalize submission score into a percent value (0-100) across schema variants."""
+    try:
+        if sub.get("percentage") is not None:
+            return float(sub.get("percentage"))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        if sub.get("score") is not None:
+            return float(sub.get("score"))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        total = float(sub.get("total_score")) if sub.get("total_score") is not None else None
+        max_score = float(sub.get("max_score")) if sub.get("max_score") is not None else None
+        if total is not None and max_score and max_score > 0:
+            return (total / max_score) * 100.0
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass
+
+    return None
+
+
+def _is_submission_evaluated(sub: Dict[str, Any]) -> bool:
+    """Treat a submission as evaluated if any grading marker exists."""
+    status = str(sub.get("status") or "").lower()
+    return bool(
+        sub.get("is_reviewed")
+        or sub.get("graded_at")
+        or status in {"graded", "evaluated", "reviewed"}
+    )
+
+
+def _compute_assessment_status(assessment: Dict[str, Any]) -> str:
+    """Compute date-based status (Upcoming/Active/Completed) from assessment window."""
+    raw_status = str(assessment.get("status") or "draft").lower()
+    start = assessment.get("start_datetime")
+    end = assessment.get("end_datetime")
+    if not start or not end:
+        return "Active" if raw_status == "published" else raw_status.title()
+
+    now = datetime.utcnow()
+
+    # Normalize start datetime to naive UTC-like datetime
+    if isinstance(start, str):
+        try:
+            start = datetime.fromisoformat(start.replace("Z", "+00:00").replace("+00:00", ""))
+        except Exception:
+            return "Active" if raw_status == "published" else raw_status.title()
+    elif isinstance(start, datetime):
+        if start.tzinfo is not None:
+            start = start.replace(tzinfo=None)
+    else:
+        return "Active" if raw_status == "published" else raw_status.title()
+
+    # Normalize end datetime to naive UTC-like datetime
+    if isinstance(end, str):
+        try:
+            end = datetime.fromisoformat(end.replace("Z", "+00:00").replace("+00:00", ""))
+        except Exception:
+            return "Active" if raw_status == "published" else raw_status.title()
+    elif isinstance(end, datetime):
+        if end.tzinfo is not None:
+            end = end.replace(tzinfo=None)
+    else:
+        return "Active" if raw_status == "published" else raw_status.title()
+
+    if now < start:
+        return "Upcoming"
+    if now > end:
+        return "Completed"
+    return "Active"
+
+
 # ──────────── My Assignment Info ────────────
 
 @router.get("/my-assignment")
@@ -755,6 +831,166 @@ async def get_head_reports(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/reports/test-analytics")
+async def get_head_test_analytics(
+    class_level: Optional[int] = Query(None),
+    subject: Optional[str] = Query(None),
+    current_user: TokenData = Depends(require_role([UserRole.HEAD, UserRole.ADMIN]))
+):
+    """Teacher-style test analytics, constrained to head assignment with optional class/subject filters."""
+    try:
+        head_doc = get_head_user(current_user.user_id) if current_user.role == UserRole.HEAD else None
+
+        group_filter = _add_optional_subject_class_filters(
+            build_assignment_filter_groups(head_doc),
+            class_level,
+            subject
+        )
+        groups = list(db.groups.find(group_filter, {
+            "student_ids": 1,
+            "teacher_id": 1,
+            "teacher_ids": 1,
+            "class_level": 1,
+            "subject": 1
+        }))
+
+        unique_students = set()
+        for g in groups:
+            for sid in g.get("student_ids", []) or []:
+                unique_students.add(str(sid))
+
+        unique_teachers = set()
+        for g in groups:
+            teacher_id = g.get("teacher_id")
+            if teacher_id:
+                unique_teachers.add(str(teacher_id))
+            for tid in g.get("teacher_ids", []) or []:
+                if tid:
+                    unique_teachers.add(str(tid))
+
+        assessment_filter = _add_optional_subject_class_filters(
+            build_assignment_filter(head_doc, {}),
+            class_level,
+            subject
+        )
+        assessments = list(db.assessments.find(assessment_filter))
+        assessment_ids = [str(a["_id"]) for a in assessments]
+
+        submissions = list(db.submissions.find({
+            "assessment_id": {"$in": assessment_ids}
+        })) if assessment_ids else []
+
+        all_scores = []
+        for sub in submissions:
+            pct = _extract_submission_percent(sub)
+            if pct is not None:
+                all_scores.append(pct)
+
+        avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
+        pass_rate = round((len([s for s in all_scores if s >= 40]) / len(all_scores)) * 100, 1) if all_scores else 0
+
+        subs_by_assessment: Dict[str, List[Dict[str, Any]]] = {}
+        for sub in submissions:
+            aid = str(sub.get("assessment_id") or "")
+            if aid:
+                subs_by_assessment.setdefault(aid, []).append(sub)
+
+        recent_performance = []
+        sorted_assessments = sorted(
+            assessments,
+            key=lambda a: a.get("created_at") or datetime.min,
+            reverse=True
+        )[:10]
+        for assessment in sorted_assessments:
+            aid = str(assessment["_id"])
+            scored = []
+            for sub in subs_by_assessment.get(aid, []):
+                pct = _extract_submission_percent(sub)
+                if pct is not None:
+                    scored.append(pct)
+            avg_t = round(sum(scored) / len(scored), 1) if scored else 0
+            recent_performance.append({
+                "name": (assessment.get("title") or "Test")[:14],
+                "avg": avg_t
+            })
+
+        excellent = len([s for s in all_scores if s >= 90])
+        good = len([s for s in all_scores if 70 <= s < 90])
+        average = len([s for s in all_scores if 50 <= s < 70])
+        needs_improvement = len([s for s in all_scores if s < 50])
+        distribution = [
+            {"name": "Excellent (>90)", "value": excellent},
+            {"name": "Good (70-90)", "value": good},
+            {"name": "Average (50-70)", "value": average},
+            {"name": "Needs Improvement (<50)", "value": needs_improvement}
+        ]
+
+        test_reports = []
+        for assessment in assessments[:50]:
+            aid = str(assessment["_id"])
+            assessment_subs = subs_by_assessment.get(aid, [])
+
+            scored = []
+            for sub in assessment_subs:
+                pct = _extract_submission_percent(sub)
+                if pct is not None:
+                    scored.append(pct)
+
+            pending_count = sum(1 for sub in assessment_subs if not _is_submission_evaluated(sub))
+            status = "No submissions"
+            if assessment_subs:
+                status = "Pending Review" if pending_count > 0 else "Completed"
+
+            created_at = assessment.get("created_at")
+            if hasattr(created_at, "isoformat"):
+                created_at = created_at.isoformat()
+
+            test_reports.append({
+                "id": aid,
+                "name": assessment.get("title", "Untitled"),
+                "type": "Staff Test",
+                "date": str(created_at)[:10] if created_at else "",
+                "taken_by": len(assessment_subs),
+                "avg_score": round(sum(scored) / len(scored), 1) if scored else 0,
+                "status": status,
+                "pending_count": pending_count,
+                "class_level": assessment.get("class_level", ""),
+                "subject": assessment.get("subject", ""),
+                "window_status": _compute_assessment_status(assessment)
+            })
+
+        test_reports.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+        available_classes = sorted(list(set(
+            [g.get("class_level") for g in groups if g.get("class_level") is not None] +
+            [a.get("class_level") for a in assessments if a.get("class_level") is not None]
+        )))
+        available_subjects = sorted(list(set(
+            [g.get("subject") for g in groups if g.get("subject")] +
+            [a.get("subject") for a in assessments if a.get("subject")]
+        )))
+
+        return {
+            "total_assessments": len(assessments),
+            "total_students": max(len(unique_students), len(set(str(s.get("student_id")) for s in submissions if s.get("student_id")))),
+            "total_teachers": len(unique_teachers),
+            "avg_score": avg_score,
+            "pass_rate": pass_rate,
+            "recent_performance": recent_performance,
+            "distribution": distribution,
+            "test_reports": test_reports,
+            "available_classes": available_classes,
+            "available_subjects": available_subjects,
+            "filters": {
+                "class_level": class_level,
+                "subject": subject
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching head test analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/reports/student-results")
 async def get_head_student_results_summary(
     class_level: Optional[int] = Query(None),
@@ -940,6 +1176,27 @@ async def get_head_student_result_detail(
             total_percentage += percentage
             best_percentage = max(best_percentage, percentage)
 
+            feedback_map = submission.get("feedback") if isinstance(submission.get("feedback"), dict) else {}
+            question_feedback = []
+            for key, value in feedback_map.items():
+                try:
+                    marks_value = float(value)
+                except (TypeError, ValueError):
+                    marks_value = value
+                question_feedback.append({
+                    "question": str(key),
+                    "marks": marks_value
+                })
+
+            question_feedback.sort(key=lambda x: x["question"])
+
+            status_raw = str(submission.get("status") or "").lower()
+            is_evaluated = bool(
+                submission.get("is_reviewed")
+                or submission.get("graded_at")
+                or status_raw in {"graded", "evaluated", "reviewed"}
+            )
+
             results.append({
                 "submission_id": str(submission["_id"]),
                 "assessment_id": str(submission.get("assessment_id")),
@@ -947,12 +1204,16 @@ async def get_head_student_result_detail(
                 "subject": assessment.get("subject"),
                 "class_level": assessment.get("class_level"),
                 "status": submission.get("status"),
+                "is_reviewed": submission.get("is_reviewed", False),
+                "is_evaluated": is_evaluated,
                 "total_score": submission.get("total_score", 0),
                 "max_score": submission.get("max_score", 0),
                 "percentage": round(percentage, 2),
                 "passed": passed,
                 "submitted_at": submission.get("submitted_at"),
-                "graded_at": submission.get("graded_at")
+                "graded_at": submission.get("graded_at"),
+                "overall_feedback": submission.get("overall_feedback"),
+                "question_feedback": question_feedback
             })
 
         attempt_count = len(results)

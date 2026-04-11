@@ -6,7 +6,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import QuestionModal from "../components/QuestionModal";
 import QuestionImageRenderer from "../components/QuestionImageRenderer";
 import useUserStore from "../stores/userStore";
-import { getCombinedClassSubjectOptions, parseCombinedValue, createCombinedValue, parseGroupName } from "../constants/academicConstants";
+import { parseCombinedValue, parseGroupName } from "../constants/academicConstants";
 import authFetch from "../utils/authFetch";
 
 import { useToast } from "../contexts/ToastContext";
@@ -74,6 +74,7 @@ const hasQuestionAnswer = (question) => {
 
 const QuestionBank = () => {
     const { user, accessToken } = useUserStore();
+    const toast = useToast();
     const isAdmin = user.role === "admin";
     const isTeacher = user.role === "teacher";
     const isHead = user.role === "head";
@@ -239,9 +240,10 @@ const QuestionBank = () => {
             if (res.ok) {
                 const data = await res.json();
                 setHeadAssignment(data);
-                if (data.assignment_type === "class") {
-                    setHeadSubjects(data.head_subjects || []);
-                }
+                const scopedSubjects = (data.head_subjects || data.assigned_subjects || [])
+                    .filter(Boolean)
+                    .sort((a, b) => String(a).localeCompare(String(b)));
+                setHeadSubjects(scopedSubjects);
             }
         } catch (e) {
             console.error("Error fetching head subjects:", e);
@@ -326,6 +328,13 @@ const QuestionBank = () => {
             if (isHead && headAssignment?.assignment_type === "subject") {
                 const cls = [...new Set((data.questions || []).map(q => q.class_level).filter(Boolean))].sort((a, b) => a - b);
                 setHeadClassOptions(cls);
+            } else if (isHead) {
+                // For class-assigned/new-style heads, derive subject filter from scoped question set.
+                const subjectsFromQuestions = [...new Set((data.questions || []).map(q => q.subject).filter(Boolean))]
+                    .sort((a, b) => String(a).localeCompare(String(b)));
+                if (subjectsFromQuestions.length > 0) {
+                    setHeadSubjects(subjectsFromQuestions);
+                }
             }
         } catch (error) {
             console.error("Error fetching questions:", error);
