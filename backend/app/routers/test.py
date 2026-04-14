@@ -2002,56 +2002,6 @@ async def get_test_result(session_id: str):
         logger.error(f"Error fetching test result: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/history/{student_id}")
-async def get_test_history(
-    student_id: str,
-    limit: int = Query(20, description="Number of results to return")
-):
-    """
-    Get test history for a student.
-    """
-    try:
-        collection = mongodb.db["test_sessions"]
-        
-        cursor = collection.find({
-            "student_id": student_id,
-            "status": "completed"
-        }).sort("completed_at", -1).limit(limit)
-        
-        tests = await cursor.to_list(length=limit)
-        
-        history = []
-        total_score = 0
-        for t in tests:
-            score = t.get("score", 0)
-            total_score += score
-            history.append({
-                "session_id": t.get("session_id"),
-                "subject": t.get("subject", "Unknown"),
-                "chapter_number": t.get("chapter_number", 0),
-                "chapter_name": t.get("chapter_name", f"Ch.{t.get('chapter_number', 0)}"),
-                "topic_name": t.get("topic_name", "Topic Test"),
-                "score": score,
-                "total_questions": t.get("total_questions", 0),
-                "correct_count": t.get("correct_count", 0),
-                "completed_at": t.get("completed_at").isoformat() if t.get("completed_at") else None
-            })
-        
-        avg_score = (total_score / len(tests)) if tests else 0
-        
-        return {
-            "history": history,
-            "total": len(tests),
-            "analytics": {
-                "total_tests": len(tests),
-                "average_score": round(avg_score, 1),
-                "best_score": max((t.get("score", 0) for t in tests), default=0)
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error fetching test history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analytics/{student_id}")
 async def get_test_analytics(

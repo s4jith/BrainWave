@@ -8,6 +8,12 @@ import useUserStore from "../stores/userStore";
 
 let isForceLoggingOut = false;
 
+function normalizeRequestUrl(url) {
+  if (typeof url !== "string") return url;
+  // Keep protocol intact (https://), but collapse duplicate slashes in the remaining path.
+  return url.replace(/([^:]\/)\/+/g, "$1");
+}
+
 function forceLogoutToLogin() {
   if (isForceLoggingOut) return;
   isForceLoggingOut = true;
@@ -30,7 +36,7 @@ export default async function authFetch(url, options = {}) {
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(normalizeRequestUrl(url), { ...options, headers });
 
   // Force logout only when unauthenticated. 403 can be valid for permission checks.
   if (response.status === 401) {
