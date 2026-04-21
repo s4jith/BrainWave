@@ -1,307 +1,303 @@
-# NCERT AI Learning Platform - Production Ready 🚀
+# NCERT AI Learning Platform -- Context-Grounded Educational Assistant
 
-##  Features
+An AI-powered learning platform that helps students read NCERT textbooks with **context-aware explanations, smart assessments, and persistent notes**. Unlike generic chat tools, this system uses retrieval-grounded generation so responses stay anchored to textbook context.
 
-### Fully Integrated RAG Chatbot
-- **AI Explanations**: 5 modes (Simple, Meaning, Story, Example, Summary)
-- **Greeting Detection**: Cost-optimized (no LLM calls for greetings)
-- **Strict RAG**: No hallucination - only context-based answers
-- **Vector Database**: 2,193 embeddings from 16 NCERT PDFs in Pinecone
-- **AI Model**: Gemini 2.5 Flash
+## Problems Solved
+- Students get stuck on textbook paragraphs and need instant simplified explanations.
+- Generic AI tools can hallucinate and provide syllabus-inaccurate answers.
+- Practice assessment creation is time-consuming for teachers and students.
+- Notes, highlights, and progress are fragmented across tools.
+- Learning flow breaks when PDF reading and AI Q&A are in separate apps.
 
-### Backend (FastAPI)
-- **RAG Chat API**: `/api/chat/` - Context-aware explanations
-- **MCQ Generation**: `/api/mcq/generate` - Auto-generate questions
-- **Evaluation**: `/api/evaluate/mcq` & `/api/evaluate/assessment`
-- **Notes Management**: `/api/notes/` - CRUD operations
-- **MongoDB Atlas**: Persistent storage
-- **Pinecone**: Vector search
+## How It Works
 
-### Frontend (React + Vite)
-- **PDF Viewer**: 16 NCERT Social Science lessons
-- **AI Panel**: Real-time explanations via backend
-- **Notes System**: Highlight and save notes
-- **Assessment**: Voice-based testing (coming soon)
+```text
+Student opens chapter PDF and highlights text
+         |
+FastAPI receives query + mode + chapter context
+         |
+RAG service retrieves relevant chunks from Pinecone
+         |
+Gemini generates grounded explanation using retrieved context
+         |
+System returns explanation in selected mode (Simple/Meaning/Story/Example/Summary)
+         |
+Student can save notes, create MCQs, and review history
+         |
+Assessment, annotation, and progress workflows persist in MongoDB
+```
 
----
+## Architecture Overview
 
-## Quick Start
+```text
+[Browser]
+   |
+   | HTTP (localhost:5173 -> localhost:8000)
+   v
+[React + Vite Frontend]
+   |  Components, hooks, context, PDF viewer, route pages
+   |
+   v
+[FastAPI Backend]
+   |  Routers: chat, notes, mcq, evaluate, assessment, auth, student, teacher, admin
+   |
+   |--- Google Gemini API         (LLM generation)
+   |--- Pinecone                  (vector retrieval for RAG)
+   |--- MongoDB Atlas             (users, notes, assessments, platform data)
+   |--- PDF toolchain             (PyMuPDF, pdf2image, PyPDF2)
+   |
+   v
+[AI + Services Layer]
+   |--- Retrieval and ranking
+   |--- Prompt/mode orchestration
+   |--- MCQ generation + evaluation
+   |--- Annotation/history services
+```
+
+## Demo Flow
+
+**Classroom Usage Flow**
+
+| Step | Action | Output |
+|------|--------|--------|
+| 1 | Open chapter PDF | Full text visible in embedded reader |
+| 2 | Highlight difficult paragraph | Query context captured |
+| 3 | Choose explanation mode | AI returns mode-specific grounded answer |
+| 4 | Generate assessment | MCQs created from chapter context |
+| 5 | Save to notes/history | Student gets persistent revision material |
+
+## Features
+
+### Core Learning
+- **Context-aware AI explanations** with multi-mode output.
+- **Strict retrieval grounding** to reduce hallucination risk.
+- **PDF-integrated workflow** for highlight-to-explain interaction.
+- **Assessment generation and evaluation** inside the same platform.
+- **Notes, annotations, and history** for revision continuity.
+
+### AI and Assessment
+- **RAG-based chat** with Pinecone-backed context retrieval.
+- **Mode-driven response shaping** (`Simple`, `Meaning`, `Story`, `Example`, `Summary`).
+- **MCQ generation** from chapter-level learning context.
+- **Answer evaluation pipeline** for objective scoring workflows.
+- **Question bank support** through dedicated API modules.
+
+### Platform and User Modules
+- **Role-oriented API modules** for student, teacher, head, and admin.
+- **Curriculum + books management** for class/subject/chapter workflows.
+- **Support, suggestions, notifications** for operational communication.
+- **Gradebook and course modules** for structured assessments.
+
+## Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| React 19 | Component-driven UI |
+| Vite (Rolldown) | Fast build/dev tooling |
+| Tailwind CSS | Utility-first styling |
+| react-pdf / pdfjs-dist | PDF rendering and interactions |
+| Zustand + Context | State and UI flow management |
+| Framer Motion | UI motion and transitions |
+| React Router | Route navigation |
+
+### Backend
+| Technology | Purpose |
+|------------|---------|
+| FastAPI | Async API framework |
+| Uvicorn | ASGI server |
+| Pydantic v2 | Validation and settings |
+| Motor + PyMongo | MongoDB async/data access |
+| PyJWT | JWT auth workflows |
+| python-dotenv | Environment loading |
+
+### AI / Data Layer
+| Technology | Purpose |
+|------------|---------|
+| Google Gemini API | Response generation |
+| Pinecone | Vector retrieval for RAG |
+| NumPy | Numeric utilities |
+| PyMuPDF / PyPDF2 / pdf2image | PDF parsing and preprocessing |
+| Pillow | Image operations in processing pipeline |
+
+## Project Structure
+
+```text
+ncert-working-2/
+|-- README.md
+|-- API_ENDPOINTS.md
+|-- PROJECT_ANALYSIS.md
+|-- backend/
+|   |-- run.py
+|   |-- requirements.txt
+|   |-- .env.example
+|   |-- app/
+|   |   |-- main.py
+|   |   |-- core/            # config, middleware, auth
+|   |   |-- db/              # mongo initialization and access
+|   |   |-- models/          # data models
+|   |   |-- routers/         # API route groups
+|   |   |-- services/        # RAG, chat, MCQ, evaluation logic
+|   |   |-- utils/
+|   |-- scripts/             # setup, seeding, processing utilities
+|-- frontend/
+|   |-- package.json
+|   |-- src/
+|   |   |-- components/
+|   |   |-- pages/
+|   |   |-- hooks/
+|   |   |-- services/
+|   |   |-- contexts/
+|   |   |-- features/
+|   |-- public/
+|-- Books/                    # NCERT source material
+```
+
+## Installation and Setup
 
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- MongoDB Atlas account
-- Pinecone account
+- npm
+- MongoDB Atlas project
+- Pinecone project
 - Google Gemini API key
 
-### 1. Backend Setup
+### 1. Clone Repository
 
 ```bash
-cd ncert_backend
+git clone https://github.com/<your-username>/ncert-working-2.git
+cd ncert-working-2
+```
 
-# Create virtual environment
-python -m venv venv
+### 2. Setup Backend
 
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# Install dependencies
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+```
 
-# Create .env file (copy from .env.example)
-copy .env.example .env
+### 3. Setup Frontend
 
-# Add your API keys to .env:
-# - GEMINI_API_KEY
-# - PINECONE_API_KEY
-# - PINECONE_HOST
-# - MONGO_URI
+```bash
+cd ../frontend
+npm install
+cat > .env << 'EOF'
+VITE_API_URL=http://localhost:8000
+EOF
+```
 
-# Run backend
+### 4. Run Services
+
+```bash
+# Terminal 1
+cd backend
+source .venv/bin/activate
 python run.py
 ```
 
-Backend will start at: **http://localhost:8000**  
-API Docs: **http://localhost:8000/docs**
-
-### 2. Frontend Setup
-
 ```bash
-cd client
-
-# Install dependencies
-npm install
-
-# Run frontend
+# Terminal 2
+cd frontend
 npm run dev
 ```
 
-Frontend will start at: **http://localhost:5173**
+- Frontend: `http://localhost:5173`
+- Backend docs: `http://localhost:8000/docs`
 
----
+## Environment Variables
 
-## Usage
+### Backend (`backend/.env`)
 
-### 1. Open the App
-Visit **http://localhost:5173** in your browser
-
-### 2. Select a Lesson
-Choose from 14 NCERT Social Science lessons
-
-### 3. Highlight Text
-Select any text in the PDF viewer
-
-### 4. Ask AI
-- Click the AI icon
-- Choose explanation mode (Simple, Meaning, Story, Example, Summary)
-- Get instant AI-powered explanations from the backend!
-
-### 5. Save Notes
-- Add heading and content
-- Notes are saved to MongoDB
-- Access them anytime
-
----
-
-## 🔧 API Endpoints
-
-### Chat / RAG
-```
-POST /api/chat/
-Body: {
-  "class_level": 6,
-  "subject": "Social Science",
-  "chapter": 1,
-  "highlight_text": "What are latitudes?",
-  "mode": "simple"
-}
-```
-
-### Generate MCQs
-```
-POST /api/mcq/generate
-Body: {
-  "class_level": 6,
-  "subject": "Social Science",
-  "chapter": 1,
-  "num_questions": 5
-}
-```
-
-### Create Note
-```
-POST /api/notes/
-Body: {
-  "student_id": "student123",
-  "class_level": 6,
-  "subject": "Social Science",
-  "chapter": 1,
-  "page_number": 5,
-  "highlight_text": "Selected text",
-  "note_content": "My note",
-  "heading": "Important concept"
-}
-```
-
----
-
-## 🗂️ Project Structure
-
-```
-ncert-working-2/
-├── client/                    # React frontend
-│   ├── src/
-│   │   ├── components/       # UI components
-│   │   ├── services/         # API integration
-│   │   ├── contexts/         # React contexts
-│   │   └── assets/           # PDFs and images
-│   └── package.json
-│
-├── ncert_backend/            # FastAPI backend
-│   ├── app/
-│   │   ├── routers/         # API endpoints
-│   │   ├── services/        # Business logic
-│   │   ├── models/          # Pydantic schemas
-│   │   └── db/              # Database connections
-│   ├── scripts/             # Utility scripts
-│   └── requirements.txt
-│
-└── README.md
-```
-
----
-
-## 🧪 Testing
-
-### Test Backend
-```bash
-cd ncert_backend
-python scripts/test_chatbot.py
-```
-
-### Test Frontend
-1. Start backend (`python run.py`)
-2. Start frontend (`npm run dev`)
-3. Open browser and test AI panel with text selection
-
----
-
-## 🎨 Frontend Integration
-
-The frontend is fully integrated with the backend:
-
-### `client/src/services/api.js`
-- **chatService**: AI explanations via RAG
-- **mcqService**: MCQ generation and evaluation
-- **notesService**: CRUD operations for notes
-- **assessmentService**: Voice assessment submission
-
-### `client/src/components/annotations/AIPanel.jsx`
-- Real-time AI explanations
-- 5 explanation modes
-- Error handling
-- Loading states
-
----
-
-## 📦 Technologies
-
-### Backend
-- **Framework**: FastAPI
-- **AI**: Google Gemini 2.5 Flash
-- **Vector DB**: Pinecone (2,193 embeddings)
-- **Database**: MongoDB Atlas
-- **OCR**: Tesseract + Poppler
-
-### Frontend
-- **Framework**: React 18 + Vite
-- **UI**: Tailwind CSS + shadcn/ui
-- **PDF**: react-pdf
-- **State**: React Context API
-
----
-
-## 🔐 Environment Variables
-
-### Backend (`.env`)
 ```env
-# API Keys
-GEMINI_API_KEY=your_gemini_api_key
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_HOST=your_pinecone_host
-MONGO_URI=your_mongodb_connection_string
-
-# Server Config
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>/<db>?retryWrites=true&w=majority
+GEMINI_API_KEY=<your-api-key>
+PINECONE_API_KEY=<your-api-key>
+PINECONE_INDEX=ncert-learning-rag
+PINECONE_HOST=https://<your-index-host>.pinecone.io
+APP_NAME=NCERT AI Learning Backend
+APP_VERSION=1.0.0
+DEBUG=True
+FRONTEND_URL=http://localhost:5173
 HOST=0.0.0.0
 PORT=8000
-DEBUG=true
-FRONTEND_URL=http://localhost:5173
 ```
 
-### Frontend (`.env`)
+### Frontend (`frontend/.env`)
+
 ```env
-VITE_API_BASE_URL=http://localhost:8000/api
+VITE_API_URL=http://localhost:8000
 ```
 
----
+## Usage
+1. Start backend and frontend.
+2. Open `http://localhost:5173`.
+3. Select class, subject, and chapter/book content.
+4. Highlight any difficult text.
+5. Choose an explanation mode.
+6. Generate assessments and save notes for revision.
 
-## 📈 Performance
+## API Endpoints
 
-- **Vector Search**: 0.7084 similarity score (excellent!)
-- **Response Time**: <2 seconds for AI explanations
-- **Database**: 2,193 vectors, 768 dimensions
-- **Greeting Detection**: 0ms (no API calls)
+Base URL: `http://localhost:8000`
 
----
+### Common Route Groups
+- `/api/chat` and related chat workflows
+- `/api/mcq` and evaluation flows
+- `/api/assessment` and `/api/assessments`
+- `/api/notes`, `/api/annotation`, `/api/history`
+- `/api/books`, `/api/curriculum`
+- `/api/student`, `/api/v1/student`, `/api/teacher`
+- `/api/tests`, `/api/test`, `/api/question-bank`, `/api/question-papers`
+- `/api/support`, `/api/support-tickets`, `/api/notifications`
+- `/api/courses`, `/api/gradebook`
 
-##  Next Steps
+### Health and System
+- `GET /` - service status
+- `GET /health` - health check
 
-- [ ] Add authentication (JWT)
-- [ ] Deploy to production (Vercel + Railway)
-- [ ] Add more subjects and classes
-- [ ] Implement voice assessment UI
-- [ ] Add real-time collaboration
-- [ ] Add progress tracking
+For full API mapping, refer to `API_ENDPOINTS.md`.
 
----
+## Architecture / How It Works
 
-## 🤝 Contributing
+### RAG Pipeline
+1. **Content ingestion**
+   NCERT textbook content is parsed and prepared for chunk-level retrieval.
+2. **Embedding and indexing**
+   Context chunks are indexed in Pinecone vector storage.
+3. **Context retrieval**
+   User question + chapter context retrieves top relevant chunks.
+4. **Grounded generation**
+   Gemini receives prompt + retrieved context + explanation mode.
+5. **Learning actions**
+   Response is consumed by notes, assessment, and history workflows.
 
-This is a production-ready educational platform. To contribute:
+### Why this architecture
+- Keeps educational responses anchored to syllabus content.
+- Supports low-latency contextual help while reading PDFs.
+- Enables modular growth into gradebook, courses, and analytics.
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+## Future Improvements
+- Fine-grained RBAC hardening and audit trails.
+- Streaming token responses for faster perceived latency.
+- Better chapter-level analytics and teacher dashboards.
+- Multi-language explanation modes and voice support.
+- CI/CD and production deployment templates.
 
----
+## Contributing Guidelines
+1. Fork the repo.
+2. Create a feature branch: `git checkout -b feature/<name>`.
+3. Keep commits small and meaningful.
+4. Run lint/tests before pushing.
+5. Open a PR with summary and validation notes.
 
-## 📝 License
+## License
+MIT License. See `LICENSE`.
 
-MIT License - See LICENSE file for details
-
----
-
-## 🙏 Acknowledgments
-
-- NCERT for educational content
-- Google Gemini for AI capabilities
-- Pinecone for vector search
-- MongoDB for database
-- FastAPI & React communities
-
----
-
-## 💡 Support
-
-For issues and questions:
-- GitHub Issues: [Create an issue](https://github.com/Winterbear0701/ncert-working-2/issues)
-- Documentation: Check `/docs` endpoint on backend
-
----
-
-**Made with ❤️ for NCERT Students**
+## Author / Contact
+- Author: `<your-name-or-team>`
+- GitHub: `https://github.com/<your-username>`
+- Issues: `https://github.com/<your-username>/ncert-working-2/issues`
