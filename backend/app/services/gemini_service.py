@@ -60,12 +60,13 @@ class GeminiService:
         
         return client, config, gemini_key_manager.current_key_index
     
-    def generate_embedding(self, text: str) -> list[float]:
+    def generate_embedding(self, text: str, retry_count: int = 0) -> list[float]:
         """
         Generate embedding vector for text using Gemini embedding model.
         
         Args:
             text: Input text to embed
+            retry_count: Retry counter for rotation
         
         Returns:
             Embedding vector (list of floats)
@@ -83,6 +84,16 @@ class GeminiService:
             )
         
         except Exception as e:
+            from app.services.gemini_key_manager import gemini_key_manager
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[Embedding Service Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.generate_embedding(text, retry_count + 1)
             logger.error(f" Embedding generation failed: {e}")
             raise
     
@@ -121,18 +132,15 @@ class GeminiService:
             return response.text
         
         except Exception as e:
-            error_str = str(e)
-            
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                current_key_id = gemini_key_manager.get_current_key_id()
-                if current_key_id:
-                    gemini_key_manager.mark_key_exhausted(current_key_id)
-                logger.warning(
-                    f"[Gemini Retry] 429 on {current_key_id or 'unknown_key'} "
-                    f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
-                )
-                
-                return self.format_explanation(context, question, mode, class_level, retry_count + 1)
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[Gemini Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.format_explanation(context, question, mode, class_level, retry_count + 1)
             
             logger.error(f" Gemini explanation failed: {e}")
             raise
@@ -176,40 +184,15 @@ class GeminiService:
             return response.text
         
         except Exception as e:
-            error_str = str(e)
-            
-            is_expired_key = (
-                "API_KEY_INVALID" in error_str or 
-                "API key expired" in error_str or
-                "API key not valid" in error_str
-            )
-            
-            is_timeout = "504" in error_str or "Deadline Exceeded" in error_str
-            
-            should_rotate = "429" in error_str or is_expired_key or is_timeout
-            
-            if should_rotate and retry_count < len(gemini_key_manager.keys):
-                current_key_id = gemini_key_manager.get_current_key_id()
-                
-                if is_expired_key:
-                    if current_key_id:
-                        gemini_key_manager.mark_key_invalid(current_key_id)
-                    logger.warning(f" API key invalid/expired. Marked as invalid, skipping to next key (retry {retry_count + 1})...")
-                elif is_timeout:
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
                     logger.warning(
-                        f"[Gemini Retry] timeout on {current_key_id or 'unknown_key'} "
-                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                        f"[Gemini Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
                     )
-                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
-                else:
-                    if current_key_id:
-                        gemini_key_manager.mark_key_exhausted(current_key_id)
-                    logger.warning(
-                        f"[Gemini Retry] 429 on {current_key_id or 'unknown_key'} "
-                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
-                    )
-                
-                return self.generate_response(prompt, retry_count + 1, max_output_tokens, model_name)
+                    return self.generate_response(prompt, retry_count + 1, max_output_tokens, model_name)
             
             logger.error(f" Gemini generation failed: {e}")
             raise
@@ -239,43 +222,18 @@ class GeminiService:
                     yield chunk.text
         
         except Exception as e:
-            error_str = str(e)
-            
-            is_expired_key = (
-                "API_KEY_INVALID" in error_str or 
-                "API key expired" in error_str or
-                "API key not valid" in error_str
-            )
-            
-            is_timeout = "504" in error_str or "Deadline Exceeded" in error_str
-            
-            should_rotate = "429" in error_str or is_expired_key or is_timeout
-            
-            if should_rotate and retry_count < len(gemini_key_manager.keys):
-                current_key_id = gemini_key_manager.get_current_key_id()
-                
-                if is_expired_key:
-                    if current_key_id:
-                        gemini_key_manager.mark_key_invalid(current_key_id)
-                    logger.warning(f" API key invalid/expired in stream. Rotating to next key (retry {retry_count + 1})...")
-                elif is_timeout:
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
                     logger.warning(
-                        f"[Gemini Stream Retry] timeout on {current_key_id or 'unknown_key'} "
-                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
+                        f"[Gemini Stream Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
                     )
-                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
-                else:
-                    if current_key_id:
-                        gemini_key_manager.mark_key_exhausted(current_key_id)
-                    logger.warning(
-                        f"[Gemini Stream Retry] 429 on {current_key_id or 'unknown_key'} "
-                        f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
-                    )
-                
-                yield from self.generate_response_streaming(prompt, retry_count + 1, max_output_tokens)
-            else:
-                logger.error(f" Gemini streaming failed: {e}")
-                raise
+                    yield from self.generate_response_streaming(prompt, retry_count + 1, max_output_tokens)
+                    return
+            logger.error(f" Gemini streaming failed: {e}")
+            raise
     
     def generate_response_with_image(
         self, 
@@ -327,18 +285,15 @@ class GeminiService:
             return response.text
         
         except Exception as e:
-            error_str = str(e)
-            
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                current_key_id = gemini_key_manager.get_current_key_id()
-                if current_key_id:
-                    gemini_key_manager.mark_key_exhausted(current_key_id)
-                logger.warning(
-                    f"[Gemini Vision Retry] 429 on {current_key_id or 'unknown_key'} "
-                    f"-> rotating (retry {retry_count + 1}/{len(gemini_key_manager.keys)})"
-                )
-                
-                return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1, max_output_tokens)
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[Gemini Vision Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.generate_response_with_image(prompt, image_bytes, mime_type, retry_count + 1, max_output_tokens)
             
             logger.error(f" Gemini vision failed: {e}")
             raise
@@ -513,14 +468,15 @@ Generate {num_questions} MCQs now in valid JSON format:"""
             return mcqs
         
         except Exception as e:
-            error_str = str(e)
-            
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
-                
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
-                
-                return self.generate_mcqs(context, num_questions, class_level, subject, chapter, retry_count + 1)
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[MCQ Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.generate_mcqs(context, num_questions, class_level, subject, chapter, retry_count + 1)
             
             logger.error(f" MCQ generation failed: {e}")
             raise
@@ -680,15 +636,15 @@ JSON:"""
             raise ValueError(f"Could not parse Gemini response after multiple attempts")
             
         except Exception as e:
-            error_str = str(e)
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f" 429 Rate limit. Rotating key and retrying ({retry_count})...")
-                current_key_id = gemini_key_manager.get_current_key_id()
-                if current_key_id:
-                    gemini_key_manager.mark_key_exhausted(current_key_id)
-                else:
-                    gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
-                return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[Varied Questions Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.generate_varied_questions(context, config, class_level, subject, chapter, retry_count + 1)
             
             logger.error(f" Varied question generation failed: {e}")
             raise
@@ -768,14 +724,15 @@ Provide evaluation in JSON format:"""
             return evaluation
         
         except Exception as e:
-            error_str = str(e)
-            
-            if "429" in error_str and retry_count < len(gemini_key_manager.keys):
-                logger.warning(f"  429 Rate limit hit. Rotating to next key (retry {retry_count + 1})...")
-                
-                gemini_key_manager.current_key_index = (gemini_key_manager.current_key_index + 1) % len(gemini_key_manager.keys)
-                
-                return self.evaluate_assessment(questions_and_answers, class_level, subject, chapter, retry_count + 1)
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[Assessment Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.evaluate_assessment(questions_and_answers, class_level, subject, chapter, retry_count + 1)
             
             logger.error(f" Assessment evaluation failed: {e}")
             raise

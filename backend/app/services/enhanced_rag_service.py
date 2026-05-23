@@ -193,7 +193,7 @@ class EnhancedRAGService:
             "EVS": list(range(1, 13)),
         }
 
-    def generate_embedding(self, text: str) -> List[float]:
+    def generate_embedding(self, text: str, retry_count: int = 0) -> List[float]:
         """Generate embedding using Gemini gemini-embedding-001 via REST API.
         
         CRITICAL: Must use same model as PDF upload for retrieval to work!
@@ -209,6 +209,16 @@ class EnhancedRAGService:
                 task_type="RETRIEVAL_QUERY"
             )
         except Exception as e:
+            from app.services.gemini_key_manager import gemini_key_manager
+            current_key_id = gemini_key_manager.get_current_key_id()
+            if current_key_id and retry_count < len(gemini_key_manager.keys):
+                rotated = gemini_key_manager.handle_key_error(current_key_id, e)
+                if rotated:
+                    logger.warning(
+                        f"[RAG Embedding Retry] Error on {current_key_id} -> rotating "
+                        f"(retry {retry_count + 1}/{len(gemini_key_manager.keys)}): {e}"
+                    )
+                    return self.generate_embedding(text, retry_count + 1)
             logger.error(f"Embedding generation failed: {e}")
             raise
 

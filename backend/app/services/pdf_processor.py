@@ -449,8 +449,9 @@ class AdvancedPDFProcessor:
             
             Keep descriptions educational and helpful for understanding the content."""
             
-            max_retries = 2
+            max_retries = max(1, len(gemini_key_manager.keys))
             for attempt in range(max_retries):
+                key_id = gemini_key_manager.get_current_key_id()
                 try:
                     vision_client = self._get_vision_client()
                     response = vision_client.models.generate_content(
@@ -463,13 +464,17 @@ class AdvancedPDFProcessor:
                     return []
                     
                 except Exception as e:
+                    self.vision_client = None  # Clear cached client to force new key next attempt
+                    if key_id:
+                        rotated = gemini_key_manager.handle_key_error(key_id, e)
+                        if rotated:
+                            logger.warning(
+                                f"[Vision Retry] Error on {key_id} -> rotating "
+                                f"(attempt {attempt + 1}/{max_retries}): {e}"
+                            )
+                            continue
+                    
                     error_str = str(e)
-                    
-                    if "429" in error_str or "quota" in error_str.lower():
-                        logger.warning(f" Vision API quota exceeded. Disabling Vision features for remaining pages.")
-                        self.vision_api_enabled = False
-                        return []
-                    
                     if "503" in error_str or "504" in error_str or "overloaded" in error_str.lower():
                         if attempt < max_retries - 1:
                             time.sleep(2 * (attempt + 1))
@@ -682,14 +687,14 @@ class PineconeEmbeddingUploader:
                 )
             except Exception as e:
                 last_error = e
-                error_str = str(e)
-                if "429" in error_str and key_id:
-                    gemini_key_manager.mark_key_exhausted(key_id)
-                    logger.warning(
-                        f"[Embedding Retry] 429 on {key_id} -> rotating "
-                        f"(attempt {attempt + 1}/{max_attempts})"
-                    )
-                    continue
+                if key_id:
+                    rotated = gemini_key_manager.handle_key_error(key_id, e)
+                    if rotated:
+                        logger.warning(
+                            f"[Embedding Retry] Error on {key_id} -> rotating "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
+                        )
+                        continue
 
                 logger.error(f"Embedding generation failed on {key_id or 'unknown_key'}: {e}")
                 raise
@@ -718,14 +723,14 @@ class PineconeEmbeddingUploader:
                 )
             except Exception as e:
                 last_error = e
-                error_str = str(e)
-                if "429" in error_str and key_id:
-                    gemini_key_manager.mark_key_exhausted(key_id)
-                    logger.warning(
-                        f"[Embedding Batch Retry] 429 on {key_id} -> rotating "
-                        f"(attempt {attempt + 1}/{max_attempts})"
-                    )
-                    continue
+                if key_id:
+                    rotated = gemini_key_manager.handle_key_error(key_id, e)
+                    if rotated:
+                        logger.warning(
+                            f"[Embedding Batch Retry] Error on {key_id} -> rotating "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
+                        )
+                        continue
                 logger.warning(f"Batch embedding failed on {key_id or 'unknown_key'}: {e}")
                 break
 

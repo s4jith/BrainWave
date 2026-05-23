@@ -34,6 +34,62 @@ from app.services.cloudinary_service import get_cloudinary_service
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Subject normalisation helpers
+# ---------------------------------------------------------------------------
+# Maps lower-cased input variants → (canonical_subject, pinecone_namespace)
+_SUBJECT_ALIAS_MAP: dict[str, tuple[str, str]] = {
+    # Maths variants
+    "maths": ("Maths", "maths"),
+    "math": ("Maths", "maths"),
+    "mathematics": ("Maths", "maths"),
+    # Physics
+    "physics": ("Physics", "physics"),
+    # Chemistry
+    "chemistry": ("Chemistry", "chemistry"),
+    # Biology
+    "biology": ("Biology", "biology"),
+    # Science (combined)
+    "science": ("Science", "science"),
+    # English
+    "english": ("English", "english"),
+    "english literature": ("English", "english"),
+    "english language": ("English", "english"),
+    # Hindi
+    "hindi": ("Hindi", "hindi"),
+    # Social Science
+    "social science": ("Social Science", "social_science"),
+    "social": ("Social Science", "social_science"),
+    "sst": ("Social Science", "social_science"),
+    "history": ("Social Science", "social_science"),
+    "geography": ("Social Science", "social_science"),
+    "civics": ("Social Science", "social_science"),
+    "economics": ("Social Science", "social_science"),
+    # EVS
+    "evs": ("EVS", "evs"),
+    "environmental studies": ("EVS", "evs"),
+    # Computer Science
+    "computer science": ("Computer Science", "computer_science"),
+    "cs": ("Computer Science", "computer_science"),
+    "informatics practices": ("Computer Science", "computer_science"),
+}
+
+
+def _normalize_subject(raw_subject: str) -> tuple[str, str]:
+    """
+    Return (canonical_subject, namespace) for a raw subject string.
+    Falls back to title-cased input and snake_case namespace if unknown.
+    """
+    key = raw_subject.strip().lower()
+    if key in _SUBJECT_ALIAS_MAP:
+        return _SUBJECT_ALIAS_MAP[key]
+    # Unknown subject: title-case + snake_case namespace
+    canonical = raw_subject.strip().title()
+    namespace = key.replace(" ", "_")
+    logger.warning(f"[Upload] Unknown subject '{raw_subject}' → canonical='{canonical}', namespace='{namespace}'")
+    return canonical, namespace
+
+
 router = APIRouter(prefix="/api/books", tags=["Book Management"])
 
 BOOKS_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "books")
@@ -498,9 +554,21 @@ async def upload_book(
     try:
         if not pdf_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-        
-        clean_title = title.replace(' ', '_').replace('/', '_')[:50]
-        safe_filename = f"{clean_title}.pdf"
+
+        # Normalise subject → canonical name + pinecone namespace
+        canonical_subject, namespace = _normalize_subject(subject)
+        if canonical_subject != subject:
+            logger.info(
+                f"[Upload] Subject normalised: '{subject}' → '{canonical_subject}' (namespace='{namespace}')"
+            )
+        subject = canonical_subject
+
+        # Validate class level
+        if not (1 <= class_level <= 12):
+            raise HTTPException(status_code=400, detail=f"Invalid class_level '{class_level}'. Must be 1-12.")
+
+        clean_title = title.strip()
+        safe_filename = f"{clean_title.replace(' ', '_').replace('/', '_')[:50]}.pdf"
         
         content = await pdf_file.read()
         if len(content) == 0:
@@ -564,9 +632,8 @@ async def upload_book(
         cloud_url = cloud_info.get('url')
         cloud_public_id = cloud_info.get('public_id')
         logger.info(f"PDF uploaded to Cloudinary: {cloud_url}")
-        
-        namespace = subject.lower().replace(' ', '_')
-        
+        # namespace already resolved by _normalize_subject() above
+
         book_id = str(uuid.uuid4())
         
         book_doc = {
@@ -1880,92 +1947,97 @@ async def fix_missing_fields():
 @router.get("/admin/hierarchical-structure")
 async def get_hierarchical_structure():
     """
-    Get the hierarchical structure of books from Pinecone metadata.
+    Get the hierarchical structure of books from MongoDB metadata.
     Returns: { subjects: { [subject]: { classes: { [class]: { chapters: [chapter_numbers] } } } } }
     
-    This queries actual Pinecone data to show what's really stored.
+    Uses MongoDB as the source of truth (complete and accurate).
+    Pinecone vector counts are fetched separately for display purposes.
     """
     try:
         from pinecone import Pinecone
-        
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-        index = pc.Index(
-            name=settings.PINECONE_MASTER_INDEX,
-            host=settings.PINECONE_MASTER_HOST
-        )
-        
-        stats = index.describe_index_stats()
-        namespaces = stats.get("namespaces", {})
-        
-        structure = {}
-        
-        for namespace_name, namespace_info in namespaces.items():
-            if namespace_info.get("vector_count", 0) == 0:
+
+        # Build structure from MongoDB (complete, no top_k limitations)
+        pipeline = [
+            {"$match": {"has_embeddings": True}},
+            {"$group": {
+                "_id": {
+                    "namespace": {"$toLower": {"$replaceAll": {"input": "$subject", "find": " ", "replacement": "_"}}},
+                    "subject": "$subject",
+                    "class_level": "$class_level",
+                    "chapter_number": "$chapter_number"
+                },
+                "embedding_count": {"$sum": "$embedding_count"},
+                "book_title": {"$first": "$title"},
+                "book_id": {"$first": "$_id"}
+            }},
+            {"$sort": {"_id.class_level": 1, "_id.chapter_number": 1}}
+        ]
+
+        rows = list(db.books.aggregate(pipeline))
+
+        # Build structure dict
+        structure: dict = {}
+        for row in rows:
+            g = row["_id"]
+            namespace = g.get("namespace", "unknown")
+            subject = g.get("subject", "Unknown")
+            class_level = int(g.get("class_level") or 0)
+            chapter_number = int(g.get("chapter_number") or 0)
+
+            if not namespace or not class_level:
                 continue
-            
-            query_response = index.query(
-                namespace=namespace_name,
-                vector=[0.0] * 768,
-                top_k=1000,
-                include_metadata=True
-            )
-            
-            classes = {}
-            for match in query_response.get("matches", []):
-                metadata = match.get("metadata", {})
-                
-                class_level = metadata.get("class_level") or metadata.get("class")
-                chapter_number = metadata.get("chapter_number") or metadata.get("chapter")
-                
-                if class_level:
-                    if isinstance(class_level, str):
-                        import re
-                        match_num = re.search(r'(\d+)', str(class_level))
-                        if match_num:
-                            class_level = int(match_num.group(1))
-                        else:
-                            continue
-                    class_level = int(class_level)
-                    
-                    class_key = str(class_level)
-                    if class_key not in classes:
-                        classes[class_key] = {
-                            "class_level": class_level,
-                            "chapters": set(),
-                            "vector_count": 0
-                        }
-                    
-                    if chapter_number:
-                        if isinstance(chapter_number, str):
-                            import re
-                            match_ch = re.search(r'(\d+)', str(chapter_number))
-                            if match_ch:
-                                chapter_number = int(match_ch.group(1))
-                        if isinstance(chapter_number, (int, float)):
-                            classes[class_key]["chapters"].add(int(chapter_number))
-                    
-                    classes[class_key]["vector_count"] += 1
-            
-            for class_key in classes:
-                classes[class_key]["chapters"] = sorted(list(classes[class_key]["chapters"]))
-            
-            if classes:
-                structure[namespace_name] = {
-                    "total_vectors": namespace_info.get("vector_count", 0),
-                    "classes": classes
+
+            if namespace not in structure:
+                structure[namespace] = {"total_vectors": 0, "classes": {}}
+
+            class_key = str(class_level)
+            if class_key not in structure[namespace]["classes"]:
+                structure[namespace]["classes"][class_key] = {
+                    "class_level": class_level,
+                    "chapters": [],
+                    "vector_count": 0
                 }
-        
+
+            if chapter_number and chapter_number not in structure[namespace]["classes"][class_key]["chapters"]:
+                structure[namespace]["classes"][class_key]["chapters"].append(chapter_number)
+
+            structure[namespace]["classes"][class_key]["vector_count"] += int(row.get("embedding_count") or 0)
+
+        # Sort chapter lists
+        for ns_data in structure.values():
+            for cls_data in ns_data["classes"].values():
+                cls_data["chapters"] = sorted(cls_data["chapters"])
+
+        # Fetch actual Pinecone namespace vector counts for the totals display
+        try:
+            pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+            index = pc.Index(name=settings.PINECONE_MASTER_INDEX, host=settings.PINECONE_MASTER_HOST)
+            stats = index.describe_index_stats()
+            pinecone_namespaces = stats.get("namespaces", {})
+            for ns_name, ns_info in pinecone_namespaces.items():
+                if ns_name in structure:
+                    structure[ns_name]["total_vectors"] = ns_info.get("vector_count", 0)
+                else:
+                    # Namespace exists in Pinecone but no MongoDB books with embeddings
+                    structure[ns_name] = {
+                        "total_vectors": ns_info.get("vector_count", 0),
+                        "classes": {}
+                    }
+        except Exception as pc_err:
+            logger.warning(f"Could not fetch Pinecone stats for hierarchical structure: {pc_err}")
+
         return {
             "success": True,
             "structure": structure,
             "total_namespaces": len(structure)
         }
-        
+
     except Exception as e:
         logger.error(f" Get hierarchical structure failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/admin/delete-subject/{subject}")
 async def delete_subject(subject: str, confirmation: str = Query(...)):
@@ -1992,7 +2064,7 @@ async def delete_subject(subject: str, confirmation: str = Query(...)):
             host=settings.PINECONE_MASTER_HOST
         )
         
-        namespace = subject.lower().replace(' ', '_')
+        _, namespace = _normalize_subject(subject)
         
         stats_before = index.describe_index_stats()
         namespace_info = stats_before.get("namespaces", {}).get(namespace, {})
@@ -2056,7 +2128,7 @@ async def delete_class(subject: str, class_level: int, confirmation: str = Query
             host=settings.PINECONE_MASTER_HOST
         )
         
-        namespace = subject.lower().replace(' ', '_')
+        _, namespace = _normalize_subject(subject)
         
         all_vector_ids = []
         
@@ -2152,7 +2224,7 @@ async def delete_chapter(subject: str, class_level: int, chapter_number: int, co
             host=settings.PINECONE_MASTER_HOST
         )
         
-        namespace = subject.lower().replace(' ', '_')
+        _, namespace = _normalize_subject(subject)
         
         all_vector_ids = []
         

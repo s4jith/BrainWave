@@ -662,12 +662,15 @@ JSON:"""
                 if len(cleaned) >= acceptance_threshold:
                     break
             except Exception as e:
-                error_str = str(e)
                 last_error = e
-                if "429" in error_str:
-                    logger.warning(f"429 quota hit on {used_key_id} (attempt {attempt + 1}/{max_attempts}). Exhausting key and retrying...")
-                    gemini_key_manager.mark_key_exhausted(used_key_id)
-                    continue  # try next key
+                if used_key_id:
+                    rotated = gemini_key_manager.handle_key_error(used_key_id, e)
+                    if rotated:
+                        logger.warning(
+                            f"[Extraction Retry] Error on {used_key_id} -> rotating "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
+                        )
+                        continue
                 # Try another key for transient/model-formatting failures.
                 logger.warning(f"Gemini extraction attempt failed on {used_key_id}: {e}")
                 continue

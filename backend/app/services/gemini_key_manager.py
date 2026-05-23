@@ -42,18 +42,26 @@ class GeminiKeyManager:
         logger.debug(f"Total daily capacity: {len(self.keys) * self.daily_limit} requests")
     
     def _load_keys_from_env(self):
-        """Load all GEMINI_API_KEY_* from environment variables."""
-        for i in range(1, 11):
-            key_name = f"GEMINI_API_KEY_{i}"
-            api_key = os.getenv(key_name)
-            
-            if api_key and api_key != "YOUR_SECOND_KEY_HERE":
-                self.keys.append({
-                    "id": key_name,
-                    "key": api_key,
-                    "index": i - 1
-                })
-                logger.debug(f"Loaded {key_name} (ending in ...{api_key[-6:]})")
+        """Load all GEMINI_API_KEY_* from environment variables dynamically."""
+        key_vars = []
+        for var_name, api_key in os.environ.items():
+            if var_name.startswith("GEMINI_API_KEY_") and api_key:
+                if api_key != "YOUR_SECOND_KEY_HERE":
+                    try:
+                        num = int(var_name.split("_")[-1])
+                        key_vars.append((num, var_name, api_key))
+                    except ValueError:
+                        key_vars.append((999, var_name, api_key))
+        
+        key_vars.sort()
+        
+        for idx, (_, key_name, api_key) in enumerate(key_vars):
+            self.keys.append({
+                "id": key_name,
+                "key": api_key,
+                "index": idx
+            })
+            logger.debug(f"Loaded {key_name} (ending in ...{api_key[-6:]})")
         
         if not self.keys:
             legacy_key = os.getenv("GEMINI_API_KEY")
@@ -213,6 +221,57 @@ class GeminiKeyManager:
                 break
         logger.warning(f"[Gemini Rate Limit] Marked {key_id} as quota-exhausted after real 429")
     
+    def handle_key_error(self, key_id: str, error: Exception) -> bool:
+        """
+        Analyze an exception from Gemini API for a given key,
+        mark the key as exhausted or invalid if appropriate,
+        and return True if the key was rotated/flagged, False otherwise.
+        """
+        if not key_id:
+            return False
+        
+        error_str = str(error)
+        error_str_lower = error_str.lower()
+        
+        # Check for quota exhaustion / rate limits (429)
+        is_exhausted = (
+            "429" in error_str or
+            "quota" in error_str_lower or
+            "rate limit" in error_str_lower or
+            "exhausted" in error_str_lower
+        )
+        
+        # Check for invalid / expired / suspended / permission denied keys (403 or invalid key)
+        is_invalid = (
+            "403" in error_str or
+            "api_key_invalid" in error_str or
+            "api key expired" in error_str_lower or
+            "api key not valid" in error_str_lower or
+            "invalid api key" in error_str_lower or
+            "suspended" in error_str_lower or
+            "permission denied" in error_str_lower or
+            "permission_denied" in error_str_lower
+        )
+        
+        if is_invalid:
+            self.mark_key_invalid(key_id)
+            return True
+        elif is_exhausted:
+            self.mark_key_exhausted(key_id)
+            return True
+        
+        # For other errors (like timeout 504), we might just want to rotate index to next key
+        is_timeout = "504" in error_str or "deadline exceeded" in error_str_lower or "timeout" in error_str_lower
+        if is_timeout:
+            for i, key_info in enumerate(self.keys):
+                if key_info["id"] == key_id:
+                    self.current_key_index = (i + 1) % len(self.keys)
+                    break
+            logger.warning(f"⏳ Timeout on {key_id} - rotated index to next key")
+            return True
+            
+        return False
+
     def get_current_key_id(self) -> Optional[str]:
         """Get the ID of the current key being used."""
         if self.keys:

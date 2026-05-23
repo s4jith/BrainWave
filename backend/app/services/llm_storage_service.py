@@ -25,12 +25,35 @@ class LLMStorageService:
     def _generate_embedding(self, text: str) -> list:
         """Generate embedding using same Gemini model as textbook index."""
         from app.services.gemini_key_manager import gemini_key_manager
-        api_key = gemini_key_manager.get_available_key()
-        return _embed_rest(
-            text=text,
-            api_key=api_key,
-            task_type="RETRIEVAL_DOCUMENT"
-        )
+        
+        last_error = None
+        max_attempts = max(1, len(gemini_key_manager.keys))
+        
+        for attempt in range(max_attempts):
+            api_key = gemini_key_manager.get_available_key()
+            if not api_key:
+                break
+            
+            key_id = gemini_key_manager.get_current_key_id()
+            try:
+                return _embed_rest(
+                    text=text,
+                    api_key=api_key,
+                    task_type="RETRIEVAL_DOCUMENT"
+                )
+            except Exception as e:
+                last_error = e
+                if key_id:
+                    rotated = gemini_key_manager.handle_key_error(key_id, e)
+                    if rotated:
+                        logger.warning(
+                            f"[LLM Storage Embedding Retry] Error on {key_id} -> rotating "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
+                        )
+                        continue
+                raise
+        
+        raise RuntimeError(f"No Gemini API key available for LLM storage embedding: {last_error}")
     
     def store_answer(
         self,
