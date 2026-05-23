@@ -5,13 +5,17 @@ Loads environment variables and application settings.
 
 from pydantic_settings import BaseSettings
 from typing import Optional
+import secrets
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     APP_NAME: str = "NCERT AI Learning Backend"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     MONGO_URI: str
     
@@ -57,7 +61,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     SECRET_KEY: Optional[str] = None
     
-    JWT_SECRET_KEY: str = "ncert-super-secret-jwt-key-change-in-production"
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
     
@@ -70,3 +74,18 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
+
+# Validate JWT secret at startup
+if not settings.JWT_SECRET_KEY or len(settings.JWT_SECRET_KEY) < 32:
+    _fallback = secrets.token_urlsafe(48)
+    _logger.warning(
+        "\n" + "=" * 60 + "\n"
+        "  ⚠️  JWT_SECRET_KEY is missing or too short (<32 chars).\n"
+        "  A random key has been generated for THIS session only.\n"
+        "  All tokens will be invalidated on next restart!\n"
+        "  \n"
+        "  Fix: add to your .env file:\n"
+        f"    JWT_SECRET_KEY={_fallback}\n"
+        + "=" * 60
+    )
+    settings.JWT_SECRET_KEY = _fallback

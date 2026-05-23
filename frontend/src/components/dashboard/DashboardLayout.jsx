@@ -1,3 +1,4 @@
+import GlobalWatermark from '../common/GlobalWatermark';
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -317,7 +318,6 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
             </button>
           )}
         </div>
-
         {}
         <nav className="flex-1 px-3 py-2 space-y-1">
           {displayNavItems.map((item) => {
@@ -574,6 +574,7 @@ export default function DashboardLayout({ children, noPadding = false, noHeader 
         <div className={noPadding ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-950 transition-colors duration-200"}>
           {children}
         </div>
+        <GlobalWatermark />
       </main>
 
       {/* Mobile Menu Toggle */}

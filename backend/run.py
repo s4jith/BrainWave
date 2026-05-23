@@ -5,6 +5,14 @@ Start the FastAPI server with uvicorn.
 import sys
 import os
 
+# Get backend directory path and insert it into sys.path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
+# Also update PYTHONPATH environment variable so uvicorn reloader subprocesses inherit it
+os.environ["PYTHONPATH"] = backend_dir + (os.pathsep + os.environ["PYTHONPATH"] if "PYTHONPATH" in os.environ else "")
+
 # WORKAROUND: Python 3.14 compatibility fix for Google Protobuf
 # Force pure-Python implementation to avoid "TypeError: Metaclasses with custom tp_new are not supported"
 # when importing the C-extension module 'google._upb._message'.

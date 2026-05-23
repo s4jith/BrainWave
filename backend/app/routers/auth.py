@@ -21,6 +21,8 @@ import jwt
 import logging
 import random
 import string
+import secrets
+import bcrypt
 from app.utils.email import send_credentials_email, send_otp_email
 
 logger = logging.getLogger(__name__)
@@ -69,12 +71,28 @@ def age_from_dob(dob: date) -> int:
     return age
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
+    """Hash password using bcrypt (secure, slow hash)."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _is_bcrypt_hash(hashed: str) -> bool:
+    """Check if a hash string is a bcrypt hash (starts with $2b$ or $2a$)."""
+    return bool(hashed) and hashed.startswith(("$2b$", "$2a$", "$2y$"))
+
+
+def _legacy_sha256_hash(password: str) -> str:
+    """Legacy SHA-256 hash — only used for migration verification."""
     return hashlib.sha256(password.encode()).hexdigest()
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(plain_password) == hashed_password
+    """Verify password against hash. Supports both bcrypt and legacy SHA-256."""
+    if not hashed_password:
+        return False
+    if _is_bcrypt_hash(hashed_password):
+        return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+    # Legacy SHA-256 fallback for pre-migration passwords
+    return _legacy_sha256_hash(plain_password) == hashed_password
 
 
 def get_user_password_hash(user: dict) -> str:
@@ -219,9 +237,16 @@ async def login(request: LoginRequest):
             logger.warning(f"Error checking first login: {e}")
             is_first_login = False
         
+        # Auto-upgrade legacy SHA-256 hashes to bcrypt on successful login
+        update_fields = {"last_login": datetime.utcnow()}
+        stored_hash = get_user_password_hash(user)
+        if stored_hash and not _is_bcrypt_hash(stored_hash):
+            update_fields["password"] = hash_password(request.password)
+            logger.info(f"Upgraded password hash to bcrypt for user: {user.get('user_id')}")
+        
         db.users.update_one(
             {"_id": user["_id"]},
-            {"$set": {"last_login": datetime.utcnow()}}
+            {"$set": update_fields}
         )
         
         session_id = str(uuid.uuid4())
@@ -372,8 +397,7 @@ async def create_teacher(
         if existing_id:
             raise HTTPException(status_code=400, detail="User ID already exists")
         
-        clean_name = request.name.lower().replace(" ", "").replace(".", "")
-        default_password = f"{clean_name}@123"
+        default_password = secrets.token_urlsafe(9)  # 12-char random password
         dob = parse_dob(request.dob)
         age = age_from_dob(dob)
         

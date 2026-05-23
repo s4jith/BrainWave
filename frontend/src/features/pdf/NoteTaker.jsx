@@ -6,10 +6,14 @@ import {
   Edit, 
   Trash2, 
   Save,
-  Plus
+  Plus,
+  Upload,
+  Eye
 } from "lucide-react";
 import useUserStore from "../../stores/userStore";
 import authFetch from "../../utils/authFetch";
+import { notesService } from "../../services/api";
+import PdfPreviewModal from "../../components/common/PdfPreviewModal";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -24,6 +28,12 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [pdfNotes, setPdfNotes] = useState([]);
+  const [selectedPdfFiles, setSelectedPdfFiles] = useState([]);
+  const [uploadingPdfs, setUploadingPdfs] = useState(false);
+  const [activePdfPreview, setActivePdfPreview] = useState(null);
+  const [pdfNoteDrafts, setPdfNoteDrafts] = useState({});
+  const [savingPdfNoteId, setSavingPdfNoteId] = useState(null);
 
   useEffect(() => {
     if (currentLesson && user) {
@@ -61,6 +71,15 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
       const data = await response.json();
       
       setNotes(data.notes || []);
+      const pdfData = await notesService.getPdfNotes(user.id);
+      const files = pdfData?.files || [];
+      setPdfNotes(files);
+      setPdfNoteDrafts(
+        files.reduce((acc, file) => {
+          acc[file.id] = file.note_text || "";
+          return acc;
+        }, {})
+      );
     } catch (err) {
       console.error("Error fetching notes:", err);
       setError(err.message);
@@ -188,6 +207,44 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
     setIsCreating(false);
   };
 
+  const handleUploadPdfs = async () => {
+    if (!user?.id || selectedPdfFiles.length === 0) return;
+    setUploadingPdfs(true);
+    setError(null);
+    try {
+      await notesService.uploadPdfNotes(user.id, selectedPdfFiles);
+      setSelectedPdfFiles([]);
+      await fetchNotes();
+    } catch (err) {
+      setError(err.message || "Failed to upload PDF notes");
+    } finally {
+      setUploadingPdfs(false);
+    }
+  };
+
+  const handleDeletePdf = async (pdfId) => {
+    setError(null);
+    try {
+      await notesService.deletePdfNote(pdfId);
+      await fetchNotes();
+    } catch (err) {
+      setError(err.message || "Failed to delete PDF note");
+    }
+  };
+
+  const handleSavePdfNote = async (pdfId) => {
+    setSavingPdfNoteId(pdfId);
+    setError(null);
+    try {
+      await notesService.updatePdfNote(pdfId, { note_text: pdfNoteDrafts[pdfId] || "" });
+      await fetchNotes();
+    } catch (err) {
+      setError(err.message || "Failed to update PDF note");
+    } finally {
+      setSavingPdfNoteId(null);
+    }
+  };
+
   const cancelEdit = () => {
     setEditingNote(null);
     setIsCreating(false);
@@ -309,6 +366,67 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
         </div>
       )}
 
+      <div className="bg-card border-x border-b rounded-b-2xl shadow-xl p-4 mt-3">
+        <h4 className="font-medium text-sm mb-3">PDF Notes</h4>
+        <div className="flex items-center gap-2 mb-3">
+          <label className="inline-flex items-center gap-2 px-3 py-2 border rounded-lg text-xs cursor-pointer hover:bg-muted">
+            <Upload className="h-3.5 w-3.5" />
+            Select PDFs
+            <input
+              type="file"
+              multiple
+              accept="application/pdf,.pdf"
+              onChange={(e) => setSelectedPdfFiles(Array.from(e.target.files || []))}
+              className="hidden"
+            />
+          </label>
+          <Button size="sm" onClick={handleUploadPdfs} disabled={uploadingPdfs || selectedPdfFiles.length === 0}>
+            {uploadingPdfs ? "Uploading..." : `Upload ${selectedPdfFiles.length || ""}`.trim()}
+          </Button>
+        </div>
+
+        {pdfNotes.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No PDF notes uploaded yet.</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto space-y-2">
+            {pdfNotes.map((file) => (
+              <div key={file.id} className="border rounded-lg p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium truncate">{file.filename}</p>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActivePdfPreview(file)}>
+                      <Eye className="h-3 w-3 mr-1" />
+                      Open
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={() => handleDeletePdf(file.id)}>
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+                <textarea
+                  value={pdfNoteDrafts[file.id] || ""}
+                  onChange={(e) => setPdfNoteDrafts((prev) => ({ ...prev, [file.id]: e.target.value }))}
+                  placeholder="Write note for this PDF"
+                  rows={2}
+                  className="w-full mt-2 px-2 py-1.5 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-background"
+                />
+                <div className="mt-1 flex justify-end">
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleSavePdfNote(file.id)}
+                    disabled={savingPdfNoteId === file.id}
+                  >
+                    {savingPdfNoteId === file.id ? "Saving..." : "Save PDF Note"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Empty state - show Add Note button */}
       {notes.length === 0 && !isCreating && !editingNote && (
         <div className="bg-card border-x border-b rounded-b-2xl shadow-xl p-4 text-center">
@@ -336,6 +454,12 @@ export default function NoteTaker({ currentLesson, pageNumber, onClose }) {
           </Button>
         </div>
       )}
+      <PdfPreviewModal
+        open={Boolean(activePdfPreview)}
+        fileUrl={activePdfPreview?.file_url}
+        title={activePdfPreview?.filename}
+        onClose={() => setActivePdfPreview(null)}
+      />
     </div>
   );
 }

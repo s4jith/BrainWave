@@ -4,13 +4,21 @@ import useUserStore from "../stores/userStore";
 import AdminLayout from "../components/AdminLayout";
 import {
     Settings, Database, Globe,
-    Save, Check, Loader2
+    Save, Check, Loader2, Stamp
 } from "lucide-react";
 import authFetch from "../utils/authFetch";
 import { SettingsPageSkeleton } from "../components/LoadingSpinner";
 
 import { useToast } from "../contexts/ToastContext";
 const API_URL = import.meta.env.VITE_API_URL;
+
+const DEFAULT_WATERMARK = {
+    enabled: false,
+    primaryText: "",
+    secondaryText: "",
+    primaryLogoUrl: "",
+    secondaryLogoUrl: "",
+};
 
 const DEFAULT_SETTINGS = {
     platformName: "NCERT Learning Platform",
@@ -21,6 +29,7 @@ const DEFAULT_SETTINGS = {
     questionTypes: ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     cognitiveLevels: ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     difficultyLevels: ["easy", "medium", "hard"],
+    watermark: DEFAULT_WATERMARK,
 };
 
 const normalizeOptionValue = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
@@ -38,11 +47,19 @@ const normalizeOptionList = (values, fallback) => {
 
 const sanitizeSettings = (raw = {}) => {
     const merged = { ...DEFAULT_SETTINGS, ...raw };
+    const mergedWatermark = { ...DEFAULT_WATERMARK, ...(merged.watermark || {}) };
     return {
         ...merged,
         questionTypes: normalizeOptionList(merged.questionTypes, DEFAULT_SETTINGS.questionTypes),
         cognitiveLevels: normalizeOptionList(merged.cognitiveLevels, DEFAULT_SETTINGS.cognitiveLevels),
         difficultyLevels: normalizeOptionList(merged.difficultyLevels, DEFAULT_SETTINGS.difficultyLevels),
+        watermark: {
+            enabled: Boolean(mergedWatermark.enabled),
+            primaryText: String(mergedWatermark.primaryText || "").trim(),
+            secondaryText: String(mergedWatermark.secondaryText || "").trim(),
+            primaryLogoUrl: String(mergedWatermark.primaryLogoUrl || "").trim(),
+            secondaryLogoUrl: String(mergedWatermark.secondaryLogoUrl || "").trim(),
+        },
     };
 };
 
@@ -147,6 +164,7 @@ export default function AdminSettings() {
     const sections = [
         { id: "general_settings", label: "General Settings", icon: Globe },
         { id: "question_options", label: "Question Dropdown Option", icon: Settings },
+        { id: "watermark", label: "Watermark", icon: Stamp },
         { id: "database", label: "Database", icon: Database },
     ];
 
@@ -299,6 +317,85 @@ export default function AdminSettings() {
                                         <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>Connected
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeSection === "watermark" && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Global Watermark</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Configure two watermark blocks shown across admin, teacher, head, and student dashboards</p>
+
+                        <div className="space-y-5">
+                            <ToggleRow
+                                label="Enable Watermark"
+                                description="Show watermark text/logo blocks in the app footer for all logged-in roles."
+                                enabled={settings.watermark?.enabled}
+                                onChange={(v) => setSettings({
+                                    ...settings,
+                                    watermark: { ...(settings.watermark || DEFAULT_WATERMARK), enabled: v }
+                                })}
+                            />
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div className="space-y-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Primary Block</h3>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Primary Text</label>
+                                        <input
+                                            type="text"
+                                            value={settings.watermark?.primaryText || ""}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                watermark: { ...(settings.watermark || DEFAULT_WATERMARK), primaryText: e.target.value }
+                                            })}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Primary Logo URL</label>
+                                        <input
+                                            type="url"
+                                            value={settings.watermark?.primaryLogoUrl || ""}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                watermark: { ...(settings.watermark || DEFAULT_WATERMARK), primaryLogoUrl: e.target.value }
+                                            })}
+                                            placeholder="https://example.com/logo.png"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Secondary Block</h3>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Secondary Text</label>
+                                        <input
+                                            type="text"
+                                            value={settings.watermark?.secondaryText || ""}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                watermark: { ...(settings.watermark || DEFAULT_WATERMARK), secondaryText: e.target.value }
+                                            })}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Secondary Logo URL</label>
+                                        <input
+                                            type="url"
+                                            value={settings.watermark?.secondaryLogoUrl || ""}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                watermark: { ...(settings.watermark || DEFAULT_WATERMARK), secondaryLogoUrl: e.target.value }
+                                            })}
+                                            placeholder="https://example.com/logo.png"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                                        />
                                     </div>
                                 </div>
                             </div>

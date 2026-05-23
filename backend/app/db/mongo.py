@@ -681,6 +681,22 @@ async def init_databases():
     
     try:
         await mongodb.connect()
+        # Create indexes for commonly queried fields (idempotent — safe to call on every startup)
+        try:
+            await mongodb.db.users.create_index("email", unique=True)
+            await mongodb.db.users.create_index("user_id", unique=True)
+            await mongodb.db.users.create_index("email_normalized")
+            await mongodb.db.users.create_index("role")
+            await mongodb.db.tests.create_index([("class_level", 1), ("subject", 1)])
+            await mongodb.db.tests.create_index("created_by")
+            await mongodb.db.test_submissions.create_index("student_id")
+            await mongodb.db.test_sessions.create_index("student_id")
+            await mongodb.db.notifications.create_index("user_id")
+            await mongodb.db.questions.create_index([("class_level", 1), ("subject", 1)])
+            await mongodb.db.groups.create_index("created_by")
+            logger.info("MongoDB indexes ensured")
+        except Exception as e:
+            logger.warning(f"Index creation skipped (non-critical): {e}")
     except Exception as e:
         logger.warning(f"MongoDB unavailable at startup (will retry on first request): {e}")
     

@@ -1672,6 +1672,13 @@ _DEFAULT_SETTINGS = {
     "questionTypes": ["mcq", "fillup", "true_false", "short_answer", "long_answer"],
     "cognitiveLevels": ["remember", "understand", "apply", "analyze", "evaluate", "create"],
     "difficultyLevels": ["easy", "medium", "hard"],
+    "watermark": {
+        "enabled": False,
+        "primaryText": "",
+        "secondaryText": "",
+        "primaryLogoUrl": "",
+        "secondaryLogoUrl": "",
+    },
 }
 
 
@@ -1700,7 +1707,23 @@ def _normalize_settings_doc(doc: dict) -> dict:
     payload["questionTypes"] = _normalize_settings_option_list(payload.get("questionTypes"), _DEFAULT_SETTINGS["questionTypes"])
     payload["cognitiveLevels"] = _normalize_settings_option_list(payload.get("cognitiveLevels"), _DEFAULT_SETTINGS["cognitiveLevels"])
     payload["difficultyLevels"] = _normalize_settings_option_list(payload.get("difficultyLevels"), _DEFAULT_SETTINGS["difficultyLevels"])
+    watermark = payload.get("watermark") if isinstance(payload.get("watermark"), dict) else {}
+    payload["watermark"] = {
+        "enabled": bool(watermark.get("enabled", _DEFAULT_SETTINGS["watermark"]["enabled"])),
+        "primaryText": str(watermark.get("primaryText", "") or "").strip(),
+        "secondaryText": str(watermark.get("secondaryText", "") or "").strip(),
+        "primaryLogoUrl": str(watermark.get("primaryLogoUrl", "") or "").strip(),
+        "secondaryLogoUrl": str(watermark.get("secondaryLogoUrl", "") or "").strip(),
+    }
     return payload
+
+
+class WatermarkSettings(BaseModel):
+    enabled: Optional[bool] = None
+    primaryText: Optional[str] = None
+    secondaryText: Optional[str] = None
+    primaryLogoUrl: Optional[str] = None
+    secondaryLogoUrl: Optional[str] = None
 
 class PlatformSettings(BaseModel):
     platformName: Optional[str] = None
@@ -1711,6 +1734,7 @@ class PlatformSettings(BaseModel):
     questionTypes: Optional[List[str]] = None
     cognitiveLevels: Optional[List[str]] = None
     difficultyLevels: Optional[List[str]] = None
+    watermark: Optional[WatermarkSettings] = None
 
 
 @router.get("/settings")

@@ -9,6 +9,7 @@ import {
     FileText, Sun, Moon, Monitor, ChevronDown, Bookmark, Trash2, Check, X, Layers,
     MessageCircle, BookMarked, MessageSquare, Compass, Menu, ChevronLeft
 } from "lucide-react";
+import GlobalWatermark from "./common/GlobalWatermark";
 import authFetch from "../utils/authFetch";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -543,6 +544,7 @@ export default function AdminLayout({ children, title, icon: Icon }) {
                 <main className="theme-scrollbar flex-1 p-6 overflow-y-auto bg-gray-50 dark:bg-black transition-colors duration-200">
                     {children}
                 </main>
+                <GlobalWatermark />
             </div>
         </div>
     );

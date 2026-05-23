@@ -8,15 +8,17 @@ import {
     Edit3,
     BookOpen,
     MessageCircle,
-    FileText,
     Calendar,
     ArrowLeft,
     X,
-    Save
+    Save,
+    Upload,
+    Eye
 } from 'lucide-react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import useUserStore from '../stores/userStore';
 import { notesService } from '../services/api';
+import PdfPreviewModal from '../components/common/PdfPreviewModal';
 
 export default function Notes() {
     const navigate = useNavigate();
@@ -30,6 +32,12 @@ export default function Notes() {
     const [showAddNote, setShowAddNote] = useState(false);
     const [editingNote, setEditingNote] = useState(null);
     const [newNote, setNewNote] = useState({ title: '', content: '' });
+    const [pdfNotes, setPdfNotes] = useState([]);
+    const [selectedPdfFiles, setSelectedPdfFiles] = useState([]);
+    const [uploadingPdfs, setUploadingPdfs] = useState(false);
+    const [activePdfPreview, setActivePdfPreview] = useState(null);
+    const [pdfNoteDrafts, setPdfNoteDrafts] = useState({});
+    const [savingPdfNoteId, setSavingPdfNoteId] = useState(null);
 
     const normalizeNote = (note) => {
         const looksManual = (note.highlight_text || '').trim() === '__manual__';
@@ -50,11 +58,21 @@ export default function Notes() {
         setApiError('');
         try {
             const data = await notesService.getNotes(user.id);
+            const pdfData = await notesService.getPdfNotes(user.id);
             const mapped = (data?.notes || []).map(normalizeNote);
             setNotes(mapped);
+            const files = pdfData?.files || [];
+            setPdfNotes(files);
+            setPdfNoteDrafts(
+                files.reduce((acc, file) => {
+                    acc[file.id] = file.note_text || '';
+                    return acc;
+                }, {})
+            );
         } catch (error) {
             setApiError(error?.message || 'Failed to load notes');
             setNotes([]);
+            setPdfNotes([]);
         } finally {
             setLoading(false);
         }
@@ -155,6 +173,46 @@ export default function Notes() {
         }
     };
 
+    const handleUploadPdfs = async () => {
+        if (!user?.id || selectedPdfFiles.length === 0) return;
+        setUploadingPdfs(true);
+        try {
+            setApiError('');
+            await notesService.uploadPdfNotes(user.id, selectedPdfFiles);
+            setSelectedPdfFiles([]);
+            await fetchNotes();
+        } catch (error) {
+            setApiError(error?.message || 'Failed to upload PDF notes');
+        } finally {
+            setUploadingPdfs(false);
+        }
+    };
+
+    const handleDeletePdf = async (pdfId) => {
+        try {
+            setApiError('');
+            await notesService.deletePdfNote(pdfId);
+            await fetchNotes();
+        } catch (error) {
+            setApiError(error?.message || 'Failed to delete PDF note');
+        }
+    };
+
+    const handleSavePdfNote = async (pdfId) => {
+        try {
+            setSavingPdfNoteId(pdfId);
+            setApiError('');
+            await notesService.updatePdfNote(pdfId, {
+                note_text: pdfNoteDrafts[pdfId] || ''
+            });
+            await fetchNotes();
+        } catch (error) {
+            setApiError(error?.message || 'Failed to update PDF note');
+        } finally {
+            setSavingPdfNoteId(null);
+        }
+    };
+
     return (
         <DashboardLayout>
             <div className="max-w-6xl mx-auto">
@@ -186,6 +244,92 @@ export default function Notes() {
                         {apiError}
                     </div>
                 )}
+
+                <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-800">Your PDF Notes</h2>
+                            <p className="text-sm text-gray-500">Upload multiple personal PDFs. Only you can see them.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
+                                <Upload className="w-4 h-4" />
+                                Select PDFs
+                                <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    multiple
+                                    onChange={(e) => setSelectedPdfFiles(Array.from(e.target.files || []))}
+                                    className="hidden"
+                                />
+                            </label>
+                            <button
+                                onClick={handleUploadPdfs}
+                                disabled={uploadingPdfs || selectedPdfFiles.length === 0}
+                                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 text-sm"
+                            >
+                                {uploadingPdfs ? 'Uploading...' : `Upload ${selectedPdfFiles.length || ''}`.trim()}
+                            </button>
+                        </div>
+                    </div>
+
+                    {selectedPdfFiles.length > 0 && (
+                        <p className="text-xs text-gray-500 mb-3">
+                            Selected: {selectedPdfFiles.map((f) => f.name).join(', ')}
+                        </p>
+                    )}
+
+                    {pdfNotes.length === 0 ? (
+                        <p className="text-sm text-gray-500">No PDF notes uploaded yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {pdfNotes.map((file) => (
+                                <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-gray-100">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-gray-800 truncate">{file.filename}</p>
+                                        <p className="text-xs text-gray-500">
+                                            {(Number(file.file_size || 0) / (1024 * 1024)).toFixed(2)} MB • {new Date(file.uploaded_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setActivePdfPreview(file)}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                            Open in App
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeletePdf(file.id)}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete
+                                        </button>
+                                    </div>
+                                    <div className="w-full mt-2">
+                                        <textarea
+                                            value={pdfNoteDrafts[file.id] || ''}
+                                            onChange={(e) => setPdfNoteDrafts((prev) => ({ ...prev, [file.id]: e.target.value }))}
+                                            placeholder="Add notes for this PDF..."
+                                            rows={2}
+                                            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                        <div className="mt-2 flex justify-end">
+                                            <button
+                                                onClick={() => handleSavePdfNote(file.id)}
+                                                disabled={savingPdfNoteId === file.id}
+                                                className="px-3 py-1.5 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50"
+                                            >
+                                                {savingPdfNoteId === file.id ? 'Saving...' : 'Save PDF Note'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
                 {}
                 <div className="flex items-center gap-4 mb-6">
@@ -361,6 +505,12 @@ export default function Notes() {
                     </div>
                 )}
             </div>
+            <PdfPreviewModal
+                open={Boolean(activePdfPreview)}
+                fileUrl={activePdfPreview?.file_url}
+                title={activePdfPreview?.filename}
+                onClose={() => setActivePdfPreview(null)}
+            />
         </DashboardLayout>
     );
 }

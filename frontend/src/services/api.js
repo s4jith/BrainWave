@@ -471,6 +471,91 @@ export const notesService = {
       throw error;
     }
   },
+
+  async getPdfNotes(studentId) {
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/${studentId}/pdfs`);
+      if (!response.ok) {
+        throw new Error(`PDF Notes API Error: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("PDF Notes API Error:", error);
+      throw error;
+    }
+  },
+
+  async uploadPdfNotes(studentId, files) {
+    try {
+      const formData = new FormData();
+      Array.from(files || []).forEach((file) => formData.append("files", file));
+
+      const response = await authFetch(`${API_BASE_URL}/api/notes/${studentId}/pdfs`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload PDF Notes API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Upload PDF Notes API Error:", error);
+      throw error;
+    }
+  },
+
+  async deletePdfNote(pdfNoteId) {
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/pdfs/${pdfNoteId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete PDF Note API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Delete PDF Note API Error:", error);
+      throw error;
+    }
+  },
+
+  async updatePdfNote(pdfNoteId, updates) {
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/notes/pdfs/${pdfNoteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Update PDF Note API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Update PDF Note API Error:", error);
+      throw error;
+    }
+  },
+};
+
+export const settingsService = {
+  async getWatermark() {
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/settings/watermark`);
+      if (!response.ok) {
+        throw new Error(`Watermark settings API Error: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Watermark settings API Error:", error);
+      throw error;
+    }
+  },
 };
 
 export const historyService = {

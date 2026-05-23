@@ -1,369 +1,86 @@
-import React, { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import useUserStore from "./stores/userStore";
+import React, { Suspense } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ProtectedRoute, PublicRoute, StaffRoute, FeatureGatedRoute } from "./components/RouteGuards";
+import TokenValidator from "./components/TokenValidator";
+import PageLoadingFallback from "./components/PageLoadingFallback";
+import { ToastProvider } from "./contexts/ToastContext";
+import "./App.css";
+
+// ── Eagerly loaded pages (always needed) ────────────────────────────────────────
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
-import TeacherPlaceholder from "./pages/TeacherPlaceholder";
 
-import Dashboard from "./pages/Dashboard";
-import BookToBot from "./pages/BookToBot";
-import Settings from "./pages/Settings";
-import TestCenter from "./pages/TestCenter";
-import TestSession from "./pages/TestSession";
-import TestResult from "./pages/TestResult";
-import ReportCard from "./pages/ReportCard";
-import AdminDashboard from "./pages/AdminDashboard";
-import StaffTests from "./pages/StaffTests";
-import SupportTickets from "./pages/SupportTickets";
-import StudentQueries from "./pages/StudentQueries";
-import TeacherQueries from "./pages/TeacherQueries";
-import StudentManagement from "./pages/StudentManagement";
-import CreateTest from "./pages/CreateTest";
-import TestManagement from "./pages/TestManagement";
-import Notes from "./pages/Notes";
-import BookManagement from "./pages/BookManagementHierarchical";
-import SubjectsManagement from "./pages/SubjectsManagement";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import CourseBuilder from "./pages/CourseBuilder";
-import AssessmentBuilder from "./pages/AssessmentBuilder";
-import AssessmentTaker from "./pages/AssessmentTaker";
-import Gradebook from "./pages/Gradebook";
-import StudentDashboard from "./pages/StudentDashboard";
-import TeacherManagement from "./pages/TeacherManagement";
-import GroupManagement from "./pages/GroupManagement";
-import StudentGroups from "./pages/StudentGroups";
-import AdminSettings from "./pages/AdminSettings";
-import AdminReports from "./pages/AdminReports";
-import AdminSuggestions from "./pages/AdminSuggestions";
-import TeacherGroups from "./pages/TeacherGroups";
-import QuestionBank from "./pages/QuestionBank";
-import QuestionPapers from "./pages/QuestionPapers";
-import TeacherTests from "./pages/TeacherTests";
-import TeacherReports from "./pages/TeacherReports";
-import TeacherSettings from "./pages/TeacherSettings";
-import HeadDashboard from "./pages/HeadDashboard";
+// ── Lazy-loaded pages (code-split per route) ────────────────────────────────────
+const Dashboard = React.lazy(() => import("./pages/Dashboard"));
+const BookToBot = React.lazy(() => import("./pages/BookToBot"));
+const Settings = React.lazy(() => import("./pages/Settings"));
+const TestCenter = React.lazy(() => import("./pages/TestCenter"));
+const TestSession = React.lazy(() => import("./pages/TestSession"));
+const TestResult = React.lazy(() => import("./pages/TestResult"));
+const ReportCard = React.lazy(() => import("./pages/ReportCard"));
+const Notes = React.lazy(() => import("./pages/Notes"));
+const ForgotPassword = React.lazy(() => import("./pages/ForgotPassword"));
+const TeacherPlaceholder = React.lazy(() => import("./pages/TeacherPlaceholder"));
+const MaintenancePage = React.lazy(() => import("./pages/MaintenancePage"));
+const StudentDashboard = React.lazy(() => import("./pages/StudentDashboard"));
+const StudentGroups = React.lazy(() => import("./pages/StudentGroups"));
+const Suggestions = React.lazy(() => import("./pages/Suggestions"));
 
-import HeadGroups from "./pages/HeadGroups";
-import HeadReports from "./pages/HeadReports";
-import HeadTests from "./pages/HeadTests";
-import MaintenancePage from "./pages/MaintenancePage";
-import CurriculumManagement from "./pages/CurriculumManagement";
-import ForgotPassword from "./pages/ForgotPassword";
-import CareerQuestions from "./pages/CareerQuestions";
-import CareerTest from "./pages/CareerTest";
-import CareerResult from "./pages/CareerResult";
-import DashboardLayout from "./components/dashboard/DashboardLayout";
-import "./App.css";
-import authFetch from "./utils/authFetch";
-import { ToastProvider } from "./contexts/ToastContext";
+// Admin pages
+const AdminDashboard = React.lazy(() => import("./pages/AdminDashboard"));
+const AdminSettings = React.lazy(() => import("./pages/AdminSettings"));
+const AdminReports = React.lazy(() => import("./pages/AdminReports"));
+const AdminSuggestions = React.lazy(() => import("./pages/AdminSuggestions"));
+const StudentManagement = React.lazy(() => import("./pages/StudentManagement"));
+const TeacherManagement = React.lazy(() => import("./pages/TeacherManagement"));
+const GroupManagement = React.lazy(() => import("./pages/GroupManagement"));
+const SubjectsManagement = React.lazy(() => import("./pages/SubjectsManagement"));
+const BookManagement = React.lazy(() => import("./pages/BookManagementHierarchical"));
+const CurriculumManagement = React.lazy(() => import("./pages/CurriculumManagement"));
+const SupportTickets = React.lazy(() => import("./pages/SupportTickets"));
 
-// Cache maintenance status for the current page lifecycle to avoid repeated calls.
-const maintenanceStatusCache = {
-  checked: false,
-  maintenance: false,
-  inFlight: null,
-};
+// Teacher pages
+const TeacherDashboard = React.lazy(() => import("./pages/TeacherDashboard"));
+const TeacherGroups = React.lazy(() => import("./pages/TeacherGroups"));
+const TeacherReports = React.lazy(() => import("./pages/TeacherReports"));
+const TeacherSettings = React.lazy(() => import("./pages/TeacherSettings"));
+const TeacherTests = React.lazy(() => import("./pages/TeacherTests"));
+const TeacherQueries = React.lazy(() => import("./pages/TeacherQueries"));
+const CourseBuilder = React.lazy(() => import("./pages/CourseBuilder"));
 
-async function fetchMaintenanceStatus(API_URL) {
-  if (maintenanceStatusCache.checked) {
-    return {
-      maintenance: maintenanceStatusCache.maintenance,
-      checked: true,
-    };
-  }
+// Test/Assessment pages
+const StaffTests = React.lazy(() => import("./pages/StaffTests"));
+const CreateTest = React.lazy(() => import("./pages/CreateTest"));
+const TestManagement = React.lazy(() => import("./pages/TestManagement"));
+const AssessmentBuilder = React.lazy(() => import("./pages/AssessmentBuilder"));
+const AssessmentTaker = React.lazy(() => import("./pages/AssessmentTaker"));
+const Gradebook = React.lazy(() => import("./pages/Gradebook"));
+const QuestionBank = React.lazy(() => import("./pages/QuestionBank"));
+const QuestionPapers = React.lazy(() => import("./pages/QuestionPapers"));
 
-  if (!maintenanceStatusCache.inFlight) {
-    maintenanceStatusCache.inFlight = (async () => {
-      try {
-        const res = await authFetch(`${API_URL}/api/admin/public/maintenance`);
-        if (res.ok) {
-          const data = await res.json();
-          maintenanceStatusCache.maintenance = data.maintenance_mode === true;
-        }
-      } catch {
-        // Fall back to cached defaults when check fails.
-      } finally {
-        maintenanceStatusCache.checked = true;
-        maintenanceStatusCache.inFlight = null;
-      }
+// Head pages
+const HeadDashboard = React.lazy(() => import("./pages/HeadDashboard"));
+const HeadGroups = React.lazy(() => import("./pages/HeadGroups"));
+const HeadReports = React.lazy(() => import("./pages/HeadReports"));
+const HeadTests = React.lazy(() => import("./pages/HeadTests"));
 
-      return {
-        maintenance: maintenanceStatusCache.maintenance,
-        checked: maintenanceStatusCache.checked,
-      };
-    })();
-  }
+// Student pages
+const StudentQueries = React.lazy(() => import("./pages/StudentQueries"));
+const CareerQuestions = React.lazy(() => import("./pages/CareerQuestions"));
+const CareerTest = React.lazy(() => import("./pages/CareerTest"));
+const CareerResult = React.lazy(() => import("./pages/CareerResult"));
 
-  return maintenanceStatusCache.inFlight;
-}
-
-function useMaintenanceMode() {
-  const [maintenance, setMaintenance] = useState(maintenanceStatusCache.maintenance);
-  const [checked, setChecked] = useState(maintenanceStatusCache.checked);
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  useEffect(() => {
-    let mounted = true;
-
-    fetchMaintenanceStatus(API_URL).then((result) => {
-      if (!mounted) return;
-      setMaintenance(result.maintenance);
-      setChecked(result.checked);
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, [API_URL]);
-
-  return { maintenance, checked };
-}
-
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, user } = useUserStore();
-  const { maintenance, checked } = useMaintenanceMode();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Block non-admins when maintenance mode is on
-  if (checked && maintenance && user.role !== "admin") {
-    return <MaintenancePage />;
-  }
-
-  if (user.role === "admin") {
-    const path = window.location.pathname;
-    const adminRoutes = ["/admin-dashboard", "/student-management", "/support-tickets", "/staff-tests", "/create-test", "/test-management", "/book-management", "/subjects-management", "/teacher-management", "/group-management", "/admin-settings", "/admin-reports", "/admin-suggestions", "/curriculum-management", "/question-papers", "/teacher-queries", "/career-questions"];
-    const isAdminRoute = adminRoutes.some(route => path.startsWith(route));
-    if (!isAdminRoute) {
-      return <Navigate to="/admin-dashboard" replace />;
-    }
-  }
-
-  if (user.role === "head") {
-    const path = window.location.pathname;
-    const headRoutes = ["/head-dashboard", "/question-bank", "/question-papers", "/head-groups", "/head-reports", "/head-tests"];
-    const isHeadRoute = headRoutes.some(route => path.startsWith(route));
-    if (!isHeadRoute) {
-      return <Navigate to="/head-dashboard" replace />;
-    }
-  }
-
-  if (user.role === "teacher") {
-    const path = window.location.pathname;
-    const teacherRoutes = [
-      "/staff-tests", "/teacher-dashboard", "/teacher-tests", "/course-builder",
-      "/courses/", "/create-test",
-      "/assessment-builder", "/assessments/", "/question-bank", "/teacher-groups",
-      "/teacher-reports", "/teacher-settings", "/question-papers"
-    ];
-    const isTeacherRoute = teacherRoutes.some(route => path.startsWith(route));
-    if (!isTeacherRoute) {
-      return <Navigate to="/teacher-dashboard" replace />;
-    }
-  }
-
-  return children;
-}
-
-function PublicRoute({ children }) {
-  const { isAuthenticated, user } = useUserStore();
-
-  if (isAuthenticated) {
-    
-    if (user.role === "admin") {
-      return <Navigate to="/admin-dashboard" replace />;
-    }
-
-    if (user.role === "head") {
-      return <Navigate to="/head-dashboard" replace />;
-    }
-
-    if (user.role === "teacher") {
-      return <Navigate to="/teacher-dashboard" replace />;
-    }
-
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
-}
-
-function StaffRoute({ children }) {
-  const { isAuthenticated, user } = useUserStore();
-  const { maintenance, checked } = useMaintenanceMode();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user.role !== "admin" && user.role !== "teacher" && user.role !== "head") {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // Block non-admins (teachers) when maintenance mode is on
-  if (checked && maintenance && user.role !== "admin") {
-    return <MaintenancePage />;
-  }
-
-  return children;
-}
-
-function FeatureGatedRoute({ featureKey, children }) {
-  const { user, getAuthHeader } = useUserStore();
-  const navigate = useNavigate();
-  const [allowed, setAllowed] = useState(null);
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  useEffect(() => {
-    if (user?.role !== "student") {
-      setAllowed(true);
-      return;
-    }
-    const checkFeature = async () => {
-      try {
-        const res = await authFetch(`${API_URL}/api/student/my-features`, {
-          headers: getAuthHeader()
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const featureVal = (data.features || {})[featureKey];
-          // For features that are not present in response, use safe default:
-          // book_to_bot defaults true, others default false
-          const defaultVal = featureKey === "book_to_bot" ? true : false;
-          setAllowed(featureVal !== undefined ? featureVal : defaultVal);
-        } else {
-          setAllowed(false);
-        }
-      } catch {
-        setAllowed(false);
-      }
-    };
-    checkFeature();
-  }, [user?.id, featureKey]);
-
-  if (allowed === null) return null; // loading
-
-  if (!allowed) {
-    return (
-      <div className="relative h-full w-full" style={{ minHeight: '100vh' }}>
-        {/* Blurred preview of the actual feature for marketing effect */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" style={{ filter: 'blur(6px)', transform: 'scale(1.02)' }}>
-          {children}
-        </div>
-        {/* Dark gradient overlay */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.55) 100%)' }} />
-        {/* Lock card */}
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl mx-4 border border-gray-200 dark:border-gray-700">
-            <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Feature Locked</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm">This feature hasn't been unlocked for your account yet.</p>
-            <p className="text-gray-400 dark:text-gray-500 mb-6 text-sm">Please contact your teacher or admin to get access.</p>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-full px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return children;
-}
-
-function TokenValidator({ children }) {
-  const { isAuthenticated, accessToken, logout } = useUserStore();
-  const [validated, setValidated] = useState(false);
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  const forceLogout = React.useCallback(() => {
-    logout();
-    if (window.location.pathname !== "/login") {
-      window.location.replace("/login");
-    }
-  }, [logout]);
-
-  const getTokenExpiryMs = React.useCallback((token) => {
-    if (!token || typeof token !== "string") return null;
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    try {
-      const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-      const payload = JSON.parse(window.atob(padded));
-      if (!payload?.exp) return null;
-      return Number(payload.exp) * 1000;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    setValidated(false);
-
-    if (!isAuthenticated || !accessToken) {
-      setValidated(true);
-      return;
-    }
-
-    const expiryMs = getTokenExpiryMs(accessToken);
-    if (expiryMs && Date.now() >= expiryMs) {
-      forceLogout();
-      setValidated(true);
-      return;
-    }
-
-    let expiryTimer = null;
-    if (expiryMs && expiryMs > Date.now()) {
-      expiryTimer = window.setTimeout(() => {
-        forceLogout();
-      }, expiryMs - Date.now());
-    }
-
-    // Verify the token is still valid by calling /api/auth/me
-    const validateToken = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        // Treat explicit auth/session failures as invalid login state.
-        if (res.status === 401 || res.status === 403) {
-          forceLogout();
-        }
-      } catch {
-        // Network error — don't logout, let offline usage continue
-      } finally {
-        setValidated(true);
-      }
-    };
-    validateToken();
-
-    return () => {
-      if (expiryTimer) {
-        window.clearTimeout(expiryTimer);
-      }
-    };
-  }, [isAuthenticated, accessToken, API_URL, forceLogout, getTokenExpiryMs]);
-
-  if (!validated) return null; // Show nothing until token is validated
-
-  return children;
-}
+// Layouts
+const DashboardLayout = React.lazy(() => import("./components/dashboard/DashboardLayout"));
 
 function App() {
   return (
     <ToastProvider>
     <BrowserRouter>
       <TokenValidator>
+      <Suspense fallback={<PageLoadingFallback />}>
       <Routes>
-        {}
+        {/* Public */}
         <Route path="/" element={<LandingPage />} />
         <Route
           path="/login"
@@ -376,7 +93,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/teacher" element={<TeacherPlaceholder />} />
 
-        {}
+        {/* Student Routes */}
         <Route
           path="/dashboard"
           element={
@@ -473,8 +190,60 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/student-dashboard"
+          element={
+            <ProtectedRoute>
+              <StudentDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-groups"
+          element={
+            <ProtectedRoute>
+              <StudentGroups />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-queries"
+          element={
+            <ProtectedRoute>
+              <StudentQueries />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/gradebook/:courseId"
+          element={
+            <ProtectedRoute>
+              <FeatureGatedRoute featureKey="my_grades">
+                <Gradebook />
+              </FeatureGatedRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-grades"
+          element={
+            <ProtectedRoute>
+              <FeatureGatedRoute featureKey="my_grades">
+                <Gradebook />
+              </FeatureGatedRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/support-tickets"
+          element={
+            <ProtectedRoute>
+              <SupportTickets />
+            </ProtectedRoute>
+          }
+        />
 
-        {}
+        {/* Admin Routes */}
         <Route
           path="/admin-dashboard"
           element={
@@ -500,22 +269,6 @@ function App() {
           }
         />
         <Route
-          path="/support-tickets"
-          element={
-            <ProtectedRoute>
-              <SupportTickets />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/my-queries"
-          element={
-            <ProtectedRoute>
-              <StudentQueries />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/teacher-queries"
           element={
             <StaffRoute>
@@ -523,8 +276,6 @@ function App() {
             </StaffRoute>
           }
         />
-
-        {}
         <Route
           path="/create-test"
           element={
@@ -622,47 +373,12 @@ function App() {
           }
         />
 
-
-        {}
+        {/* Teacher Routes */}
         <Route
           path="/teacher-dashboard"
           element={
             <StaffRoute>
               <TeacherDashboard />
-            </StaffRoute>
-          }
-        />
-
-        {}
-        <Route
-          path="/head-dashboard"
-          element={
-            <StaffRoute>
-              <HeadDashboard />
-            </StaffRoute>
-          }
-        />
-        <Route
-          path="/head-groups"
-          element={
-            <StaffRoute>
-              <HeadGroups />
-            </StaffRoute>
-          }
-        />
-        <Route
-          path="/head-reports"
-          element={
-            <StaffRoute>
-              <HeadReports />
-            </StaffRoute>
-          }
-        />
-        <Route
-          path="/head-tests"
-          element={
-            <StaffRoute>
-              <HeadTests />
             </StaffRoute>
           }
         />
@@ -731,7 +447,7 @@ function App() {
           }
         />
 
-        {}
+        {/* Assessment Routes */}
         <Route
           path="/assessment-builder"
           element={
@@ -757,45 +473,37 @@ function App() {
           }
         />
 
-        {}
+        {/* Head Routes */}
         <Route
-          path="/my-groups"
+          path="/head-dashboard"
           element={
-            <ProtectedRoute>
-              <StudentGroups />
-            </ProtectedRoute>
-          }
-        />
-
-        {}
-        <Route
-          path="/student-dashboard"
-          element={
-            <ProtectedRoute>
-              <StudentDashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        {}
-        <Route
-          path="/gradebook/:courseId"
-          element={
-            <ProtectedRoute>
-              <FeatureGatedRoute featureKey="my_grades">
-                <Gradebook />
-              </FeatureGatedRoute>
-            </ProtectedRoute>
+            <StaffRoute>
+              <HeadDashboard />
+            </StaffRoute>
           }
         />
         <Route
-          path="/my-grades"
+          path="/head-groups"
           element={
-            <ProtectedRoute>
-              <FeatureGatedRoute featureKey="my_grades">
-                <Gradebook />
-              </FeatureGatedRoute>
-            </ProtectedRoute>
+            <StaffRoute>
+              <HeadGroups />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/head-reports"
+          element={
+            <StaffRoute>
+              <HeadReports />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/head-tests"
+          element={
+            <StaffRoute>
+              <HeadTests />
+            </StaffRoute>
           }
         />
 
@@ -825,9 +533,10 @@ function App() {
           }
         />
 
-        {}
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes >
+      </Routes>
+      </Suspense>
       </TokenValidator>
     </BrowserRouter>
     </ToastProvider>

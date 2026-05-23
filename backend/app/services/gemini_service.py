@@ -5,7 +5,10 @@ Gemini Service - Handles all Google Gemini AI interactions with multi-key rotati
 from google import genai
 from google.genai import types
 from app.services.gemini_key_manager import gemini_key_manager
+import base64
+import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +300,6 @@ class GeminiService:
             Generated text response
         """
         try:
-            import base64
             
             api_key = gemini_key_manager.get_available_key()
             if not api_key:
@@ -501,7 +503,6 @@ Generate {num_questions} MCQs now in valid JSON format:"""
                 config=config,
             )
             
-            import json
             text = response.text
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
@@ -554,8 +555,7 @@ Generate {num_questions} MCQs now in valid JSON format:"""
             List of question dictionaries
         """
         try:
-            import json
-            import re
+
             
             requirements_str = ""
             total_q = 0
@@ -758,7 +758,6 @@ Provide evaluation in JSON format:"""
                 config=config,
             )
             
-            import json
             text = response.text
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]

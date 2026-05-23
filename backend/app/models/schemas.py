@@ -106,6 +106,24 @@ class NotesListResponse(BaseModel):
     notes: List[Note] = Field(..., description="List of notes")
     total: int = Field(..., description="Total number of notes")
 
+
+class NotePdf(BaseModel):
+    """Uploaded PDF note metadata for a student."""
+    id: str = Field(..., description="MongoDB _id")
+    student_id: str
+    filename: str
+    file_url: str
+    cloudinary_public_id: str
+    file_size: int = Field(..., description="File size in bytes")
+    note_text: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class NotePdfListResponse(BaseModel):
+    """Response schema for listing uploaded note PDFs."""
+    files: List[NotePdf] = Field(..., description="List of uploaded PDF notes")
+    total: int = Field(..., description="Total number of uploaded files")
+
 class ErrorResponse(BaseModel):
     """Standard error response."""
     error: str = Field(..., description="Error message")

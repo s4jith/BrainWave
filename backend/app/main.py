@@ -166,6 +166,31 @@ app.include_router(gradebook.router)
 from app.routers import career
 app.include_router(career.router)
 
+
+@app.get("/api/settings/watermark", tags=["Settings"])
+async def get_watermark_settings():
+    """Return watermark settings for authenticated users across roles."""
+    from app.db.mongo import db
+    try:
+        col = db.get_collection("platform_settings")
+        doc = col.find_one({"_id": "global"}) or {}
+        watermark = doc.get("watermark") if isinstance(doc.get("watermark"), dict) else {}
+        return {
+            "enabled": bool(watermark.get("enabled", False)),
+            "primaryText": str(watermark.get("primaryText", "") or ""),
+            "secondaryText": str(watermark.get("secondaryText", "") or ""),
+            "primaryLogoUrl": str(watermark.get("primaryLogoUrl", "") or ""),
+            "secondaryLogoUrl": str(watermark.get("secondaryLogoUrl", "") or ""),
+        }
+    except Exception:
+        return {
+            "enabled": False,
+            "primaryText": "",
+            "secondaryText": "",
+            "primaryLogoUrl": "",
+            "secondaryLogoUrl": "",
+        }
+
 @app.get("/api/public/maintenance", tags=["Public"])
 async def public_maintenance_alias():
     """Alias for /api/admin/public/maintenance (backward compat)."""
