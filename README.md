@@ -296,8 +296,3 @@ For full API mapping, refer to `API_ENDPOINTS.md`.
 
 ## License
 MIT License. See `LICENSE`.
-
-## Author / Contact
-- Author: `<your-name-or-team>`
-- GitHub: `https://github.com/<your-username>`
-- Issues: `https://github.com/<your-username>/ncert-working-2/issues`
