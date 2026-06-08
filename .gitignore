@@ -5,6 +5,7 @@ venv/
 temp_env/
 *_env/
 __pycache__/
+.pubcache/
 *.py[cod]
 *$py.class
 *.so
