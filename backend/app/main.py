@@ -99,6 +99,12 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
+# AuthMiddleware must be added first so that CORSMiddleware (added second)
+# becomes the outermost wrapper. Starlette's add_middleware inserts at index 0
+# and then reverses when building the stack, so last-added = outermost.
+# CORSMiddleware must be outermost so it adds headers even on 401/403 responses.
+app.add_middleware(AuthMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,9 +112,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global auth middleware — protects all /api/ routes except public whitelist
-app.add_middleware(AuthMiddleware)
 
 app.include_router(chat.router, prefix="/api")
 app.include_router(mcq.router, prefix="/api")

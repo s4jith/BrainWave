@@ -1,0 +1,72 @@
+name: brainwave
+description: "BrainWave - NCERT AI Learning Platform for Students"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.7
+
+  # HTTP
+  dio: ^5.4.3+1
+
+  # Secure storage
+  flutter_secure_storage: ^9.2.2
+
+  # Local preferences
+  shared_preferences: ^2.3.1
+
+  # Fonts & UI
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.1
+  percent_indicator: ^4.2.4
+  lottie: ^3.1.2
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # Markdown rendering (for AI responses)
+  flutter_markdown: ^0.7.3
+
+  # Date/time
+  intl: ^0.19.0
+  timeago: ^3.7.0
+
+  # File handling
+  file_picker: ^8.0.3
+  image_picker: ^1.1.2
+
+  # PDF viewer
+  pdfx: ^2.9.0
+
+  # URL launcher
+  url_launcher: ^6.3.0
+
+  # Environment variables
+  flutter_dotenv: ^5.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/images/
+    - assets/animations/
