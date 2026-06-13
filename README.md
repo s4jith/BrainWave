@@ -293,6 +293,7 @@ For full API mapping, refer to `API_ENDPOINTS.md`.
 3. Keep commits small and meaningful.
 4. Run lint/tests before pushing.
 5. Open a PR with summary and validation notes.
-
+https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload&code_challenge=tKmKHn4v6GC7Z0kghAGYZwyVAMXTZTM1qKPFzbjYV4k&code_challenge_method=S256&state=zWZSWPvjf-RZuQmJzJCe4IC2mCGgYh-yrV6ZaxePXQA
 ## License
 MIT License. See `LICENSE`.
+https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload&code_challenge=tKmKHn4v6GC7Z0kghAGYZwyVAMXTZTM1qKPFzbjYV4k&code_challenge_method=S256&state=zWZSWPvjf-RZuQmJzJCe4IC2mCGgYh-yrV6ZaxePXQA
